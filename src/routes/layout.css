@@ -1,0 +1,74 @@
+@import 'tailwindcss';
+
+/*
+ * Design tokens.
+ *
+ * The twelve pitch-class colours are deliberately NOT here. They live in the
+ * database so they can be matched to a physical painted wheel, and they are
+ * injected as --pc-0 … --pc-11 (plus a contrast-safe --pc-N-ink for each) by
+ * the root layout. Everything below is structural and not user-editable.
+ *
+ * Source of truth for the ground and ink values is src/lib/design/palette.ts;
+ * tokens.test.ts fails if these literals drift from it.
+ */
+
+@theme {
+	/* Ground — deep, near-achromatic, so the pitch colours carry all the chroma. */
+	--color-ground: oklch(0.16 0.008 265);
+	--color-ground-raised: oklch(0.2 0.009 265);
+	--color-ground-overlay: oklch(0.25 0.01 265);
+	--color-ground-line: oklch(0.31 0.011 265);
+
+	/* Ink */
+	--color-ink-dim: oklch(0.58 0.012 265);
+	--color-ink-muted: oklch(0.74 0.01 265);
+	--color-ink: oklch(0.97 0.004 265);
+
+	/* Type. Grotesque for chord symbols at size; mono for degrees and numerals. */
+	--font-display: 'Space Grotesk Variable', ui-sans-serif, system-ui, sans-serif;
+	--font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+	/*
+	 * Practice-mode scale. These assume a screen roughly 80cm away on a music
+	 * stand, so the floor is far above a normal UI's.
+	 */
+	--text-chord: clamp(4rem, 18vw, 14rem);
+	--text-chord--line-height: 0.85;
+	--text-cue: clamp(1.5rem, 4vw, 3rem);
+	--text-cue--line-height: 1.1;
+
+	--ease-wheel: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+:root {
+	color-scheme: dark;
+}
+
+html {
+	background: var(--color-ground);
+	color: var(--color-ink);
+	font-family: var(--font-display);
+	/* Landscape-first on a music stand, but never lock orientation. */
+	-webkit-text-size-adjust: 100%;
+}
+
+body {
+	margin: 0;
+	min-height: 100dvh;
+}
+
+/* Chord symbols and degree numbers must never be selected by a stray palm. */
+.no-select {
+	-webkit-user-select: none;
+	user-select: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+	}
+}
