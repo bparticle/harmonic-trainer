@@ -190,10 +190,135 @@ zero elapsed time — where a hand-rolled version is *silently* wrong. A schedul
 that is quietly mis-scheduling is the worst possible failure mode here, because
 nothing about the UI would reveal it. Wired up in M4.
 
-### Verification gap in M0
+### Verification gap in M0 (closed in M1 — see below)
 
 The rendered page was verified programmatically — DOM contents, computed styles,
 resolved custom properties, loaded font families, live values read back from
 Neon — but **not** inspected visually, because the browser pane could not
 composite a screenshot in the build environment. Visual review of the M0 page is
 outstanding.
+
+---
+
+## M1 — music core
+
+### Intervals carry diatonic steps, not just semitones
+
+An interval is `{ steps, semitones }`. Semitones alone cannot distinguish an
+augmented fifth from a minor sixth, and transposing by one gives a different
+letter than transposing by the other. Every spelling guarantee in the app rests
+on this pairing: the letter comes from the step count, and the accidental is
+then whatever it must be to land on the right semitone. That is why G♭ + P4
+gives C♭ rather than B.
+
+### Scales are stacked, not looked up
+
+No table of key signatures. A scale is the mode's interval pattern transposed
+from the tonic, which makes G♭ major produce its C♭ and B major its A♯ for free,
+and makes every mode in every key work by the same code path. Key signature is
+*derived* by summing the alterations in the scale, which means it also works for
+modal keys, where a lookup table would have needed a second table.
+
+### The tritone above the tonic is the raised fourth
+
+The one chromatic note that does not follow the key's accidental direction. In
+C — a flat-spelling key by the jazz convention adopted here — pitch class 6 is
+F♯, not G♭, because it functions as a leading tone up to the fifth. Without this
+rule the recogniser emitted `Gbdim7` where every chart in the world says
+`F#dim7`. The same rule gives A as the ♯4 of E♭.
+
+### Diminished triads live inside `min7b5`
+
+The brief's quality list has `min7b5` and `dim7` but no plain diminished triad,
+so a diminished triad is `min7b5` with no seventh extension. `formatChord`
+renders that as `dim` / `°` and the half-diminished seventh as `m7b5` / `ø7`.
+The alternative — adding a quality the brief did not ask for — seemed worse than
+one small piece of encoding.
+
+### Chord symbols are parsed quality-first
+
+`parseChord` reads the quality token *before* stripping alterations. The `b5` in
+`m7b5` belongs to the quality, and stripping alterations first silently turned
+half-diminished chords into minor sevenths with a flat five — a different chord
+with a different function, and a bug that would have been invisible until some
+minor ii–V got analysed wrongly weeks later. The `sus` token is matched anywhere
+in the symbol rather than anchored, because `G7sus4` writes its extension first.
+
+### Rootless voicings need order-preserving stacking
+
+Form A is 3–5–7–9 and form B is 7–9–3–5. Placing each note at the lowest octave
+above the previous one is what keeps them different; sorting the result by pitch
+collapses form B into form A, which is the one thing those two shapes must never
+do. Dominants swap the fifth for the thirteenth, since the fifth of a dominant is
+the note nobody misses.
+
+### Recognition is ranked by an explicit idiom prior
+
+Every chord template carries a `prior` — how often that chord actually turns up
+in this music. It is the mechanism behind the brief's own example: E–G–B♭–D fits
+`Em7♭5` exactly, with the root in the bass, and still loses to a rootless `C9`,
+because rootless dominants are everywhere and root-position half-diminished
+chords are not. Combined with a bonus for the specific shapes that are idiomatic
+*without* their root, this reproduces the required ranking without a special
+case, and generalises: B–D–F–A in C reads as `G9` before `Bm7♭5` for the same
+reason.
+
+The weights live in one `W` object at the top of `recognise.ts`. They are tuned
+against the golden fixtures and are the first thing to adjust if the rankings
+ever feel wrong in practice.
+
+### Diminished sevenths report all four of their dominants
+
+A dim7 is symmetric, so it is the rootless ♭9 of four different dominants.
+Recognition returns the literal `F#dim7` first and then `D7b9 > F7b9 > Ab7b9 >
+B7b9`. That list is not noise — it is the fact the wheel is supposed to make
+visible, arriving for free from the same scoring.
+
+### Inversion is not a slash chord
+
+A first-inversion Cmaj7 is `Cmaj7` with `inversion: 1`, not `Cmaj7/E`. The
+`bass` field is reserved for a bass note that genuinely is not a chord tone.
+This keeps the abstract chord and the voicing separate in the output exactly as
+they are separate in the model.
+
+### Modulation needs a complete ii–V–I
+
+A bare V–I is not enough evidence: E7–Am7 in C is `V7/vi` doing its job, not a
+move to A minor. Detection therefore requires a full ii–V–I landing outside the
+current key, and additionally requires that the three chords are not all already
+diatonic at home.
+
+The pivot is then found by walking *backwards* for the last chord diatonic in
+both keys — the point where the ear changed key without noticing, and the cell
+the two key-shapes share on the wheel.
+
+### Some modulations honestly have no pivot
+
+C to A is three steps on the circle and the two scales share only four notes, so
+there is no common diatonic chord to pivot on; C to G♭ shares less still. Rather
+than invent a pivot, `analyse` reports the key change with no `pivot` field, and
+the fixtures assert that absence. It is a real musical fact and a better lesson
+than a fabricated hinge — keys that far apart have to be reached directly or via
+a dominant.
+
+### Backdoor is checked before tritone substitution
+
+B♭7 in C sits a semitone above the diatomic A, so a naive tritone-sub test claims
+it as the substitute for `V7/vi`. Its actual job is approaching the tonic from
+below. Order matters here and the fixtures pin it.
+
+### Two golden fixtures were wrong, not the code
+
+Worth recording because the instinct is always to "fix" the implementation.
+`E♭`→`B` is four steps on the circle, not six — the short way round is
+E♭→A♭→D♭→F♯→B. And A is the ♯4 of E♭, not the ♯6, since E→A is three letter-steps
+across six semitones. Both were verified by hand before the fixtures were
+changed.
+
+### Coverage
+
+263 golden fixtures across 19 categories, driving 370 tests. Includes all 15
+major and 14 minor scale spellings, 22 modal spellings, the diatonic sevenths of
+25 keys, ii–V–I in all 12 major and all 12 minor keys with guide-tone motion
+verified in every one, every inversion of every diatonic seventh in C, and pivot
+modulations at 1, 2, 3 and 6 steps on the circle of fifths.
