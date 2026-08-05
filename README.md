@@ -108,7 +108,15 @@ src/
     design/        Colour science and design tokens
       color.ts       OKLCH <-> sRGB, gamut clamping, WCAG contrast
       palette.ts     12 pitch-class colours, ground, ink
-    music/         Music core - notes, chords, recognition, analysis (M1)
+    music/         Music core
+      note.ts        Note as letter + alter + octave; midi and pitch class derived
+      interval.ts    Intervals as (diatonic steps, semitones); transposition
+      key.ts         Keys, scales, all modes, circle-of-fifths distance
+      spell.ts       spell(pitchClass, key, harmonicFunction) - used everywhere
+      chord.ts       Abstract chord vs concrete voicing; symbols; diatonic harmony
+      recognise.ts   Ranked candidates with confidence and reasoning
+      analyse.ts     Roman numerals, secondary dominants, subs, modulation
+      __fixtures__/  263 hand-authored golden fixtures
     server/
       auth.ts        Password check and signed session cookie
       db/
@@ -157,8 +165,8 @@ local Postgres for development and tests.
 | M      | Deliverable                                  | Status |
 | ------ | -------------------------------------------- | ------ |
 | **M0** | Repo, DB, migrations, test runner, tokens    | done   |
-| **M1** | Music core + ~200 golden fixtures            | next   |
-| **M2** | Harmonic wheel component                     |        |
+| **M1** | Music core + golden fixtures                 | done   |
+| **M2** | Harmonic wheel component                     | next   |
 | **M3** | MIDI layer                                   |        |
 | **M4** | SRS + seeded skill graph                     |        |
 | **M5** | Session engine                               |        |
