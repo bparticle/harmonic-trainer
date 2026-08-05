@@ -1,0 +1,25 @@
+# Local development database only.
+#
+# Production is Neon; nothing here is deployed. This exists so `npm run test`
+# and `npm run db:migrate` can run against a real Postgres without touching
+# the hosted database or needing network access.
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: harmonic
+      POSTGRES_PASSWORD: harmonic
+      POSTGRES_DB: harmonic
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U harmonic -d harmonic']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:
