@@ -7,10 +7,12 @@
 	import { midi as session } from '$lib/midi/shared.svelte';
 	import type { MidiEvent } from '$lib/midi/cluster';
 	import { playChord, playSequence, startAudio, stopAll } from '$lib/audio/engine';
-	import { markPlayed, pose, toVoicing } from '$lib/session/drill';
+	import { markGathered, markPlayed, pose, toVoicing } from '$lib/session/drill';
 	import { recognise } from '$lib/music/recognise';
 	import { gradeFromPerformance } from '$lib/srs/scheduler';
 	import { parseKey } from '$lib/music/key';
+	import { formatNote } from '$lib/music/note';
+	import { spell } from '$lib/music/spell';
 	import { chordCells, keyOverlay } from '$lib/wheel/overlays';
 	import type { Highlight, WheelGeometry } from '$lib/wheel/geometry';
 	import { cellsFor } from '$lib/wheel/geometry';
@@ -64,6 +66,9 @@
 	let lastMarking = $state<{ correct: boolean; missing: number[]; extra: number[] } | null>(null);
 	let namedChord = $state<string | null>(null);
 	let revealed = $state(false);
+	/** Pitch classes played since this card was posed, for the ones you build up over time. */
+	let gathered = $state<number[]>([]);
+	let showedAnswer = $state(false);
 	let logRatings = $state<Record<string, ReviewRating>>({});
 
 	/** Reviews gathered during this block, flushed when it finishes. */
@@ -99,6 +104,8 @@
 		revealed = false;
 		lastMarking = null;
 		namedChord = null;
+		gathered = [];
+		showedAnswer = false;
 		pending = [];
 		askedAt = performance.now();
 	});
@@ -109,12 +116,21 @@
 		void playQuestion();
 	});
 
+	/** True for the things you play one note after another rather than together. */
+	const isSequential = $derived(
+		(currentCard?.payload as { kind?: string } | undefined)?.kind === 'scale'
+	);
+
 	async function playQuestion() {
 		if (!prompt?.audible) return;
 		await startAudio();
-		if (prompt.direction === 'hear_play' || prompt.direction === 'hear_name') {
-			await playChord(prompt.audible, 1.9);
-		}
+		/*
+		 * A scale is not a chord. Sounding all seven notes at once produced a tone
+		 * cluster nobody could identify, on the gentlest card in the app — and
+		 * then demanded all seven back simultaneously, which is not playable.
+		 */
+		if (isSequential) await playSequence(prompt.audible, 0.4);
+		else await playChord(prompt.audible, 1.9);
 		askedAt = performance.now();
 	}
 
@@ -131,7 +147,16 @@
 		if (!prompt || prompt.answerWith !== 'play' || answered || !currentCard) return;
 
 		const expected = (currentCard.payload as { answerPitchClasses: number[] }).answerPitchClasses;
-		const marking = markPlayed(toVoicing(expected), chord.notes);
+
+		let marking;
+		if (isSequential) {
+			// Built up over time: the notes arrive one at a time, so they are
+			// gathered rather than compared as a single handful.
+			gathered = [...new Set([...gathered, ...chord.notes.map((n) => ((n % 12) + 12) % 12)])];
+			marking = markGathered(expected, gathered);
+		} else {
+			marking = markPlayed(toVoicing(expected), chord.notes);
+		}
 		lastMarking = marking;
 
 		if (marking.correct) {
@@ -158,9 +183,38 @@
 		answered = false;
 		revealed = false;
 		lastMarking = null;
+		gathered = [];
+		showedAnswer = false;
 		cardIndex = cardIndex + 1;
 		askedAt = performance.now();
 	}
+
+	/**
+	 * Give up and be shown it.
+	 *
+	 * Not the same as skipping: you see the notes, so the next time round is a
+	 * real attempt rather than another blank. It still counts as needing help,
+	 * which is exactly what the scheduler should know.
+	 */
+	function showAnswer() {
+		if (!currentCard || showedAnswer) return;
+		showedAnswer = true;
+		record('again', false);
+	}
+
+	/** Note names for the current answer, in the key you are in. */
+	const answerNotes = $derived.by(() => {
+		const payload = currentCard?.payload as
+			| { answerPitchClasses?: number[]; detail?: string }
+			| undefined;
+		if (!payload?.answerPitchClasses) return [];
+		return payload.answerPitchClasses.map((pc) => formatNote(spell(pc, context), { unicode: true }));
+	});
+
+	/** What is still missing, as note names rather than a bare count. */
+	const missingNotes = $derived(
+		(lastMarking?.missing ?? []).map((pc) => formatNote(spell(pc, context), { unicode: true }))
+	);
 
 	function skipCard() {
 		if (currentCard && !answered) record('again', false);
@@ -414,13 +468,22 @@
 					{/if}
 				</div>
 
-				{#if lastMarking && !lastMarking.correct}
+				{#if showedAnswer}
+					<p class="text-ink-muted font-display text-xl">{answerNotes.join('  ')}</p>
+				{:else if lastMarking && !lastMarking.correct}
+					<!-- Names, not counts: "missing 4" tells you nothing you can act on. -->
 					<p class="text-ink-dim font-mono text-xs">
-						{lastMarking.missing.length ? `missing ${lastMarking.missing.length}` : ''}
-						{lastMarking.extra.length ? `· ${lastMarking.extra.length} extra` : ''}
+						{missingNotes.length ? `still need ${missingNotes.join(' ')}` : ''}
+						{lastMarking.extra.length ? ` · ${lastMarking.extra.length} not in it` : ''}
 					</p>
 				{:else if answered}
 					<p class="font-mono text-xs" style="color: var(--pc-5)">yes</p>
+				{/if}
+
+				{#if isSequential && gathered.length && !answered}
+					<p class="text-ink-dim font-mono text-[0.7rem]">
+						{gathered.length} of {answerNotes.length} so far
+					</p>
 				{/if}
 
 				<Wheel {config} active={keyView.pitchClasses} degrees={keyView.degrees} {highlights}
@@ -434,8 +497,13 @@
 						>
 					{/if}
 					<button
+						class="border-ground-line hover:border-ink-dim rounded-lg border px-4 py-2.5 font-mono text-xs transition-colors"
+						onclick={showAnswer}
+						disabled={showedAnswer}>show me</button
+					>
+					<button
 						class="text-ink-dim hover:text-ink px-4 py-2.5 font-mono text-xs transition-colors"
-						onclick={skipCard}>skip this one</button
+						onclick={skipCard}>{showedAnswer ? 'next' : 'skip this one'}</button
 					>
 				</div>
 			</section>
@@ -448,12 +516,14 @@
 		{/if}
 
 		<footer class="mt-6 flex items-center justify-between gap-4">
+			<!-- Wide enough to play a scale in one hand without running out of
+			     keyboard, which 25 keys was not. -->
 			<Keyboard
 				lit={session.live}
 				onnoteon={(n) => virtual('noteon', n)}
 				onnoteoff={(n) => virtual('noteoff', n)}
-				count={25}
-				showLabels={false}
+				from={48}
+				count={29}
 			/>
 		</footer>
 
