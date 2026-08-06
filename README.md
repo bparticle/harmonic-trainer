@@ -197,12 +197,29 @@ local Postgres for development and tests.
 | **M2** | Harmonic wheel component                     | done   |
 | **M3** | MIDI layer                                   | done   |
 | **M4** | SRS + seeded skill graph                     | done   |
-| **M5** | Session engine                               | next   |
-| **M6** | Vault, blind-spot report, transfer detection |        |
-| **M7** | Backing tracks and play-along                |        |
+| **M5** | Session engine                               | done   |
+| **M6** | Vault, blind-spot report, transfer detection | later  |
+| **M7** | Backing tracks and play-along                | done   |
 | **M8** | Songwriting mode and data export             |        |
 
 `DECISIONS.md` records every non-obvious choice and why it was made.
+
+---
+
+## Playing along
+
+**Play along** generates a rhythm section from a chord chart: walking bass,
+brushed drums, and comping that is off by default. Nothing is recorded — the
+line and the pattern are computed from the chart — so every form plays in all
+twelve keys at any tempo without a single audio file existing.
+
+Charts are stored as Roman numerals (`I7 · IV7 · V7`) and resolved into a key at
+the last moment, which is what makes "the same blues in E♭" a parameter rather
+than a second chart. Tap a bar to loop it and another to stretch the loop out;
+tempo moves under a running track because every event is scheduled in musical
+time rather than seconds.
+
+The same rhythm section, with fewer knobs, is the "Apply it" block of a session.
 
 ---
 
@@ -212,19 +229,11 @@ local Postgres for development and tests.
 npm run db:seed
 ```
 
-Seeds 19 skills, 5 chord charts and 3024 cards — every skill, in all twelve
-keys, across each direction that item can be asked in.
+Seeds the skeleton only: the skills and the five chord charts. There is no card
+bank and no simulated history, and both absences are deliberate — see
+`DECISIONS.md`. Cards are created a rung at a time as the ladder is climbed, so
+a new account starts with the C major scale and nothing else.
 
-```bash
-npm run db:seed -- --history
-```
-
-Adds four weeks of simulated practice so the progress views have something to
-show during development. It is deliberately uneven: C, F, G and B♭ come out
-around 86% with fast answers, D and E♭ around 64%, the far side of the wheel
-below 50% and slow, and the minor keys untouched. A blind-spot report over
-uniform data looks like it works when it does not.
-
-`--reset` clears the generated rows first. Re-seeding without it matches
-existing cards by identity, so editing the curriculum never orphans review
-history.
+`--reset` clears every generated row first and puts the ladder back at C.
+Re-seeding without it matches existing rows by identity, so editing the
+curriculum never orphans review history.

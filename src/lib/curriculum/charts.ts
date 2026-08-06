@@ -1,4 +1,8 @@
+import type { BarChord } from '$lib/audio/bass';
+import { formatChord, type AbstractChord } from '$lib/music/chord';
+import { key as makeKey, type Key } from '$lib/music/key';
 import type { ChartStyle } from '$lib/server/db/schema';
+import { chordFromNumeral } from './progressions';
 
 /**
  * The application vehicles, as chord grids.
@@ -98,4 +102,84 @@ export const CHARTS: ChartSeed[] = [
 
 export function chartBySlug(slug: string): ChartSeed | undefined {
 	return CHARTS.find((c) => c.slug === slug);
+}
+
+// ---------------------------------------------------------------------------
+// Putting a chart into a key
+// ---------------------------------------------------------------------------
+
+/** One bar as it will be read and played. */
+export type ChartBar = {
+	/** Bar number from one, so it can be said out loud. */
+	number: number;
+	/** The chords in this bar, with their numerals kept for the analysis view. */
+	chords: {
+		numeral: string;
+		symbol: string;
+		chord: AbstractChord;
+		beats: number;
+	}[];
+};
+
+export type RealisedChart = {
+	slug: string;
+	name: string;
+	style: ChartStyle;
+	keyCenter: string;
+	defaultBpm: number;
+	notes: string;
+	/** Rows of bars, as printed. */
+	rows: ChartBar[][];
+	/** The same bars flattened, which is what the players consume. */
+	bars: BarChord[];
+	beatsPerBar: number;
+};
+
+/**
+ * Resolve a numeral grid into one key.
+ *
+ * A bar holds one chord for the whole bar, or two for half each — which is how
+ * charts have always been written, and enough for every form here. The minor
+ * forms are read in aeolian so that `i` and `iv` come out minor without every
+ * numeral having to be spelled with an accidental.
+ */
+export function realiseChart(seed: ChartSeed, keyName: string, beatsPerBar = 4): RealisedChart {
+	const minor = seed.style === 'minor_blues' || seed.style === 'modal_vamp';
+	const k: Key = minor ? makeKey(keyName.replace(/m$/, ''), 'aeolian') : makeKey(keyName);
+
+	const bars: BarChord[] = [];
+	let number = 0;
+
+	const rows = seed.grid.map((row) =>
+		row.map((cell) => {
+			number++;
+			const numerals = cell.trim().split(/\s+/);
+			const share = beatsPerBar / numerals.length;
+
+			const chords = numerals.map((numeral) => {
+				const built = chordFromNumeral(numeral, k);
+				bars.push({ chord: built, beats: share });
+				return {
+					numeral,
+					symbol: formatChord(built),
+					chord: built,
+					beats: share
+				};
+			});
+
+			return { number, chords };
+		})
+	);
+
+	return {
+		slug: seed.slug,
+		name: seed.name,
+		style: seed.style,
+		keyCenter: keyName,
+		defaultBpm: seed.defaultBpm,
+		notes: seed.notes,
+		rows,
+		bars,
+		beatsPerBar
+	};
 }

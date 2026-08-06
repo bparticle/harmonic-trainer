@@ -3,6 +3,7 @@
 	import ChordSymbol from '$lib/components/ChordSymbol.svelte';
 	import Keyboard from '$lib/components/Keyboard.svelte';
 	import Wheel from '$lib/wheel/Wheel.svelte';
+	import BackingControls from '$lib/components/BackingControls.svelte';
 	import Timer from '$lib/session/Timer.svelte';
 	import { midi as session } from '$lib/midi/shared.svelte';
 	import type { MidiEvent } from '$lib/midi/cluster';
@@ -425,10 +426,11 @@
 					if it comes. If it does not, play anyway.
 				</p>
 				<Wheel {config} active={keyView.pitchClasses} degrees={keyView.degrees} {highlights}
-					lit={session.live.map((n) => n % 12)} size={380} interactive={false} />
-				<p class="text-ink-dim font-mono text-xs">
-					Backing tracks arrive in M7; for now this is you and a wheel.
-				</p>
+					lit={session.live.map((n) => n % 12)} size={300} interactive={false} />
+
+				{#if plan}
+					<BackingControls keyName={plan.keyCenter} />
+				{/if}
 			</section>
 
 		<!-- ---------------------------------------------------------------- -->

@@ -972,3 +972,65 @@ cannot get.
 
 Feedback names the notes now rather than counting them. "Missing 4" tells you
 nothing you can act on; "still need D E F G A B" is an instruction.
+
+---
+
+## M7 — the rhythm section
+
+### Generated, not recorded
+
+Twelve keys times five forms times every tempo is not a set of audio files
+anyone is going to make, and a play-along that only exists in two keys teaches
+you those two keys. Everything is computed from the chart, which is why
+transposition is a parameter here rather than a feature request.
+
+### Musical time, not seconds
+
+Every event is scheduled as `{'4n': 3.5}` — three and a half quarter notes —
+rather than as a number of seconds. Musical time rescales when the tempo
+changes; seconds do not. That single choice is why the tempo control can move
+while the track is playing instead of stopping and rebuilding it.
+
+### The bass walks by stepping, not by aiming
+
+The first version placed the approach note first and then aimed each middle beat
+at it by interpolation. On a bar of one chord that produces `C3 B2 C3 B2`: the
+line rocking on the spot. It also repeated notes, because the approach was
+computed against the root rather than against wherever the line had got to.
+
+Now the direction is decided first, the middle beats step through the chord
+tones in that direction, and the approach is recomputed against the note
+actually reached. `C7` gives `C3 E3 G3 F♯3` into F.
+
+Deterministic throughout — no randomness anywhere. A bass player who improvised
+something different every four bars would be a menace to practise against, and
+a line you cannot assert is a line you cannot test.
+
+### Comping is off by default
+
+The whole point of practising over a backing is usually to comp for yourself.
+Two people voicing the same chord is one too many, so it starts muted and the
+bass carries the root either way. Muting is a gain, not a reschedule, so it is
+instant.
+
+### Draw is for drawing
+
+Tone's `Draw` queue runs on animation frames, so it stops completely when the
+tab is not compositing. The first version routed *everything* through it: the
+playing flag, the count-in ending, and the chart highlight. Two of those were
+wrong. Pressing play left the button reading "Play", and with the tab in the
+background the count-in click would carry on for as long as you were away.
+
+Anything with a consequence is now scheduled on the transport — the audio clock,
+which does not care whether anything is on screen. Only the bar highlight, which
+is purely cosmetic, is left in `Draw`.
+
+This is the third time in this project a bug has come from state flowing through
+the wrong clock: the chord-detection flush loop was on rAF, and the MIDI restore
+effect wrote to state it also read. The pattern is worth naming.
+
+### `°` and `°7` are different chords
+
+`chordFromNumeral` mapped both to a half-diminished seventh, which quietly turned
+the passing diminished in bar 6 of the jazz blues into a chord with a different
+function. A bare `°` is the triad; `°7` is the fully diminished seventh.

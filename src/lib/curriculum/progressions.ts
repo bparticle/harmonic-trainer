@@ -228,6 +228,9 @@ export function chordFromNumeral(numeral: string, k: Key): AbstractChord {
 	const has = (s: string) => suffix.includes(s);
 
 	if (has('ø')) return chord(root, 'min7b5', [7]);
+	// °7 is the fully diminished seventh; a bare ° is only the triad. Checked in
+	// this order because the diminished seventh contains the other one.
+	if (has('°7') || has('dim7')) return chord(root, 'dim7', []);
 	if (has('°')) return chord(root, 'min7b5', []);
 	if (has('maj7')) return chord(root, 'maj', [7]);
 	if (has('7')) return isMinor ? chord(root, 'min', [7]) : chord(root, 'dom', []);
