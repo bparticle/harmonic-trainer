@@ -66,6 +66,21 @@ export function parsePrefs(input: unknown): Prefs {
 	};
 }
 
+/**
+ * The remembered MIDI device, by name.
+ *
+ * Names come from the driver, so they are trusted only as far as being a
+ * reasonable length string; `null` clears the preference.
+ */
+export function parseDeviceName(input: unknown): string | null {
+	if (input === null) return null;
+	if (typeof input !== 'string') throw new Error('midiDevice must be a string or null');
+	const name = input.trim();
+	if (name.length === 0) return null;
+	if (name.length > 200) throw new Error('midiDevice name is implausibly long');
+	return name;
+}
+
 export function parseColorMap(input: unknown): ColorMap {
 	if (!Array.isArray(input) || input.length !== 12) {
 		throw new Error('Colour map must be twelve colours');

@@ -11,6 +11,7 @@
 	import { recognise } from '$lib/music/recognise';
 	import { gradeFromPerformance } from '$lib/srs/scheduler';
 	import { parseKey } from '$lib/music/key';
+	import { focusById } from '$lib/curriculum/focus';
 	import { chordCells, keyOverlay } from '$lib/wheel/overlays';
 	import type { Highlight, WheelGeometry } from '$lib/wheel/geometry';
 	import { cellsFor } from '$lib/wheel/geometry';
@@ -277,6 +278,12 @@
 	const progress = $derived(
 		plan ? `${Math.min(index + 1, plan.blocks.length)} of ${plan.blocks.length}` : ''
 	);
+
+	// What you asked to work on, echoed back — a session that does not say what
+	// it is about is hard to tell apart from one that decided at random.
+	const focusLabel = $derived(
+		focusById((plan as { focusId?: string | null } | null)?.focusId)?.label ?? null
+	);
 </script>
 
 <svelte:head><title>Session · Harmonic Trainer</title></svelte:head>
@@ -305,8 +312,8 @@
 		<header class="mb-5 flex items-center justify-between gap-4">
 			<div class="flex items-baseline gap-3">
 				<h1 class="font-display text-ink text-lg font-semibold tracking-tight">{block.title}</h1>
-				<span class="text-ink-dim font-mono text-[0.65rem] tracking-widest uppercase">
-					{progress} · {plan?.keyCenter}
+				<span class="text-ink-muted font-mono text-[0.7rem]">
+					{progress} · {plan?.keyCenter}{focusLabel ? ` · ${focusLabel}` : ''}
 				</span>
 			</div>
 			<div class="flex items-center gap-4">

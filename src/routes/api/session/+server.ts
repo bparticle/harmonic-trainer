@@ -49,7 +49,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	if (action === 'start') {
 		const length = Number(body.lengthMinutes ?? 20);
 		if (![10, 20, 35].includes(length)) error(400, 'Sessions are 10, 20 or 35 minutes');
-		return json(await startOrResume(length as SessionLength));
+		return json(
+			await startOrResume({
+				lengthMinutes: length as SessionLength,
+				preferredKey: typeof body.key === 'string' && body.key ? body.key : null,
+				focusId: typeof body.focusId === 'string' && body.focusId ? body.focusId : null
+			})
+		);
 	}
 
 	const sessionId = typeof body.sessionId === 'string' ? body.sessionId : null;

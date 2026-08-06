@@ -104,6 +104,22 @@ export class MidiSession {
 		this.#startPolling();
 	}
 
+	/**
+	 * The device to prefer when several are plugged in, remembered by *name*.
+	 *
+	 * Web MIDI ids are opaque and not stable across browser restarts or replugs,
+	 * so an id is no use for "always use my Matriarch". The name is, and it is
+	 * also the only part a person recognises.
+	 */
+	preferredName = $state<string | null>(null);
+
+	/** Called when the choice changes, so it can be persisted. */
+	#onDeviceChosen: ((name: string) => void) | null = null;
+
+	onDeviceChosen(handler: ((name: string) => void) | null) {
+		this.#onDeviceChosen = handler;
+	}
+
 	#refreshDevices() {
 		if (!this.#access) return;
 
@@ -117,12 +133,23 @@ export class MidiSession {
 		});
 		this.devices = found;
 
-		// Keep listening to whatever is chosen; otherwise take the first thing
-		// plugged in, so the common case needs no interaction at all.
-		if (this.selectedId && !found.some((d) => d.id === this.selectedId)) {
-			this.selectedId = null;
+		/*
+		 * Choosing, in order of how much it was asked for:
+		 *   1. the device already selected, if it is still there
+		 *   2. the remembered name — this is what survives a replug or a reload
+		 *   3. whatever is plugged in
+		 *
+		 * The previous version dropped straight to the first device whenever the
+		 * selected id went missing, so any hot-plug event silently moved you onto
+		 * another port.
+		 */
+		const stillPresent = found.some((d) => d.id === this.selectedId);
+		if (!stillPresent) {
+			const remembered = this.preferredName
+				? found.find((d) => d.name === this.preferredName)
+				: undefined;
+			this.selectedId = remembered?.id ?? found[0]?.id ?? null;
 		}
-		if (!this.selectedId && found.length) this.selectedId = found[0].id;
 
 		this.#access.inputs.forEach((input) => {
 			input.onmidimessage = input.id === this.selectedId ? (e) => this.#receive(e) : null;
@@ -131,6 +158,11 @@ export class MidiSession {
 
 	select(id: string) {
 		this.selectedId = id;
+		const chosen = this.devices.find((d) => d.id === id);
+		if (chosen) {
+			this.preferredName = chosen.name;
+			this.#onDeviceChosen?.(chosen.name);
+		}
 		this.#refreshDevices();
 	}
 

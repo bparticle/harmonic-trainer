@@ -41,6 +41,28 @@
 		midi.latencyOffsetMs = data.settings.prefs.midiLatencyOffsetMs;
 	});
 
+	/*
+	 * Which keyboard to prefer, remembered across reloads and replugs.
+	 *
+	 * The name is stored rather than the id: Web MIDI ids are opaque and not
+	 * stable, so an id cannot express "always use the Matriarch". Writing back
+	 * happens whenever the choice changes, which is the only time it can.
+	 */
+	$effect(() => {
+		midi.preferredName = data.settings.midiDevice;
+	});
+
+	$effect(() => {
+		midi.onDeviceChosen((name) => {
+			void fetch('/api/settings', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ midiDevice: name })
+			});
+		});
+		return () => midi.onDeviceChosen(null);
+	});
+
 	// The login screen is the one place without the shell.
 	const bare = $derived(page.url.pathname.startsWith('/login'));
 </script>

@@ -824,3 +824,56 @@ menu, and paired with a retry.
 Permission is also checked through the Permissions API before falling back to
 our own stored flag — it covers access granted before this app started
 remembering, and it survives clearing site data that the flag does not.
+
+---
+
+## Agency, and remembering the keyboard
+
+### The device preference was designed and never wired
+
+`settings.midi_device` has existed since M0 and nothing ever wrote to it, so the
+chosen port was only ever in memory — and `#refreshDevices` dropped straight to
+the first device whenever the selected id went missing, which any hot-plug event
+causes. Choosing the Matriarch and then navigating quietly moved you to whatever
+port enumerated first.
+
+It is now remembered **by name**, not by id. Web MIDI ids are opaque and not
+stable across restarts or replugs, so an id cannot express "always use the
+Matriarch". The name can, and it is also the only part a person recognises.
+Selection order is: the device already selected if it is still present, then the
+remembered name, then whatever is plugged in.
+
+### One button, unless you have a plan
+
+The brief asks for one button and no menus, and that is right for the days when
+you just want to sit down and play. It is wrong on the days when you already
+know what you want to work on — being overruled by a scheduler is how a good
+practice tool ends up unused.
+
+So the app still decides by default, and now gets out of the way if asked. A key
+can be taken from the wheel on the home screen; a focus area narrows the drills.
+Both are optional and neither changes what gets recorded, so steering costs
+nothing in what the app remembers.
+
+Two rules keep it coherent:
+
+- **A chosen focus narrows the drills, never the warm-up.** The warm-up has its
+  own material by design, and a warm-up that is not a warm-up is just another
+  drill with a misleading name.
+- **The new idea follows the focus.** Asking to practise ii–V–I and then being
+  taught something about quartal voicings would make the choice feel decorative.
+  Choosing ii–V–I in E♭ now yields the guide-tone atom, in E♭.
+
+`chosenKey` on the plan records whether the key was *honoured*, not merely
+requested — asking for a key that has no material should not read as having
+chosen it.
+
+### A session that does not say what it is about
+
+The header now reads `1 of 6 · Eb · ii–V–I`. Without it, a session you steered
+is indistinguishable from one that picked at random, which is most of what made
+practice mode confusing.
+
+The home screen also lists the six blocks and their lengths before you start.
+Knowing what the next twenty minutes contains is not a menu — it is the
+difference between a plan and a surprise.
