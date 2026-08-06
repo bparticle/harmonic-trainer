@@ -95,6 +95,7 @@ npm run dev
 | `npm run db:generate` | Generate migration SQL from the schema |
 | `npm run db:migrate`  | Apply pending migrations               |
 | `npm run db:studio`   | Drizzle Studio                         |
+| `npm run db:seed`     | Seed the curriculum (3024 cards)       |
 | `npm run db:up`       | Start the local dev Postgres in Docker |
 | `npm run db:down`     | Stop it                                |
 
@@ -124,6 +125,13 @@ src/
       rotation.svelte.ts  Drag momentum, friction, detent snapping
       overlays.ts    Key, chord neighbours, brightness axis, modulation
       Wheel.svelte   Parametric SVG; knows no music, only cells
+    curriculum/    The syllabus, as data
+      skills.ts      The L0-L11 graph plus the application track
+      cards.ts       Card generation from (skill, key, item, direction)
+      charts.ts      Blues, minor blues, rhythm changes, modal vamps
+      mastery.ts     Unlock gating; needs transfer, not just accuracy
+    srs/
+      scheduler.ts   FSRS via ts-fsrs; direction and cold-key weighting
     midi/          Web MIDI, clustering, take recording
       cluster.ts     Note-ons gathered into chord events; pedal handling
       smf.ts         Standard MIDI File encode and decode
@@ -188,10 +196,35 @@ local Postgres for development and tests.
 | **M1** | Music core + golden fixtures                 | done   |
 | **M2** | Harmonic wheel component                     | done   |
 | **M3** | MIDI layer                                   | done   |
-| **M4** | SRS + seeded skill graph                     | next   |
-| **M5** | Session engine                               |        |
+| **M4** | SRS + seeded skill graph                     | done   |
+| **M5** | Session engine                               | next   |
 | **M6** | Vault, blind-spot report, transfer detection |        |
 | **M7** | Backing tracks and play-along                |        |
 | **M8** | Songwriting mode and data export             |        |
 
 `DECISIONS.md` records every non-obvious choice and why it was made.
+
+---
+
+## Seeding
+
+```bash
+npm run db:seed
+```
+
+Seeds 19 skills, 5 chord charts and 3024 cards — every skill, in all twelve
+keys, across each direction that item can be asked in.
+
+```bash
+npm run db:seed -- --history
+```
+
+Adds four weeks of simulated practice so the progress views have something to
+show during development. It is deliberately uneven: C, F, G and B♭ come out
+around 86% with fast answers, D and E♭ around 64%, the far side of the wheel
+below 50% and slow, and the minor keys untouched. A blind-spot report over
+uniform data looks like it works when it does not.
+
+`--reset` clears the generated rows first. Re-seeding without it matches
+existing cards by identity, so editing the curriculum never orphans review
+history.

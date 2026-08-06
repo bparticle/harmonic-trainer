@@ -537,3 +537,85 @@ The rootless reasoning existed, but only in the side panel, while the headline
 showed a bare chord symbol. If the answer names a root that was never sounded,
 that belongs next to the answer — so the display now carries a one-line caveat
 ("rootless — no B♭ played", "stacked fourths, named by its shape").
+
+---
+
+## M4 — spaced repetition and the curriculum
+
+### Short-term scheduling is off, so `relearning` never happens
+
+FSRS ships with sub-day learning steps (1 minute, 10 minutes) for cramming
+something in a single sitting. This app practises once a day, so a card due in
+ten minutes means nothing to it — within-session repetition is the session
+engine's job, not the scheduler's.
+
+Leaving it on also meant persisting a `learning_steps` counter, and getting that
+wrong pinned every card at the ten-minute step forever, which is exactly the
+class of silent bug the library was chosen to avoid — reintroduced in my own
+translation layer. Turning the feature off removed the counter and the bug
+together.
+
+Consequence worth recording: with no relearning steps, a lapse keeps the card in
+`review` with a collapsed interval rather than moving it to `relearning`. The
+enum value exists in the schema and will never occur.
+
+Fuzz is off too, for a different reason: it exists to stop thousand-card decks
+bunching reviews onto one day, which is not a problem here, and turning it off
+makes intervals deterministic so the tests can assert real numbers.
+
+### Direction weighting is selection, not scheduling
+
+Play-to-name is the weakest link and the brief asks for it to be weighted up.
+That weight is applied when *choosing* which due card to ask, never to the
+intervals themselves. Distorting FSRS's output would corrupt its model of your
+memory; changing which card gets picked from the due pile does not.
+
+Cold keys get a similar nudge, bounded so that a badly overdue card in a
+comfortable key still beats a barely-due one in a neglected key.
+
+### Grades come from latency, not self-report
+
+Correctness comes from the pitch classes played. The grade then comes from how
+long it took — under 1.5s is `easy`, under 4s is `good`, slower is `hard`.
+Latency is the measurement the brief cares about, and it is more honest than a
+self-rating nobody gives accurately under time pressure. The block 6 self-rating
+still refines it.
+
+### Cards carry a stable identity so re-seeding does not erase history
+
+A card's identity is a deterministic string built from skill, key, item and
+direction. Re-running the seed matches existing rows instead of inserting
+duplicates and orphaning their reviews. That matters because the curriculum will
+be edited, and edits should not cost you your history.
+
+### Directions are omitted where the question has no answer
+
+A scale has no single chord shape to read off the wheel and name; an inversion
+drill is about where the hands go, not about naming anything. Generating cards
+nobody can answer would quietly poison the accuracy statistics that the mastery
+gate depends on. 3024 cards across the curriculum, unevenly split across the
+four directions for exactly this reason.
+
+### Mastery gates on transfer, not just accuracy
+
+Three conditions: at least twelve reviews, 85% accuracy, and *at least one
+unprompted appearance in free play*. The third is the one that matters — a thing
+is not learned because it was answered correctly twelve times in a drill, it is
+learned when it turns up in playing nobody asked for. The brief calls that the
+app's real scoreboard, so it belongs in the gate rather than in a report.
+
+### Seeding: batched, and honest about the learner
+
+Row-at-a-time inserts against Neon meant one network round trip per row, and
+3024 cards took over twenty minutes. Chunks of 500 brought a full reset with
+four weeks of history down to 23 seconds.
+
+The simulated history is deliberately uneven — C, F, G and B♭ practised hard,
+the far side of the wheel barely touched, minor keys not at all — because a
+blind-spot report over uniform data looks like it works when it does not.
+
+A first attempt at the rating distribution banded the roll so that a strong key
+could never miss, and every warm key came out at a suspicious 100%. Ability is
+now the cutoff for `again` directly, so the seeded accuracies land where they
+were meant to: 85–87% warm, 64% lukewarm, 37–52% cold, with latency tracking the
+same split.
