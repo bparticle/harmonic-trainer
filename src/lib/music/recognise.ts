@@ -126,19 +126,22 @@ const TEMPLATES: Template[] = TEMPLATE_SPECS.map((spec) => {
 });
 
 /**
- * Shapes that are idiomatic *without* their root — the left-hand voicings that
- * a jazz pianist plays thousands of times. Expressed as the set of degrees
- * remaining once the root is gone.
+ * Shapes that are idiomatic *without* their root — the left-hand voicings a
+ * jazz pianist plays thousands of times. Expressed as the set of degrees
+ * remaining once the root is gone; the A and B forms differ in how they are
+ * stacked, not in what they contain, so each set appears once.
+ *
+ * Every one of them carries a ninth or a thirteenth, and that is the point. A
+ * bare 3–5–7 is not a rootless voicing, it is a triad: every minor triad is the
+ * 3–5–7 of a major seventh a major third below it, so Dm would report as B♭∆
+ * and Am as F∆. An extension is the evidence that the chord is genuinely bigger
+ * than what is under the hand and the root has been dropped on purpose.
  */
 const ROOTLESS_SHAPES: number[][] = [
-	[3, 5, 7, 9], // form A
-	[7, 9, 3, 5], // form B
-	[3, 13, 7, 9], // form A on a dominant
-	[7, 9, 3, 13], // form B on a dominant
+	[3, 5, 7, 9],
+	[3, 7, 9, 13],
 	[3, 7, 9],
-	[7, 3, 13],
-	[3, 5, 7],
-	[7, 3, 5]
+	[3, 7, 13]
 ];
 
 function isRootlessShape(degrees: number[]): boolean {

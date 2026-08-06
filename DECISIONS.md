@@ -513,3 +513,27 @@ read a key off the real object.
 What rotation does *not* do is transpose what you are playing, and that is
 correct: your hands are on the same three keys, so it is still Bm. The shape
 tracks the notes.
+
+### A bare 3–5–7 is a triad, not a rootless voicing
+
+Found by playing A–D–F and being told it was B♭∆. It is, technically: D, F and A
+are the 3rd, 5th and 7th of B♭ major seventh. But **every** minor triad is the
+rootless 3–5–7 of a major seventh a major third below it — Dm is B♭∆, Em is C∆,
+Am is F∆ — so the rootless bonus was firing on every minor triad anyone played
+and naming a note that was not there.
+
+The idiom shapes now all carry a ninth or a thirteenth. An extension is the
+evidence that the chord is genuinely bigger than what is under the hand and the
+root was dropped deliberately; three notes stacked in thirds are just three
+notes stacked in thirds. E–G–B♭–D still reads as a rootless C9, because it has
+the ninth.
+
+The relationship is real and still surfaces, several places down the ranking,
+which is where it belongs.
+
+### A name that includes a note you did not play has to say so
+
+The rootless reasoning existed, but only in the side panel, while the headline
+showed a bare chord symbol. If the answer names a root that was never sounded,
+that belongs next to the answer — so the display now carries a one-line caveat
+("rootless — no B♭ played", "stacked fourths, named by its shape").

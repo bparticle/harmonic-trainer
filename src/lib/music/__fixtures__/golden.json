@@ -552,6 +552,26 @@
 			"contains": ["Am7"]
 		},
 		{
+			"why": "A D F is a second-inversion Dm, not a rootless Bbmaj7 — a bare 3-5-7 is just a triad.",
+			"pitches": [57, 62, 65],
+			"top": "Dm"
+		},
+		{
+			"why": "No minor triad should report as the rootless major seventh a third below it.",
+			"pitches": [52, 55, 59],
+			"top": "Em"
+		},
+		{
+			"why": "A plain major triad stays a major triad.",
+			"pitches": [48, 52, 55],
+			"top": "C"
+		},
+		{
+			"why": "But add a ninth and the rootless reading earns its place again.",
+			"pitches": [52, 55, 58, 62],
+			"top": "C9"
+		},
+		{
 			"why": "Two notes are not a chord.",
 			"pitches": [48, 52],
 			"expectEmpty": true
