@@ -9,7 +9,7 @@
 	import { key as makeKey, parseKey } from '$lib/music/key';
 	import { formatNote } from '$lib/music/note';
 	import { spell } from '$lib/music/spell';
-	import { chordCells } from '$lib/wheel/overlays';
+	import { chordCells, keyOverlay } from '$lib/wheel/overlays';
 	import { mod12, pitchClassAt, type Highlight, type WheelGeometry } from '$lib/wheel/geometry';
 
 	/*
@@ -166,8 +166,19 @@
 	}
 
 	const highlights = $derived.by((): Highlight[] => {
-		if (!current || !revealed || !current.candidates.length) return [];
-		return [{ cells: chordCells(current.candidates[0].chord, config, GEOMETRY), strength: 1 }];
+		// The key's seven notes, so turning the wheel visibly moves something
+		// rather than only relabelling a corner of the screen. The block sits
+		// under the index mark, which is how you read a key off the real object.
+		const shapes: Highlight[] = [
+			{ cells: keyOverlay(context, config, GEOMETRY).scaleCells, strength: 0.45, outline: true }
+		];
+		if (current && revealed && current.candidates.length) {
+			shapes.push({
+				cells: chordCells(current.candidates[0].chord, config, GEOMETRY),
+				strength: 1
+			});
+		}
+		return shapes;
 	});
 
 	const noteNames = $derived(
@@ -282,7 +293,6 @@
 
 			<Wheel
 				{config}
-				{context}
 				active={session.live.map((n) => n % 12)}
 				{highlights}
 				lit={session.live.map((n) => n % 12)}

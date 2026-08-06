@@ -483,3 +483,33 @@ to claim is the number worth tracking.
 quietly dropping `note` and `down`. A distributive version is needed. Caught by
 `svelte-check`, not by the tests, which is a reminder that the type check earns
 its place in the loop.
+
+### The wheel's labels are painted on
+
+Found by playing into it: rotating from C to G♭ silently rewrote F♯ as G♭ across
+every cell, because labels were being spelled against the current key. On a
+physical wheel the labels are paint. Turning it does not relabel anything, and
+neither should this.
+
+`wheelNoteName` spells from distance along the circle of fifths instead — up to
+six fifths clockwise takes sharps, past that it is shorter to come back
+anticlockwise with flats. That yields the conventional set (C D♭ D E♭ E F F♯ G
+A♭ A B♭ B) and never changes.
+
+Key-aware spelling still governs everything else, and must: in G♭ a chord reads
+G♭∆, and the fourth degree is C♭ even though the wheel cell it sits on says B.
+Two different jobs, now two different functions.
+
+A side effect worth keeping: the wheel component no longer imports anything from
+the music core at all. It takes cells, colours and shapes, and draws them.
+
+### Rotating has to change something you can see
+
+Turning the wheel only relabelled a corner of the screen, which read as nothing
+happening. The current key's seven notes are now drawn as a shape on the wheel,
+so the block visibly swings round to sit under the index mark — which is how you
+read a key off the real object.
+
+What rotation does *not* do is transpose what you are playing, and that is
+correct: your hands are on the same three keys, so it is still Bm. The shape
+tracks the notes.

@@ -1,4 +1,5 @@
-import { parseNote, pitchClass } from '$lib/music/note';
+import { ivl, transpose } from '$lib/music/interval';
+import { parseNote, pitchClass, type Note } from '$lib/music/note';
 import type { WheelConfig } from '$lib/settings';
 
 /**
@@ -102,6 +103,36 @@ export function spoke(position: number, config: WheelConfig): number[] {
 	return Array.from({ length: distinctRings(config) }, (_, ring) =>
 		pitchClassAt({ ring, position }, config)
 	);
+}
+
+/**
+ * The wheel's own note names, which never change.
+ *
+ * The labels on a physical wheel are painted on. Turning it does not rewrite
+ * them, so neither should this: re-spelling every cell against the current key
+ * meant rotating from C to G♭ silently rewrote F♯ as G♭ everywhere, which reads
+ * as the object changing under your hands.
+ *
+ * Spelling comes from distance along the circle of fifths instead. Up to six
+ * fifths clockwise takes sharps; past that it is shorter to come back
+ * anticlockwise with flats. That yields the conventional set — C D♭ D E♭ E F F♯
+ * G A♭ A B♭ B — whatever key is in play.
+ *
+ * Key-dependent spelling still belongs everywhere else: a chord symbol in G♭
+ * must read G♭∆, not F♯∆. That is `spell()`'s job, not this one.
+ */
+export function wheelNoteName(pc: number): Note {
+	const cof = cofIndexOf(pc);
+	const C: Note = { letter: 'C', alter: 0, octave: 4 };
+
+	// Down a fifth and up a fourth land on the same pitch class, so both
+	// directions can be walked with an ascending interval.
+	const steps = cof <= 6 ? cof : 12 - cof;
+	const interval = cof <= 6 ? ivl('P5') : ivl('P4');
+
+	let note = C;
+	for (let i = 0; i < steps; i++) note = transpose(note, interval);
+	return { ...note, octave: 4 };
 }
 
 /** Semitones gained by moving inward one ring at the same angle. */

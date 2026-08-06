@@ -1,7 +1,5 @@
 <script lang="ts">
-	import { formatNote, pitchClass } from '$lib/music/note';
-	import { key as makeKey, type Key } from '$lib/music/key';
-	import { spell } from '$lib/music/spell';
+	import { formatNote } from '$lib/music/note';
 	import type { WheelConfig } from '$lib/settings';
 	import {
 		arcPath,
@@ -12,6 +10,7 @@
 		pitchClassAt,
 		ringRadii,
 		shapePolygonPath,
+		wheelNoteName,
 		type Cell,
 		type Highlight,
 		type WheelGeometry
@@ -36,7 +35,6 @@
 
 	let {
 		config,
-		context = makeKey('C'),
 		/** Pitch classes filled with their own colour. */
 		active = [],
 		/** Extra shapes drawn over the wheel. */
@@ -53,7 +51,6 @@
 		onselect
 	}: {
 		config: WheelConfig;
-		context?: Key;
 		active?: number[];
 		highlights?: Highlight[];
 		lit?: number[];
@@ -171,7 +168,8 @@
 					ring,
 					position,
 					pc,
-					name: formatNote(spell(pc, context), { unicode: true }),
+					// Painted on, not re-spelled per key — see wheelNoteName.
+					name: formatNote(wheelNoteName(pc), { unicode: true }),
 					duplicate: isDuplicateRing(ring, config)
 				});
 			}
