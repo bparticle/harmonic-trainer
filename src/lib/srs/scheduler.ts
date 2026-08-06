@@ -177,6 +177,8 @@ export type Schedulable = {
 	cardId: string;
 	direction: CardDirection;
 	keyCenter: string;
+	/** Which skill the card belongs to, so a block can ask for its own material. */
+	skillCode?: string;
 	state: SrsState;
 };
 

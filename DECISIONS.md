@@ -661,3 +661,77 @@ worth memorising and the letter is not.
 On the circle of fifths a diatonic scale is seven contiguous positions, so with
 the dimming in place the key now reads as a single solid block of numbered
 cells — which is the visual map the wheel exists to build.
+
+---
+
+## M5 — the session engine
+
+### Blocks are written as they finish, not at the end
+
+The brief says a session can be abandoned without penalty, and that only means
+anything if nothing was being withheld. Each block posts its own results the
+moment it completes, so walking away halfway keeps everything up to that point.
+Resuming reads the first block with no recorded result.
+
+### A block must not contradict its own instruction
+
+The warm-up says "scale in the right hand, the seven diatonic sevenths
+underneath", and the first version handed it any due `see_play` card — so it
+opened by telling you to warm up with a ii–V–i. Blocks now name the skills they
+draw from, not just the directions.
+
+The same bug had a second half: today's key was chosen from every key present in
+the deck, including the minor centres that only exist because the minor ii–V
+generates them. That landed on C minor and then promised seven diatonic sevenths
+with no key-anchoring material to give. The session key is now chosen only from
+keys the warm-up can actually serve.
+
+### Block 4 always has something to teach
+
+Mastery requires a transfer event; transfer detection is M6. Nothing could ever
+be mastered, so the curriculum sat on L0 forever, and L0 has no atoms — meaning
+the single new idea the whole session is built around was empty every day.
+
+Rather than weaken the gate, atom selection falls back: the current skill is
+asked first, and when it has nothing, the lowest-level skill with an unseen atom
+is used. Ordering never runs ahead of the graph; it only refuses to run out of
+things to say. Transfer counts are read from the real table, which is empty and
+honest rather than stubbed to a convenient number.
+
+### `inArray`, not `= any(...)`
+
+Drizzle expands a JS array into a tuple of placeholders, so
+`where(sql\`id = any(${ids})\`)` produces `= any(($1, $2, $3))`, which Postgres
+rejects. Every 500 the session threw traced back to this. `inArray` is the
+helper that exists for it.
+
+### Reviews and schedules move together or not at all
+
+Recording a batch writes the review rows and advances the FSRS state inside one
+transaction. A half-written batch would leave the scheduler believing a card had
+been reviewed with no review to justify it — drift that nothing in the UI would
+ever reveal.
+
+### The finish screen does not depend on the session still existing
+
+Ending a session clears it from the server's "today" query, so the page
+initially fell through to "no session running" the instant you finished one,
+which reads as though the last twenty minutes had been discarded. The completed
+state is held locally and takes precedence.
+
+### Audio is loaded on demand and synthesised, not sampled
+
+Your piano makes its own sound, so nothing here reproduces what you play — it
+only asks. An FM electric piano is a handful of parameters against tens of
+megabytes of samples, and browsers block audio until a gesture anyway, so Tone.js
+is imported the first time something needs to make a noise rather than on every
+page that might.
+
+The metronome runs on Tone's transport rather than a timer, because a metronome
+that drifts is worse than none.
+
+### Backing tracks are deferred, and the block says so
+
+Block 5 captures and highlights the target device but has no backing loop; that
+is M7. The screen states this rather than leaving you waiting for audio that is
+not coming.

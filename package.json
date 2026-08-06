@@ -28,6 +28,7 @@
 		"@fontsource/ibm-plex-mono": "^5.3.0",
 		"drizzle-orm": "^0.45.2",
 		"pg": "^8.22.0",
+		"tone": "^15.1.22",
 		"ts-fsrs": "^5.4.1"
 	},
 	"devDependencies": {
