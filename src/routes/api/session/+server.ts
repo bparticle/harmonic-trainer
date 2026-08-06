@@ -52,8 +52,14 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		return json(
 			await startOrResume({
 				lengthMinutes: length as SessionLength,
-				preferredKey: typeof body.key === 'string' && body.key ? body.key : null,
-				focusId: typeof body.focusId === 'string' && body.focusId ? body.focusId : null
+				progressionId:
+					typeof body.progressionId === 'string' && body.progressionId
+						? body.progressionId
+						: null,
+				progressionKey:
+					typeof body.progressionKey === 'string' && body.progressionKey
+						? body.progressionKey
+						: null
 			})
 		);
 	}

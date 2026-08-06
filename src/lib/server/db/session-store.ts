@@ -1,23 +1,35 @@
 import { randomUUID } from 'node:crypto';
 import { and, desc, eq, gte, inArray, isNull, sql } from 'drizzle-orm';
 import { db } from './index';
-import { cards, reviews, sessionBlocks, sessions, skills, srsState, transferEvents } from './schema';
+import { cards, reviews, sessionBlocks, sessions, skills, srsState } from './schema';
 import type { BlockType, ReviewRating } from './schema';
 import { initialState, schedule, type Schedulable, type SrsState } from '$lib/srs/scheduler';
-import { evaluate, type SkillStats } from '$lib/curriculum/mastery';
-import { nextSkill } from '$lib/curriculum/mastery';
 import { planSession, resumeIndex, type SessionLength, type SessionPlan } from '$lib/session/plan';
-import { chooseAtomWithFallback } from '$lib/session/atoms';
-import { skillByCode } from '$lib/curriculum/skills';
-import { skillsInFocus } from '$lib/curriculum/focus';
+import {
+	FIRST_POSITION,
+	positionOf,
+	reachedSoFar,
+	rungById,
+	stageByKey,
+	type Position
+} from '$lib/curriculum/ladder';
+import {
+	cardsForProgression,
+	cardsForReached,
+	rungSkillCode,
+	type GeneratedCard
+} from '$lib/curriculum/cards';
+import { progressionById } from '$lib/curriculum/progressions';
+import { loadSettings, saveSettings } from './settings';
 
 /**
  * Reading and writing sessions.
  *
  * Blocks are written as they finish rather than at the end, so a session that
- * is abandoned halfway still leaves everything up to that point on record. The
- * brief is explicit that abandoning costs nothing, and that only works if
- * nothing was being held back.
+ * is abandoned halfway still leaves everything up to that point on record.
+ *
+ * Cards are created here too, lazily: reaching a rung is what brings its cards
+ * into existence. Nothing is ever due that has not been introduced.
  */
 
 export type ActiveSession = {
@@ -25,12 +37,92 @@ export type ActiveSession = {
 	startedAt: Date;
 	plan: SessionPlan;
 	completedBlocks: BlockType[];
-	/** Index of the block to show. Equal to the block count when finished. */
 	resumeAt: number;
 };
 
-/** Everything the planner needs, gathered in as few queries as possible. */
-async function gatherPlanningData() {
+/** Where the ladder currently is, from settings, falling back to the very start. */
+export async function currentPosition(): Promise<Position> {
+	const settings = await loadSettings();
+	return (
+		positionOf(settings.prefs.ladderKey, settings.prefs.ladderRung) ?? FIRST_POSITION
+	);
+}
+
+/**
+ * Create any cards for places already reached that do not exist yet.
+ *
+ * Idempotent through the identity string, so it can be called on every session
+ * start without duplicating anything.
+ */
+export async function ensureCards(generated: GeneratedCard[]): Promise<number> {
+	if (generated.length === 0) return 0;
+
+	const skillRows = await db.select({ id: skills.id, code: skills.code }).from(skills);
+	const skillIds = new Map(skillRows.map((s) => [s.code, s.id]));
+
+	const existing = await db.select({ payload: cards.payloadJson }).from(cards);
+	const known = new Set(
+		existing
+			.map((row) => (row.payload as { identity?: string })?.identity)
+			.filter((id): id is string => Boolean(id))
+	);
+
+	const fresh = generated.filter((card) => !known.has(card.identity));
+	if (fresh.length === 0) return 0;
+
+	const newCards: Array<typeof cards.$inferInsert> = [];
+	const newStates: Array<typeof srsState.$inferInsert> = [];
+	const now = new Date();
+
+	for (const card of fresh) {
+		const skillId = skillIds.get(card.skillCode);
+		// A card with no skill row would violate the foreign key. Skipping is
+		// better than failing the whole session; the seed will supply it later.
+		if (!skillId) continue;
+
+		const id = randomUUID();
+		newCards.push({
+			id,
+			skillId,
+			direction: card.direction,
+			keyCenter: card.keyCenter,
+			payloadJson: { ...card.payload, identity: card.identity }
+		});
+		newStates.push({ cardId: id, ...initialState(now) });
+	}
+
+	if (newCards.length === 0) return 0;
+	await db.insert(cards).values(newCards);
+	await db.insert(srsState).values(newStates);
+	return newCards.length;
+}
+
+/** Bring the ladder's cards up to date with where you have got to. */
+export async function ensureLadderCards(position: Position): Promise<number> {
+	return ensureCards(cardsForReached(reachedSoFar(position)));
+}
+
+/** Bring a progression into existence in a key, the first time it is asked for. */
+export async function ensureProgressionCards(
+	progressionId: string,
+	keyName: string
+): Promise<number> {
+	const progression = progressionById(progressionId);
+	if (!progression) return 0;
+	return ensureCards(cardsForProgression(progression, keyName));
+}
+
+/** Move one step along the ladder, and create whatever that unlocks. */
+export async function advanceLadder(to: Position): Promise<Position> {
+	const settings = await loadSettings();
+	await saveSettings({
+		prefs: { ...settings.prefs, ladderKey: to.stage.key, ladderRung: to.rung.id }
+	});
+	await ensureLadderCards(to);
+	return to;
+}
+
+async function gatherPlanningData(position: Position) {
 	const scheduled = await db
 		.select({
 			cardId: cards.id,
@@ -71,65 +163,16 @@ async function gatherPlanningData() {
 		.leftJoin(reviews, eq(reviews.cardId, cards.id))
 		.groupBy(cards.keyCenter);
 
-	const perSkill = await db
-		.select({
-			code: skills.code,
-			total: sql<number>`count(${reviews.id})::int`,
-			correct: sql<number>`sum(case when ${reviews.correct} then 1 else 0 end)::int`
-		})
-		.from(skills)
-		.leftJoin(cards, eq(cards.skillId, skills.id))
-		.leftJoin(reviews, eq(reviews.cardId, cards.id))
-		.groupBy(skills.code);
-
-	// Real transfer counts, read from the table that M6 will start filling. Empty
-	// for now, which is the honest value — a skill genuinely has not been seen
-	// turning up unprompted until something is watching for it.
-	const perTransfer = await db
-		.select({ code: skills.code, n: sql<number>`count(${transferEvents.id})::int` })
-		.from(skills)
-		.leftJoin(transferEvents, eq(transferEvents.skillId, skills.id))
-		.groupBy(skills.code);
-	const transfersByCode = new Map(perTransfer.map((row) => [row.code, row.n ?? 0]));
-
-	const stats = new Map<string, SkillStats>(
-		perSkill.map((row) => [
-			row.code,
-			{
-				skillCode: row.code,
-				reviews: row.total ?? 0,
-				correct: row.correct ?? 0,
-				transfers: transfersByCode.get(row.code) ?? 0
-			}
-		])
-	);
-
 	return {
 		schedulable,
 		reviewsByKey: new Map(perKey.map((r) => [r.keyCenter, r.n ?? 0])),
-		allKeys: [...new Set(scheduled.map((r) => r.keyCenter))].sort(),
-		stats
+		// Only keys that have been reached, so nothing can be planned in a key
+		// that has never been introduced.
+		allKeys: [...new Set(reachedSoFar(position).map((r) => r.key))],
+		position
 	};
 }
 
-/** Atoms already met, so today's is a new one where possible. */
-async function seenAtoms(): Promise<Set<string>> {
-	const rows = await db
-		.select({ result: sessionBlocks.resultJson })
-		.from(sessionBlocks)
-		.where(eq(sessionBlocks.blockType, 'new_atom'))
-		.orderBy(desc(sessionBlocks.startedAt))
-		.limit(100);
-
-	const seen = new Set<string>();
-	for (const row of rows) {
-		const id = (row.result as { atomId?: string } | null)?.atomId;
-		if (id) seen.add(id);
-	}
-	return seen;
-}
-
-/** The session started today, if there is one. */
 export async function todaysSession(now = new Date()): Promise<ActiveSession | null> {
 	const midnight = new Date(now);
 	midnight.setHours(0, 0, 0, 0);
@@ -163,20 +206,21 @@ async function hydrate(row: typeof sessions.$inferSelect): Promise<ActiveSession
 	};
 }
 
+export type SessionRequest = {
+	lengthMinutes?: SessionLength;
+	/** A progression to work on instead of the ladder rung. */
+	progressionId?: string | null;
+	/** Which key to practise a progression in. Defaults to the current one. */
+	progressionKey?: string | null;
+};
+
 /**
  * Start today's session, or hand back the one already in progress.
  *
- * Idempotent on purpose: pressing the one button twice, or reloading mid
- * session, must not throw away what has been done.
+ * The session is built around wherever the ladder currently is — not around a
+ * scheduler's idea of which key has been neglected. A progression can be asked
+ * for instead, in any key already reached.
  */
-export type SessionRequest = {
-	lengthMinutes?: SessionLength;
-	/** A key you asked for, rather than the one the weighting would pick. */
-	preferredKey?: string | null;
-	/** A focus area id from `FOCUS_AREAS`. */
-	focusId?: string | null;
-};
-
 export async function startOrResume(
 	request: SessionRequest = {},
 	now = new Date()
@@ -184,28 +228,31 @@ export async function startOrResume(
 	const existing = await todaysSession(now);
 	if (existing) return existing;
 
-	const { schedulable, reviewsByKey, allKeys, stats } = await gatherPlanningData();
-	const verdicts = evaluate(stats);
-	const focusSkills = skillsInFocus(request.focusId).map((s) => s.code);
+	const position = await currentPosition();
+	await ensureLadderCards(position);
 
-	/*
-	 * When a focus was asked for, the new idea comes from it. Being told to
-	 * practise ii–V–I and then taught something about quartal voicings would
-	 * make the choice feel decorative.
-	 */
-	const levelOf = (code: string) => skillByCode(code)?.level ?? 99;
-	const seen = await seenAtoms();
-	const preferredSkill = focusSkills[0] ?? nextSkill(verdicts)?.code ?? null;
-	const atom = chooseAtomWithFallback(preferredSkill, seen, levelOf);
+	let focusSkills: string[] | null = null;
+	let preferredKey: string | null = position.stage.key;
+
+	if (request.progressionId) {
+		const keyName = request.progressionKey ?? position.stage.key;
+		await ensureProgressionCards(request.progressionId, keyName);
+		focusSkills = [`prog:${request.progressionId}`];
+		preferredKey = keyName;
+	} else {
+		focusSkills = [rungSkillCode(position.rung.id)];
+	}
+
+	const { schedulable, reviewsByKey, allKeys } = await gatherPlanningData(position);
 
 	const plan = planSession({
 		lengthMinutes: request.lengthMinutes ?? 20,
 		cards: schedulable,
 		reviewsByKey,
-		allKeys,
-		atomId: atom?.id ?? null,
-		preferredKey: request.preferredKey ?? null,
-		focusSkills: focusSkills.length ? focusSkills : null,
+		allKeys: allKeys.length ? allKeys : [position.stage.key],
+		atomId: null,
+		preferredKey,
+		focusSkills,
 		now
 	});
 
@@ -214,7 +261,12 @@ export async function startOrResume(
 		id,
 		startedAt: now,
 		keyCenter: plan.keyCenter,
-		planJson: { ...plan, skillCode: preferredSkill, focusId: request.focusId ?? null }
+		planJson: {
+			...plan,
+			ladderKey: position.stage.key,
+			ladderRung: position.rung.id,
+			progressionId: request.progressionId ?? null
+		}
 	});
 
 	return { id, startedAt: now, plan, completedBlocks: [], resumeAt: 0 };
@@ -269,8 +321,7 @@ export type ReviewInput = {
  * Record reviews and advance their schedules, in one transaction.
  *
  * All or nothing: a half-written batch would leave the scheduler believing a
- * card was reviewed when no review exists to justify it, and that is the sort
- * of drift nothing in the UI would ever reveal.
+ * card was reviewed when no review exists to justify it.
  */
 export async function recordReviews(
 	sessionId: string | null,
@@ -280,8 +331,6 @@ export async function recordReviews(
 	if (batch.length === 0) return;
 
 	await db.transaction(async (tx) => {
-		// `inArray`, not `= any(...)`: Drizzle expands a JS array into a tuple of
-		// placeholders, which `any()` cannot take.
 		const ids = batch.map((r) => r.cardId);
 		const states = await tx.select().from(srsState).where(inArray(srsState.cardId, ids));
 		const byCard = new Map(states.map((s) => [s.cardId, s]));
@@ -320,7 +369,32 @@ export async function recordReviews(
 	});
 }
 
-/** Cards for a block, with everything needed to pose them. */
+/** How the current rung is going, for deciding whether to suggest moving on. */
+export async function rungProgress(position: Position) {
+	const code = rungSkillCode(position.rung.id);
+	const [row] = await db
+		.select({
+			total: sql<number>`count(${reviews.id})::int`,
+			correct: sql<number>`sum(case when ${reviews.correct} then 1 else 0 end)::int`
+		})
+		.from(cards)
+		.innerJoin(skills, eq(skills.id, cards.skillId))
+		.leftJoin(reviews, eq(reviews.cardId, cards.id))
+		.where(and(eq(skills.code, code), eq(cards.keyCenter, position.stage.key)));
+
+	const total = row?.total ?? 0;
+	const correct = row?.correct ?? 0;
+	const accuracy = total > 0 ? correct / total : 0;
+
+	return {
+		reviews: total,
+		correct,
+		accuracy,
+		/** Only ever a suggestion — moving on is your call. */
+		looksSolid: total >= position.rung.suggestAfter && accuracy >= 0.8
+	};
+}
+
 export async function loadCards(cardIds: string[]) {
 	if (cardIds.length === 0) return [];
 	const rows = await db
@@ -335,7 +409,8 @@ export async function loadCards(cardIds: string[]) {
 		.innerJoin(skills, eq(skills.id, cards.skillId))
 		.where(inArray(cards.id, cardIds));
 
-	// Keep the planner's order; the query does not preserve it.
 	const byId = new Map(rows.map((r) => [r.id, r]));
 	return cardIds.map((id) => byId.get(id)).filter((r): r is (typeof rows)[number] => Boolean(r));
 }
+
+export { rungById, stageByKey };

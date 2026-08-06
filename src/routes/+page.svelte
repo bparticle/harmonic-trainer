@@ -1,243 +1,251 @@
 <script lang="ts">
 	/*
-	 * Start here.
+	 * Where you are, and the one thing to do next.
 	 *
-	 * The app will decide everything if you let it — key, cards, the one new
-	 * idea. It will also get out of the way if you already know what you want to
-	 * work on, because being overruled by a scheduler on the days you have a plan
-	 * is how a practice tool ends up unused. Either way the same things get
-	 * recorded, so steering costs nothing in what gets remembered.
+	 * The ladder is visible on purpose: knowing that C has seven small steps and
+	 * that you are on the third of them is worth more than any streak counter,
+	 * and it makes the size of the whole thing feel finite.
 	 */
 
 	let { data } = $props();
 
 	// svelte-ignore state_referenced_locally
 	let length = $state<10 | 20 | 35>(data.settings.prefs.sessionLengthMinutes);
-	let chosenKey = $state('');
-	let focusId = $state('due');
-	let showChoices = $state(false);
+	let tab = $state<'ladder' | 'progressions'>('ladder');
+	let progressionKey = $state('');
 
-	const RING = [
-		{ pc: 0, label: 'C' },
-		{ pc: 7, label: 'G' },
-		{ pc: 2, label: 'D' },
-		{ pc: 9, label: 'A' },
-		{ pc: 4, label: 'E' },
-		{ pc: 11, label: 'B' },
-		{ pc: 6, label: 'Gb' },
-		{ pc: 1, label: 'Db' },
-		{ pc: 8, label: 'Ab' },
-		{ pc: 3, label: 'Eb' },
-		{ pc: 10, label: 'Bb' },
-		{ pc: 5, label: 'F' }
-	];
-
-	const R = 108;
-	const positions = RING.map((entry, i) => {
-		const angle = (i / RING.length) * Math.PI * 2 - Math.PI / 2;
-		return { ...entry, x: Math.cos(angle) * R, y: Math.sin(angle) * R };
-	});
-
-	const cold = $derived(new Set(data.coldestKeys));
+	const glyph = (s: string) => s.replace(/b/g, '♭').replace(/#/g, '♯');
 	const resuming = $derived(Boolean(data.active));
-	const focus = $derived(data.focusAreas.find((f) => f.id === focusId));
 
-	const glyph = (label: string) => label.replace('b', '♭').replace('#', '♯');
+	const reachedKeys = $derived(data.stages.slice(0, data.position.stageIndex + 1).map((s) => s.key));
 
-	const BLOCKS = [
-		'Warm up',
-		'Name what you play',
-		'Ear drill',
-		'One new thing',
-		'Apply it',
-		'Log'
-	];
-
-	const minutes = (seconds: number) =>
-		seconds >= 60 ? `${Math.round(seconds / 60)}m` : `${seconds}s`;
-
-	function pickKey(label: string) {
-		chosenKey = chosenKey === label ? '' : label;
-	}
+	const byLevel = $derived(
+		Object.entries(data.progressionLevels).map(([level, name]) => ({
+			level: Number(level),
+			name,
+			items: data.progressions.filter((p) => p.level === Number(level))
+		}))
+	);
 </script>
 
 <svelte:head><title>Harmonic Trainer</title></svelte:head>
 
-<main class="mx-auto flex min-h-[calc(100dvh-3.5rem)] max-w-5xl flex-col px-6 py-8">
-	<div class="flex flex-1 flex-col items-center justify-center gap-8">
-		<!-- The twelve keys, with the ones you avoid lit. Clicking one takes it. -->
-		<svg
-			viewBox="-150 -150 300 300"
-			class="no-select w-full max-w-[17rem]"
-			role="group"
-			aria-label="Choose a key, or leave it to the app"
-		>
-			<circle r={R} fill="none" stroke="var(--color-ground-line)" stroke-width="1" />
-			{#each positions as p (p.pc)}
-				{@const isCold = cold.has(p.label)}
-				{@const isChosen = chosenKey === p.label}
-				<g
-					transform="translate({p.x} {p.y})"
-					role="button"
-					tabindex="0"
-					aria-label="Practise in {p.label}"
-					aria-pressed={isChosen}
-					class="key-node"
-					onclick={() => pickKey(p.label)}
-					onkeydown={(e) => e.key === 'Enter' && pickKey(p.label)}
-				>
-					<circle
-						r="24"
-						fill="var(--pc-{p.pc})"
-						opacity={isChosen ? 1 : isCold ? 0.92 : 0.2}
-					/>
-					{#if isChosen}
-						<circle r="29" fill="none" stroke="var(--color-ink)" stroke-width="2" />
-					{/if}
-					<text
-						y="1"
-						text-anchor="middle"
-						dominant-baseline="middle"
-						font-size="16"
-						font-weight="600"
-						font-family="var(--font-display)"
-						fill={isChosen || isCold ? `var(--pc-${p.pc}-ink)` : 'var(--color-ink-dim)'}
-						>{glyph(p.label)}</text
-					>
-				</g>
-			{/each}
-		</svg>
-
-		<p class="text-ink-dim -mt-2 text-center font-mono text-xs">
-			{#if chosenKey}
-				Practising in {glyph(chosenKey)}.
-				<button class="text-ink-muted hover:text-ink underline underline-offset-2"
-					onclick={() => (chosenKey = '')}>let the app choose</button
-				>
-			{:else}
-				The lit keys are the ones you have been avoiding. Tap one to take it.
-			{/if}
+<main class="mx-auto flex min-h-[calc(100dvh-3.5rem)] max-w-3xl flex-col gap-8 px-6 py-8">
+	<!-- Where you are ---------------------------------------------------- -->
+	<section class="text-center">
+		<p class="text-ink-dim font-mono text-[0.65rem] tracking-widest uppercase">
+			Key {data.position.stageIndex + 1} of {data.stages.length}
 		</p>
+		<h1 class="font-display text-ink mt-1 text-6xl leading-none font-semibold tracking-tight">
+			{glyph(data.position.key)}
+			<span class="text-ink-dim text-2xl">/ {glyph(data.position.relativeMinor)}</span>
+		</h1>
+		<p class="text-ink-muted mt-2 text-sm">{data.position.accidentals}</p>
+	</section>
 
-		<form method="POST" action="?/start" class="flex w-full flex-col items-center gap-4">
-			<input type="hidden" name="length" value={length} />
-			<input type="hidden" name="key" value={chosenKey} />
-			<input type="hidden" name="focus" value={focusId} />
-
-			<button
-				type="submit"
-				class="bg-ink text-ground font-display rounded-2xl px-10 py-6 text-2xl font-semibold
-				       tracking-tight transition-transform active:scale-[0.98]"
-			>
-				{resuming ? 'Carry on with today’s session' : 'Start a session'}
-			</button>
-
-			{#if resuming}
-				<p class="text-ink-dim font-mono text-xs">
-					Picked up where you left off, in {data.active?.plan.keyCenter}.
-				</p>
-			{:else}
-				<button
-					type="button"
-					class="text-ink-muted hover:text-ink font-mono text-xs transition-colors"
-					onclick={() => (showChoices = !showChoices)}
-					aria-expanded={showChoices}
+	<!-- The rungs of this key --------------------------------------------- -->
+	<section>
+		<ol class="flex flex-col gap-1">
+			{#each data.rungs as rung, i (rung.id)}
+				{@const done = i < data.position.rungIndex}
+				{@const current = i === data.position.rungIndex}
+				<li
+					class="flex items-baseline gap-3 rounded-lg px-3 py-2"
+					class:is-current={current}
+					class:is-done={done}
 				>
-					{showChoices ? 'hide options' : `${length} min · ${focus?.label ?? 'whatever’s due'}`}
-				</button>
-
-				{#if showChoices}
-					<div
-						class="border-ground-line bg-ground-raised w-full max-w-xl rounded-xl border p-4"
+					<span
+						class="font-mono text-[0.7rem] tabular-nums"
+						style:color={current
+							? 'var(--color-ink)'
+							: done
+								? 'var(--pc-5)'
+								: 'var(--color-ink-dim)'}
 					>
-						<h2 class="text-ink-dim mb-2 font-mono text-[0.65rem] tracking-widest uppercase">
-							Work on
-						</h2>
-						<div class="grid gap-1 sm:grid-cols-2">
-							{#each data.focusAreas as area (area.id)}
-								<button
-									type="button"
-									class="hover:bg-ground-overlay rounded px-3 py-2 text-left transition-colors"
-									class:is-selected={focusId === area.id}
-									onclick={() => (focusId = area.id)}
-								>
-									<span class="font-display text-ink block text-sm font-semibold"
-										>{area.label}</span
-									>
-									<span class="text-ink-dim block text-[0.7rem] leading-snug"
-										>{area.description}</span
-									>
-								</button>
-							{/each}
-						</div>
-
-						<h2 class="text-ink-dim mt-4 mb-2 font-mono text-[0.65rem] tracking-widest uppercase">
-							Length
-						</h2>
-						<div class="flex gap-1">
-							{#each [10, 20, 35] as const as m (m)}
-								<button
-									type="button"
-									class="border-ground-line hover:border-ink-dim flex-1 rounded border px-3 py-1.5 font-mono text-xs transition-colors"
-									class:is-selected={length === m}
-									onclick={() => (length = m)}>{m} min</button
-								>
-							{/each}
-						</div>
+						{done ? '✓' : i + 1}
+					</span>
+					<div class="min-w-0 flex-1">
+						<span
+							class="font-display block text-sm font-semibold"
+							style:color={current ? 'var(--color-ink)' : 'var(--color-ink-muted)'}
+							>{rung.label}</span
+						>
+						{#if current}
+							<span class="text-ink-dim block text-[0.75rem] leading-snug">{rung.teaches}</span>
+						{/if}
 					</div>
-				{/if}
-			{/if}
-		</form>
-
-		<!-- What a session actually is, so it is not a surprise. -->
-		<ol class="flex flex-wrap items-center justify-center gap-x-1 gap-y-2">
-			{#each BLOCKS as block, i (block)}
-				<li class="text-ink-dim flex items-center gap-1 font-mono text-[0.7rem]">
-					<span class="text-ink-muted">{block}</span>
-					<span class="text-ink-dim/70">{minutes(data.blockPreview[i])}</span>
-					{#if i < BLOCKS.length - 1}<span class="text-ink-dim/50 px-1">›</span>{/if}
 				</li>
 			{/each}
 		</ol>
-	</div>
+	</section>
 
-	<dl class="border-ground-line grid grid-cols-2 gap-x-8 gap-y-3 border-t pt-6 sm:grid-cols-4">
+	<!-- Do it -------------------------------------------------------------- -->
+	<section class="flex flex-col items-center gap-3">
+		<p class="text-ink-muted max-w-md text-center text-sm leading-relaxed">
+			{data.position.rung.instruction}
+		</p>
+
+		<form method="POST" action="?/start" class="flex flex-col items-center gap-3">
+			<input type="hidden" name="length" value={length} />
+			<input type="hidden" name="progression" value={tab === 'progressions' ? progressionKey.split('|')[0] : ''} />
+			<input type="hidden" name="progressionKey" value={progressionKey.split('|')[1] ?? ''} />
+			<button
+				type="submit"
+				class="bg-ink text-ground font-display rounded-2xl px-10 py-5 text-xl font-semibold
+				       tracking-tight transition-transform active:scale-[0.98]"
+			>
+				{resuming ? 'Carry on' : 'Practise this'}
+			</button>
+			<div class="flex gap-1">
+				{#each [10, 20, 35] as const as m (m)}
+					<button
+						type="button"
+						class="border-ground-line hover:border-ink-dim rounded border px-2.5 py-1 font-mono text-[0.7rem] transition-colors"
+						class:is-selected={length === m}
+						onclick={() => (length = m)}>{m}m</button
+					>
+				{/each}
+			</div>
+		</form>
+
+		<!-- Moving on is a decision, not a threshold. -->
+		<div class="mt-2 flex items-center gap-3">
+			<form method="POST" action="?/back">
+				<button
+					class="text-ink-dim hover:text-ink font-mono text-[0.7rem] transition-colors"
+					disabled={data.position.stageIndex === 0 && data.position.rungIndex === 0}
+					>← back a step</button
+				>
+			</form>
+			{#if data.next}
+				<form method="POST" action="?/advance">
+					<button
+						class="border-ground-line hover:border-ink-dim rounded-lg border px-3 py-1.5 font-mono text-[0.7rem] transition-colors"
+						class:is-suggested={data.progress.looksSolid}
+					>
+						{data.progress.looksSolid ? 'ready for' : 'skip to'}
+						{data.next.rung.id === 'scale' && data.next.key !== data.position.key
+							? glyph(data.next.key)
+							: data.next.rung.label.toLowerCase()} →
+					</button>
+				</form>
+			{/if}
+		</div>
+
+		{#if data.progress.reviews > 0}
+			<p class="text-ink-dim font-mono text-[0.7rem]">
+				{data.progress.correct} of {data.progress.reviews} right on this step
+				{#if data.progress.looksSolid}· looks solid{/if}
+			</p>
+		{/if}
+	</section>
+
+	<!-- Progressions, as their own thing ----------------------------------- -->
+	<section class="border-ground-line border-t pt-6">
+		<div class="mb-3 flex items-center gap-2">
+			{#each [['ladder', 'The keys'], ['progressions', 'Chord progressions']] as const as [id, label] (id)}
+				<button
+					class="rounded-lg px-3 py-1.5 font-mono text-xs transition-colors"
+					class:is-selected={tab === id}
+					onclick={() => (tab = id)}>{label}</button
+				>
+			{/each}
+		</div>
+
+		{#if tab === 'progressions'}
+			<p class="text-ink-dim mb-4 text-[0.75rem] leading-relaxed">
+				Separate from the keys, on purpose. Pick one and a key you already know — the same
+				progression gets easier every time you meet it somewhere new.
+			</p>
+
+			{#each byLevel as group (group.level)}
+				<h3 class="text-ink-dim mt-4 mb-1 font-mono text-[0.65rem] tracking-widest uppercase">
+					{group.name}
+				</h3>
+				<ul class="flex flex-col gap-1">
+					{#each group.items as progression (progression.id)}
+						<li>
+							<div class="hover:bg-ground-raised rounded-lg px-3 py-2 transition-colors">
+								<div class="flex items-baseline justify-between gap-3">
+									<span class="font-display text-ink text-sm font-semibold"
+										>{progression.name}</span
+									>
+									<div class="flex flex-wrap justify-end gap-1">
+										{#each reachedKeys as k (k)}
+											{@const value = `${progression.id}|${progression.mode === 'minor' ? (data.stages.find((s) => s.key === k)?.relativeMinor ?? k) : k}`}
+											<button
+												class="border-ground-line hover:border-ink-dim rounded border px-1.5 py-0.5 font-mono text-[0.65rem] transition-colors"
+												class:is-selected={progressionKey === value}
+												onclick={() => {
+													progressionKey = progressionKey === value ? '' : value;
+													tab = 'progressions';
+												}}>{glyph(value.split('|')[1])}</button
+											>
+										{/each}
+									</div>
+								</div>
+								<p class="text-ink-dim mt-0.5 text-[0.72rem] leading-snug">
+									{progression.describes}
+								</p>
+							</div>
+						</li>
+					{/each}
+				</ul>
+			{/each}
+		{:else}
+			<ol class="flex flex-wrap gap-1">
+				{#each data.stages as stage, i (stage.key)}
+					{@const reached = i <= data.position.stageIndex}
+					<li
+						class="border-ground-line rounded border px-2.5 py-1 font-mono text-xs"
+						class:is-selected={i === data.position.stageIndex}
+						style:opacity={reached ? 1 : 0.35}
+					>
+						{glyph(stage.key)}
+					</li>
+				{/each}
+			</ol>
+			<p class="text-ink-dim mt-3 text-[0.75rem] leading-relaxed">
+				One accidental at a time, out from C. You are on {data.position.stageIndex + 1} of {data
+					.stages.length}; the rest arrive when you are ready for them.
+			</p>
+		{/if}
+	</section>
+
+	<dl class="border-ground-line grid grid-cols-3 gap-x-6 border-t pt-5">
 		<div>
-			<dt class="text-ink-dim font-mono text-[0.65rem] tracking-widest uppercase">due now</dt>
+			<dt class="text-ink-dim font-mono text-[0.65rem] tracking-widest uppercase">due</dt>
 			<dd class="text-ink-muted mt-1 font-mono text-sm">{data.due} of {data.totalCards}</dd>
 		</div>
 		<div>
 			<dt class="text-ink-dim font-mono text-[0.65rem] tracking-widest uppercase">this week</dt>
-			<dd class="text-ink-muted mt-1 font-mono text-sm">{data.reviewsThisWeek} reviews</dd>
+			<dd class="text-ink-muted mt-1 font-mono text-sm">{data.reviewsThisWeek}</dd>
 		</div>
-		<div class="col-span-2">
-			<dt class="text-ink-dim font-mono text-[0.65rem] tracking-widest uppercase">
-				coldest keys
-			</dt>
-			<dd class="text-ink-muted mt-1 font-mono text-sm">
-				{data.coldestKeys.map(glyph).join(' · ') || '—'}
-			</dd>
+		<div>
+			<dt class="text-ink-dim font-mono text-[0.65rem] tracking-widest uppercase">session</dt>
+			<dd class="text-ink-muted mt-1 font-mono text-sm">{length} min</dd>
 		</div>
 	</dl>
 </main>
 
 <style>
-	.is-selected {
+	.is-selected,
+	.is-current {
 		background: var(--color-ground-overlay);
 		border-color: var(--color-ink-dim);
 		color: var(--color-ink);
 	}
 
-	.key-node {
-		cursor: pointer;
+	.is-done {
+		opacity: 0.65;
 	}
 
-	.key-node circle {
-		transition: opacity 160ms var(--ease-wheel);
+	.is-suggested {
+		border-color: var(--pc-5);
+		color: var(--color-ink);
 	}
 
-	.key-node:focus-visible {
-		outline: 2px solid var(--color-ink-dim);
-		outline-offset: 2px;
+	button:disabled {
+		opacity: 0.3;
 	}
 </style>

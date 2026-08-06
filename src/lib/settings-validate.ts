@@ -1,4 +1,5 @@
 import { isInSrgbGamut, type Oklch } from './design/color';
+import { rungById, stageByKey } from './curriculum/ladder';
 import type { ColorMap, Prefs, WheelConfig } from './settings';
 
 /**
@@ -58,11 +59,20 @@ export function parsePrefs(input: unknown): Prefs {
 		return Math.round(n);
 	};
 
+	// The ladder position has to name a real place, or the session planner would
+	// be asked for material that does not exist.
+	const ladderKey = String(value.ladderKey ?? 'C');
+	const ladderRung = String(value.ladderRung ?? 'scale');
+	if (!stageByKey(ladderKey)) throw new Error(`Unknown key on the ladder: ${ladderKey}`);
+	if (!rungById(ladderRung)) throw new Error(`Unknown rung: ${ladderRung}`);
+
 	return {
 		sessionLengthMinutes: length as Prefs['sessionLengthMinutes'],
 		revealDelayMs: bounded('revealDelayMs', 0, 30_000),
 		chordClusterWindowMs: bounded('chordClusterWindowMs', 20, 500),
-		midiLatencyOffsetMs: bounded('midiLatencyOffsetMs', -500, 500)
+		midiLatencyOffsetMs: bounded('midiLatencyOffsetMs', -500, 500),
+		ladderKey,
+		ladderRung
 	};
 }
 
