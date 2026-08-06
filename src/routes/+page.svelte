@@ -52,7 +52,11 @@
 		<h1 class="font-display text-ink text-xl leading-none font-semibold tracking-tight">
 			Harmonic&nbsp;Trainer
 		</h1>
-		<span class="text-ink-dim font-mono text-[0.65rem] tracking-widest uppercase">m0</span>
+		<nav class="flex gap-4 font-mono text-[0.65rem] tracking-widest uppercase">
+			<a href="/explore" class="text-ink-muted hover:text-ink transition-colors">explore</a>
+			<a href="/settings/wheel" class="text-ink-dim hover:text-ink transition-colors">calibrate</a>
+			<a href="/settings/colours" class="text-ink-dim hover:text-ink transition-colors">colours</a>
+		</nav>
 	</header>
 
 	<div class="flex flex-1 items-center justify-center py-10">

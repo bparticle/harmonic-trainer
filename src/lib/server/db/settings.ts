@@ -42,6 +42,24 @@ export async function loadSettings(): Promise<AppSettings> {
 	return toAppSettings(row);
 }
 
+/**
+ * Patch the singleton. Only the fields present are touched, so the colour
+ * editor and the wheel calibration screen can each save without clobbering the
+ * other's work.
+ */
+export async function saveSettings(patch: Partial<AppSettings>): Promise<AppSettings> {
+	await loadSettings(); // guarantees the row exists
+
+	const update: Record<string, unknown> = { updatedAt: new Date() };
+	if (patch.colorMap) update.colorMapJson = patch.colorMap;
+	if (patch.wheelConfig) update.wheelConfigJson = patch.wheelConfig;
+	if (patch.prefs) update.prefsJson = patch.prefs;
+	if (patch.midiDevice !== undefined) update.midiDevice = patch.midiDevice;
+
+	const [row] = await db.update(settings).set(update).where(eq(settings.id, 1)).returning();
+	return toAppSettings(row);
+}
+
 function toAppSettings(row: typeof settings.$inferSelect): AppSettings {
 	return {
 		colorMap: row.colorMapJson as ColorMap,

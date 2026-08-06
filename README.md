@@ -116,7 +116,17 @@ src/
       chord.ts       Abstract chord vs concrete voicing; symbols; diatonic harmony
       recognise.ts   Ranked candidates with confidence and reasoning
       analyse.ts     Roman numerals, secondary dominants, subs, modulation
+      voiceleading.ts  Distance between chords; neighbours one or two notes away
+      symbol.ts        Chord symbols split into typographic parts
       __fixtures__/  263 hand-authored golden fixtures
+    wheel/         The harmonic wheel
+      geometry.ts    Ring/position to pitch class; shapes derived from intervals
+      rotation.svelte.ts  Drag momentum, friction, detent snapping
+      overlays.ts    Key, chord neighbours, brightness axis, modulation
+      Wheel.svelte   Parametric SVG; knows no music, only cells
+    components/
+      Glyph.svelte       Musical accidentals as vectors
+      ChordSymbol.svelte Composed chord symbols with spoken labels
     server/
       auth.ts        Password check and signed session cookie
       db/
@@ -127,6 +137,11 @@ src/
   routes/
     layout.css     Design tokens as Tailwind theme
     +layout.*      Injects the database-owned palette during SSR
+    explore/       The wheel with every overlay
+    settings/
+      wheel/       Calibration against your physical wheel
+      colours/     OKLCH palette editor with live contrast
+    api/settings/  Patches the singleton settings row
     login/         The password gate
   hooks.server.ts  Redirects unauthenticated requests to /login
 ```
@@ -166,8 +181,8 @@ local Postgres for development and tests.
 | ------ | -------------------------------------------- | ------ |
 | **M0** | Repo, DB, migrations, test runner, tokens    | done   |
 | **M1** | Music core + golden fixtures                 | done   |
-| **M2** | Harmonic wheel component                     | next   |
-| **M3** | MIDI layer                                   |        |
+| **M2** | Harmonic wheel component                     | done   |
+| **M3** | MIDI layer                                   | next   |
 | **M4** | SRS + seeded skill graph                     |        |
 | **M5** | Session engine                               |        |
 | **M6** | Vault, blind-spot report, transfer detection |        |
