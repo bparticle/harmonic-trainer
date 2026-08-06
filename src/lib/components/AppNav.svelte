@@ -23,6 +23,7 @@
 	const LINKS = [
 		{ href: '/', label: 'Today' },
 		{ href: '/play', label: 'Play' },
+		{ href: '/backing', label: 'Play along' },
 		{ href: '/explore', label: 'Explore' }
 	];
 
