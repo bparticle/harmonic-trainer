@@ -2,7 +2,7 @@
 	import ChordSymbol from '$lib/components/ChordSymbol.svelte';
 	import Keyboard from '$lib/components/Keyboard.svelte';
 	import Wheel from '$lib/wheel/Wheel.svelte';
-	import { MidiSession } from '$lib/midi/session.svelte';
+	import { midi as session } from '$lib/midi/shared.svelte';
 	import { encodeSmf } from '$lib/midi/smf';
 	import type { ChordEvent, MidiEvent } from '$lib/midi/cluster';
 	import { recognise, type Candidate } from '$lib/music/recognise';
@@ -26,7 +26,6 @@
 	const GEOMETRY: WheelGeometry = { outerRadius: 330, ringWidth: 52 };
 	const config = $derived(data.settings.wheelConfig);
 
-	const session = new MidiSession();
 
 	let keyName = $state('C');
 	const context = $derived(parseKey(keyName));
@@ -80,21 +79,21 @@
 		if (revealTimer) clearTimeout(revealTimer);
 	}
 
-	// Kept in an effect so a change to the stored preferences reaches a live
-	// session rather than only applying on the next page load.
+	/*
+	 * The session itself is owned by the root layout and outlives this page —
+	 * only the handlers are ours. They are cleared on the way out so a chord
+	 * played on another screen does not still be marked by a page nobody is
+	 * looking at.
+	 */
 	$effect(() => {
-		session.windowMs = data.settings.prefs.chordClusterWindowMs;
-		session.latencyOffsetMs = data.settings.prefs.midiLatencyOffsetMs;
-	});
-
-	$effect(() => {
-		session.detect();
 		session.onChord(onChord);
 		// Sustain pedal is navigation: it claims the current chord so both hands
 		// can stay on the keys.
 		session.onPedal((down) => down && claim());
-		session.startVirtual();
-		return () => session.destroy();
+		return () => {
+			session.onChord(null);
+			session.onPedal(null);
+		};
 	});
 
 	function onKeydown(event: KeyboardEvent) {
@@ -209,67 +208,24 @@
 <svelte:window onkeydown={onKeydown} />
 
 <main class="mx-auto flex min-h-dvh max-w-[1400px] flex-col px-5 py-6">
-	<header class="mb-4 flex items-baseline justify-between gap-4">
-		<div class="flex items-baseline gap-4">
-			<a href="/" class="font-display text-ink text-lg font-semibold tracking-tight">Harmonic</a>
-			<span class="text-ink-dim font-mono text-[0.65rem] tracking-widest uppercase">play</span>
-		</div>
-		<nav class="flex gap-4 font-mono text-[0.65rem] tracking-widest uppercase">
-			<a href="/explore" class="text-ink-dim hover:text-ink transition-colors">explore</a>
-			<a href="/settings/wheel" class="text-ink-dim hover:text-ink transition-colors">calibrate</a>
-		</nav>
-	</header>
-
-	<!-- Device state, stated plainly rather than apologised for. -->
-	<section class="border-ground-line bg-ground-raised mb-5 rounded-lg border p-3">
-		<div class="flex flex-wrap items-center gap-3">
-			<span class="text-ink-dim font-mono text-[0.65rem] tracking-widest uppercase">midi</span>
-
-			{#if session.status === 'ready'}
-				<select
-					class="border-ground-line bg-ground text-ink-muted rounded border px-2 py-1 font-mono text-xs"
-					value={session.selectedId}
-					onchange={(e) => session.select(e.currentTarget.value)}
-				>
-					{#each session.devices as device (device.id)}
-						<option value={device.id}>{device.name}</option>
-					{/each}
-				</select>
-				{#if session.devices.length === 0}
-					<span class="text-ink-dim font-mono text-xs">connected, but nothing plugged in</span>
-				{/if}
-			{:else if session.status === 'idle'}
-				<button
-					class="bg-ink text-ground rounded px-3 py-1 text-xs font-semibold"
-					onclick={() => session.connect()}>Connect a keyboard</button
-				>
-			{:else if session.status === 'requesting'}
-				<span class="text-ink-dim font-mono text-xs">asking permission…</span>
-			{:else}
-				<span class="text-ink-muted max-w-2xl text-xs leading-relaxed"
-					>{session.unavailableReason}</span
-				>
-			{/if}
-
-			<span class="ml-auto flex items-center gap-3">
-				{#if session.pedalDown}
-					<span class="text-ink-muted font-mono text-[0.65rem] tracking-widest uppercase"
-						>pedal</span
-					>
-				{/if}
-				<button
-					class="rounded px-3 py-1 font-mono text-xs transition-colors"
-					class:is-recording={recording}
-					style:background={recording ? 'var(--pc-0)' : 'var(--color-ground-overlay)'}
-					style:color={recording ? 'var(--pc-0-ink)' : 'var(--color-ink-muted)'}
-					onclick={toggleRecording}
-				>
-					{recording ? 'stop' : 'record'}
-				</button>
-			</span>
-		</div>
+	<!-- Device management lives in the header's cog, on every page. What stays
+	     here is the one control that belongs to this screen. -->
+	<section class="mb-5 flex items-center gap-3">
+		<button
+			class="rounded px-3 py-1.5 font-mono text-xs transition-colors"
+			style:background={recording ? 'var(--pc-0)' : 'var(--color-ground-overlay)'}
+			style:color={recording ? 'var(--pc-0-ink)' : 'var(--color-ink-muted)'}
+			onclick={toggleRecording}
+		>
+			{recording ? 'stop recording' : 'record a take'}
+		</button>
 		{#if takeStatus}
-			<p class="text-ink-dim mt-2 font-mono text-xs">{takeStatus}</p>
+			<p class="text-ink-dim font-mono text-xs">{takeStatus}</p>
+		{/if}
+		{#if session.unavailableReason}
+			<p class="text-ink-muted max-w-2xl text-xs leading-relaxed">
+				{session.unavailableReason}
+			</p>
 		{/if}
 	</section>
 

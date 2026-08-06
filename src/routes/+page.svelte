@@ -44,19 +44,7 @@
 <svelte:head><title>Harmonic Trainer</title></svelte:head>
 
 <main class="mx-auto flex min-h-dvh max-w-5xl flex-col px-6 py-8">
-	<header class="flex items-baseline justify-between">
-		<h1 class="font-display text-ink text-xl leading-none font-semibold tracking-tight">
-			Harmonic&nbsp;Trainer
-		</h1>
-		<nav class="flex gap-4 font-mono text-[0.65rem] tracking-widest uppercase">
-			<a href="/play" class="text-ink-dim hover:text-ink transition-colors">play</a>
-			<a href="/explore" class="text-ink-dim hover:text-ink transition-colors">explore</a>
-			<a href="/settings/wheel" class="text-ink-dim hover:text-ink transition-colors">calibrate</a>
-			<a href="/settings/colours" class="text-ink-dim hover:text-ink transition-colors">colours</a>
-		</nav>
-	</header>
-
-	<div class="flex flex-1 flex-col items-center justify-center gap-10 py-10">
+	<div class="flex flex-1 flex-col items-center justify-center gap-10 py-6">
 		<svg viewBox="-170 -170 340 340" class="no-select w-full max-w-[19rem]" role="img"
 			aria-label="The twelve keys, with the coldest marked">
 			<circle r={R} fill="none" stroke="var(--color-ground-line)" stroke-width="1" />

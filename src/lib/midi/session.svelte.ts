@@ -155,12 +155,17 @@ export class MidiSession {
 		}
 	}
 
-	onChord(handler: (chord: ChordEvent) => void) {
+	/**
+	 * Handlers are set by whichever page is showing, and cleared on the way out.
+	 * The session outlives every page, so a stale handler would have a screen
+	 * nobody is looking at marking chords played somewhere else.
+	 */
+	onChord(handler: ((chord: ChordEvent) => void) | null) {
 		this.#onChord = handler;
 	}
 
 	/** Sustain pedal as navigation: CC64 advances when both hands are busy. */
-	onPedal(handler: (down: boolean) => void) {
+	onPedal(handler: ((down: boolean) => void) | null) {
 		this.#onPedal = handler;
 	}
 

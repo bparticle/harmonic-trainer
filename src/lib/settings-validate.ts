@@ -1,5 +1,5 @@
 import { isInSrgbGamut, type Oklch } from './design/color';
-import type { ColorMap, WheelConfig } from './settings';
+import type { ColorMap, Prefs, WheelConfig } from './settings';
 
 /**
  * Validation for the two settings the UI can write.
@@ -32,6 +32,38 @@ export function parseWheelConfig(input: unknown): WheelConfig {
 	}
 
 	return { rings, ringOffsetSteps, offsetDirection, startNote };
+}
+
+/**
+ * Bounds rather than free numbers.
+ *
+ * These come from sliders, so the ranges are already constrained in the UI —
+ * but the endpoint is reachable without it, and a chord window of zero would
+ * quietly break note clustering in a way that looks like broken MIDI.
+ */
+export function parsePrefs(input: unknown): Prefs {
+	if (typeof input !== 'object' || input === null) throw new Error('Prefs must be an object');
+	const value = input as Record<string, unknown>;
+
+	const length = Number(value.sessionLengthMinutes);
+	if (![10, 20, 35].includes(length)) {
+		throw new Error('sessionLengthMinutes must be 10, 20 or 35');
+	}
+
+	const bounded = (name: string, min: number, max: number) => {
+		const n = Number(value[name]);
+		if (!Number.isFinite(n) || n < min || n > max) {
+			throw new Error(`${name} must be between ${min} and ${max}`);
+		}
+		return Math.round(n);
+	};
+
+	return {
+		sessionLengthMinutes: length as Prefs['sessionLengthMinutes'],
+		revealDelayMs: bounded('revealDelayMs', 0, 30_000),
+		chordClusterWindowMs: bounded('chordClusterWindowMs', 20, 500),
+		midiLatencyOffsetMs: bounded('midiLatencyOffsetMs', -500, 500)
+	};
 }
 
 export function parseColorMap(input: unknown): ColorMap {

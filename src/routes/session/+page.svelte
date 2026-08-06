@@ -4,7 +4,7 @@
 	import Keyboard from '$lib/components/Keyboard.svelte';
 	import Wheel from '$lib/wheel/Wheel.svelte';
 	import Timer from '$lib/session/Timer.svelte';
-	import { MidiSession } from '$lib/midi/session.svelte';
+	import { midi as session } from '$lib/midi/shared.svelte';
 	import type { MidiEvent } from '$lib/midi/cluster';
 	import { playChord, playSequence, startAudio, stopAll } from '$lib/audio/engine';
 	import { markPlayed, pose, toVoicing } from '$lib/session/drill';
@@ -54,7 +54,6 @@
 	);
 	const summary = $state({ keyCenter: '', blocks: 0 });
 
-	const session = new MidiSession();
 	let busy = $state(false);
 	let problem = $state<string | null>(null);
 
@@ -79,11 +78,18 @@
 		currentCard ? pose(currentCard.direction, currentCard.payload as never) : null
 	);
 
+	/*
+	 * The session is owned by the root layout; only the handlers belong to this
+	 * page, and they are cleared on the way out so a chord played elsewhere is
+	 * not still being marked here.
+	 */
 	$effect(() => {
-		session.detect();
-		session.startVirtual();
 		session.onPedal((down) => down && advanceHandsFree());
-		return () => session.destroy();
+		session.onChord(handleChord);
+		return () => {
+			session.onPedal(null);
+			session.onChord(null);
+		};
 	});
 
 	// Reset the per-block state whenever the block changes.
@@ -116,7 +122,7 @@
 
 	// ---- answering --------------------------------------------------------
 
-	session.onChord((chord) => {
+	function handleChord(chord: { notes: number[] }) {
 		if (!block) return;
 
 		if (block.type === 'name_what_you_play') {
@@ -135,7 +141,7 @@
 			record(gradeFromPerformance(true, Math.round(performance.now() - askedAt)), true);
 			setTimeout(nextCard, 550);
 		}
-	});
+	}
 
 	function record(rating: ReviewRating, correct: boolean) {
 		if (!currentCard) return;
