@@ -19,6 +19,7 @@
 		"db:migrate": "drizzle-kit migrate",
 		"db:push": "drizzle-kit push",
 		"db:studio": "drizzle-kit studio",
+		"db:seed": "vite-node scripts/seed.ts",
 		"db:up": "docker compose up -d db",
 		"db:down": "docker compose down"
 	},
@@ -26,7 +27,8 @@
 		"@fontsource-variable/space-grotesk": "^5.3.0",
 		"@fontsource/ibm-plex-mono": "^5.3.0",
 		"drizzle-orm": "^0.45.2",
-		"pg": "^8.22.0"
+		"pg": "^8.22.0",
+		"ts-fsrs": "^5.4.1"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-vercel": "^6.3.3",
@@ -36,12 +38,14 @@
 		"@types/node": "^22",
 		"@types/pg": "^8.20.4",
 		"@vite-pwa/sveltekit": "^1.1.0",
+		"dotenv": "^17.4.2",
 		"drizzle-kit": "^0.31.10",
 		"svelte": "^5.56.1",
 		"svelte-check": "^4.6.0",
 		"tailwindcss": "^4.3.0",
 		"typescript": "^6.0.3",
 		"vite": "^8.0.16",
+		"vite-node": "^6.0.0",
 		"vitest": "^4.1.8"
 	}
 }
