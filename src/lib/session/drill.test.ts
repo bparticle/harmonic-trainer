@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CardPayload } from '$lib/curriculum/cards';
-import { choicesFor, markNamed, markPlayed, pose, toVoicing } from './drill';
+import { choicesFor, markGathered, markNamed, markPlayed, pose, toVoicing } from './drill';
 
 const cmaj7: CardPayload = {
 	kind: 'chord',
@@ -96,6 +96,48 @@ describe('marking a played answer', () => {
 
 	it('fails an empty answer', () => {
 		expect(markPlayed([60, 64, 67], []).correct).toBe(false);
+	});
+});
+
+describe('marking something played over time', () => {
+	const C_MAJOR = [0, 2, 4, 5, 7, 9, 11];
+
+	it('accepts a scale played one note at a time', () => {
+		// The bug this exists to prevent: comparing a scale as a chord demanded
+		// all seven notes simultaneously, which nobody can play.
+		expect(markGathered(C_MAJOR, [60, 62, 64, 65, 67, 69, 71]).correct).toBe(true);
+	});
+
+	it('accepts it in any octave and any order', () => {
+		expect(markGathered(C_MAJOR, [71, 48, 62, 76, 65, 57, 55]).correct).toBe(true);
+	});
+
+	it('reports which notes are still needed, by pitch class', () => {
+		const marking = markGathered(C_MAJOR, [60, 64, 67]);
+		expect(marking.correct).toBe(false);
+		expect(marking.missing).toEqual([2, 5, 9, 11]);
+	});
+
+	it('forgives repeats and passing notes', () => {
+		// Scales get played with repeats and stray notes; that is not an error.
+		const marking = markGathered(C_MAJOR, [60, 60, 62, 63, 64, 65, 67, 69, 71]);
+		expect(marking.correct).toBe(true);
+		expect(marking.extra).toEqual([]);
+	});
+
+	it('is not satisfied by nothing', () => {
+		expect(markGathered(C_MAJOR, []).correct).toBe(false);
+		expect(markGathered(C_MAJOR, []).missing).toHaveLength(7);
+	});
+
+	it('completes as the last note arrives', () => {
+		let gathered: number[] = [];
+		const order = [60, 62, 64, 65, 67, 69, 71];
+		const results = order.map((note) => {
+			gathered = [...gathered, note];
+			return markGathered(C_MAJOR, gathered).correct;
+		});
+		expect(results).toEqual([false, false, false, false, false, false, true]);
 	});
 });
 

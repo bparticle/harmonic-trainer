@@ -942,3 +942,33 @@ The L0–L11 skill graph, the mastery gate, the focus areas and the atom system
 are gone. Every one of them was solving a problem the ladder solves more simply,
 and the mastery gate in particular could never be satisfied — it required a
 transfer event, and transfer detection is M6.
+
+### A scale is not a chord
+
+Reported as "a very weird, dissonant chord" on the gentlest card in the app,
+and it was exactly that: the scale card's voicing is all seven notes, and
+`playChord` sounded them simultaneously. C–D–E–F–G–A–B as a single stack is a
+tone cluster, and it was being offered as the first thing anyone hears.
+
+`playSequence` existed, was imported, and was never called.
+
+The marking had the same bug from the other side. It compared the answer as a
+single handful, so all seven notes had to sound *at once* to be right — which is
+unplayable, and reported "missing 4" at anything a person could actually do.
+Notes are now gathered as they arrive: any order, any octave, repeats and
+passing notes forgiven, complete when every one has been played.
+
+Both halves came from treating one type as though it were another. Anything
+played over time — scales now, progressions next — needs its own posing and its
+own marking, not a chord's.
+
+### "Show me" is not the same as "skip"
+
+Asked for directly, and right. Skipping leaves you no wiser and the next
+encounter is another blank; being shown the notes means the next attempt is a
+real one. It still records `again`, because needing the answer is exactly what
+the scheduler should know — but it is no longer the only way out of a card you
+cannot get.
+
+Feedback names the notes now rather than counting them. "Missing 4" tells you
+nothing you can act on; "still need D E F G A B" is an instruction.

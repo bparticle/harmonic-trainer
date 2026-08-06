@@ -100,6 +100,24 @@ export function markPlayed(expected: number[], played: number[]): Marking {
 }
 
 /**
+ * Mark something played a note at a time rather than all at once.
+ *
+ * A scale is not a chord. Comparing it as one demanded seven simultaneous
+ * notes, which is unplayable — and reported "missing 4" at anything a person
+ * could actually do. Notes are gathered as they arrive and the answer is
+ * complete when every one has been played, in any order, in any octave.
+ */
+export function markGathered(expected: number[], gathered: number[]): Marking {
+	const want = [...new Set(expected.map((n) => ((n % 12) + 12) % 12))];
+	const got = new Set(gathered.map((n) => ((n % 12) + 12) % 12));
+
+	const missing = want.filter((pc) => !got.has(pc));
+	// Extra notes are not an error here: passing notes and repeats are how
+	// scales are actually played.
+	return { correct: missing.length === 0, missing, extra: [] };
+}
+
+/**
  * Mark a named answer against a set of acceptable spellings.
  *
  * Forgiving about how it is written — `Cmaj7`, `CM7` and `C∆` are the same
