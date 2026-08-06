@@ -72,6 +72,13 @@
 	const ringCount = $derived(rings ?? config.rings);
 	const distinct = $derived(distinctRings(config));
 
+	/*
+	 * Resting cells stay properly coloured rather than dropping to a wash.
+	 * The premise of the whole app is that colour means pitch, so a wheel that
+	 * sits mostly grey until something is selected argues against itself. Active
+	 * cells go to full; the duplicate ring sits back because it is a repeat, not
+	 * because it is unimportant.
+	 */
 	const activeSet = $derived(new Set(active.map((pc) => ((pc % 12) + 12) % 12)));
 	const litSet = $derived(new Set(lit.map((pc) => ((pc % 12) + 12) % 12)));
 
@@ -220,7 +227,7 @@
 					d={cellSectorPath(cell, geometry)}
 					fill="var(--pc-{cell.pc})"
 					class="cell-fill"
-					opacity={isActive ? 0.95 : cell.duplicate ? 0.1 : 0.18}
+					opacity={isActive ? 0.98 : cell.duplicate ? 0.28 : 0.5}
 					onclick={() => onselect?.({ ring: cell.ring, position: cell.position }, cell.pc)}
 					onkeydown={(e) =>
 						e.key === 'Enter' && onselect?.({ ring: cell.ring, position: cell.position }, cell.pc)}

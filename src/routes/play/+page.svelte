@@ -10,7 +10,7 @@
 	import { formatNote } from '$lib/music/note';
 	import { spell } from '$lib/music/spell';
 	import { chordCells } from '$lib/wheel/overlays';
-	import type { Highlight, WheelGeometry } from '$lib/wheel/geometry';
+	import { mod12, pitchClassAt, type Highlight, type WheelGeometry } from '$lib/wheel/geometry';
 
 	/*
 	 * Live naming.
@@ -155,6 +155,16 @@
 		}
 	}
 
+	/**
+	 * Turning the wheel sets the key, exactly as it does on the physical object:
+	 * the index mark at the top is fixed, and you rotate to bring the key you
+	 * want underneath it.
+	 */
+	function onWheelRotate(steps: number) {
+		const pc = pitchClassAt({ ring: 0, position: mod12(-steps) }, config);
+		keyName = formatNote(spell(pc, makeKey('C')));
+	}
+
 	const highlights = $derived.by((): Highlight[] => {
 		if (!current || !revealed || !current.candidates.length) return [];
 		return [{ cells: chordCells(current.candidates[0].chord, config, GEOMETRY), strength: 1 }];
@@ -266,17 +276,18 @@
 					Hit the pedal or the spacebar the moment you have it.
 				{:else}
 					Reveal is held back {(revealDelayMs / 1000).toFixed(1)}s so your ear goes first.
+					Turn the wheel to change key.
 				{/if}
 			</p>
 
 			<Wheel
 				{config}
 				{context}
-				active={[]}
+				active={session.live.map((n) => n % 12)}
 				{highlights}
 				lit={session.live.map((n) => n % 12)}
 				size={420}
-				interactive={false}
+				onrotate={onWheelRotate}
 			/>
 
 			<Keyboard
