@@ -7,7 +7,7 @@
 	import type { ChordEvent, MidiEvent } from '$lib/midi/cluster';
 	import { recognise, type Candidate } from '$lib/music/recognise';
 	import { key as makeKey, parseKey } from '$lib/music/key';
-	import { formatNote } from '$lib/music/note';
+	import { formatNote, formatPitch } from '$lib/music/note';
 	import { spell } from '$lib/music/spell';
 	import { chordCells, keyOverlay } from '$lib/wheel/overlays';
 	import { mod12, pitchClassAt, type Highlight, type WheelGeometry } from '$lib/wheel/geometry';
@@ -156,6 +156,23 @@
 	}
 
 	/**
+	 * A one-line warning when the headline name is not simply the notes under the
+	 * hand — most importantly when it names a root that was never played.
+	 */
+	const caveat = $derived.by(() => {
+		const top = current?.candidates[0];
+		if (!top || !revealed) return null;
+		if (top.interpretation === 'rootless') {
+			return `rootless — no ${formatPitch(top.chord.root, true)} played`;
+		}
+		if (top.interpretation === 'quartal') return 'stacked fourths, named by its shape';
+		if (top.interpretation === 'upper-structure') return 'a triad over a different bass';
+		if (top.interpretation === 'slash') return 'the bass note is not a chord tone';
+		if (top.omitted.includes(5)) return 'fifth not played';
+		return null;
+	});
+
+	/**
 	 * Turning the wheel sets the key, exactly as it does on the physical object:
 	 * the index mark at the top is fixed, and you rotate to bring the key you
 	 * want underneath it.
@@ -268,10 +285,15 @@
 				{:else if !revealed}
 					<span class="text-ink-dim font-display text-[7rem] leading-none font-semibold">?</span>
 				{:else}
-					<div class="flex flex-col items-center gap-3">
+					<div class="flex flex-col items-center gap-2">
 						<ChordSymbol chord={current.candidates[0].chord} size="clamp(3rem, 11vw, 7rem)" />
+						{#if caveat}
+							<!-- If the name involves a note that was never played, say so here,
+							     where the name is, not in a panel off to the side. -->
+							<span class="text-ink-muted font-mono text-xs">{caveat}</span>
+						{/if}
 						{#if current.candidates.length > 1}
-							<span class="text-ink-dim font-mono text-xs">
+							<span class="text-ink-dim mt-1 font-mono text-xs">
 								or {current.candidates
 									.slice(1, 3)
 									.map((c) => c.symbol)
