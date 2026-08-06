@@ -114,7 +114,6 @@
 		<section class="flex flex-col items-center gap-5">
 			<Wheel
 				{config}
-				context={currentKey}
 				active={activePitchClasses}
 				{highlights}
 				{arcs}

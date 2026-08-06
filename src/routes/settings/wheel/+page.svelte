@@ -113,7 +113,7 @@
 
 	<div class="grid gap-10 lg:grid-cols-[minmax(0,1fr)_380px]">
 		<section class="flex justify-center">
-			<Wheel {config} context={C_MAJOR} active={[]} size={620} />
+			<Wheel {config} active={[]} size={620} />
 		</section>
 
 		<aside class="flex flex-col gap-7">

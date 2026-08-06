@@ -111,7 +111,7 @@
 
 	<div class="grid gap-10 lg:grid-cols-[minmax(0,1fr)_380px]">
 		<section class="flex flex-col items-center gap-6">
-			<Wheel config={data.settings.wheelConfig} context={C_MAJOR} active={[...Array(12).keys()]} size={560} />
+			<Wheel config={data.settings.wheelConfig} active={[...Array(12).keys()]} size={560} />
 
 			<div class="grid w-full max-w-xl grid-cols-12 gap-1">
 				{#each palette as colour, pc (pc)}
