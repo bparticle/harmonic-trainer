@@ -53,6 +53,7 @@
 			Harmonic&nbsp;Trainer
 		</h1>
 		<nav class="flex gap-4 font-mono text-[0.65rem] tracking-widest uppercase">
+			<a href="/play" class="text-ink-muted hover:text-ink transition-colors">play</a>
 			<a href="/explore" class="text-ink-muted hover:text-ink transition-colors">explore</a>
 			<a href="/settings/wheel" class="text-ink-dim hover:text-ink transition-colors">calibrate</a>
 			<a href="/settings/colours" class="text-ink-dim hover:text-ink transition-colors">colours</a>
