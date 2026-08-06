@@ -322,3 +322,92 @@ major and 14 minor scale spellings, 22 modal spellings, the diatonic sevenths of
 25 keys, ii–V–I in all 12 major and all 12 minor keys with guide-tone motion
 verified in every one, every inversion of every diatonic seventh in C, and pivot
 modulations at 1, 2, 3 and 6 steps on the circle of fifths.
+
+---
+
+## M2 — the harmonic wheel
+
+### The brief's two geometric claims are true, and now enforced
+
+Ring *n* at angular position θ holds circle-of-fifths index `θ − n·offset·direction`.
+With five rings and an offset of three that means moving inward one ring is a
+minor third, so a radial spoke spells a diminished seventh and the fifth ring
+duplicates the first. Both are asserted in `geometry.test.ts` for all twelve
+positions, and both are surfaced on the calibration screen as plain statements
+("a radial spoke: a diminished seventh", "ring 5 duplicates ring 1") rather than
+left as trivia.
+
+Reversing `offsetDirection` stacks the same chord downward instead of up —
+C–E♭–G♭–A becomes C–A–F♯–E♭ — so what a spoke spells depends only on how many
+distinct rings there are, which is `12 / gcd(12, offset)`.
+
+### Shapes are relative cell offsets, which is why rotation transposes
+
+A shape is computed once from an interval set as offsets from a root at
+(ring 0, position 0), then placed. Every pitch class appears once per ring, so
+each note has four candidate cells and the closest one is chosen. Because the
+result depends only on the intervals, Cmaj7 and F♯maj7 produce byte-identical
+shapes and transposing is literally rotating. A test asserts that across six
+keys.
+
+### Rotation is modelled as a physical object
+
+Drag owns the angle outright; release hands over to momentum, friction, and then
+a damped spring into the nearest of twelve detents. Split out of the component
+into `rotation.svelte.ts` so the physics is testable without a DOM — which
+immediately caught that `isAtRest` was treating "momentarily still between two
+detents" as settled.
+
+`prefers-reduced-motion` skips coasting and springing entirely and snaps
+straight to the detent.
+
+### Musical glyphs are drawn, not typed
+
+`♭ ♯ ∆ ø °` are missing from most display faces, and a fallback box at 14rem is
+not a subtle failure. `Glyph.svelte` draws each one as a stroked path in a
+100-unit em box with the baseline at the bottom edge, so `size` behaves like a
+font size and they sit on the baseline with the type. This was promised in M0
+and is now delivered.
+
+`ChordSymbol.svelte` composes those with raised, smaller extensions. Because the
+symbol is partly vectors, it is hidden from assistive technology and a spoken
+form supplied alongside — "E flat minor 7" — rather than left as unreadable
+punctuation. There is no ARIA role for "a word made of vectors", so `role="text"`
+was wrong and a visually-hidden sibling is right.
+
+### Voice-leading distance is exact, not approximate
+
+Minimal total semitone movement over every way of pairing two chords' notes,
+brute-forced. Chords are never more than six or seven notes, so the factorial is
+irrelevant and an exact answer beats a clever heuristic. This is what orders the
+neighbours list, and it puts E♭∆ one note and two semitones from Gm7, exactly as
+the brief's example requires.
+
+### The wheel component owns no music knowledge
+
+It takes cells, highlights, arcs and lit pitch classes, and draws them. Every
+overlay is computed in `overlays.ts` from the music core. The consequence worth
+having: the live MIDI overlay in M3 is just a `lit` array — the component needs
+no change at all to light up what is being played.
+
+### Settings are patched, not replaced
+
+Calibration and the colour editor each `POST` only the field they own, so
+neither can undo the other by saving a stale copy of the whole object. Both
+inputs are validated server-side: an out-of-gamut colour or a zero-ring wheel
+would not crash anything, it would quietly render wrong, which is worse.
+
+### The colour editor clamps as you drag
+
+Pushing chroma past what sRGB can hold at a given lightness silently clamps to
+the maximum that fits, holding lightness and hue. Verified in the browser:
+asking for chroma 0.32 at L 0.55, H 27 yields 0.226 and stays in gamut. The
+contrast readout is live because a colour that has drifted out of legibility is
+not obvious by eye until it is on a music stand across the room.
+
+### Three test expectations were wrong again, not the code
+
+Recorded because the pattern keeps repeating. C∆7 and Dm7 share only one note,
+so three differ, not two. JavaScript's default `.sort()` is lexicographic, so
+`[10, 2, 7]` needs a numeric comparator. And a ii–V–I walks *anticlockwise*
+round the circle — D to G is −1 fifth, not +1.
