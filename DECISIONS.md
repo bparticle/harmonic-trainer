@@ -877,3 +877,68 @@ practice mode confusing.
 The home screen also lists the six blocks and their lengths before you start.
 Knowing what the next twenty minutes contains is not a menu — it is the
 difference between a plan and a surprise.
+
+---
+
+## The progression, rebuilt
+
+Reported after real use: the exercises were too hard, material arrived from
+nowhere, and the "solution" to a card was sometimes a whole chord progression.
+All three were true, and the causes were mine.
+
+### The seeded history was driving real sessions
+
+`--history` invented four weeks of practice with deliberately uneven key
+coverage, so the blind-spot weighting did exactly what it was built to do and
+pushed towards B, F♯ and A♭ — keys chosen because a *simulation* had skipped
+them. Meanwhile all 3024 cards were created due at once, so altered dominants
+and quartal voicings from the top of the syllabus were as eligible as a C major
+triad.
+
+Seed data that flatters the developer is one thing; seed data that steers the
+user's practice is another. There is no card bank and no simulated history in
+the seed any more.
+
+### Nothing exists until it is reached
+
+Cards are created when a rung is reached, not up front. A new account has
+exactly two: the C major scale, to see and to hear. Nothing else *can* be asked,
+which is a much stronger guarantee than a scheduler promising not to.
+
+### One key at a time, out from C
+
+Keys are met in the order musicians have always met them — C, then one
+accidental at a time, alternating sharp and flat sides. Seven small rungs per
+key: the scale, the home chord, the three main chords, all seven triads, the
+tonic seventh, all seven sevenths, the relative minor. Each rung is mostly the
+previous one plus one idea.
+
+The old model generated every key at once and let the scheduler choose, which
+assumed a broad familiarity with all twelve keys that the app is supposed to be
+*building*.
+
+### Moving on is a decision
+
+Asked for directly, and correct: the ladder tracks and suggests ("looks solid"
+after roughly eight correct answers at 80%) but never gates. There is a step
+forward and a step back, both always available. You can tell whether something
+is under your fingers better than a review count can.
+
+### Progressions became their own section
+
+Also asked for, and a better idea than having them as rungs. Learning what is in
+a key and learning how chords move within it are different jobs, and mixing them
+made both muddier. Progressions are now a separate library, ordered by
+difficulty from I–IV–V–I to tritone substitution, each playable in any key
+already reached — so the same progression gets easier every time it turns up
+somewhere new.
+
+They are also stepped through chord by chord rather than presented as one
+answer, which is what made a card's "solution" look like a progression.
+
+### What went with it
+
+The L0–L11 skill graph, the mastery gate, the focus areas and the atom system
+are gone. Every one of them was solving a problem the ladder solves more simply,
+and the mastery gate in particular could never be satisfied — it required a
+transfer event, and transfer detection is M6.

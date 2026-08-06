@@ -11,7 +11,6 @@
 	import { recognise } from '$lib/music/recognise';
 	import { gradeFromPerformance } from '$lib/srs/scheduler';
 	import { parseKey } from '$lib/music/key';
-	import { focusById } from '$lib/curriculum/focus';
 	import { chordCells, keyOverlay } from '$lib/wheel/overlays';
 	import type { Highlight, WheelGeometry } from '$lib/wheel/geometry';
 	import { cellsFor } from '$lib/wheel/geometry';
@@ -65,7 +64,6 @@
 	let lastMarking = $state<{ correct: boolean; missing: number[]; extra: number[] } | null>(null);
 	let namedChord = $state<string | null>(null);
 	let revealed = $state(false);
-	let atomShowing = $state<'from' | 'to'>('from');
 	let logRatings = $state<Record<string, ReviewRating>>({});
 
 	/** Reviews gathered during this block, flushed when it finishes. */
@@ -102,7 +100,6 @@
 		lastMarking = null;
 		namedChord = null;
 		pending = [];
-		atomShowing = 'from';
 		askedAt = performance.now();
 	});
 
@@ -173,10 +170,6 @@
 	/** Pedal or spacebar: whatever "next" means for the block showing. */
 	function advanceHandsFree() {
 		if (!block) return;
-		if (block.type === 'new_atom') {
-			atomShowing = atomShowing === 'from' ? 'to' : 'from';
-			return;
-		}
 		if (prompt && !answered) {
 			if (prompt.answerWith === 'name' && !revealed) {
 				revealed = true;
@@ -254,13 +247,11 @@
 			{ cells: keyView.scaleCells, strength: 0.4, outline: true }
 		];
 
-		if (block?.type === 'new_atom' && data.atom) {
-			const pcs =
-				atomShowing === 'from' ? data.atom.fromPitchClasses : data.atom.toPitchClasses;
-			shapes.push({
-				cells: cellsFor(pcs, pcs[0] ?? 0, config, GEOMETRY),
-				strength: 1
-			});
+		if (block?.type === 'new_atom' && data.progression) {
+			const pcs = data.progression.steps[0]?.pitchClasses ?? [];
+			if (pcs.length) {
+				shapes.push({ cells: cellsFor(pcs, pcs[0], config, GEOMETRY), strength: 1 });
+			}
 		} else if (prompt?.visible && currentCard) {
 			const pcs = (currentCard.payload as { answerPitchClasses: number[] }).answerPitchClasses;
 			shapes.push({ cells: cellsFor(pcs, pcs[0] ?? 0, config, GEOMETRY), strength: 0.9 });
@@ -279,11 +270,9 @@
 		plan ? `${Math.min(index + 1, plan.blocks.length)} of ${plan.blocks.length}` : ''
 	);
 
-	// What you asked to work on, echoed back — a session that does not say what
-	// it is about is hard to tell apart from one that decided at random.
-	const focusLabel = $derived(
-		focusById((plan as { focusId?: string | null } | null)?.focusId)?.label ?? null
-	);
+	// What this session is about, echoed back. A session that does not say what
+	// it is for is hard to tell apart from one that decided at random.
+	const focusLabel = $derived(data.progression?.name ?? data.rung?.label ?? null);
 </script>
 
 <svelte:head><title>Session · Harmonic Trainer</title></svelte:head>
@@ -330,40 +319,33 @@
 			</div>
 		</header>
 
-		<p class="text-ink-muted mb-6 text-sm leading-relaxed">{block.instruction}</p>
+		<!-- The rung's own words win where it has them: it knows what you are
+		     actually doing better than a generic block description does. -->
+		<p class="text-ink-muted mb-6 text-sm leading-relaxed">
+			{block.type === 'wheel_warmup' && data.rung ? data.rung.instruction : block.instruction}
+		</p>
 
 		<!-- ---------------------------------------------------------------- -->
-		{#if block.type === 'new_atom' && data.atom}
+		{#if block.type === 'new_atom' && (data.rung || data.progression)}
 			<section class="flex flex-1 flex-col items-center gap-6">
 				<h2 class="font-display text-ink text-center text-3xl font-semibold tracking-tight">
-					{data.atom.title}
+					{data.progression?.name ?? data.rung?.label}
 				</h2>
 				<p class="text-ink-muted max-w-2xl text-center text-lg leading-relaxed">
-					{data.atom.explanation}
+					{data.progression?.describes ?? data.rung?.teaches}
+				</p>
+				<p class="text-ink-dim max-w-xl text-center text-sm leading-relaxed">
+					{data.progression?.listenFor ?? data.rung?.instruction}
 				</p>
 
-				<div class="flex items-center gap-3">
-					{#each ['from', 'to'] as const as which (which)}
-						<button
-							class="border-ground-line hover:border-ink-dim rounded-lg border px-4 py-2 font-mono text-xs transition-colors"
-							class:is-selected={atomShowing === which}
-							onclick={() => (atomShowing = which)}
-						>
-							{which === 'from' ? 'what you play' : 'the change'}
-						</button>
-					{/each}
-				</div>
-
-				<p class="font-display text-ink text-2xl">
-					{(atomShowing === 'from' ? data.atom.fromSymbols : data.atom.toSymbols).join('  ·  ')}
-				</p>
+				{#if data.progression}
+					<p class="font-display text-ink text-2xl">
+						{data.progression.steps.map((s) => s.symbol).join('  ·  ')}
+					</p>
+				{/if}
 
 				<Wheel {config} active={keyView.pitchClasses} degrees={keyView.degrees} {highlights}
 					lit={session.live.map((n) => n % 12)} size={380} interactive={false} />
-
-				<p class="text-ink-dim text-center font-mono text-xs">
-					Listen for: {data.atom.listenFor}
-				</p>
 			</section>
 
 		<!-- ---------------------------------------------------------------- -->
@@ -384,12 +366,9 @@
 		{:else if block.type === 'apply'}
 			<section class="flex flex-1 flex-col items-center justify-center gap-6">
 				<p class="text-ink-muted max-w-xl text-center leading-relaxed">
-					{#if data.atom}
-						Use <strong class="text-ink">{data.atom.title.toLowerCase()}</strong> if it comes. If it
-						does not, play anyway.
-					{:else}
-						Play freely in {plan?.keyCenter}.
-					{/if}
+					Play freely in {plan?.keyCenter}. Use
+					<strong class="text-ink">{(data.progression?.name ?? data.rung?.label ?? 'it').toLowerCase()}</strong>
+					if it comes. If it does not, play anyway.
 				</p>
 				<Wheel {config} active={keyView.pitchClasses} degrees={keyView.degrees} {highlights}
 					lit={session.live.map((n) => n % 12)} size={380} interactive={false} />

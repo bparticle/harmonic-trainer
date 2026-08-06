@@ -51,8 +51,11 @@ const SHAPE: Array<{ type: BlockType; share: number; title: string; instruction:
 		type: 'wheel_warmup',
 		share: 3 / 20,
 		title: 'Warm up',
-		instruction:
-			'Scale in the right hand, the seven diatonic sevenths underneath. Your usual warm-up, now in a key that needs it.'
+		// Deliberately generic: the real instruction comes from the rung you are
+		// on, and promising "the seven diatonic sevenths" while you are still on
+		// the scale is exactly the kind of thing that makes a session feel like it
+		// is aimed at someone else.
+		instruction: 'Hands on the keys, slowly. Nothing here is timed against you.'
 	},
 	{
 		type: 'name_what_you_play',
@@ -99,7 +102,11 @@ const SHAPE: Array<{ type: BlockType; share: number; title: string; instruction:
 const DRILL_BLOCKS: Partial<
 	Record<BlockType, { directions: CardDirection[]; skills?: string[] }>
 > = {
-	wheel_warmup: { directions: ['see_play'], skills: ['L1', 'L1b'] },
+	// Everything now draws from wherever the ladder is. The warm-up used to be
+	// pinned to the old key-anchoring skills, which no longer exist — and which
+	// would have been wrong anyway, since the rung you are on *is* the thing to
+	// warm up on.
+	wheel_warmup: { directions: ['see_play'] },
 	name_what_you_play: { directions: ['play_name'] },
 	ear_drill: { directions: ['hear_name', 'hear_play'] }
 };
@@ -176,24 +183,7 @@ export function planSession(input: PlanInput): SessionPlan {
 	const now = input.now ?? new Date();
 	const cold = coldestKeys(input.reviewsByKey, input.allKeys);
 
-	/*
-	 * Today's key has to be one the warm-up can actually serve.
-	 *
-	 * Minor key centres exist in the deck, but only because the minor ii–V
-	 * generates them; the key-anchoring skills are major only. Choosing from
-	 * every key present meant landing on C minor and then opening a block that
-	 * promises "the seven diatonic sevenths" with nothing in that key to give.
-	 */
-	const warmupSkills = DRILL_BLOCKS.wheel_warmup?.skills;
-	const eligible = [
-		...new Set(
-			input.cards
-				.filter((c) => !warmupSkills || (c.skillCode ? warmupSkills.includes(c.skillCode) : false))
-				.map((c) => c.keyCenter)
-		)
-	].sort();
-
-	const pool = eligible.length ? eligible : input.allKeys;
+	const pool = input.allKeys;
 	// An asked-for key wins outright, as long as it exists at all.
 	const honoured = Boolean(input.preferredKey && input.allKeys.includes(input.preferredKey));
 	const keyCenter = honoured

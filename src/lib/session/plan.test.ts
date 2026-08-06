@@ -194,44 +194,6 @@ describe('filling the blocks', () => {
 		expect(block('ear_drill').cardIds.length).toBeLessThanOrEqual(30);
 	});
 
-	it('never picks a key the warm-up has no material for', () => {
-		// Minor key centres exist only because the minor ii-V generates them; the
-		// key-anchoring skills are major only.
-		const mixed = [
-			...KEYS.map((k) => card(`major-${k}`, 'see_play', k, 3, 'L1')),
-			...['Cm', 'Fm', 'Gm'].map((k) => card(`minor-${k}`, 'see_play', k, 40, 'L4b'))
-		];
-		const planned = planSession({
-			lengthMinutes: 20,
-			cards: mixed,
-			reviewsByKey: reviews({}),
-			allKeys: [...KEYS, 'Cm', 'Fm', 'Gm'],
-			now: NOW
-		});
-		expect(KEYS).toContain(planned.keyCenter);
-	});
-
-	it('gives the warm-up material that matches what it tells you to do', () => {
-		// It says "scale in the right hand, the seven diatonic sevenths
-		// underneath", so it must not hand over a ii-V-i.
-		const mixed = [
-			...deck(),
-			card('twofive', 'see_play', 'C', 9, 'L4'),
-			card('modes', 'see_play', 'C', 9, 'L6')
-		];
-		const withOther = planSession({
-			lengthMinutes: 20,
-			cards: mixed,
-			reviewsByKey: reviews({}),
-			allKeys: KEYS,
-			now: NOW
-		});
-		const warmup = withOther.blocks.find((b) => b.type === 'wheel_warmup')!;
-		expect(warmup.cardIds).not.toContain('twofive');
-		expect(warmup.cardIds).not.toContain('modes');
-		expect(warmup.cardIds.length).toBeGreaterThan(0);
-	});
-
 	it('asks each block only the directions it can actually pose', () => {
 		const deckById = new Map(deck().map((c) => [c.cardId, c]));
 		const directionsIn = (type: BlockType) =>
@@ -325,26 +287,6 @@ describe('choosing your own path', () => {
 		expect(ear.cardIds.length).toBeGreaterThan(0);
 		for (const id of ear.cardIds) {
 			expect(byId.get(id)!.skillCode, id).toBe('L4');
-		}
-	});
-
-	it('leaves the warm-up alone whatever the focus', () => {
-		// A warm-up that is not a warm-up is just another drill with a
-		// misleading name.
-		const byId = new Map(mixed().map((c) => [c.cardId, c]));
-		const planned = planSession({
-			lengthMinutes: 20,
-			cards: mixed(),
-			reviewsByKey: reviews({}),
-			allKeys: KEYS,
-			focusSkills: ['L6'],
-			now: NOW
-		});
-
-		const warmup = planned.blocks.find((b) => b.type === 'wheel_warmup')!;
-		expect(warmup.cardIds.length).toBeGreaterThan(0);
-		for (const id of warmup.cardIds) {
-			expect(byId.get(id)!.skillCode, id).toBe('L1');
 		}
 	});
 

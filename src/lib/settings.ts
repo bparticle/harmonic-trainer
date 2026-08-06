@@ -33,6 +33,15 @@ export type Prefs = {
 	chordClusterWindowMs: number;
 	/** Offset applied to incoming MIDI timestamps after latency calibration. */
 	midiLatencyOffsetMs: number;
+	/**
+	 * Where you are on the ladder: which key, and which rung of it.
+	 *
+	 * Advancing is a decision, not a threshold. The app says when a rung looks
+	 * solid; you decide when to move, because you can tell whether something is
+	 * under your fingers far better than a review count can.
+	 */
+	ladderKey: string;
+	ladderRung: string;
 };
 
 export type ColorMap = Oklch[];
@@ -48,7 +57,10 @@ export const DEFAULT_PREFS: Prefs = {
 	sessionLengthMinutes: 20,
 	revealDelayMs: 2000,
 	chordClusterWindowMs: 80,
-	midiLatencyOffsetMs: 0
+	midiLatencyOffsetMs: 0,
+	// Everyone starts at the beginning: C major, and the seven notes in it.
+	ladderKey: 'C',
+	ladderRung: 'scale'
 };
 
 export const DEFAULT_COLOR_MAP: ColorMap = DEFAULT_PALETTE;

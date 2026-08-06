@@ -1,0 +1,159 @@
+import { describe, expect, it } from 'vitest';
+import {
+	PROGRESSIONS,
+	chordFromNumeral,
+	progressionById,
+	progressionsAtLevel,
+	realiseProgression
+} from './progressions';
+import { formatChord } from '$lib/music/chord';
+import { key as makeKey, parseKey } from '$lib/music/key';
+import { STAGES } from './ladder';
+
+const symbolOf = (numeral: string, keyName: string) =>
+	formatChord(chordFromNumeral(numeral, parseKey(keyName)));
+
+describe('Roman numerals into chords', () => {
+	it('reads the plain diatonic triads of C', () => {
+		expect(['I', 'ii', 'iii', 'IV', 'V', 'vi'].map((n) => symbolOf(n, 'C'))).toEqual([
+			'C',
+			'Dm',
+			'Em',
+			'F',
+			'G',
+			'Am'
+		]);
+	});
+
+	it('reads sevenths', () => {
+		expect(symbolOf('ii7', 'C')).toBe('Dm7');
+		expect(symbolOf('V7', 'C')).toBe('G7');
+		expect(symbolOf('Imaj7', 'C')).toBe('Cmaj7');
+	});
+
+	it('reads half-diminished and diminished', () => {
+		expect(symbolOf('iiø7', 'Am')).toBe('Bm7b5');
+		expect(symbolOf('vii°', 'C')).toBe('Bdim');
+	});
+
+	it('reads chromatic roots', () => {
+		expect(symbolOf('bVII7', 'C')).toBe('Bb7');
+		expect(symbolOf('bII7', 'C')).toBe('Db7');
+		expect(symbolOf('bVI', 'C')).toBe('Ab');
+	});
+
+	it('reads applied dominants as a fifth above their target', () => {
+		expect(symbolOf('V7/vi', 'C')).toBe('E7');
+		expect(symbolOf('V7/ii', 'C')).toBe('A7');
+		expect(symbolOf('V7/V', 'C')).toBe('D7');
+	});
+
+	it('transposes: the same numeral is a different chord in each key', () => {
+		expect(symbolOf('ii7', 'Eb')).toBe('Fm7');
+		expect(symbolOf('V7', 'Eb')).toBe('Bb7');
+		expect(symbolOf('bII7', 'Eb')).toBe('E7');
+		expect(symbolOf('ii7', 'B')).toBe('C#m7');
+	});
+
+	it('refuses nonsense', () => {
+		expect(() => chordFromNumeral('Q', makeKey('C'))).toThrow();
+		expect(() => chordFromNumeral('', makeKey('C'))).toThrow();
+	});
+});
+
+describe('the progression library', () => {
+	it('has unique ids', () => {
+		const ids = PROGRESSIONS.map((p) => p.id);
+		expect(new Set(ids).size).toBe(ids.length);
+	});
+
+	it('starts easy', () => {
+		const first = progressionsAtLevel(1);
+		expect(first.length).toBeGreaterThanOrEqual(3);
+		// Level one is triads only: no sevenths, no chromatic roots.
+		for (const p of first) {
+			for (const numeral of p.numerals) {
+				expect(numeral, `${p.id}: ${numeral}`).not.toMatch(/7|b|#|\//);
+			}
+		}
+	});
+
+	it('gets harder in steps', () => {
+		expect(progressionsAtLevel(3).some((p) => p.id === 'ii-V-I')).toBe(true);
+		expect(progressionsAtLevel(5).some((p) => p.id === 'tritone-sub')).toBe(true);
+	});
+
+	it('describes each one and says what to listen for', () => {
+		for (const p of PROGRESSIONS) {
+			expect(p.describes.length, p.id).toBeGreaterThan(30);
+			expect(p.listenFor.length, p.id).toBeGreaterThan(20);
+		}
+	});
+
+	it('resolves in every key of the ladder without throwing', () => {
+		for (const p of PROGRESSIONS) {
+			for (const stage of STAGES) {
+				const keyName = p.mode === 'minor' ? stage.relativeMinor : stage.key;
+				expect(() => realiseProgression(p, keyName), `${p.id} in ${keyName}`).not.toThrow();
+			}
+		}
+	});
+});
+
+describe('realising a progression', () => {
+	it('steps through one chord at a time', () => {
+		const realised = realiseProgression(progressionById('ii-V-I')!, 'C');
+		expect(realised.steps.map((s) => s.symbol)).toEqual(['Dm7', 'G7', 'Cmaj7']);
+		expect(realised.steps).toHaveLength(3);
+	});
+
+	it('gives each step its own notes and voicing', () => {
+		const realised = realiseProgression(progressionById('I-IV-V-I')!, 'G');
+		expect(realised.steps.map((s) => s.symbol)).toEqual(['G', 'C', 'D', 'G']);
+		for (const step of realised.steps) {
+			expect(step.pitchClasses).toHaveLength(3);
+			expect(step.voicing).toHaveLength(3);
+		}
+	});
+
+	it('gives a shell only where there is a seventh to shell', () => {
+		const sevenths = realiseProgression(progressionById('ii-V-I')!, 'C');
+		expect(sevenths.steps.every((s) => s.shell !== null)).toBe(true);
+
+		const triads = realiseProgression(progressionById('I-IV-V-I')!, 'C');
+		expect(triads.steps.every((s) => s.shell === null)).toBe(true);
+	});
+
+	it('handles the minor progressions in a minor key', () => {
+		const realised = realiseProgression(progressionById('i-iv-v-i')!, 'Am');
+		expect(realised.steps.map((s) => s.symbol)).toEqual(['Am', 'Dm', 'Em', 'Am']);
+	});
+
+	it('borrows a major third for the minor ii–V', () => {
+		// Without it the cadence does not pull, which is the whole point.
+		const realised = realiseProgression(progressionById('ii-V-i-minor')!, 'Am');
+		expect(realised.steps.map((s) => s.symbol)).toEqual(['Bm7b5', 'E7', 'Am7']);
+	});
+
+	it('lays out twelve bars of blues', () => {
+		const realised = realiseProgression(progressionById('blues-basic')!, 'F');
+		expect(realised.steps).toHaveLength(12);
+		expect(realised.steps[0].symbol).toBe('F7');
+		expect(realised.steps[4].symbol).toBe('Bb7');
+		expect(realised.steps[8].symbol).toBe('C7');
+	});
+
+	it('keeps every note on a real keyboard', () => {
+		for (const p of PROGRESSIONS) {
+			for (const stage of STAGES) {
+				const keyName = p.mode === 'minor' ? stage.relativeMinor : stage.key;
+				for (const step of realiseProgression(p, keyName).steps) {
+					for (const note of [...step.voicing, ...(step.shell ?? [])]) {
+						expect(note, `${p.id} ${keyName} ${step.symbol}`).toBeGreaterThanOrEqual(21);
+						expect(note).toBeLessThanOrEqual(108);
+					}
+				}
+			}
+		}
+	});
+});
