@@ -32,6 +32,10 @@ export type SessionPlan = {
 	atomId: string | null;
 	/** Keys the blind-spot weighting is pushing forward. */
 	coldKeys: string[];
+	/** True when the key was asked for rather than chosen by weighting. */
+	chosenKey?: boolean;
+	/** Skills the drills were narrowed to, if any. */
+	focusSkills?: string[] | null;
 };
 
 /**
@@ -113,6 +117,16 @@ export type PlanInput = {
 	allKeys: string[];
 	/** The next unmastered skill, if the graph has one open. */
 	atomId?: string | null;
+	/** A key you asked for. Overrides the cold-key weighting. */
+	preferredKey?: string | null;
+	/**
+	 * Skills to concentrate the drills on.
+	 *
+	 * Applies only to blocks that have no material of their own — the warm-up
+	 * stays the warm-up whatever you pick, because a warm-up that is not a
+	 * warm-up is just another drill with a misleading name.
+	 */
+	focusSkills?: string[] | null;
 	now?: Date;
 };
 
@@ -179,12 +193,15 @@ export function planSession(input: PlanInput): SessionPlan {
 		)
 	].sort();
 
-	const keyCenter = chooseKey(
-		input.reviewsByKey,
-		eligible.length ? eligible : input.allKeys,
-		now
-	);
+	const pool = eligible.length ? eligible : input.allKeys;
+	// An asked-for key wins outright, as long as it exists at all.
+	const honoured = Boolean(input.preferredKey && input.allKeys.includes(input.preferredKey));
+	const keyCenter = honoured
+		? input.preferredKey!
+		: chooseKey(input.reviewsByKey, pool, now);
+
 	const durations = blockDurations(input.lengthMinutes);
+	const focus = input.focusSkills?.length ? input.focusSkills : null;
 
 	// One ordered pool of due cards for the whole session, so no card is asked
 	// twice in one sitting even when two blocks could both use it.
@@ -198,12 +215,15 @@ export function planSession(input: PlanInput): SessionPlan {
 
 		if (source) {
 			const wanted = Math.max(1, Math.round(duration / SECONDS_PER_CARD));
+			// A block with its own material keeps it; the rest follow the focus.
+			const wantedSkills = source.skills ?? focus;
+
 			cardIds = due
 				.filter(
 					(c) =>
 						source.directions.includes(c.direction) &&
 						!taken.has(c.cardId) &&
-						(!source.skills || (c.skillCode ? source.skills.includes(c.skillCode) : false))
+						(!wantedSkills || (c.skillCode ? wantedSkills.includes(c.skillCode) : false))
 				)
 				// Today's key first; the rest of the due pile behind it.
 				.sort((a, b) => Number(b.keyCenter === keyCenter) - Number(a.keyCenter === keyCenter))
@@ -226,7 +246,11 @@ export function planSession(input: PlanInput): SessionPlan {
 		lengthMinutes: input.lengthMinutes,
 		blocks,
 		atomId: input.atomId ?? null,
-		coldKeys: cold
+		coldKeys: cold,
+		// Whether the key was actually honoured, not merely requested — asking for
+		// a key that does not exist should not read as having chosen it.
+		chosenKey: honoured,
+		focusSkills: focus
 	};
 }
 

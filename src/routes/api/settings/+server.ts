@@ -1,6 +1,11 @@
 import { json, error, type RequestHandler } from '@sveltejs/kit';
 import { saveSettings } from '$lib/server/db/settings';
-import { parseColorMap, parsePrefs, parseWheelConfig } from '$lib/settings-validate';
+import {
+	parseColorMap,
+	parseDeviceName,
+	parsePrefs,
+	parseWheelConfig
+} from '$lib/settings-validate';
 
 /**
  * Patch the singleton settings row.
@@ -28,7 +33,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				? { wheelConfig: parseWheelConfig(patch.wheelConfig) }
 				: {}),
 			...(patch.colorMap !== undefined ? { colorMap: parseColorMap(patch.colorMap) } : {}),
-			...(patch.prefs !== undefined ? { prefs: parsePrefs(patch.prefs) } : {})
+			...(patch.prefs !== undefined ? { prefs: parsePrefs(patch.prefs) } : {}),
+			...(patch.midiDevice !== undefined
+				? { midiDevice: parseDeviceName(patch.midiDevice) }
+				: {})
 		});
 		return json(saved);
 	} catch (e) {

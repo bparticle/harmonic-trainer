@@ -9,6 +9,7 @@ import { nextSkill } from '$lib/curriculum/mastery';
 import { planSession, resumeIndex, type SessionLength, type SessionPlan } from '$lib/session/plan';
 import { chooseAtomWithFallback } from '$lib/session/atoms';
 import { skillByCode } from '$lib/curriculum/skills';
+import { skillsInFocus } from '$lib/curriculum/focus';
 
 /**
  * Reading and writing sessions.
@@ -168,8 +169,16 @@ async function hydrate(row: typeof sessions.$inferSelect): Promise<ActiveSession
  * Idempotent on purpose: pressing the one button twice, or reloading mid
  * session, must not throw away what has been done.
  */
+export type SessionRequest = {
+	lengthMinutes?: SessionLength;
+	/** A key you asked for, rather than the one the weighting would pick. */
+	preferredKey?: string | null;
+	/** A focus area id from `FOCUS_AREAS`. */
+	focusId?: string | null;
+};
+
 export async function startOrResume(
-	lengthMinutes: SessionLength = 20,
+	request: SessionRequest = {},
 	now = new Date()
 ): Promise<ActiveSession> {
 	const existing = await todaysSession(now);
@@ -177,16 +186,26 @@ export async function startOrResume(
 
 	const { schedulable, reviewsByKey, allKeys, stats } = await gatherPlanningData();
 	const verdicts = evaluate(stats);
-	const skill = nextSkill(verdicts);
+	const focusSkills = skillsInFocus(request.focusId).map((s) => s.code);
+
+	/*
+	 * When a focus was asked for, the new idea comes from it. Being told to
+	 * practise ii–V–I and then taught something about quartal voicings would
+	 * make the choice feel decorative.
+	 */
 	const levelOf = (code: string) => skillByCode(code)?.level ?? 99;
-	const atom = chooseAtomWithFallback(skill?.code ?? null, await seenAtoms(), levelOf);
+	const seen = await seenAtoms();
+	const preferredSkill = focusSkills[0] ?? nextSkill(verdicts)?.code ?? null;
+	const atom = chooseAtomWithFallback(preferredSkill, seen, levelOf);
 
 	const plan = planSession({
-		lengthMinutes,
+		lengthMinutes: request.lengthMinutes ?? 20,
 		cards: schedulable,
 		reviewsByKey,
 		allKeys,
 		atomId: atom?.id ?? null,
+		preferredKey: request.preferredKey ?? null,
+		focusSkills: focusSkills.length ? focusSkills : null,
 		now
 	});
 
@@ -195,7 +214,7 @@ export async function startOrResume(
 		id,
 		startedAt: now,
 		keyCenter: plan.keyCenter,
-		planJson: { ...plan, skillCode: skill?.code ?? null }
+		planJson: { ...plan, skillCode: preferredSkill, focusId: request.focusId ?? null }
 	});
 
 	return { id, startedAt: now, plan, completedBlocks: [], resumeAt: 0 };

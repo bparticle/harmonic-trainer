@@ -275,6 +275,105 @@ describe('filling the blocks', () => {
 	});
 });
 
+describe('choosing your own path', () => {
+	const mixed = () => [
+		...KEYS.map((k) => card(`anchor-${k}`, 'see_play', k, 3, 'L1')),
+		...KEYS.map((k) => card(`ear-${k}`, 'hear_name', k, 3, 'L1')),
+		...KEYS.map((k) => card(`two-${k}`, 'hear_name', k, 9, 'L4')),
+		...KEYS.map((k) => card(`mode-${k}`, 'hear_name', k, 9, 'L6'))
+	];
+
+	it('takes the key you asked for, over the cold-key weighting', () => {
+		const planned = planSession({
+			lengthMinutes: 20,
+			cards: mixed(),
+			// C is the most practised, so weighting would never choose it.
+			reviewsByKey: reviews({ C: 9999 }),
+			allKeys: KEYS,
+			preferredKey: 'C',
+			now: NOW
+		});
+		expect(planned.keyCenter).toBe('C');
+		expect(planned.chosenKey).toBe(true);
+	});
+
+	it('falls back to weighting when the key asked for does not exist', () => {
+		const planned = planSession({
+			lengthMinutes: 20,
+			cards: mixed(),
+			reviewsByKey: reviews({}),
+			allKeys: KEYS,
+			preferredKey: 'H#',
+			now: NOW
+		});
+		expect(KEYS).toContain(planned.keyCenter);
+		expect(planned.chosenKey).toBe(false);
+	});
+
+	it('narrows the drills to the focus', () => {
+		const byId = new Map(mixed().map((c) => [c.cardId, c]));
+		const planned = planSession({
+			lengthMinutes: 20,
+			cards: mixed(),
+			reviewsByKey: reviews({}),
+			allKeys: KEYS,
+			focusSkills: ['L4'],
+			now: NOW
+		});
+
+		const ear = planned.blocks.find((b) => b.type === 'ear_drill')!;
+		expect(ear.cardIds.length).toBeGreaterThan(0);
+		for (const id of ear.cardIds) {
+			expect(byId.get(id)!.skillCode, id).toBe('L4');
+		}
+	});
+
+	it('leaves the warm-up alone whatever the focus', () => {
+		// A warm-up that is not a warm-up is just another drill with a
+		// misleading name.
+		const byId = new Map(mixed().map((c) => [c.cardId, c]));
+		const planned = planSession({
+			lengthMinutes: 20,
+			cards: mixed(),
+			reviewsByKey: reviews({}),
+			allKeys: KEYS,
+			focusSkills: ['L6'],
+			now: NOW
+		});
+
+		const warmup = planned.blocks.find((b) => b.type === 'wheel_warmup')!;
+		expect(warmup.cardIds.length).toBeGreaterThan(0);
+		for (const id of warmup.cardIds) {
+			expect(byId.get(id)!.skillCode, id).toBe('L1');
+		}
+	});
+
+	it('records the focus on the plan', () => {
+		const planned = planSession({
+			lengthMinutes: 20,
+			cards: mixed(),
+			reviewsByKey: reviews({}),
+			allKeys: KEYS,
+			focusSkills: ['L4', 'L4b'],
+			now: NOW
+		});
+		expect(planned.focusSkills).toEqual(['L4', 'L4b']);
+	});
+
+	it('behaves exactly as before when nothing is chosen', () => {
+		const planned = planSession({
+			lengthMinutes: 20,
+			cards: mixed(),
+			reviewsByKey: reviews({}),
+			allKeys: KEYS,
+			now: NOW
+		});
+		expect(planned.chosenKey).toBe(false);
+		expect(planned.focusSkills).toBeNull();
+		expect(planned.blocks).toHaveLength(6);
+	});
+});
+
 describe('resuming', () => {
 	const plan: SessionPlan = planSession({
 		lengthMinutes: 20,
