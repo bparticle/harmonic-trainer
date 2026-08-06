@@ -117,17 +117,6 @@
 <svelte:head><title>Explore · Harmonic Trainer</title></svelte:head>
 
 <main class="mx-auto min-h-dvh max-w-[1500px] px-5 py-6">
-	<header class="mb-6 flex items-baseline justify-between gap-4">
-		<div class="flex items-baseline gap-4">
-			<a href="/" class="font-display text-ink text-lg font-semibold tracking-tight">Harmonic</a>
-			<span class="text-ink-dim font-mono text-[0.65rem] tracking-widest uppercase">explore</span>
-		</div>
-		<nav class="flex gap-4 font-mono text-[0.65rem] tracking-widest uppercase">
-			<a href="/settings/wheel" class="text-ink-dim hover:text-ink transition-colors">calibrate</a>
-			<a href="/settings/colours" class="text-ink-dim hover:text-ink transition-colors">colours</a>
-		</nav>
-	</header>
-
 	<div class="grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
 		<!-- The wheel is the hero. -->
 		<section class="flex flex-col items-center gap-5">

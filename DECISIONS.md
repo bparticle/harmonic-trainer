@@ -735,3 +735,66 @@ that drifts is worse than none.
 Block 5 captures and highlights the target device but has no backing loop; that
 is M7. The screen states this rather than leaving you waiting for audio that is
 not coming.
+
+---
+
+## Persistent app shell
+
+### MIDI belongs to the app, not to a page
+
+Each page constructed its own `MidiSession`, so every navigation tore down the
+connection and rebuilt it, and any page without a drill had no session at all —
+the keyboard simply felt dead there. That is the sort of inconsistency that
+makes a working app feel unreliable.
+
+There is now one module-level instance. ES modules are evaluated once, and
+SvelteKit routes on the client, so it survives navigation for the life of the
+tab. Constructing it at module scope is safe during SSR because the class
+touches no browser API until `detect`, `connect` or `startVirtual` is called,
+and only the root layout does that.
+
+Verified rather than assumed: a note held down on `/play`, navigated to
+`/explore` without releasing it, still shows in the header.
+
+### Handlers are borrowed, and given back
+
+The session outlives every page, so `onChord` and `onPedal` are set on mount and
+cleared on unmount. A stale handler would leave a screen nobody is looking at
+marking chords played somewhere else.
+
+### Reconnecting without asking
+
+Web MIDI permission is remembered per origin, so a second `requestMIDIAccess`
+does not prompt. Once connected, the fact is stored locally and the connection
+is restored on load — the piano is simply live when the app opens rather than
+needing a button pressed at the start of every session. First-time visitors
+still get an explicit prompt, and it can be switched off again from the menu.
+
+### One header, and it says what it is
+
+Every page carried its own header with different links in different places,
+which made moving around feel like moving between separate tools. There is now a
+single sticky shell: the same three destinations in the same order everywhere,
+with the current one marked.
+
+The links were also set in the dimmest ink in the palette, which is right for a
+caption and wrong for the only navigation in the app. Inactive links now sit at
+`--color-ink-muted` and the current one at full `--color-ink`.
+
+### The notes are always visible
+
+The header shows what is sounding on every screen, including the pages that do
+nothing with it. Most of the time it is decoration — but an instrument that
+responds everywhere feels connected, and one that responds on two screens out of
+six feels broken on the other four.
+
+### Settings follow you
+
+Device choice, reveal delay, chord window, MIDI latency and session length live
+behind a cog in the header rather than in one page's chrome. Device management
+especially has to be reachable from anywhere: a piano switched on mid-session
+should not require navigating to a particular page to be noticed.
+
+Preferences are validated server-side with real bounds. A chord window of zero
+would quietly break note clustering in a way that looks exactly like broken
+MIDI hardware.

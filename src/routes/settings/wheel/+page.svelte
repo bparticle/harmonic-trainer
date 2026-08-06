@@ -97,17 +97,11 @@
 <svelte:head><title>Calibrate · Harmonic Trainer</title></svelte:head>
 
 <main class="mx-auto min-h-dvh max-w-[1300px] px-5 py-6">
-	<header class="mb-6 flex items-baseline justify-between">
-		<div class="flex items-baseline gap-4">
-			<a href="/explore" class="font-display text-ink text-lg font-semibold tracking-tight">
-				Harmonic
-			</a>
-			<span class="text-ink-dim font-mono text-[0.65rem] tracking-widest uppercase">calibrate</span>
-		</div>
+	<header class="mb-6 flex items-baseline gap-4">
+		<h1 class="font-display text-ink text-lg font-semibold tracking-tight">Calibrate the wheel</h1>
 		<a
 			href="/settings/colours"
-			class="text-ink-dim hover:text-ink font-mono text-[0.65rem] tracking-widest uppercase transition-colors"
-			>colours</a
+			class="text-ink-muted hover:text-ink font-mono text-xs transition-colors">colours →</a
 		>
 	</header>
 
