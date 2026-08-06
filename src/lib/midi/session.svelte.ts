@@ -67,7 +67,8 @@ export class MidiSession {
 			return 'Web MIDI needs a secure connection. Open this over https rather than http.';
 		}
 		if (this.status === 'denied') {
-			return 'Permission to use MIDI devices was declined. Allow it in the browser’s site settings and reload.';
+			const detail = this.error ? ` (${this.error})` : '';
+			return `Permission to use MIDI devices was declined${detail}. Allow it in the browser’s site settings and reload.`;
 		}
 		return null;
 	}
@@ -87,7 +88,11 @@ export class MidiSession {
 		this.status = 'requesting';
 		try {
 			this.#access = await navigator.requestMIDIAccess({ sysex: false });
-		} catch {
+			this.error = null;
+		} catch (e) {
+			// Keep the reason. "Nothing happened" is the least useful thing a
+			// connect button can do, and swallowing the error guarantees it.
+			this.error = e instanceof Error ? e.message : String(e);
 			this.status = 'denied';
 			return;
 		}

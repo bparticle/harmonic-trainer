@@ -27,12 +27,38 @@ const REMEMBER_KEY = 'harmonic:midi-connected';
 export async function restoreMidi(): Promise<void> {
 	midi.detect();
 	midi.startVirtual();
-
 	if (midi.status !== 'idle') return;
+
+	if (await alreadyAllowed()) {
+		await midi.connect();
+		return;
+	}
+
 	if (typeof localStorage === 'undefined') return;
 	if (localStorage.getItem(REMEMBER_KEY) !== 'yes') return;
-
 	await midi.connect();
+}
+
+/**
+ * Has this browser already granted MIDI access?
+ *
+ * Asking the Permissions API is better than trusting our own flag: permission
+ * survives clearing site data that our flag does not, and it covers the case
+ * where access was granted before this app started remembering. Not every
+ * browser exposes `midi` as a queryable permission, so a failure here just
+ * falls through to the stored flag.
+ */
+async function alreadyAllowed(): Promise<boolean> {
+	if (typeof navigator === 'undefined' || !navigator.permissions) return false;
+	try {
+		const status = await navigator.permissions.query({
+			name: 'midi' as PermissionName,
+			sysex: false
+		} as PermissionDescriptor);
+		return status.state === 'granted';
+	} catch {
+		return false;
+	}
 }
 
 export async function connectMidi(): Promise<void> {

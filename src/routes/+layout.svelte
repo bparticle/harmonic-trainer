@@ -4,6 +4,7 @@
 	import '@fontsource/ibm-plex-mono/500.css';
 	import './layout.css';
 	import favicon from '$lib/assets/favicon.svg';
+	import { untrack } from 'svelte';
 	import { page } from '$app/state';
 	import AppNav from '$lib/components/AppNav.svelte';
 	import { paletteToCssText } from '$lib/design/palette';
@@ -20,13 +21,18 @@
 	/*
 	 * MIDI is started once, here, and lives for as long as the tab does.
 	 *
-	 * It used to be created per page, so every navigation dropped the connection
-	 * and pages without a drill felt dead. Owning it at the root means the piano
-	 * is simply live, everywhere, all the time.
+	 * `untrack` is load-bearing. `restoreMidi` reads `midi.status`, which made
+	 * this effect depend on it — so connecting, which sets the status to
+	 * `requesting`, re-ran the effect, fired its cleanup, and destroyed the
+	 * connection before it could be established. Pressing "connect" appeared to
+	 * do nothing at all.
+	 *
+	 * There is no cleanup for the same reason there is no teardown: the session
+	 * is meant to outlive every page, and the only thing that ends it is closing
+	 * the tab.
 	 */
 	$effect(() => {
-		void restoreMidi();
-		return () => midi.destroy();
+		untrack(() => void restoreMidi());
 	});
 
 	// Keep a running session's clustering in step with the saved preferences.

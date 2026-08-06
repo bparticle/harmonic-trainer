@@ -127,10 +127,19 @@
 						class="bg-ink text-ground w-full rounded px-3 py-2 text-sm font-semibold"
 						onclick={connectMidi}>Connect a keyboard</button
 					>
+					<p class="text-ink-dim mt-2 text-[0.7rem] leading-relaxed">
+						The browser will ask permission once, then remember it.
+					</p>
 				{:else if midi.status === 'requesting'}
 					<p class="text-ink-dim font-mono text-xs">Waiting for permission…</p>
 				{:else}
 					<p class="text-ink-muted text-xs leading-relaxed">{midi.unavailableReason}</p>
+					{#if midi.status === 'denied'}
+						<button
+							class="border-ground-line hover:border-ink-dim mt-2 w-full rounded border px-3 py-1.5 font-mono text-xs transition-colors"
+							onclick={connectMidi}>try again</button
+						>
+					{/if}
 				{/if}
 
 				{#if midi.pedalDown}
