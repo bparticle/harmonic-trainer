@@ -75,6 +75,25 @@
 		return keyView.pitchClasses;
 	});
 
+	/**
+	 * What to write on the lit cells.
+	 *
+	 * In chord mode the useful label is the chord tone — root, 3rd, 5th, 7th —
+	 * because that is what makes one voicing comparable to another. Everywhere
+	 * else it is the scale degree.
+	 */
+	const CHORD_TONES = ['R', '3', '5', '7', '9', '11', '13'];
+
+	const wheelDegrees = $derived.by(() => {
+		if (overlay === 'chord') {
+			return new Map(
+				chordPitchClasses(selectedChord).map((pc, i) => [pc, CHORD_TONES[i] ?? String(i)])
+			);
+		}
+		if (overlay === 'modulation') return undefined;
+		return keyView.degrees;
+	});
+
 	const arcs = $derived.by(() => {
 		if (overlay === 'modulation') {
 			return [
@@ -115,6 +134,7 @@
 			<Wheel
 				{config}
 				active={activePitchClasses}
+				degrees={wheelDegrees}
 				{highlights}
 				{arcs}
 				lit={litPitchClasses}

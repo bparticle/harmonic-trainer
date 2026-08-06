@@ -619,3 +619,45 @@ could never miss, and every warm key came out at a suspicious 100%. Ability is
 now the cutoff for `again` directly, so the seeded accuracies land where they
 were meant to: 85–87% warm, 64% lukewarm, 37–52% cold, with latency tracking the
 same split.
+
+### An alteration has to be audible
+
+Playing B♭–C–E offered C7, C7♭5 and C7♯5 as three separate readings. All three
+fit, because the fifth is missing from all of them — but you cannot hear a
+flattened fifth that was never played, and offering all three is inventing
+evidence rather than reporting it. A candidate is now rejected outright when the
+degree one of its alterations modifies is not among the notes.
+
+### Three notes stacked in thirds is a triad; three notes is not
+
+B♭–C–E contains a major second and a tritone, so it is not a triad however it is
+rearranged. As C–E–B♭ it is root, third and seventh: a **shell voicing**, which
+is the shape the curriculum teaches at L3.
+
+Reporting that as "fifth not played" was accurate and useless. Recognition now
+labels the shape, because "shell voicing" connects what is under the hand to
+something learnable and "missing a note" does not.
+
+### Figure and ground on the wheel
+
+Every cell sitting at a readable middle made the wheel busy rather than
+informative: eleven saturated competitors mean the seven-note shape has to be
+decoded instead of seen. In-key cells now go to 96% and everything else drops to
+9%, so a scale reads as one object at a glance.
+
+Two exceptions keep that from becoming a rule that hurts. A note actually
+sounding is never dimmed away, even outside the key — playing something the key
+does not contain is precisely when you want to see where it landed. And when no
+key is selected there is no figure to separate, so contrast would only make the
+wheel look switched off; everything sits at a readable middle instead.
+
+### Degrees on the cells
+
+The wheel now writes `I ii iii IV V vi vii°` under the note names, and chord
+tones (`R 3 5 7 9`) in chord mode. The degree is the part that transfers: ii–V–I
+is one shape in all twelve keys and Dm7–G7–C is not, so the numeral is what is
+worth memorising and the letter is not.
+
+On the circle of fifths a diatonic scale is seven contiguous positions, so with
+the dimming in place the key now reads as a single solid block of numbered
+cells — which is the visual map the wheel exists to build.

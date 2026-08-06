@@ -30,7 +30,19 @@ export type KeyOverlay = {
 	scaleCells: Cell[];
 	pitchClasses: number[];
 	chords: Array<{ chord: AbstractChord; symbol: string; roman: string; cells: Cell[] }>;
+	/**
+	 * Degree label per pitch class, for writing on the wheel.
+	 *
+	 * The degree is what transfers: ii–V–I is the same shape in all twelve keys,
+	 * and Dm7–G7–C is not. Putting the numeral on the cell is what lets the
+	 * pattern be memorised rather than the letters.
+	 */
+	degrees: Map<number, string>;
 };
+
+/** Bare degree numerals, without the chord-quality suffix. */
+const MAJOR_DEGREES = ['I', 'ii', 'iii', 'IV', 'V', 'vi', 'vii°'];
+const MINOR_DEGREES = ['i', 'ii°', '♭III', 'iv', 'v', '♭VI', '♭VII'];
 
 const MAJOR_ROMAN = ['Imaj7', 'ii7', 'iii7', 'IVmaj7', 'V7', 'vi7', 'viim7b5'];
 const MINOR_ROMAN = ['i7', 'iim7b5', 'bIIImaj7', 'iv7', 'v7', 'bVImaj7', 'bVII7'];
@@ -41,8 +53,11 @@ export function keyOverlay(k: Key, config: WheelConfig, geometry: WheelGeometry)
 	const tonic = pitchClass(k.tonic);
 	const roman = k.mode === 'aeolian' ? MINOR_ROMAN : MAJOR_ROMAN;
 
+	const degreeNames = k.mode === 'aeolian' ? MINOR_DEGREES : MAJOR_DEGREES;
+
 	return {
 		pitchClasses,
+		degrees: new Map(pitchClasses.map((pc, i) => [pc, degreeNames[i]])),
 		scaleCells: cellsFor(pitchClasses, tonic, config, geometry),
 		chords: [1, 2, 3, 4, 5, 6, 7].map((degree) => {
 			const chord = diatonicSeventh(k, degree);

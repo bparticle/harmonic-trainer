@@ -182,12 +182,14 @@
 		keyName = formatNote(spell(pc, makeKey('C')));
 	}
 
+	const keyView = $derived(keyOverlay(context, config, GEOMETRY));
+
 	const highlights = $derived.by((): Highlight[] => {
-		// The key's seven notes, so turning the wheel visibly moves something
-		// rather than only relabelling a corner of the screen. The block sits
-		// under the index mark, which is how you read a key off the real object.
+		// The key's seven notes outlined, so turning the wheel visibly moves
+		// something rather than only relabelling a corner of the screen. The block
+		// sits under the index mark, which is how you read a key off the object.
 		const shapes: Highlight[] = [
-			{ cells: keyOverlay(context, config, GEOMETRY).scaleCells, strength: 0.45, outline: true }
+			{ cells: keyView.scaleCells, strength: 0.45, outline: true }
 		];
 		if (current && revealed && current.candidates.length) {
 			shapes.push({
@@ -313,9 +315,15 @@
 				{/if}
 			</p>
 
+			<!--
+				The key is the figure, carrying its degree numerals; what you are
+				actually playing is ringed on top of it. That way the pattern stays
+				learnable while still showing where your hands landed inside it.
+			-->
 			<Wheel
 				{config}
-				active={session.live.map((n) => n % 12)}
+				active={keyView.pitchClasses}
+				degrees={keyView.degrees}
 				{highlights}
 				lit={session.live.map((n) => n % 12)}
 				size={420}

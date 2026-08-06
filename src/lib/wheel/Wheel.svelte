@@ -37,6 +37,12 @@
 		config,
 		/** Pitch classes filled with their own colour. */
 		active = [],
+		/**
+		 * Degree label per pitch class — `I`, `ii`, `♭VII`. Shown under the note
+		 * name on active cells, so the shape can be learned as a pattern of
+		 * degrees rather than a set of letters that changes with every key.
+		 */
+		degrees = undefined,
 		/** Extra shapes drawn over the wheel. */
 		highlights = [],
 		/** Pitch classes ringed as currently sounding — wired to MIDI in M3. */
@@ -52,6 +58,7 @@
 	}: {
 		config: WheelConfig;
 		active?: number[];
+		degrees?: Map<number, string>;
 		highlights?: Highlight[];
 		lit?: number[];
 		arcs?: Array<{ from: number; to: number; ring?: number; label?: string; muted?: boolean }>;
@@ -69,15 +76,33 @@
 	const ringCount = $derived(rings ?? config.rings);
 	const distinct = $derived(distinctRings(config));
 
-	/*
-	 * Resting cells stay properly coloured rather than dropping to a wash.
-	 * The premise of the whole app is that colour means pitch, so a wheel that
-	 * sits mostly grey until something is selected argues against itself. Active
-	 * cells go to full; the duplicate ring sits back because it is a repeat, not
-	 * because it is unimportant.
-	 */
 	const activeSet = $derived(new Set(active.map((pc) => ((pc % 12) + 12) % 12)));
 	const litSet = $derived(new Set(lit.map((pc) => ((pc % 12) + 12) % 12)));
+
+	/*
+	 * Figure and ground.
+	 *
+	 * When a key is showing, the notes in it go to full colour and everything
+	 * else drops right back, so the seven-note shape reads as one object at a
+	 * glance rather than as a busy ring you have to decode. Learning the pattern
+	 * is the whole purpose of the thing, and it cannot compete with eleven other
+	 * saturated cells.
+	 *
+	 * When nothing is selected there is no figure, so contrast would only make
+	 * the wheel look switched off — everything sits at a readable middle
+	 * instead.
+	 */
+	const hasFigure = $derived(activeSet.size > 0 && activeSet.size < 12);
+
+	function fillOpacity(pc: number, duplicate: boolean): number {
+		// A note actually sounding is never dimmed away, even when it is outside
+		// the key — playing something the key does not contain is exactly the
+		// moment you want to see where it landed.
+		if (litSet.has(pc)) return duplicate ? 0.6 : 0.96;
+		if (!hasFigure) return duplicate ? 0.28 : 0.5;
+		if (activeSet.has(pc)) return duplicate ? 0.5 : 0.96;
+		return duplicate ? 0.05 : 0.09;
+	}
 
 	let rotation = $state<RotationState>({ angle: 0, velocity: 0, dragging: false });
 	let frame = 0;
@@ -219,34 +244,49 @@
 		{#each cells as cell (`${cell.ring}-${cell.position}`)}
 			{@const centre = cellCentre(cell, geometry)}
 			{@const isActive = activeSet.has(cell.pc)}
-			{@const isLit = litSet.has(cell.pc)}
-			<g class="cell" class:is-duplicate={cell.duplicate}>
-				<path
-					d={cellSectorPath(cell, geometry)}
-					fill="var(--pc-{cell.pc})"
-					class="cell-fill"
-					opacity={isActive ? 0.98 : cell.duplicate ? 0.28 : 0.5}
-					onclick={() => onselect?.({ ring: cell.ring, position: cell.position }, cell.pc)}
-					onkeydown={(e) =>
-						e.key === 'Enter' && onselect?.({ ring: cell.ring, position: cell.position }, cell.pc)}
-					role="button"
-					tabindex="-1"
-					aria-label={cell.name}
-				/>
-				{#if isLit}
-					<path d={cellSectorPath(cell, geometry, 0.006, 0.5)} class="cell-lit" />
-				{/if}
-				<text
-					x={centre.x}
-					y={centre.y}
-					transform="rotate({labelRotation} {centre.x} {centre.y})"
-					class="cell-label"
-					fill={isActive ? `var(--pc-${cell.pc}-ink)` : 'var(--color-ink-muted)'}
-					opacity={cell.duplicate && !isActive ? 0.45 : 1}
-					text-anchor="middle"
-					dominant-baseline="central">{cell.name}</text
-				>
-			</g>
+				{@const isLit = litSet.has(cell.pc)}
+				{@const degree = isActive ? degrees?.get(cell.pc) : undefined}
+				{@const ink = isActive ? `var(--pc-${cell.pc}-ink)` : 'var(--color-ink-muted)'}
+				<g class="cell" class:is-duplicate={cell.duplicate}>
+					<path
+						d={cellSectorPath(cell, geometry)}
+						fill="var(--pc-{cell.pc})"
+						class="cell-fill"
+						opacity={fillOpacity(cell.pc, cell.duplicate)}
+						onclick={() => onselect?.({ ring: cell.ring, position: cell.position }, cell.pc)}
+						onkeydown={(e) =>
+							e.key === 'Enter' && onselect?.({ ring: cell.ring, position: cell.position }, cell.pc)}
+						role="button"
+						tabindex="-1"
+						aria-label={degree ? `${cell.name}, ${degree}` : cell.name}
+					/>
+					{#if isLit}
+						<path d={cellSectorPath(cell, geometry, 0.006, 0.5)} class="cell-lit" />
+					{/if}
+					<g transform="rotate({labelRotation} {centre.x} {centre.y})">
+						<text
+							x={centre.x}
+							y={centre.y + (degree ? -7 : 0)}
+							class="cell-label"
+							fill={ink}
+							opacity={hasFigure && !isActive ? 0.5 : cell.duplicate && !isActive ? 0.45 : 1}
+							text-anchor="middle"
+							dominant-baseline="central">{cell.name}</text
+						>
+						{#if degree}
+							<!-- The degree is the thing worth memorising: it is the same in
+							     all twelve keys, and the letter is not. -->
+							<text
+								x={centre.x}
+								y={centre.y + 10}
+								class="cell-degree"
+								fill={ink}
+								text-anchor="middle"
+								dominant-baseline="central">{degree}</text
+							>
+						{/if}
+					</g>
+				</g>
 		{/each}
 
 		{#each highlightPaths as highlight, i (i)}
@@ -317,10 +357,21 @@
 
 	.cell-label {
 		font-family: var(--font-display);
-		font-size: 19px;
+		font-size: 18px;
 		font-weight: 600;
 		pointer-events: none;
-		transition: fill 220ms var(--ease-wheel);
+		transition:
+			fill 220ms var(--ease-wheel),
+			opacity 220ms var(--ease-wheel);
+	}
+
+	.cell-degree {
+		font-family: var(--font-mono);
+		font-size: 11px;
+		font-weight: 500;
+		letter-spacing: 0.04em;
+		opacity: 0.82;
+		pointer-events: none;
 	}
 
 	.highlight {
