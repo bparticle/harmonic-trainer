@@ -411,3 +411,75 @@ Recorded because the pattern keeps repeating. C∆7 and Dm7 share only one note,
 so three differ, not two. JavaScript's default `.sort()` is lexicographic, so
 `[10, 2, 7]` needs a numeric comparator. And a ii–V–I walks *anticlockwise*
 round the circle — D to G is −1 fifth, not +1.
+
+---
+
+## M3 — MIDI layer
+
+### Settling a gesture is a timing question, not a rendering one
+
+The flush loop originally ran on `requestAnimationFrame`, which was wrong and
+was caught by testing in a browser pane that was not compositing: rAF is paused
+or throttled whenever the tab is not painting, so chord detection silently
+stopped. Playing into an app that has quietly stopped listening is the worst
+failure this thing could have — worse than a crash, because nothing tells you.
+
+It now runs on `setInterval`. Background tabs still throttle timers, but they
+throttle rather than pause, and the events themselves accumulate correctly
+either way.
+
+### The on-screen keyboard is the same pipeline, not a lesser one
+
+`MidiSession.push()` is the single entry point, and the on-screen keyboard calls
+it with the same note-on and note-off events the hardware sends. Nothing
+downstream — clustering, recognition, recording, scoring — can tell which one is
+playing. That is what makes the no-MIDI mode a genuine fallback rather than a
+second, worse implementation that rots.
+
+### `unsupported` is a first-class state with a real explanation
+
+Web MIDI does not exist in Safari on any platform, and every iOS browser is
+Safari underneath. The UI says so in words, names the browsers that do work, and
+carries on with the keyboard. An error toast would have been a lie about whose
+fault it is.
+
+### Zero-velocity note-on means note-off
+
+Plenty of hardware, including some Arturia firmware, releases notes that way
+rather than sending 0x80. Handled in the reducer so nothing above it has to
+know.
+
+### The sustain pedal does two jobs, and they do not conflict
+
+Held down, it keeps released notes sounding, so the clusterer reports what is
+actually ringing rather than what is under a finger. Pressed, it also advances
+the interface — the brief's "navigation when hands are busy". Both are driven
+from the same CC64 messages, with a half-pedal threshold at 64.
+
+### Takes are stored as real Standard MIDI Files
+
+Format 0, one track, tempo written in, times as wall-clock milliseconds
+converted to ticks. Not a bespoke JSON blob, because the brief wants takes kept
+forever and re-analysed when the engine improves — and because a standard file
+opens in any DAW, which matters the day this app is not the only thing that
+should be able to read your own playing. Verified end to end: a recorded take
+round-trips through the encoder, survives the database as `bytea`, and comes
+back with an intact `MThd`/`MTrk` structure.
+
+The API decodes every uploaded take before storing it, purely to refuse anything
+unreadable. A take that cannot be parsed is worse than no take, because it looks
+like data until the day it is needed.
+
+### "Guess before reveal" is self-reported, because it has to be
+
+The app cannot know what you thought. So the chord is detected, held as a `?`
+for the reveal delay, and you hit the pedal or the spacebar to claim you had it.
+That claim is the honest measurement available, and the latency from detection
+to claim is the number worth tracking.
+
+### `Omit` on a union loses the union
+
+`Omit<MidiEvent, 'time'>` collapses to the keys all three variants share,
+quietly dropping `note` and `down`. A distributive version is needed. Caught by
+`svelte-check`, not by the tests, which is a reminder that the type check earns
+its place in the loop.

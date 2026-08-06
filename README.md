@@ -124,9 +124,14 @@ src/
       rotation.svelte.ts  Drag momentum, friction, detent snapping
       overlays.ts    Key, chord neighbours, brightness axis, modulation
       Wheel.svelte   Parametric SVG; knows no music, only cells
+    midi/          Web MIDI, clustering, take recording
+      cluster.ts     Note-ons gathered into chord events; pedal handling
+      smf.ts         Standard MIDI File encode and decode
+      session.svelte.ts  Devices, hot-plug, live state, recording
     components/
       Glyph.svelte       Musical accidentals as vectors
       ChordSymbol.svelte Composed chord symbols with spoken labels
+      Keyboard.svelte    On-screen keyboard; the no-MIDI fallback
     server/
       auth.ts        Password check and signed session cookie
       db/
@@ -182,8 +187,8 @@ local Postgres for development and tests.
 | **M0** | Repo, DB, migrations, test runner, tokens    | done   |
 | **M1** | Music core + golden fixtures                 | done   |
 | **M2** | Harmonic wheel component                     | done   |
-| **M3** | MIDI layer                                   | next   |
-| **M4** | SRS + seeded skill graph                     |        |
+| **M3** | MIDI layer                                   | done   |
+| **M4** | SRS + seeded skill graph                     | next   |
 | **M5** | Session engine                               |        |
 | **M6** | Vault, blind-spot report, transfer detection |        |
 | **M7** | Backing tracks and play-along                |        |
