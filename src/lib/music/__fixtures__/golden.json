@@ -572,6 +572,23 @@
 			"top": "C9"
 		},
 		{
+			"why": "Bb C E is a C7 shell voicing — three notes, but not a triad.",
+			"pitches": [58, 60, 64],
+			"top": "C7",
+			"expectInterpretation": "shell"
+		},
+		{
+			"why": "An altered fifth cannot be claimed when no fifth was played at all.",
+			"pitches": [48, 52, 58],
+			"top": "C7",
+			"excludes": ["C7b5", "C7#5"]
+		},
+		{
+			"why": "But an altered fifth that is actually sounding is a fair reading.",
+			"pitches": [48, 52, 56, 58],
+			"contains": ["C7#5"]
+		},
+		{
 			"why": "Two notes are not a chord.",
 			"pitches": [48, 52],
 			"expectEmpty": true

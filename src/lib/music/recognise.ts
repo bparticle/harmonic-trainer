@@ -20,7 +20,23 @@ import { spell } from './spell';
  * confident face.
  */
 
-export type Interpretation = 'tertian' | 'rootless' | 'quartal' | 'upper-structure' | 'slash';
+export type Interpretation =
+	| 'tertian'
+	| 'shell'
+	| 'rootless'
+	| 'quartal'
+	| 'upper-structure'
+	| 'slash';
+
+/** Which chord degree each alteration modifies. */
+const ALTERATION_DEGREE: Record<Alteration, number> = {
+	b5: 5,
+	'#5': 5,
+	b9: 9,
+	'#9': 9,
+	'#11': 11,
+	b13: 13
+};
 
 export type Candidate = {
 	chord: AbstractChord;
@@ -245,6 +261,17 @@ function scoreTemplate(
 	// A chord needs at least three notes to be a chord.
 	if (played.length < 3) return null;
 
+	/*
+	 * An alteration has to be audible.
+	 *
+	 * C–E–B♭ fits C7, C7♭5 and C7♯5 equally well, because the fifth is missing
+	 * in all three — but you cannot hear a flattened fifth that was never
+	 * played, and offering all three is inventing evidence. If the degree an
+	 * alteration modifies is not in the notes, the reading is unsupported.
+	 */
+	const alterations = template.spec.alterations ?? [];
+	if (alterations.some((a) => missingDegrees.includes(ALTERATION_DEGREE[a]))) return null;
+
 	const reasoning: string[] = [];
 	let score = W.prior * template.prior;
 
@@ -260,6 +287,16 @@ function scoreTemplate(
 	}
 
 	let interpretation: Interpretation = 'tertian';
+
+	/*
+	 * Root, third and seventh and nothing else is a shell voicing — the shape
+	 * the curriculum teaches at L3, not merely "a chord missing its fifth".
+	 * Naming the shape connects what is under the hand to something learnable.
+	 */
+	if (hasRoot && remaining.length === 3 && [1, 3, 7].every((d) => remaining.includes(d))) {
+		interpretation = 'shell';
+		reasoning.push('shell voicing: root, 3rd and 7th, with the fifth left out');
+	}
 
 	if (!hasRoot) {
 		interpretation = 'rootless';

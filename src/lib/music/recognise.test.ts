@@ -14,6 +14,7 @@ type Fixture = {
 	top?: string;
 	above?: string[];
 	contains?: string[];
+	excludes?: string[];
 	expectInterpretation?: string;
 	expectEmpty?: boolean;
 };
@@ -58,6 +59,12 @@ describe('chord recognition', () => {
 		if (f.contains) {
 			for (const symbol of f.contains) {
 				expect(symbols, `ranked: ${symbols.join(' > ')}`).toContain(symbol);
+			}
+		}
+
+		if (f.excludes) {
+			for (const symbol of f.excludes) {
+				expect(symbols, `ranked: ${symbols.join(' > ')}`).not.toContain(symbol);
 			}
 		}
 
