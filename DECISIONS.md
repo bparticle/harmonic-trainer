@@ -798,3 +798,29 @@ should not require navigating to a particular page to be noticed.
 Preferences are validated server-side with real bounds. A chord window of zero
 would quietly break note clustering in a way that looks exactly like broken
 MIDI hardware.
+
+### An effect that reads MIDI state cannot also own MIDI's lifetime
+
+Pressing "connect a keyboard" did nothing at all, silently. The root layout's
+effect called `restoreMidi`, which reads `midi.status` — so the effect *depended*
+on the status. Connecting sets it to `requesting`, the effect re-ran, its cleanup
+fired `midi.destroy()`, and the connection was torn down before
+`requestMIDIAccess` could resolve.
+
+The read is now wrapped in `untrack`, and the effect has no cleanup at all: the
+session is meant to outlive every page, and the only thing that should end it is
+closing the tab.
+
+This is the second time in this build that an effect writing to state it also
+reads has caused a bug that looked like something else entirely. Worth watching
+for wherever a rune-based store is initialised from a component.
+
+### A failed connect must say why
+
+`connect()` caught the rejection and threw the reason away, which is how a
+denied permission became "nothing happens". The message is kept, shown in the
+menu, and paired with a retry.
+
+Permission is also checked through the Permissions API before falling back to
+our own stored flag — it covers access granted before this app started
+remembering, and it survives clearing site data that the flag does not.
