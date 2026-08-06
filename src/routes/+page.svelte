@@ -1,15 +1,21 @@
 <script lang="ts">
-	let { data } = $props();
+	import { formatNote } from '$lib/music/note';
+	import { spell } from '$lib/music/spell';
+	import { key as makeKey } from '$lib/music/key';
 
 	/*
-	 * A preview of the wheel's outermost ring: twelve pitch classes in
-	 * circle-of-fifths order, each carrying its colour and its computed
-	 * contrast-safe ink.
+	 * One button.
 	 *
-	 * The labels are literals here on purpose. Real spelling — why the fourth
-	 * degree of Eb major is Ab and never G# — is the music core's job in M1, and
-	 * this page must not quietly grow a second, wrong implementation of it.
+	 * No menus and no choosing: the session engine already decided the key, the
+	 * cards and the new idea. Everything else on this page is a fact about where
+	 * things stand, stated as a musical observation rather than a score.
 	 */
+
+	let { data } = $props();
+	// The buttons own this once the page is up; settings only seed it.
+	// svelte-ignore state_referenced_locally
+	let length = $state<10 | 20 | 35>(data.settings.prefs.sessionLengthMinutes);
+
 	const RING = [
 		{ pc: 0, label: 'C' },
 		{ pc: 7, label: 'G' },
@@ -25,24 +31,14 @@
 		{ pc: 5, label: 'F' }
 	];
 
-	const R = 132;
-	const NODE = 30;
+	const R = 120;
 	const positions = RING.map((entry, i) => {
 		const angle = (i / RING.length) * Math.PI * 2 - Math.PI / 2;
 		return { ...entry, x: Math.cos(angle) * R, y: Math.sin(angle) * R };
 	});
 
-	const facts = $derived([
-		{ k: 'database', v: 'neon · connected' },
-		{ k: 'tables', v: String(data.tableCount) },
-		{ k: 'migrations', v: String(data.migrationCount) },
-		{ k: 'palette', v: `12 swatches · ${data.gamutFailures} out of gamut` },
-		{ k: 'session', v: `${data.settings.prefs.sessionLengthMinutes} min` },
-		{
-			k: 'wheel',
-			v: `${data.settings.wheelConfig.rings} rings · offset ${data.settings.wheelConfig.ringOffsetSteps}`
-		}
-	]);
+	const cold = $derived(new Set(data.coldestKeys));
+	const resuming = $derived(Boolean(data.active));
 </script>
 
 <svelte:head><title>Harmonic Trainer</title></svelte:head>
@@ -53,62 +49,87 @@
 			Harmonic&nbsp;Trainer
 		</h1>
 		<nav class="flex gap-4 font-mono text-[0.65rem] tracking-widest uppercase">
-			<a href="/play" class="text-ink-muted hover:text-ink transition-colors">play</a>
-			<a href="/explore" class="text-ink-muted hover:text-ink transition-colors">explore</a>
+			<a href="/play" class="text-ink-dim hover:text-ink transition-colors">play</a>
+			<a href="/explore" class="text-ink-dim hover:text-ink transition-colors">explore</a>
 			<a href="/settings/wheel" class="text-ink-dim hover:text-ink transition-colors">calibrate</a>
 			<a href="/settings/colours" class="text-ink-dim hover:text-ink transition-colors">colours</a>
 		</nav>
 	</header>
 
-	<div class="flex flex-1 items-center justify-center py-10">
-		<svg
-			viewBox="-190 -190 380 380"
-			class="no-select w-full max-w-[26rem]"
-			role="img"
-			aria-label="The twelve pitch classes in circle-of-fifths order, coloured by pitch"
-		>
+	<div class="flex flex-1 flex-col items-center justify-center gap-10 py-10">
+		<svg viewBox="-170 -170 340 340" class="no-select w-full max-w-[19rem]" role="img"
+			aria-label="The twelve keys, with the coldest marked">
 			<circle r={R} fill="none" stroke="var(--color-ground-line)" stroke-width="1" />
-
 			{#each positions as p (p.pc)}
+				{@const isCold = cold.has(p.label.replace('♭', 'b'))}
 				<g transform="translate({p.x} {p.y})">
-					<circle r={NODE} fill="var(--pc-{p.pc})" />
+					<circle r="26" fill="var(--pc-{p.pc})" opacity={isCold ? 0.95 : 0.22} />
 					<text
 						y="1"
 						text-anchor="middle"
 						dominant-baseline="middle"
-						font-size="20"
+						font-size="17"
 						font-weight="600"
 						font-family="var(--font-display)"
-						fill="var(--pc-{p.pc}-ink)">{p.label}</text
+						fill={isCold ? `var(--pc-${p.pc}-ink)` : 'var(--color-ink-dim)'}>{p.label}</text
 					>
 				</g>
 			{/each}
-
-			<text
-				text-anchor="middle"
-				y="-6"
-				font-size="11"
-				letter-spacing="3"
-				font-family="var(--font-mono)"
-				fill="var(--color-ink-dim)">CIRCLE OF</text
-			>
-			<text
-				text-anchor="middle"
-				y="12"
-				font-size="11"
-				letter-spacing="3"
-				font-family="var(--font-mono)"
-				fill="var(--color-ink-dim)">FIFTHS</text
-			>
 		</svg>
+
+		<form method="POST" action="?/start" class="flex flex-col items-center gap-4">
+			<input type="hidden" name="length" value={length} />
+			<button
+				type="submit"
+				class="bg-ink text-ground font-display rounded-2xl px-10 py-6 text-2xl font-semibold
+				       tracking-tight transition-transform active:scale-[0.98]"
+			>
+				{resuming ? 'Carry on with today’s session' : 'Start today’s session'}
+			</button>
+
+			{#if !resuming}
+				<div class="flex gap-1">
+					{#each [10, 20, 35] as const as minutes (minutes)}
+						<button
+							type="button"
+							class="border-ground-line hover:border-ink-dim rounded border px-3 py-1 font-mono text-xs transition-colors"
+							class:is-selected={length === minutes}
+							onclick={() => (length = minutes)}>{minutes} min</button
+						>
+					{/each}
+				</div>
+			{:else}
+				<p class="text-ink-dim font-mono text-xs">
+					Picked up where you left off, in {data.active?.plan.keyCenter}.
+				</p>
+			{/if}
+		</form>
 	</div>
 
-	<dl class="border-ground-line grid grid-cols-2 gap-x-8 gap-y-3 border-t pt-6 sm:grid-cols-3">
-		{#each facts as fact (fact.k)}
-			<div>
-				<dt class="text-ink-dim font-mono text-[0.65rem] tracking-widest uppercase">{fact.k}</dt>
-				<dd class="text-ink-muted mt-1 font-mono text-sm">{fact.v}</dd>
-			</div>
-		{/each}
+	<dl class="border-ground-line grid grid-cols-2 gap-x-8 gap-y-3 border-t pt-6 sm:grid-cols-4">
+		<div>
+			<dt class="text-ink-dim font-mono text-[0.65rem] tracking-widest uppercase">due now</dt>
+			<dd class="text-ink-muted mt-1 font-mono text-sm">{data.due} of {data.totalCards}</dd>
+		</div>
+		<div>
+			<dt class="text-ink-dim font-mono text-[0.65rem] tracking-widest uppercase">this week</dt>
+			<dd class="text-ink-muted mt-1 font-mono text-sm">{data.reviewsThisWeek} reviews</dd>
+		</div>
+		<div class="col-span-2">
+			<dt class="text-ink-dim font-mono text-[0.65rem] tracking-widest uppercase">
+				coldest keys
+			</dt>
+			<dd class="text-ink-muted mt-1 font-mono text-sm">
+				{data.coldestKeys.join(' · ') || '—'}
+			</dd>
+		</div>
 	</dl>
 </main>
+
+<style>
+	.is-selected {
+		background: var(--color-ground-overlay);
+		border-color: var(--color-ink-dim);
+		color: var(--color-ink);
+	}
+</style>
