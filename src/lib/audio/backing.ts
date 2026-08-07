@@ -1,4 +1,5 @@
 import type { Key } from '$lib/music/key';
+import { WakeLock } from '$lib/wake-lock';
 import { totalBeats, walkingBass, type BarChord } from './bass';
 import { compPattern, drumPattern, type CompHit, type DrumHit, type Feel } from './groove';
 
@@ -273,6 +274,9 @@ export class BackingTrack {
 	};
 	/** 0–1 per part, on top of the mix built into the voices themselves. */
 	#level: Record<Part, number> = { bass: 1, drums: 1, comp: 1, metronome: 1 };
+	// Held for exactly as long as something is actually sounding — see start,
+	// pause, resume and stop — so the screen sleeps the instant nothing is.
+	#wakeLock = new WakeLock();
 
 	/** Called on every beat with the position, for highlighting the chart. */
 	onBeat: ((state: BackingState) => void) | null = null;
@@ -379,11 +383,16 @@ export class BackingTrack {
 
 		this.#playing = true;
 		transport.start();
+		// The count-in counts as playing for this purpose: dozing off during the
+		// four clicks before the tune starts would be a strange place to draw
+		// the line.
+		void this.#wakeLock.request();
 	}
 
 	stop(): void {
 		this.#playing = false;
 		this.#paused = false;
+		this.#wakeLock.release();
 		if (!tone) return;
 		const transport = tone.getTransport();
 		transport.stop();
@@ -414,6 +423,7 @@ export class BackingTrack {
 		if (!this.#playing) return;
 		this.#playing = false;
 		this.#paused = true;
+		this.#wakeLock.release();
 		tone?.getTransport().pause();
 		// A note left ringing into the silence would be one more thing to listen
 		// past while trying to hear the shape just landed on.
@@ -437,6 +447,7 @@ export class BackingTrack {
 			this.#paused = false;
 			this.#playing = true;
 			tone?.getTransport().start();
+			void this.#wakeLock.request();
 			return true;
 		}
 
@@ -490,6 +501,7 @@ export class BackingTrack {
 
 	dispose(): void {
 		this.stop();
+		this.#wakeLock.dispose();
 		if (this.#voices) {
 			for (const voice of [
 				this.#voices.bass,
