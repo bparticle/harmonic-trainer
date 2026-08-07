@@ -1,4 +1,4 @@
-import { drizzle } from 'drizzle-orm/node-postgres';
+import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 import { env } from '$env/dynamic/private';
 import * as schema from './schema';
@@ -19,13 +19,40 @@ import * as schema from './schema';
  * pool of exactly one.
  */
 
-if (!env.DATABASE_URL) throw new Error('DATABASE_URL is not set');
+type Db = NodePgDatabase<typeof schema>;
 
-const pool = new pg.Pool({
-	connectionString: env.DATABASE_URL,
-	max: 1,
-	idleTimeoutMillis: 10_000
+let instance: Db | null = null;
+
+/*
+ * Built on first use, not on import.
+ *
+ * SvelteKit's production build imports every server module to work out
+ * prerendering, which runs this file's top level on a machine that is
+ * building the app, not serving it — CI, most obviously, which has no
+ * `DATABASE_URL` and has no reason to need one. A module-level `throw` here
+ * used to fail that build outright. Deferring the check to the first real
+ * query means importing the module is free, and the error still appears
+ * immediately for the first request that actually needs a database.
+ */
+function connect(): Db {
+	if (!instance) {
+		if (!env.DATABASE_URL) throw new Error('DATABASE_URL is not set');
+		const pool = new pg.Pool({
+			connectionString: env.DATABASE_URL,
+			max: 1,
+			idleTimeoutMillis: 10_000
+		});
+		instance = drizzle(pool, { schema });
+	}
+	return instance;
+}
+
+export const db: Db = new Proxy({} as Db, {
+	get(_target, prop, receiver) {
+		const real = connect();
+		const value = Reflect.get(real, prop, receiver);
+		return typeof value === 'function' ? value.bind(real) : value;
+	}
 });
 
-export const db = drizzle(pool, { schema });
 export { schema };
