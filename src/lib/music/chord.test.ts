@@ -3,6 +3,7 @@ import golden from './__fixtures__/golden.json';
 import {
 	chordNotes,
 	closeVoicing,
+	degreeLabels,
 	diatonicSeventh,
 	diatonicTriad,
 	drop2,
@@ -159,5 +160,45 @@ describe('chord symbols', () => {
 
 	it('does not give a 6 chord a seventh', () => {
 		expect(pitches(chordNotes(parseChord('C6')))).toEqual(['C', 'E', 'G', 'A']);
+	});
+});
+
+describe('naming the notes of a chord by degree', () => {
+	const degrees = (symbol: string) => degreeLabels(parseChord(symbol)).map((d) => d.degree);
+
+	it('numbers a plain triad', () => {
+		expect(degrees('C')).toEqual(['1', '3', '5']);
+	});
+
+	it('flattens the third of a minor chord', () => {
+		expect(degrees('Cm')).toEqual(['1', '♭3', '5']);
+	});
+
+	it('flattens the seventh of a dominant and not of a major seventh', () => {
+		expect(degrees('C7')).toEqual(['1', '3', '5', '♭7']);
+		expect(degrees('Cmaj7')).toEqual(['1', '3', '5', '7']);
+	});
+
+	it('double-flats the seventh of a diminished seventh', () => {
+		// The thing that makes it a diminished seventh rather than a sixth.
+		expect(degrees('Cdim7')).toEqual(['1', '♭3', '♭5', '♭♭7']);
+	});
+
+	it('names the half-diminished fifth', () => {
+		expect(degrees('Cm7b5')).toEqual(['1', '♭3', '♭5', '♭7']);
+	});
+
+	it('keeps extensions above the octave', () => {
+		expect(degrees('C9')).toEqual(['1', '3', '5', '♭7', '9']);
+	});
+
+	it('marks an alteration', () => {
+		expect(degrees('C7b9')).toContain('♭9');
+		expect(degrees('C7#11')).toContain('♯11');
+	});
+
+	it('hands back the spelled note alongside the number', () => {
+		const labels = degreeLabels(parseChord('Eb7'));
+		expect(labels.map((l) => formatNote(l.note))).toEqual(['Eb', 'G', 'Bb', 'Db']);
 	});
 });

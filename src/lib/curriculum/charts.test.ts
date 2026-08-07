@@ -64,6 +64,32 @@ describe('resolving a chart into a key', () => {
 		expect(realiseChart(minorBlues, 'C').rows[1][0].chords[0].symbol).toBe('Fm7');
 	});
 
+	it('spells a raised degree with a sharp, not whatever the key prefers', () => {
+		// ♯I in F is F♯, and re-spelling it through the key gave G♭ — a flat, for a
+		// numeral whose whole meaning is "raised".
+		const bar = realiseChart(chartBySlug('indiana')!, 'F').rows[2][1];
+		expect(bar.chords[0].symbol).toBe('F#dim7');
+	});
+
+	it('does not flatten the sixth twice in a minor chart', () => {
+		// Read in aeolian, ♭VI landed on a double flat and fell back to G7 — the
+		// same chord as the bar after it. Numerals count from the major scale.
+		const bar = realiseChart(minorBlues, 'C').rows[2][0];
+		expect(bar.chords[0].symbol).toBe('Ab7');
+	});
+
+	it('never writes a double accidental, in any chart, in any key', () => {
+		for (const seed of CHARTS) {
+			for (const k of ['C', 'G', 'D', 'A', 'E', 'B', 'Gb', 'Db', 'Ab', 'Eb', 'Bb', 'F']) {
+				for (const bar of realiseChart(seed, k).rows.flat()) {
+					for (const chord of bar.chords) {
+						expect(chord.symbol, `${seed.slug} in ${k}: ${chord.numeral}`).not.toMatch(/bb|##/);
+					}
+				}
+			}
+		}
+	});
+
 	it('builds the passing diminished as a real diminished seventh', () => {
 		// A half-diminished here would be a different chord with a different job.
 		const bar = realiseChart(jazzBlues, 'C').rows[1][1];
@@ -79,6 +105,46 @@ describe('resolving a chart into a key', () => {
 	it('keeps the numerals alongside the symbols', () => {
 		const bar = realiseChart(blues, 'C').rows[0][0];
 		expect(bar.chords[0].numeral).toBe('I7');
+	});
+});
+
+describe('the repertoire', () => {
+	it('gives every standard the year that puts it in the public domain', () => {
+		// The only thing making these shippable, so it is not optional.
+		for (const seed of CHARTS.filter((c) => c.category === 'standard')) {
+			expect(seed.published, seed.slug).toBeDefined();
+			expect(seed.published!, seed.slug).toBeLessThanOrEqual(1930);
+		}
+	});
+
+	it('claims a publication year for nothing else', () => {
+		for (const seed of CHARTS.filter((c) => c.category !== 'standard')) {
+			expect(seed.published, seed.slug).toBeUndefined();
+		}
+	});
+
+	it('walks the bird blues through a ii-V into every chord', () => {
+		expect(symbols('bird-blues', 'F').slice(0, 8)).toEqual([
+			'Fmaj7',
+			'Em7',
+			'A7',
+			'Dm7',
+			'G7',
+			'Cm7',
+			'F7',
+			'Bb7'
+		]);
+	});
+
+	it('moves the three-tonic cycle by major thirds', () => {
+		expect(symbols('three-tonic-cycle', 'C').slice(0, 6)).toEqual([
+			'Cmaj7', 'Eb7', 'Abmaj7', 'B7', 'Emaj7', 'G7'
+		]);
+	});
+
+	it('takes the fifths cycle through all twelve keys and home', () => {
+		const roots = symbols('fifths-cycle', 'C').filter((_, i) => i % 2 === 0);
+		expect(new Set(roots).size).toBe(12);
 	});
 });
 

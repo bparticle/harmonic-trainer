@@ -7,23 +7,49 @@ import { chordFromNumeral } from './progressions';
 /**
  * The application vehicles, as chord grids.
  *
- * Generic forms only — twelve-bar blues, minor blues, rhythm changes, modal
- * vamps. Nothing here is a transcription of anyone's tune, and nothing here is
- * anyone's melody. The chart importer is where your own material goes.
+ * Three kinds of thing live here, and the difference matters:
+ *
+ *   forms      The generic shapes — twelve-bar blues, rhythm changes, a modal
+ *              vamp. Nobody's tune; the raw material everything else is built
+ *              from.
+ *   cycles     Named harmonic devices. A bird blues and a three-tonic cycle are
+ *              patterns that get taught in every book, not compositions, even
+ *              though both are named after the player who made them famous.
+ *   standards  Real repertoire, and only where the copyright has expired: US
+ *              publication in 1930 or earlier. The year is recorded on each one
+ *              so the claim can be checked rather than taken on trust.
+ *
+ * What is deliberately absent is a fake book. No melodies anywhere, and no
+ * changes to tunes still in copyright — that is what the chart importer is for.
  *
  * Grids are stored as Roman numerals rather than chord symbols, so one chart
  * plays in all twelve keys without being rewritten. Bars are grouped into rows
  * of four purely because that is how a chart is read.
  */
 
+export type ChartCategory = 'form' | 'cycle' | 'standard';
+
+export const CHART_CATEGORIES: Record<ChartCategory, string> = {
+	form: 'Forms',
+	cycle: 'Cycles',
+	standard: 'Standards'
+};
+
 export type ChartSeed = {
 	slug: string;
 	name: string;
 	style: ChartStyle;
+	category: ChartCategory;
+	/** How the key is named and heard. Numerals always resolve against the major
+	 * scale — see `realiseChart` — so this only decides whether the chart is
+	 * announced as "C" or "C minor". */
+	mode: 'major' | 'minor';
 	defaultBpm: number;
 	/** Rows of bars; each bar holds one or two Roman numerals. */
 	grid: string[][];
 	notes: string;
+	/** Year of first publication, for the standards. Their licence to be here. */
+	published?: number;
 };
 
 export const CHARTS: ChartSeed[] = [
@@ -31,6 +57,8 @@ export const CHARTS: ChartSeed[] = [
 		slug: 'blues-12',
 		name: 'Twelve-bar blues',
 		style: 'blues',
+		category: 'form',
+		mode: 'major',
 		defaultBpm: 120,
 		grid: [
 			['I7', 'IV7', 'I7', 'I7'],
@@ -44,6 +72,8 @@ export const CHARTS: ChartSeed[] = [
 		slug: 'blues-12-jazz',
 		name: 'Twelve-bar blues, jazz changes',
 		style: 'blues',
+		category: 'form',
+		mode: 'major',
 		defaultBpm: 140,
 		grid: [
 			['I7', 'IV7', 'I7', 'v7 I7'],
@@ -57,6 +87,8 @@ export const CHARTS: ChartSeed[] = [
 		slug: 'minor-blues-12',
 		name: 'Minor blues',
 		style: 'minor_blues',
+		category: 'form',
+		mode: 'minor',
 		defaultBpm: 120,
 		grid: [
 			['i7', 'i7', 'i7', 'i7'],
@@ -70,6 +102,8 @@ export const CHARTS: ChartSeed[] = [
 		slug: 'rhythm-changes',
 		name: 'Rhythm changes',
 		style: 'rhythm_changes',
+		category: 'form',
+		mode: 'major',
 		defaultBpm: 160,
 		grid: [
 			['I6 vi7', 'ii7 V7', 'I6 vi7', 'ii7 V7'],
@@ -88,6 +122,8 @@ export const CHARTS: ChartSeed[] = [
 		slug: 'modal-vamp',
 		name: 'Modal vamp',
 		style: 'modal_vamp',
+		category: 'form',
+		mode: 'minor',
 		defaultBpm: 132,
 		grid: [
 			['i7', 'i7', 'i7', 'i7'],
@@ -97,6 +133,151 @@ export const CHARTS: ChartSeed[] = [
 		],
 		notes:
 			'Dorian, sixteen bars, with a shift up a semitone for two. Nowhere to hide behind harmonic motion, so the voicings and the melody have to carry it.'
+	},
+
+	// -- Cycles: named devices, not compositions ------------------------------
+	{
+		slug: 'bird-blues',
+		name: 'Bird blues',
+		style: 'blues',
+		category: 'cycle',
+		mode: 'major',
+		defaultBpm: 180,
+		grid: [
+			['Imaj7', 'vii7 III7', 'vi7 II7', 'v7 I7'],
+			['IV7', 'iv7 bVII7', 'iii7 VI7', 'biii7 bVI7'],
+			['ii7', 'V7', 'Imaj7 VI7', 'ii7 V7']
+		],
+		notes:
+			'The blues rewritten as an unbroken chain of ii–Vs, which is the single best argument for learning them. Same twelve bars, same three chords underneath, and almost nothing left of the original harmony on the surface.'
+	},
+	{
+		slug: 'three-tonic-cycle',
+		name: 'Three-tonic cycle',
+		style: 'custom',
+		category: 'cycle',
+		mode: 'major',
+		defaultBpm: 160,
+		grid: [
+			['Imaj7 bIII7', 'bVImaj7 VII7', 'IIImaj7 V7', 'Imaj7'],
+			['bVImaj7 VII7', 'IIImaj7 V7', 'Imaj7 bIII7', 'bVImaj7']
+		],
+		notes:
+			'Three key centres a major third apart, each reached by its own dominant. The device Coltrane built on, on its own without the tune — which is the useful part anyway, because the pattern moves to any key and the tune does not.'
+	},
+	{
+		slug: 'fifths-cycle',
+		name: 'ii–V round the wheel',
+		style: 'custom',
+		category: 'cycle',
+		mode: 'major',
+		defaultBpm: 120,
+		grid: [
+			['ii7 V7', 'v7 I7', 'i7 IV7', 'iv7 bVII7'],
+			['bvii7 bIII7', 'biii7 bVI7', 'bvi7 bII7', 'bii7 bV7'],
+			['bv7 VII7', 'vii7 III7', 'iii7 VI7', 'vi7 II7']
+		],
+		notes:
+			'A ii–V into every one of the twelve keys, falling in fifths, arriving back where it started. Two beats each and no resolution anywhere: the point is the shape of the move, not the arrival.'
+	},
+
+	// -- Standards: public domain only. See the note at the top of this file. --
+	{
+		slug: 'indiana',
+		name: '(Back Home Again in) Indiana',
+		style: 'custom',
+		category: 'standard',
+		mode: 'major',
+		defaultBpm: 200,
+		published: 1917,
+		grid: [
+			['I', 'I', 'IV7', 'IV7'],
+			['I', 'VI7', 'ii7', 'ii7'],
+			['I', '#I°7', 'ii7', 'V7'],
+			['iii7 VI7', 'ii7', 'ii7 V7', 'I V7'],
+			['I', 'I', 'IV7', 'IV7'],
+			['I', 'VI7', 'ii7', 'ii7'],
+			['IV', 'iv', 'I VI7', 'ii7 V7'],
+			['I', 'vi7', 'ii7 V7', 'I']
+		],
+		notes:
+			'Thirty-two bars from 1917 and the vehicle half of bebop was built on. Fast, diatonic, and full of the ii–Vs you have been drilling — which is exactly why it was chosen.'
+	},
+	{
+		slug: 'sweet-georgia-brown',
+		name: 'Sweet Georgia Brown',
+		style: 'custom',
+		category: 'standard',
+		mode: 'major',
+		defaultBpm: 190,
+		published: 1925,
+		grid: [
+			['VI7', 'VI7', 'VI7', 'VI7'],
+			['II7', 'II7', 'II7', 'II7'],
+			['V7', 'V7', 'V7', 'V7'],
+			['I', 'I', 'I', 'I7'],
+			['IV', 'IV', 'IV', 'IV'],
+			['I', 'I', 'VI7', 'VI7'],
+			['II7', 'II7', 'V7', 'V7'],
+			['I', 'VI7', 'ii7 V7', 'I']
+		],
+		notes:
+			'Opens three dominants away from home and spends sixteen bars walking back. If you want to feel the circle of fifths rather than look at it, this is the one.'
+	},
+	{
+		slug: 'st-louis-blues',
+		name: 'St. Louis Blues',
+		style: 'blues',
+		category: 'standard',
+		mode: 'major',
+		defaultBpm: 130,
+		published: 1914,
+		grid: [
+			['I7', 'I7', 'I7', 'I7'],
+			['IV7', 'IV7', 'I7', 'I7'],
+			['V7', 'IV7', 'I7', 'V7'],
+			['i', 'i', 'V7', 'V7'],
+			['i', 'i', 'V7', 'i'],
+			['i', 'i', 'V7', 'V7'],
+			['i', 'i', 'V7', 'I7'],
+			['I7', 'I7', 'I7', 'I7'],
+			['IV7', 'IV7', 'I7', 'I7'],
+			['V7', 'IV7', 'I7', 'V7']
+		],
+		notes:
+			'Blues, then sixteen bars in the parallel minor, then blues again. The minor strain is the interesting part: same tonic, same fifth, and a completely different room.'
+	},
+	{
+		slug: 'st-james-infirmary',
+		name: 'St. James Infirmary',
+		style: 'custom',
+		category: 'standard',
+		mode: 'minor',
+		defaultBpm: 96,
+		published: 1929,
+		grid: [
+			['i', 'i V7', 'i', 'iv'],
+			['i', 'V7', 'i', 'i']
+		],
+		notes:
+			'Eight bars, minor, traditional. Short enough that you go round it many times in a sitting, which is the point — it is somewhere to try one idea repeatedly rather than a form to get through.'
+	},
+	{
+		slug: 'bill-bailey',
+		name: "Bill Bailey, Won't You Please Come Home",
+		style: 'custom',
+		category: 'standard',
+		mode: 'major',
+		defaultBpm: 150,
+		published: 1902,
+		grid: [
+			['I', 'I', 'I', 'I7'],
+			['IV', 'IV', 'I', 'VI7'],
+			['II7', 'II7', 'V7', 'V7'],
+			['I', 'VI7', 'ii7 V7', 'I']
+		],
+		notes:
+			'Sixteen bars of ragtime, and about as plain as a chart gets. Worth having because the I–VI–II–V at the end is the turnaround you will play for the rest of your life.'
 	}
 ];
 
@@ -139,13 +320,16 @@ export type RealisedChart = {
  * Resolve a numeral grid into one key.
  *
  * A bar holds one chord for the whole bar, or two for half each — which is how
- * charts have always been written, and enough for every form here. The minor
- * forms are read in aeolian so that `i` and `iv` come out minor without every
- * numeral having to be spelled with an accidental.
+ * charts have always been written, and enough for every form here.
+ *
+ * Numerals resolve against the major scale even for the minor charts, because
+ * that is the convention every chart is written in: ♭VI in C minor means A♭,
+ * counted from C major. Reading them in aeolian instead flattened the sixth a
+ * second time, and bar 9 of the minor blues — which is meant to be the A♭7
+ * leaning on the V — came out as another G7.
  */
 export function realiseChart(seed: ChartSeed, keyName: string, beatsPerBar = 4): RealisedChart {
-	const minor = seed.style === 'minor_blues' || seed.style === 'modal_vamp';
-	const k: Key = minor ? makeKey(keyName.replace(/m$/, ''), 'aeolian') : makeKey(keyName);
+	const k: Key = makeKey(keyName.replace(/m$/, ''));
 
 	const bars: BarChord[] = [];
 	let number = 0;

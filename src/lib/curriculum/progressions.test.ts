@@ -55,6 +55,30 @@ describe('Roman numerals into chords', () => {
 		expect(symbolOf('ii7', 'B')).toBe('C#m7');
 	});
 
+	it('raises with a sharp and lowers with a flat, keeping the letter', () => {
+		// The numeral says which way the note moved; re-spelling through the key
+		// threw that away and returned whichever accidental the key preferred.
+		expect(symbolOf('#I', 'F')).toBe('F#');
+		expect(symbolOf('bV7', 'C')).toBe('Gb7');
+		expect(symbolOf('bVI7', 'C')).toBe('Ab7');
+		expect(symbolOf('#iv°7', 'C')).toBe('F#dim7');
+	});
+
+	it('writes E rather than F♭, and F rather than E♯', () => {
+		// Both are correct by letter arithmetic and neither is ever written.
+		expect(symbolOf('bII7', 'Eb')).toBe('E7');
+		expect(symbolOf('bV7', 'B')).toBe('F7');
+		expect(symbolOf('#iv°7', 'B')).toBe('Fdim7');
+	});
+
+	it('reads minor numerals from the major scale, as charts are written', () => {
+		// ♭VI in C minor is A♭, counted from C major. Counting it from aeolian —
+		// which already has a flat sixth — flattened it a second time.
+		expect(symbolOf('bVI7', 'C')).toBe('Ab7');
+		expect(symbolOf('i7', 'C')).toBe('Cm7');
+		expect(symbolOf('iv7', 'C')).toBe('Fm7');
+	});
+
 	it('refuses nonsense', () => {
 		expect(() => chordFromNumeral('Q', makeKey('C'))).toThrow();
 		expect(() => chordFromNumeral('', makeKey('C'))).toThrow();

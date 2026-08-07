@@ -8,7 +8,7 @@ import {
 } from '$lib/music/chord';
 import { ivl, transpose } from '$lib/music/interval';
 import { key as makeKey, scale, type Key } from '$lib/music/key';
-import { midi, pitchClass, type Note } from '$lib/music/note';
+import { midi, pitchClass, type Letter, type Note } from '$lib/music/note';
 import { spell } from '$lib/music/spell';
 
 /**
@@ -190,6 +190,23 @@ const NUMERAL_VALUE: Record<string, number> = {
 const NUMERAL_PATTERN = /^([b#]?)([ivIV]+)(.*)$/;
 
 /**
+ * The seven white keys, by pitch class.
+ *
+ * An accidental still standing on one of these is a spelling nobody uses: F♭ is
+ * written E, E♯ is written F. Enharmonically identical either way, and one of
+ * them is readable at a glance while playing.
+ */
+const NATURAL_LETTER: Record<number, Letter | undefined> = {
+	0: 'C',
+	2: 'D',
+	4: 'E',
+	5: 'F',
+	7: 'G',
+	9: 'A',
+	11: 'B'
+};
+
+/**
  * Turn a Roman numeral into a real chord in a key.
  *
  * Handles the diatonic cases, chromatic roots (♭II, ♭VII), quality suffixes
@@ -221,8 +238,31 @@ export function chordFromNumeral(numeral: string, k: Key): AbstractChord {
 	let root: Note = notes[degree - 1];
 
 	if (accidental) {
-		const shifted = pitchClass(root) + (accidental === 'b' ? -1 : 1);
-		root = spell(((shifted % 12) + 12) % 12, k);
+		/*
+		 * Alter the note, do not re-spell it.
+		 *
+		 * `♯I` means the tonic raised, so in F it is F♯ — and going via the pitch
+		 * class and asking the key to spell it gave G♭, because F major is a flat
+		 * key. Same thing turned `♭V` in C into F♯ sitting next to a D♭m7. Moving
+		 * the alteration keeps the letter, which is the entire point of the
+		 * numeral.
+		 *
+		 * Two exceptions, both about readability rather than theory. An accidental
+		 * still standing on a natural pitch is a spelling nobody writes — ♭II in
+		 * E♭ is E7, never F♭7 — and those take the plain letter. Past a single
+		 * accidental it stops being useful at all, because B𝄫 helps no one, so
+		 * the far keys fall back to whatever the key would call the note.
+		 */
+		const altered = { ...root, alter: root.alter + (accidental === 'b' ? -1 : 1) };
+		const pc = ((pitchClass(altered) % 12) + 12) % 12;
+
+		if (altered.alter !== 0 && NATURAL_LETTER[pc]) {
+			root = { ...altered, letter: NATURAL_LETTER[pc]!, alter: 0 };
+		} else if (Math.abs(altered.alter) <= 1) {
+			root = altered;
+		} else {
+			root = spell(pc, k);
+		}
 	}
 
 	const has = (s: string) => suffix.includes(s);
@@ -276,10 +316,9 @@ export type RealisedProgression = {
 
 /** Put a progression into a key. */
 export function realiseProgression(progression: Progression, keyName: string): RealisedProgression {
-	const k =
-		progression.mode === 'minor'
-			? makeKey(keyName.replace(/m$/, ''), 'aeolian')
-			: makeKey(keyName);
+	// Numerals count from the major scale whatever the mode, which is how they
+	// are written on every chart. See the note in `realiseChart`.
+	const k = makeKey(keyName.replace(/m$/, ''));
 
 	const steps: ProgressionStep[] = progression.numerals.map((numeral) => {
 		const built = chordFromNumeral(numeral, k);

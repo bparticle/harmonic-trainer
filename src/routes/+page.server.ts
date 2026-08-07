@@ -74,7 +74,10 @@ export const actions: Actions = {
 		await startOrResume({
 			lengthMinutes: valid.includes(length as SessionLength) ? (length as SessionLength) : 20,
 			progressionId: typeof progressionId === 'string' && progressionId ? progressionId : null,
-			progressionKey: (form.get('progressionKey') as string) || null
+			progressionKey: (form.get('progressionKey') as string) || null,
+			// Exploring a step somewhere else on the ladder. Does not move it.
+			focusKey: (form.get('focusKey') as string) || null,
+			focusRung: (form.get('focusRung') as string) || null
 		});
 		redirect(303, '/session');
 	},

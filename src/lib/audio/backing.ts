@@ -80,6 +80,19 @@ function build(t: Tone): Voices {
 	}).connect(gains.bass);
 	bass.volume.value = -6;
 
+	/*
+	 * Cymbals.
+	 *
+	 * MetalSynth is a quiet instrument by nature — six detuned square waves
+	 * through a highpass — and the first pass trimmed it a further 30dB on top of
+	 * that. Against a bass at -6 the ride simply was not there, which is exactly
+	 * how it was reported.
+	 *
+	 * These numbers were set by metering each part alone at the destination
+	 * rather than by ear-guessing: the kit now peaks about 2dB under the bass.
+	 * Cymbals are transients, so peaking a little under a sustained bass note is
+	 * what "level with it" sounds like.
+	 */
 	const ride = new t.MetalSynth({
 		envelope: { attack: 0.001, decay: 0.62, release: 0.16 },
 		harmonicity: 5.1,
@@ -87,7 +100,7 @@ function build(t: Tone): Voices {
 		resonance: 5000,
 		octaves: 1.5
 	}).connect(gains.drums);
-	ride.volume.value = -30;
+	ride.volume.value = -5;
 
 	const hihat = new t.MetalSynth({
 		envelope: { attack: 0.001, decay: 0.09, release: 0.02 },
@@ -96,20 +109,20 @@ function build(t: Tone): Voices {
 		resonance: 7000,
 		octaves: 1.2
 	}).connect(gains.drums);
-	hihat.volume.value = -28;
+	hihat.volume.value = -4;
 
 	const kick = new t.MembraneSynth({
 		pitchDecay: 0.04,
 		octaves: 5,
 		envelope: { attack: 0.001, decay: 0.28, sustain: 0 }
 	}).connect(gains.drums);
-	kick.volume.value = -14;
+	kick.volume.value = -6;
 
 	const snare = new t.NoiseSynth({
 		noise: { type: 'white' },
 		envelope: { attack: 0.001, decay: 0.12, sustain: 0 }
 	}).connect(gains.drums);
-	snare.volume.value = -24;
+	snare.volume.value = -11;
 
 	const comp = new t.PolySynth(t.FMSynth, {
 		harmonicity: 3.01,
@@ -246,6 +259,8 @@ export class BackingTrack {
 		comp: true,
 		metronome: true
 	};
+	/** 0–1 per part, on top of the mix built into the voices themselves. */
+	#level: Record<Part, number> = { bass: 1, drums: 1, comp: 1, metronome: 1 };
 
 	/** Called on every beat with the position, for highlighting the chart. */
 	onBeat: ((state: BackingState) => void) | null = null;
@@ -385,6 +400,22 @@ export class BackingTrack {
 	}
 
 	/**
+	 * Balance one part against the others, 0 to 1.
+	 *
+	 * Whether the drums are loud enough depends on the room, the speakers and
+	 * whether an actual piano is competing with them, none of which the defaults
+	 * can know.
+	 */
+	setLevel(part: Part, level: number): void {
+		this.#level[part] = Math.max(0, Math.min(1, level));
+		this.applyMutes();
+	}
+
+	getLevel(part: Part): number {
+		return this.#level[part];
+	}
+
+	/**
 	 * Anything that changes the notes — feel, loop points, the chart itself —
 	 * has to be rebuilt. Restarted from the top rather than spliced in, because
 	 * a loop that changes length underneath you is disorienting to play over.
@@ -417,8 +448,9 @@ export class BackingTrack {
 
 	private applyMutes(): void {
 		if (!this.#voices) return;
-		for (const [part, gain] of Object.entries(this.#voices.gains)) {
-			gain.gain.value = this.#muted[part as Part] ? 0 : 1;
+		for (const [name, gain] of Object.entries(this.#voices.gains)) {
+			const part = name as Part;
+			gain.gain.value = this.#muted[part] ? 0 : this.#level[part];
 		}
 	}
 }
