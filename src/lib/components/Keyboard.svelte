@@ -14,7 +14,7 @@
 	let {
 		/** Lowest MIDI note shown. C2 = 36. */
 		from = 36,
-		/** Number of keys. The Keystep's 32 by default. */
+		/** Number of keys. Thirty-two by default, the size of a small controller. */
 		count = 32,
 		/** Notes currently sounding. */
 		lit = [],

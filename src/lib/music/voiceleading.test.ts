@@ -126,9 +126,9 @@ describe('neighbours', () => {
 
 describe('common tones and root motion', () => {
 	it('finds the notes two chords share', () => {
-		expect(
-			commonTones(parseChord('Gm7'), parseChord('Ebmaj7')).sort((a, b) => a - b)
-		).toEqual([2, 7, 10]);
+		expect(commonTones(parseChord('Gm7'), parseChord('Ebmaj7')).sort((a, b) => a - b)).toEqual([
+			2, 7, 10
+		]);
 	});
 
 	it('measures root motion in fifths', () => {

@@ -1,0 +1,100 @@
+# Contributing
+
+Thanks for looking. This is a small project with strong opinions; the fastest
+way to get a change merged is to know what they are.
+
+## Getting set up
+
+You need Node 22+, Docker (or any Postgres), and a browser with Web MIDI —
+Chrome, Edge or Firefox. See the README for why Safari cannot run it.
+
+```bash
+git clone https://github.com/OWNER/harmonic-trainer.git
+cd harmonic-trainer
+npm install
+cp .env.example .env       # the defaults match docker-compose
+npm run db:up              # starts Postgres
+npm run db:migrate
+npm run db:seed
+npm run dev
+```
+
+A MIDI keyboard is optional. The on-screen keyboard feeds exactly the same
+pipeline, so every feature can be exercised without hardware.
+
+## Before you open a pull request
+
+```bash
+npm run verify   # format check, type check, tests
+```
+
+CI runs the same three. A pull request that fails them will not be reviewed
+until it passes, and that is not a judgement about the change.
+
+## The house rules
+
+These are the constraints the project is built around. A change that breaks one
+of them needs to argue the case in the pull request, not just pass the tests.
+
+**No staff notation. Anywhere.** Not as an option, a toggle, or an advanced
+panel. Music is keyboard diagrams, the harmonic wheel, chord symbols,
+scale-degree numbers, Roman numerals, intervals and colour. This is the single
+most load-bearing decision in the project: the whole point is to be usable by
+people who read chord symbols fluently and staves not at all.
+
+**Hands stay on the keys.** Nothing inside a practice session may require
+typing or precise mouse work. Advancing happens by MIDI auto-advance, the
+sustain pedal, the spacebar, or one large tap target. Type sizes assume a
+screen most of a metre away. Setup screens are exempt; sessions are not.
+
+**Everything transposes.** Musical material is stored as Roman numerals or
+intervals and resolved into a key at the last moment. If you find yourself
+writing a chord symbol into a data file, something has gone wrong.
+
+**Notes are spelled, never numbered.** A note is `{ letter, alter, octave }`.
+Pitch class and MIDI number are derived. G♯ and A♭ are different notes that
+happen to sound the same, and the difference has to survive transposition.
+
+**No gamification.** No confetti, coins, badges, streaks or guilt. The
+scoreboard is whether you can name what you played.
+
+**Nothing in copyright.** Only generic forms and public-domain material ships
+in the repo, and every bundled standard records its publication year. Anything
+still in copyright belongs in your own database via the chart importer.
+
+## Code style
+
+- Prettier decides formatting. Do not argue with it, and do not reformat code
+  you are not otherwise changing.
+- Boring, readable code over clever code.
+- Comments explain **why**, not what. If a comment restates the line below it,
+  delete it.
+- No placeholder implementations, `TODO`s, or stubs on `main`. If it is not
+  finished, it is not merged.
+- New musical logic needs tests. The music core is the part everything else
+  trusts, and "it looked right on screen" is not evidence.
+
+## Tests
+
+Vitest, no database required — the music core, the curriculum and the audio
+generators are pure. If your change needs a database to be tested, that is
+usually a sign the logic wants extracting from the query.
+
+```bash
+npm test               # once
+npm run test:watch     # while working
+```
+
+## Where things live
+
+`DECISIONS.md` is the log of every non-obvious choice and why it was made,
+including the ones that turned out to be wrong. It is worth skimming before
+proposing an architectural change — the question may already be answered there.
+If your change overturns something in it, add an entry saying so.
+
+## Reporting bugs
+
+Musical bugs are the interesting ones. If a chord is named wrong, a progression
+resolves oddly, or a bass line sounds wrong, please include the exact chord
+symbols or notes, the key, and what you expected instead. A golden-fixture case
+is the ideal bug report and often the whole fix.

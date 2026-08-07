@@ -15,16 +15,12 @@
 
 	let { context = makeKey('C'), max = 6 }: { context?: Key; max?: number } = $props();
 
-	const notes = $derived(
-		[...new Set(midi.live.map((n) => ((n % 12) + 12) % 12))].slice(0, max)
-	);
+	const notes = $derived([...new Set(midi.live.map((n) => ((n % 12) + 12) % 12))].slice(0, max));
 </script>
 
 <div class="live-notes" aria-live="off" aria-label="Notes currently sounding">
 	{#each notes as pc (pc)}
-		<span
-			class="pill"
-			style="background: var(--pc-{pc}); color: var(--pc-{pc}-ink)"
+		<span class="pill" style="background: var(--pc-{pc}); color: var(--pc-{pc}-ink)"
 			>{formatNote(spell(pc, context), { unicode: true })}</span
 		>
 	{:else}

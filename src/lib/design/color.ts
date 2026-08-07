@@ -2,11 +2,12 @@
  * Colour conversion, gamut checking and contrast, for the twelve pitch-class
  * swatches.
  *
- * Colours are authored in OKLCH because the palette has to be *editable* — the
- * brief wants a colour editor so the screen can be matched to a physical
- * painted wheel and a colour-coded Keystep. In OKLCH, dragging lightness does
- * not change hue and dragging hue does not change perceived lightness, which
- * is the only sane basis for that editor. sRGB hex would make it guesswork.
+ * Colours are authored in OKLCH because the palette has to be *editable*: the
+ * colour editor exists so the screen can be matched to a physical object — a
+ * painted wheel, coloured stickers on the keys. In OKLCH, dragging lightness
+ * does not change hue and dragging hue does not change perceived lightness,
+ * which is the only sane basis for such an editor. sRGB hex would make it
+ * guesswork.
  *
  * Everything here is pure and dependency-free so it can be unit tested and can
  * also run at build time.
@@ -91,9 +92,7 @@ export function clampToGamut(color: Oklch, steps = 24): Oklch {
 /** WCAG 2.1 relative luminance. */
 export function relativeLuminance(color: Oklch): number {
 	const lin = oklchToLinearSrgb(color);
-	return (
-		0.2126 * clamp01(lin.r) + 0.7152 * clamp01(lin.g) + 0.0722 * clamp01(lin.b)
-	);
+	return 0.2126 * clamp01(lin.r) + 0.7152 * clamp01(lin.g) + 0.0722 * clamp01(lin.b);
 }
 
 /** WCAG 2.1 contrast ratio between two colours, 1–21. */
@@ -121,5 +120,4 @@ export function contrastSafeInk(
 
 const round = (x: number, dp: number) => Number(x.toFixed(dp));
 
-export const css = ({ l, c, h }: Oklch) =>
-	`oklch(${round(l, 4)} ${round(c, 4)} ${round(h, 2)})`;
+export const css = ({ l, c, h }: Oklch) => `oklch(${round(l, 4)} ${round(c, 4)} ${round(h, 2)})`;

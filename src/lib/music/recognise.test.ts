@@ -97,9 +97,7 @@ describe('recognition invariants', () => {
 		const played = new Set(pitches.map((p) => p % 12));
 		for (const c of recognise(pitches)) {
 			if (c.interpretation !== 'quartal' && c.interpretation !== 'upper-structure') {
-				const chordPcs = new Set(
-					closeVoicing(c.chord, 3).map((n) => ((midi(n) % 12) + 12) % 12)
-				);
+				const chordPcs = new Set(closeVoicing(c.chord, 3).map((n) => ((midi(n) % 12) + 12) % 12));
 				for (const pc of played) {
 					expect(chordPcs, `${c.symbol} should explain pitch class ${pc}`).toContain(pc);
 				}

@@ -78,9 +78,7 @@ const RATING_TO_FSRS: Record<ReviewRating, Grade> = {
  * card at the ten-minute step forever — an entirely self-inflicted bug that
  * disappears along with the feature nobody here needs.
  */
-const engine = new FSRS(
-	generatorParameters({ enable_fuzz: false, enable_short_term: false })
-);
+const engine = new FSRS(generatorParameters({ enable_fuzz: false, enable_short_term: false }));
 
 export function initialState(now = new Date()): SrsState {
 	return fromCard(createEmptyCard(now));
@@ -162,7 +160,7 @@ export function isDue(state: SrsState, now = new Date()): boolean {
  * FSRS's intervals to favour a direction would corrupt its model of your
  * memory; changing which due card gets picked does not.
  *
- * Play-to-name is weighted highest because the brief names it as the weakest
+ * Play-to-name is weighted highest because it is the weakest
  * link, and it is the direction the whole app exists to fix — being able to
  * play a thing you cannot name is the problem statement.
  */
@@ -223,7 +221,7 @@ export function selectDue(cards: Schedulable[], options: SelectionOptions = {}):
  * Grade a review from what was actually played.
  *
  * Correctness comes from the pitch classes; the grade then comes from how long
- * it took. Latency is the measurement the brief cares about, so it is what
+ * it took. Latency is the measurement that matters here, so it is what
  * separates "good" from "easy" rather than a self-report nobody makes honestly
  * under time pressure.
  */

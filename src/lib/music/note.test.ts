@@ -1,13 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-	formatNote,
-	isEnharmonic,
-	isSameNote,
-	midi,
-	note,
-	parseNote,
-	pitchClass
-} from './note';
+import { formatNote, isEnharmonic, isSameNote, midi, note, parseNote, pitchClass } from './note';
 import { between, intervalName, ivl, simplify, transpose } from './interval';
 
 describe('midi numbers', () => {
@@ -52,9 +44,7 @@ describe('identity', () => {
 describe('parsing and formatting', () => {
 	it('round-trips ascii', () => {
 		for (const name of ['C4', 'Eb4', 'F#3', 'Bbb5', 'Cx2', 'G0']) {
-			expect(formatNote(parseNote(name), { octave: true })).toBe(
-				name.replace('x', '##')
-			);
+			expect(formatNote(parseNote(name), { octave: true })).toBe(name.replace('x', '##'));
 		}
 	});
 
@@ -162,9 +152,7 @@ describe('transposition preserves spelling', () => {
 			for (const name of names) {
 				const interval = ivl(name);
 				const moved = transpose(parseNote(root), interval);
-				expect(midi(moved) - midi(parseNote(root)), `${root} + ${name}`).toBe(
-					interval.semitones
-				);
+				expect(midi(moved) - midi(parseNote(root)), `${root} + ${name}`).toBe(interval.semitones);
 			}
 		}
 	});

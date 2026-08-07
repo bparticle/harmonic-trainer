@@ -66,7 +66,8 @@ export function reduce(state: ClusterState, event: MidiEvent): ClusterState {
 		case 'noteon': {
 			// A note-on with zero velocity is a note-off. Plenty of hardware sends
 			// them that way, including some Arturia firmware.
-			if (event.velocity === 0) return reduce(state, { type: 'noteoff', note: event.note, time: event.time });
+			if (event.velocity === 0)
+				return reduce(state, { type: 'noteoff', note: event.note, time: event.time });
 			held.set(event.note, event.velocity);
 			sustained.delete(event.note);
 			return {
@@ -91,7 +92,13 @@ export function reduce(state: ClusterState, event: MidiEvent): ClusterState {
 			if (event.down) return { ...state, pedalDown: true };
 			// Lifting the pedal drops everything not still under a finger, which
 			// changes what is sounding and so is worth re-reporting.
-			return { ...state, pedalDown: false, sustained: new Set(), dirty: true, lastNoteOn: event.time };
+			return {
+				...state,
+				pedalDown: false,
+				sustained: new Set(),
+				dirty: true,
+				lastNoteOn: event.time
+			};
 		}
 	}
 }

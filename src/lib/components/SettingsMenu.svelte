@@ -72,7 +72,10 @@
 	}
 </script>
 
-<svelte:window onpointerdown={onWindowPointerDown} onkeydown={(e) => e.key === 'Escape' && (open = false)} />
+<svelte:window
+	onpointerdown={onWindowPointerDown}
+	onkeydown={(e) => e.key === 'Escape' && (open = false)}
+/>
 
 <div class="relative" bind:this={panel}>
 	<button

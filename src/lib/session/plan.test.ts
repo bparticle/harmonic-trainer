@@ -54,11 +54,10 @@ function deck(): Schedulable[] {
  * silently become the coldest key, which is how the first version of these
  * tests fooled itself.
  */
-const reviews = (entries: Record<string, number>) =>
-	new Map(KEYS.map((k) => [k, entries[k] ?? 0]));
+const reviews = (entries: Record<string, number>) => new Map(KEYS.map((k) => [k, entries[k] ?? 0]));
 
 describe('block shape', () => {
-	it('matches the brief exactly at twenty minutes', () => {
+	it('divides twenty minutes into the canonical shape', () => {
 		const seconds = blockDurations(20);
 		expect(seconds).toEqual([180, 180, 240, 300, 300, 30]);
 	});
@@ -110,8 +109,18 @@ describe('block shape', () => {
 describe('choosing the key', () => {
 	it('picks from the least practised', () => {
 		const history = reviews({
-			C: 500, G: 400, F: 380, D: 300, A: 250, E: 200,
-			Bb: 180, Eb: 150, Db: 120, Ab: 3, B: 1, Gb: 2
+			C: 500,
+			G: 400,
+			F: 380,
+			D: 300,
+			A: 250,
+			E: 200,
+			Bb: 180,
+			Eb: 150,
+			Db: 120,
+			Ab: 3,
+			B: 1,
+			Gb: 2
 		});
 		expect(['B', 'Gb', 'Ab', 'Db']).toContain(chooseKey(history, KEYS, NOW));
 	});
@@ -151,8 +160,18 @@ describe('cold keys', () => {
 	it('reports the four least practised', () => {
 		const cold = coldestKeys(
 			reviews({
-				C: 90, G: 80, D: 70, F: 65, Bb: 60, Eb: 55,
-				Ab: 50, Db: 45, Gb: 40, A: 5, E: 3, B: 1
+				C: 90,
+				G: 80,
+				D: 70,
+				F: 65,
+				Bb: 60,
+				Eb: 55,
+				Ab: 50,
+				Db: 45,
+				Gb: 40,
+				A: 5,
+				E: 3,
+				B: 1
 			}),
 			KEYS
 		);
@@ -199,9 +218,9 @@ describe('filling the blocks', () => {
 		const directionsIn = (type: BlockType) =>
 			new Set(block(type).cardIds.map((id) => deckById.get(id)!.direction));
 
-		expect([...directionsIn('ear_drill')].every((d) => d === 'hear_name' || d === 'hear_play')).toBe(
-			true
-		);
+		expect(
+			[...directionsIn('ear_drill')].every((d) => d === 'hear_name' || d === 'hear_play')
+		).toBe(true);
 		expect([...directionsIn('wheel_warmup')]).toEqual(['see_play']);
 		expect([...directionsIn('name_what_you_play')]).toEqual(['play_name']);
 	});

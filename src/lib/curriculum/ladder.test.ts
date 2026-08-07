@@ -134,9 +134,7 @@ describe('what a rung asks in a key', () => {
 
 	it('gives the relative minor the same notes as its major', () => {
 		const [scaleItem] = itemsForRung('relative-minor', STAGES[0]);
-		expect([...scaleItem.answerPitchClasses].sort((a, b) => a - b)).toEqual([
-			0, 2, 4, 5, 7, 9, 11
-		]);
+		expect([...scaleItem.answerPitchClasses].sort((a, b) => a - b)).toEqual([0, 2, 4, 5, 7, 9, 11]);
 	});
 
 	it('works in every key without throwing', () => {

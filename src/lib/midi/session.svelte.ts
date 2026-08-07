@@ -108,7 +108,7 @@ export class MidiSession {
 	 * The device to prefer when several are plugged in, remembered by *name*.
 	 *
 	 * Web MIDI ids are opaque and not stable across browser restarts or replugs,
-	 * so an id is no use for "always use my Matriarch". The name is, and it is
+	 * so an id is no use for "always use the weighted one". The name is, and it
 	 * also the only part a person recognises.
 	 */
 	preferredName = $state<string | null>(null);

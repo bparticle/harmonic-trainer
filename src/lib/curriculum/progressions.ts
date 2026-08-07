@@ -353,4 +353,3 @@ export function realiseProgression(progression: Progression, keyName: string): R
 export function progressionIdentity(progressionId: string, keyName: string): string {
 	return `progression|${keyName}|${progressionId}`;
 }
-

@@ -1,0 +1,36 @@
+name: Feature request
+description: Suggest something the project should do
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please read the house rules in `CONTRIBUTING.md` first. Some things are
+        deliberately absent — staff notation and sight-reading above all — and
+        a proposal that needs one of them will not be accepted however good it
+        otherwise is.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What is hard or impossible right now? Describe the problem, not the solution.
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you have in mind
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: rules
+    attributes:
+      label: House rules
+      options:
+        - label: This needs no staff notation
+          required: true
+        - label: This does not require typing or precise mouse work during a practice session
+          required: true

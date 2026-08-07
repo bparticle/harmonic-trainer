@@ -99,10 +99,7 @@ export async function playSequence(
 }
 
 /** Play a progression: each chord in turn, held. */
-export async function playProgression(
-	chords: number[][],
-	chordSeconds = 1.1
-): Promise<void> {
+export async function playProgression(chords: number[][], chordSeconds = 1.1): Promise<void> {
 	await startAudio();
 	const t = await load();
 	if (!piano) return;

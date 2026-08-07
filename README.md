@@ -1,6 +1,10 @@
 # Harmonic Trainer
 
-A machine for naming what your hands already do.
+A practice tool for naming what your hands already do.
+
+Plenty of musicians can play far more than they can name. You improvise
+fluently, you hear where a chord wants to go, and you could not say what you
+just played or repeat it in another key. This is for that gap.
 
 Not a music theory course. Two jobs: **name** the chords and progressions
 already under your fingers, and **perturb** them one voicing or substitution at
@@ -10,25 +14,45 @@ a time, so new material grows out of what you can already play.
 NAME → PERTURB → RECOGNISE → APPLY
 ```
 
-No staff notation, anywhere, ever. Music is represented as keyboard diagrams,
-the harmonic wheel, chord symbols, scale-degree numbers, Roman numerals,
-intervals and colour.
+**No staff notation, anywhere, ever.** Not as an option, a toggle or an
+advanced panel. Music is keyboard diagrams, a harmonic wheel, chord symbols,
+scale-degree numbers, Roman numerals, intervals and colour. If you read chord
+charts fluently and staves not at all, nothing here will ask you to.
+
+Free software, MIT licensed. Run it on your laptop, deploy it wherever you
+like, change whatever you want. It is designed to be one person's instance —
+there are no accounts, no telemetry, and no server anyone else controls.
+
+## What it does
+
+- **Play** — connect a MIDI keyboard and it names what you play as you play it,
+  with the reasoning, on a harmonic wheel that shows why.
+- **Today** — pick any key, any step or any progression and practise it.
+  Spaced repetition schedules the review; a twelve-key ladder suggests where to
+  go next but never locks anything.
+- **Play along** — a rhythm section generated from a chord chart. Walking bass,
+  drums, optional comping, any key, any tempo, loop any bars. Blues, rhythm
+  changes, cycles and public-domain standards, plus anything you type in.
+- **Explore** — the wheel, chord neighbours, voice leading.
+
+No MIDI keyboard? Everything works with the on-screen one.
 
 ---
 
-## Before you start: where this runs
+## Before you start: browser support
 
-**Practice sessions need a laptop running Chrome, Edge or Firefox.**
+**Connecting a MIDI instrument needs Chrome, Edge or Firefox on a desktop.**
 
 Web MIDI does not exist in Safari — on iOS, iPadOS _or_ macOS — and every iOS
-browser is forced onto WebKit, so an iPad cannot run the parts of this app that
-matter. See `DECISIONS.md` for the detail.
+browser is forced onto WebKit, so an iPad cannot drive the parts of this app
+that listen to a keyboard. See `DECISIONS.md` for the detail.
 
-The iPad is still a first-class device for **Explore** mode: the wheel, the
-chord browser, the play-along charts. It just is not where you play.
+Everything else works everywhere, including on a tablet: the wheel, the
+play-along charts, the on-screen keyboard.
 
-Web MIDI also requires a secure context. Vercel serves HTTPS by default, so that
-is handled; a plain `http://` origin would silently disable MIDI.
+Web MIDI also requires a secure context. `localhost` counts; a deployed
+`http://` origin does not, and will disable MIDI with no error message. Serve
+over HTTPS.
 
 ---
 
@@ -38,65 +62,77 @@ is handled; a plain `http://` origin would silently disable MIDI.
 | ------ | -------------------------------------------------------- |
 | App    | SvelteKit 2 · Svelte 5 (runes) · TypeScript · Tailwind 4 |
 | Build  | Vite 8 · `@vite-pwa/sveltekit`                           |
-| Data   | Neon Postgres · Drizzle ORM · `node-postgres`            |
+| Data   | Postgres 15+ · Drizzle ORM · `node-postgres`             |
 | Audio  | Tone.js — ear drills and backing tracks only             |
 | MIDI   | Web MIDI API                                             |
-| Deploy | Vercel (`adapter-vercel`, Node runtime)                  |
+| Deploy | `adapter-auto` — Vercel, Netlify, Cloudflare, or Node    |
 | Tests  | Vitest                                                   |
 
-Your digital piano makes its own sound, so the app never synthesises a piano
-voice for what you play. It only generates audio for ear drills, backing tracks
-and the metronome — which is why there are no sampled instruments to vendor.
+Your instrument makes its own sound, so the app never synthesises a piano voice
+for what you play. It only generates audio for ear drills, backing tracks and
+the metronome — which is why there are no sampled instruments to vendor and the
+whole thing is a few hundred kilobytes.
 
 ---
 
-## Getting started
+## Running it locally
+
+You need **Node 22+** and a **Postgres 15+**. Docker gives you the second one.
 
 ```bash
+git clone https://github.com/OWNER/harmonic-trainer.git
+cd harmonic-trainer
 npm install
-```
-
-Copy the environment template and fill it in:
-
-```bash
-cp .env.example .env
-```
-
-- `DATABASE_URL` — your Neon **pooled** connection string (the hostname
-  containing `-pooler`). For local work, `npm run db:up` starts a Postgres in
-  Docker and the default value in `.env.example` points at it.
-- `APP_PASSWORD` — the single shared password gating the app.
-- `AUTH_SECRET` — any long random string, used to sign the session cookie.
-
-Apply the schema:
-
-```bash
-npm run db:migrate
-```
-
-Then run it:
-
-```bash
+cp .env.example .env    # the defaults already match docker-compose
+npm run db:up           # start Postgres in Docker
+npm run db:migrate      # apply the schema
+npm run db:seed         # skills and chord charts
 npm run dev
 ```
+
+Open `http://localhost:5173` and sign in with the `APP_PASSWORD` from your
+`.env`. Practice material is created as you go, so a fresh install starts with
+one thing to learn rather than three thousand.
+
+Already have a Postgres? Skip `db:up` and point `DATABASE_URL` at it.
+
+---
+
+## Deploying it
+
+`adapter-auto` detects Vercel, Netlify, Cloudflare Pages and Azure with no
+configuration. Set the three environment variables from `.env.example` in your
+host's dashboard, point it at any Postgres, and run `npm run db:migrate` once
+against that database.
+
+To self-host instead, install `@sveltejs/adapter-node` and set it in
+`vite.config.ts`; `npm run build` then produces a plain Node server.
+
+Two things to get right wherever you put it:
+
+- **Serve over HTTPS.** Web MIDI silently does nothing on an insecure origin.
+- **Set a real `APP_PASSWORD`.** It is the only thing in front of the app.
+  Read `SECURITY.md` before putting it anywhere public.
 
 ---
 
 ## Scripts
 
-| Command               | Does                                   |
-| --------------------- | -------------------------------------- |
-| `npm run dev`         | Dev server on `:5173`                  |
-| `npm run build`       | Production build                       |
-| `npm test`            | Vitest, once                           |
-| `npm run test:watch`  | Vitest, watching                       |
-| `npm run check`       | `svelte-check` type check              |
-| `npm run db:generate` | Generate migration SQL from the schema |
-| `npm run db:migrate`  | Apply pending migrations               |
-| `npm run db:studio`   | Drizzle Studio                         |
-| `npm run db:seed`     | Seed the curriculum (3024 cards)       |
-| `npm run db:up`       | Start the local dev Postgres in Docker |
-| `npm run db:down`     | Stop it                                |
+| Command               | Does                                         |
+| --------------------- | -------------------------------------------- |
+| `npm run dev`         | Dev server on `:5173`                        |
+| `npm run build`       | Production build                             |
+| `npm test`            | Vitest, once                                 |
+| `npm run test:watch`  | Vitest, watching                             |
+| `npm run check`       | `svelte-check` type check                    |
+| `npm run format`      | Format with Prettier                         |
+| `npm run verify`      | Format check, types and tests — what CI runs |
+| `npm run db:generate` | Generate migration SQL from the schema       |
+| `npm run db:migrate`  | Apply pending migrations                     |
+| `npm run db:studio`   | Drizzle Studio                               |
+| `npm run db:seed`     | Seed the skills and chord charts             |
+| `npm run db:up`       | Start the local dev Postgres in Docker       |
+| `npm run db:down`     | Stop it                                      |
 
 ---
 
@@ -190,17 +226,19 @@ local Postgres for development and tests.
 
 ## Milestones
 
-| M      | Deliverable                                  | Status |
-| ------ | -------------------------------------------- | ------ |
-| **M0** | Repo, DB, migrations, test runner, tokens    | done   |
-| **M1** | Music core + golden fixtures                 | done   |
-| **M2** | Harmonic wheel component                     | done   |
-| **M3** | MIDI layer                                   | done   |
-| **M4** | SRS + seeded skill graph                     | done   |
-| **M5** | Session engine                               | done   |
-| **M7** | Backing tracks and play-along                | done   |
+| M      | Deliverable                               | Status |
+| ------ | ----------------------------------------- | ------ |
+| **M0** | Repo, DB, migrations, test runner, tokens | done   |
+| **M1** | Music core + golden fixtures              | done   |
+| **M2** | Harmonic wheel component                  | done   |
+| **M3** | MIDI layer                                | done   |
+| **M4** | SRS + seeded skill graph                  | done   |
+| **M5** | Session engine                            | done   |
+| **M7** | Backing tracks and play-along             | done   |
 
-`DECISIONS.md` records every non-obvious choice and why it was made.
+`DECISIONS.md` records every non-obvious choice and why it was made, including
+the ones that turned out to be wrong. It is the most useful thing to read
+before proposing an architectural change.
 
 ### Not built, on purpose
 
@@ -208,12 +246,12 @@ Two milestones from the original brief are deliberately unbuilt. Nothing in the
 app hints at either, because a menu item leading nowhere is worse than an
 absence.
 
-| M      | Deliverable                                  | Why it is parked |
-| ------ | -------------------------------------------- | ---------------- |
+| M      | Deliverable                                  | Why it is parked                                            |
+| ------ | -------------------------------------------- | ----------------------------------------------------------- |
 | **M6** | Vault, blind-spot report, transfer detection | Needs months of recorded playing before it can say anything |
-| **M8** | Songwriting mode and data export             | Wanted later, not now |
+| **M8** | Songwriting mode and data export             | Wanted later, not now                                       |
 
-The plan for both is in `DECISIONS.md` under *M6 is parked*, along with what was
+The plan for both is in `DECISIONS.md` under _M6 is parked_, along with what was
 kept for whoever builds it.
 
 ---
@@ -251,12 +289,12 @@ and the shape under the hands.
 
 The charts come in three kinds, and the difference is deliberate:
 
-| | |
-| --------- | ------------------------------------------------------------- |
-| Forms     | The generic shapes: blues, minor blues, rhythm changes, a vamp  |
+|           |                                                                         |
+| --------- | ----------------------------------------------------------------------- |
+| Forms     | The generic shapes: blues, minor blues, rhythm changes, a vamp          |
 | Cycles    | Named devices — bird blues, the three-tonic cycle, ii–V round the wheel |
-| Standards | Real repertoire, public domain only: US publication ≤ 1930      |
-| Yours     | Whatever you typed in, kept in the database                     |
+| Standards | Real repertoire, public domain only: US publication ≤ 1930              |
+| Yours     | Whatever you typed in, kept in the database                             |
 
 There is no fake book here. Every standard records its publication year, a test
 enforces that the year exists and is 1930 or earlier, and nothing in copyright
@@ -299,3 +337,23 @@ a new account starts with the C major scale and nothing else.
 `--reset` clears every generated row first and puts the ladder back at C.
 Re-seeding without it matches existing rows by identity, so editing the
 curriculum never orphans review history.
+
+---
+
+## Contributing
+
+Pull requests are welcome. `CONTRIBUTING.md` has the setup steps and the house
+rules — the constraints above are not negotiable defaults, they are the point
+of the project, so it is worth reading before writing code.
+
+```bash
+npm run verify   # format check, types, tests — the same three CI runs
+```
+
+## Licence
+
+MIT. See `LICENSE`.
+
+Bundled musical material is generic (blues, rhythm changes, modal vamps, ii–V
+cycles) or public domain, and every bundled standard records its publication
+year. Nothing in copyright ships in this repository.

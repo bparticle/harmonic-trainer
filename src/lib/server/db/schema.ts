@@ -69,21 +69,10 @@ export const reviewRating = pgEnum('review_rating', ['again', 'hard', 'good', 'e
 // ---------------------------------------------------------------------------
 
 export type BlockType =
-	| 'wheel_warmup'
-	| 'name_what_you_play'
-	| 'ear_drill'
-	| 'new_atom'
-	| 'apply'
-	| 'log';
+	'wheel_warmup' | 'name_what_you_play' | 'ear_drill' | 'new_atom' | 'apply' | 'log';
 
 export type SkillCategory =
-	| 'inventory'
-	| 'keys'
-	| 'voicings'
-	| 'progressions'
-	| 'modes'
-	| 'reharm'
-	| 'application';
+	'inventory' | 'keys' | 'voicings' | 'progressions' | 'modes' | 'reharm' | 'application';
 
 export type FactType =
 	| 'key_used'
@@ -106,7 +95,7 @@ export type ChartStyle = 'blues' | 'minor_blues' | 'rhythm_changes' | 'modal_vam
  * Single row, id pinned to 1. Holds the editable design tokens (the twelve
  * pitch-class colours) and the harmonic wheel calibration, both of which the
  * brief requires to live in the database rather than in CSS so they can be
- * matched to the physical wheel and the painted Keystep.
+ * matched to a physical wheel or coloured stickers on the keys.
  */
 export const settings = pgTable(
 	'settings',

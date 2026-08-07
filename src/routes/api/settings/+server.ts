@@ -34,9 +34,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				: {}),
 			...(patch.colorMap !== undefined ? { colorMap: parseColorMap(patch.colorMap) } : {}),
 			...(patch.prefs !== undefined ? { prefs: parsePrefs(patch.prefs) } : {}),
-			...(patch.midiDevice !== undefined
-				? { midiDevice: parseDeviceName(patch.midiDevice) }
-				: {})
+			...(patch.midiDevice !== undefined ? { midiDevice: parseDeviceName(patch.midiDevice) } : {})
 		});
 		return json(saved);
 	} catch (e) {

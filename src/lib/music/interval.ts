@@ -76,8 +76,7 @@ export function ivl(name: string): Interval {
 
 /** Interval between two notes, preserving the diatonic distance. */
 export function between(from: Note, to: Note): Interval {
-	const steps =
-		LETTER_STEPS[to.letter] - LETTER_STEPS[from.letter] + 7 * (to.octave - from.octave);
+	const steps = LETTER_STEPS[to.letter] - LETTER_STEPS[from.letter] + 7 * (to.octave - from.octave);
 	const semitones =
 		LETTER_SEMITONES[to.letter] +
 		to.alter +

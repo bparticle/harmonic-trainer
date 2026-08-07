@@ -25,7 +25,6 @@
 	const GEOMETRY: WheelGeometry = { outerRadius: 330, ringWidth: 52 };
 	const config = $derived(data.settings.wheelConfig);
 
-
 	let keyName = $state('C');
 	const context = $derived(parseKey(keyName));
 	const KEYS = ['C', 'G', 'D', 'A', 'E', 'B', 'Gb', 'Db', 'Ab', 'Eb', 'Bb', 'F'];
@@ -141,9 +140,7 @@
 		// The key's seven notes outlined, so turning the wheel visibly moves
 		// something rather than only relabelling a corner of the screen. The block
 		// sits under the index mark, which is how you read a key off the object.
-		const shapes: Highlight[] = [
-			{ cells: keyView.scaleCells, strength: 0.45, outline: true }
-		];
+		const shapes: Highlight[] = [{ cells: keyView.scaleCells, strength: 0.45, outline: true }];
 		if (current && revealed && current.candidates.length) {
 			shapes.push({
 				cells: chordCells(current.candidates[0].chord, config, GEOMETRY),
@@ -208,8 +205,8 @@
 				{#if current && !revealed}
 					Hit the pedal or the spacebar the moment you have it.
 				{:else}
-					Reveal is held back {(revealDelayMs / 1000).toFixed(1)}s so your ear goes first.
-					Turn the wheel to change key.
+					Reveal is held back {(revealDelayMs / 1000).toFixed(1)}s so your ear goes first. Turn the
+					wheel to change key.
 				{/if}
 			</p>
 
@@ -245,8 +242,7 @@
 						<button
 							class="border-ground-line hover:border-ink-dim font-display rounded border px-1 py-2 text-sm font-semibold transition-colors"
 							class:is-selected={keyName === name}
-							onclick={() => (keyName = name)}
-							>{name.replace('b', '♭').replace('#', '♯')}</button
+							onclick={() => (keyName = name)}>{name.replace('b', '♭').replace('#', '♯')}</button
 						>
 					{/each}
 				</div>
@@ -259,7 +255,14 @@
 					</h2>
 					<span class="text-ink-muted font-mono text-xs">{(revealDelayMs / 1000).toFixed(1)}s</span>
 				</div>
-				<input type="range" min="0" max="6000" step="250" bind:value={revealDelayMs} class="w-full" />
+				<input
+					type="range"
+					min="0"
+					max="6000"
+					step="250"
+					bind:value={revealDelayMs}
+					class="w-full"
+				/>
 			</section>
 
 			<section class="border-ground-line bg-ground-raised rounded-lg border p-4">

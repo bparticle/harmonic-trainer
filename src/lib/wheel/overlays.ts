@@ -116,9 +116,7 @@ export function neighbourOverlays(
  * Lydian is furthest clockwise, Locrian furthest anti.
  */
 export function scaleBlock(k: Key, config: WheelConfig): { start: number; end: number } | null {
-	const positions = new Set(
-		scale(k).map((n) => positionOf(pitchClass(n), 0, config))
-	);
+	const positions = new Set(scale(k).map((n) => positionOf(pitchClass(n), 0, config)));
 	if (positions.size !== 7) return null;
 
 	for (let start = 0; start < 12; start++) {

@@ -13,16 +13,7 @@ import { scale, type Key } from './key';
  */
 
 export type ChordQuality =
-	| 'maj'
-	| 'min'
-	| 'dom'
-	| 'min7b5'
-	| 'dim7'
-	| 'aug'
-	| 'sus2'
-	| 'sus4'
-	| 'maj6'
-	| 'min6';
+	'maj' | 'min' | 'dom' | 'min7b5' | 'dim7' | 'aug' | 'sus2' | 'sus4' | 'maj6' | 'min6';
 
 export type Extension = 7 | 9 | 11 | 13;
 export type Alteration = 'b5' | '#5' | 'b9' | '#9' | '#11' | 'b13';
@@ -239,7 +230,8 @@ export function invert(voicing: Note[], n: number): Note[] {
 		if (!lowest) break;
 		let raised = { ...lowest, octave: lowest.octave + 1 };
 		const highest = notes[notes.length - 1];
-		while (highest && midi(raised) < midi(highest)) raised = { ...raised, octave: raised.octave + 1 };
+		while (highest && midi(raised) < midi(highest))
+			raised = { ...raised, octave: raised.octave + 1 };
 		notes.push(raised);
 	}
 	return notes;
@@ -309,10 +301,7 @@ export function rootlessVoicing(c: AbstractChord, form: 'A' | 'B' = 'A', octave 
 	const root = { ...c.root, octave };
 	const colour = c.quality === 'dom' ? [13, 5] : [5, 13];
 
-	const wanted =
-		form === 'A'
-			? [[3], colour, [7], [9]]
-			: [[7], [9], [3], colour];
+	const wanted = form === 'A' ? [[3], colour, [7], [9]] : [[7], [9], [3], colour];
 
 	const intervals = wanted
 		.map((preferences) => preferDegree(c, preferences))
@@ -489,7 +478,7 @@ export function formatChord(c: AbstractChord, unicode = false): string {
 		symbol += String(highest && highest !== 7 ? highest : 7);
 	} else if (c.quality === 'min7b5') {
 		// Without a seventh this is a plain diminished triad, not a half-diminished
-		// seventh. The brief's quality list has no separate entry for it.
+		// seventh. The quality list has no separate entry for it.
 		if (!c.extensions.includes(7)) symbol += unicode ? '°' : 'dim';
 		else symbol += unicode ? 'ø7' : 'm7b5';
 	} else if (c.quality === 'dim7') {
@@ -514,8 +503,7 @@ export function formatChord(c: AbstractChord, unicode = false): string {
 	return symbol;
 }
 
-const SYMBOL_PATTERN =
-	/^([A-Ga-g](?:bb|##|[b#♭♯])?)(.*?)(?:\/([A-Ga-g](?:bb|##|[b#♭♯])?))?$/;
+const SYMBOL_PATTERN = /^([A-Ga-g](?:bb|##|[b#♭♯])?)(.*?)(?:\/([A-Ga-g](?:bb|##|[b#♭♯])?))?$/;
 
 /**
  * Parse a chord symbol: `Dm7`, `G7b9`, `Cmaj7`, `Bm7b5`, `F#dim7`, `C/E`.

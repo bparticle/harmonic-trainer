@@ -66,7 +66,7 @@ export function toVoicing(pitchClasses: number[], from = 60): number[] {
 	const out: number[] = [];
 	let previous = from - 1;
 	for (const pc of pitchClasses) {
-		let note = from + (((pc - (from % 12)) % 12) + 12) % 12;
+		let note = from + ((((pc - (from % 12)) % 12) + 12) % 12);
 		while (note <= previous) note += 12;
 		previous = note;
 		out.push(note);

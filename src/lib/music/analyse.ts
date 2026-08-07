@@ -20,12 +20,7 @@ import { scaleDegree } from './spell';
  */
 
 export type ChordCategory =
-	| 'diatonic'
-	| 'secondary-dominant'
-	| 'tritone-sub'
-	| 'backdoor'
-	| 'borrowed'
-	| 'chromatic';
+	'diatonic' | 'secondary-dominant' | 'tritone-sub' | 'backdoor' | 'borrowed' | 'chromatic';
 
 export type HarmonicRole = 'tonic' | 'subdominant' | 'dominant' | 'other';
 
@@ -212,7 +207,6 @@ function analyseChord(c: AbstractChord, k: Key): Omit<Analysis, 'key' | 'pivot'>
 				explanation: `${roman} — the tritone substitute for ${replacing}, sharing its third and seventh`
 			};
 		}
-
 	}
 
 	// Modal interchange: is this the diatonic chord of the parallel key?

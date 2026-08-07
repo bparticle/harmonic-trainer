@@ -52,9 +52,7 @@
 	 * the last twenty minutes had been thrown away.
 	 */
 	let justFinished = $state(false);
-	const finished = $derived(
-		justFinished || (Boolean(plan) && index >= (plan?.blocks.length ?? 0))
-	);
+	const finished = $derived(justFinished || (Boolean(plan) && index >= (plan?.blocks.length ?? 0)));
 	const summary = $state({ keyCenter: '', blocks: 0 });
 
 	let busy = $state(false);
@@ -206,10 +204,11 @@
 	/** Note names for the current answer, in the key you are in. */
 	const answerNotes = $derived.by(() => {
 		const payload = currentCard?.payload as
-			| { answerPitchClasses?: number[]; detail?: string }
-			| undefined;
+			{ answerPitchClasses?: number[]; detail?: string } | undefined;
 		if (!payload?.answerPitchClasses) return [];
-		return payload.answerPitchClasses.map((pc) => formatNote(spell(pc, context), { unicode: true }));
+		return payload.answerPitchClasses.map((pc) =>
+			formatNote(spell(pc, context), { unicode: true })
+		);
 	});
 
 	/** What is still missing, as note names rather than a bare count. */
@@ -298,9 +297,7 @@
 	// ---- wheel -------------------------------------------------------------
 
 	const highlights = $derived.by((): Highlight[] => {
-		const shapes: Highlight[] = [
-			{ cells: keyView.scaleCells, strength: 0.4, outline: true }
-		];
+		const shapes: Highlight[] = [{ cells: keyView.scaleCells, strength: 0.4, outline: true }];
 
 		if (block?.type === 'new_atom' && data.progression) {
 			const pcs = data.progression.steps[0]?.pitchClasses ?? [];
@@ -339,8 +336,8 @@
 			<div class="max-w-md">
 				<h1 class="font-display text-ink mb-3 text-4xl font-semibold tracking-tight">Done.</h1>
 				<p class="text-ink-muted mb-6 leading-relaxed">
-					{summary.blocks || plan?.blocks.length} blocks in {summary.keyCenter ||
-						plan?.keyCenter}. Everything is recorded.
+					{summary.blocks || plan?.blocks.length} blocks in {summary.keyCenter || plan?.keyCenter}.
+					Everything is recorded.
 				</p>
 				<a href="/" class="bg-ink text-ground rounded-lg px-5 py-3 font-semibold">Home</a>
 			</div>
@@ -399,11 +396,18 @@
 					</p>
 				{/if}
 
-				<Wheel {config} active={keyView.pitchClasses} degrees={keyView.degrees} {highlights}
-					lit={session.live.map((n) => n % 12)} size={380} interactive={false} />
+				<Wheel
+					{config}
+					active={keyView.pitchClasses}
+					degrees={keyView.degrees}
+					{highlights}
+					lit={session.live.map((n) => n % 12)}
+					size={380}
+					interactive={false}
+				/>
 			</section>
 
-		<!-- ---------------------------------------------------------------- -->
+			<!-- ---------------------------------------------------------------- -->
 		{:else if block.type === 'name_what_you_play'}
 			<section class="flex flex-1 flex-col items-center justify-center gap-6">
 				<div class="grid min-h-[10rem] place-items-center">
@@ -413,27 +417,43 @@
 						<span class="text-ink-dim font-mono text-sm">Play something.</span>
 					{/if}
 				</div>
-				<Wheel {config} active={keyView.pitchClasses} degrees={keyView.degrees} {highlights}
-					lit={session.live.map((n) => n % 12)} size={340} interactive={false} />
+				<Wheel
+					{config}
+					active={keyView.pitchClasses}
+					degrees={keyView.degrees}
+					{highlights}
+					lit={session.live.map((n) => n % 12)}
+					size={340}
+					interactive={false}
+				/>
 			</section>
 
-		<!-- ---------------------------------------------------------------- -->
+			<!-- ---------------------------------------------------------------- -->
 		{:else if block.type === 'apply'}
 			<section class="flex flex-1 flex-col items-center justify-center gap-6">
 				<p class="text-ink-muted max-w-xl text-center leading-relaxed">
 					Play freely in {plan?.keyCenter}. Use
-					<strong class="text-ink">{(data.progression?.name ?? data.rung?.label ?? 'it').toLowerCase()}</strong>
+					<strong class="text-ink"
+						>{(data.progression?.name ?? data.rung?.label ?? 'it').toLowerCase()}</strong
+					>
 					if it comes. If it does not, play anyway.
 				</p>
-				<Wheel {config} active={keyView.pitchClasses} degrees={keyView.degrees} {highlights}
-					lit={session.live.map((n) => n % 12)} size={300} interactive={false} />
+				<Wheel
+					{config}
+					active={keyView.pitchClasses}
+					degrees={keyView.degrees}
+					{highlights}
+					lit={session.live.map((n) => n % 12)}
+					size={300}
+					interactive={false}
+				/>
 
 				{#if plan}
 					<BackingControls keyName={plan.keyCenter} />
 				{/if}
 			</section>
 
-		<!-- ---------------------------------------------------------------- -->
+			<!-- ---------------------------------------------------------------- -->
 		{:else if block.type === 'log'}
 			<section class="flex flex-1 flex-col gap-4">
 				<p class="text-ink-muted text-sm">How did this session feel overall?</p>
@@ -448,7 +468,7 @@
 				</div>
 			</section>
 
-		<!-- ---------------------------------------------------------------- -->
+			<!-- ---------------------------------------------------------------- -->
 		{:else if currentCard && prompt}
 			<section class="flex flex-1 flex-col items-center justify-center gap-6">
 				<span class="text-ink-dim font-mono text-xs">
@@ -488,8 +508,15 @@
 					</p>
 				{/if}
 
-				<Wheel {config} active={keyView.pitchClasses} degrees={keyView.degrees} {highlights}
-					lit={session.live.map((n) => n % 12)} size={320} interactive={false} />
+				<Wheel
+					{config}
+					active={keyView.pitchClasses}
+					degrees={keyView.degrees}
+					{highlights}
+					lit={session.live.map((n) => n % 12)}
+					size={320}
+					interactive={false}
+				/>
 
 				<div class="flex gap-3">
 					{#if prompt.answerWith === 'name' && !revealed}
@@ -530,9 +557,7 @@
 		</footer>
 
 		<div class="mt-4 flex items-center justify-between">
-			<span class="text-ink-dim font-mono text-[0.7rem]">
-				Pedal or spacebar moves you on.
-			</span>
+			<span class="text-ink-dim font-mono text-[0.7rem]"> Pedal or spacebar moves you on. </span>
 			<button
 				class="bg-ink text-ground rounded-lg px-5 py-2.5 text-sm font-semibold disabled:opacity-40"
 				onclick={() => finishBlock({ answered: pending.length })}

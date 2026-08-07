@@ -3,7 +3,7 @@
 	 * A block's timer.
 	 *
 	 * Visible but not nagging: it counts down as a thin ring rather than a
-	 * number that pulls the eye, because the brief wants no punishment for
+	 * number that pulls the eye, because there is no punishment for
 	 * running over. When it reaches zero it says so and stops — it does not
 	 * force you off the block.
 	 */
@@ -46,7 +46,14 @@
 
 <div class="flex items-center gap-2" role="timer" aria-label="Time left in this block">
 	<svg viewBox="0 0 34 34" width="26" height="26" aria-hidden="true">
-		<circle cx="17" cy="17" r="15" fill="none" stroke="var(--color-ground-line)" stroke-width="2.5" />
+		<circle
+			cx="17"
+			cy="17"
+			r="15"
+			fill="none"
+			stroke="var(--color-ground-line)"
+			stroke-width="2.5"
+		/>
 		<circle
 			cx="17"
 			cy="17"

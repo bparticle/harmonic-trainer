@@ -22,7 +22,7 @@ describe('major scales', () => {
 		expect(names(scale(key(tonic)))).toEqual(expected);
 	});
 
-	it('covers the enharmonic boundary keys the brief calls out', () => {
+	it('covers the enharmonic boundary keys', () => {
 		expect(names(scale(key('Gb')))).toContain('Cb');
 		expect(names(scale(key('F#')))).toContain('E#');
 		expect(names(scale(key('C#')))).toContain('B#');
@@ -102,9 +102,7 @@ describe('spelling resolver', () => {
 		const resolved = spell(
 			pc,
 			context,
-			hint
-				? { kind: 'interval', root: parseNote(hint.root), interval: hint.interval }
-				: undefined
+			hint ? { kind: 'interval', root: parseNote(hint.root), interval: hint.interval } : undefined
 		);
 		expect(formatNote(resolved)).toBe(expected);
 		// Whatever it is called, it must still be the pitch class that was asked for.
@@ -130,9 +128,12 @@ describe('spelling resolver', () => {
 describe('scale degrees', () => {
 	const cases = golden.scaleDegrees;
 
-	it.each(cases)('$note in $key is $expect', ({ note: noteName, key: keyName, expect: expected }) => {
-		expect(formatDegree(scaleDegree(parseNote(noteName), parseKey(keyName)))).toBe(expected);
-	});
+	it.each(cases)(
+		'$note in $key is $expect',
+		({ note: noteName, key: keyName, expect: expected }) => {
+			expect(formatDegree(scaleDegree(parseNote(noteName), parseKey(keyName)))).toBe(expected);
+		}
+	);
 });
 
 describe('key naming', () => {

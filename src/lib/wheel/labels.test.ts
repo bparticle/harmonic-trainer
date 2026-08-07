@@ -9,20 +9,7 @@ const name = (pc: number) => formatNote(wheelNoteName(pc));
 describe('the wheel’s painted labels', () => {
 	it('uses the conventional shortest spelling for all twelve', () => {
 		const labels = Array.from({ length: 12 }, (_, pc) => name(pc));
-		expect(labels).toEqual([
-			'C',
-			'Db',
-			'D',
-			'Eb',
-			'E',
-			'F',
-			'F#',
-			'G',
-			'Ab',
-			'A',
-			'Bb',
-			'B'
-		]);
+		expect(labels).toEqual(['C', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B']);
 	});
 
 	it('never changes, whatever key is in play', () => {

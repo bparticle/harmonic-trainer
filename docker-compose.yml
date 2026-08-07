@@ -1,8 +1,8 @@
-# Local development database only.
+# Local development database only. Nothing here is deployed.
 #
-# Production is Neon; nothing here is deployed. This exists so `npm run test`
-# and `npm run db:migrate` can run against a real Postgres without touching
-# the hosted database or needing network access.
+# This exists so a checkout can run `npm run db:migrate` and `npm run dev`
+# against a real Postgres with one command, without an account anywhere. Any
+# Postgres 15+ works just as well — point DATABASE_URL at it and skip this.
 services:
   db:
     image: postgres:17-alpine

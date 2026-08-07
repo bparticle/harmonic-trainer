@@ -48,7 +48,10 @@
 	alongside it. `aria-label` on a span is not reliably announced, and there is
 	no ARIA role for "this is a word made of vectors".
 -->
-<span class="chord-symbol no-select {className}" style:font-size={size === 'inherit' ? undefined : size}>
+<span
+	class="chord-symbol no-select {className}"
+	style:font-size={size === 'inherit' ? undefined : size}
+>
 	<span class="sr-only">{label}</span>
 	<span class="chord-visual" aria-hidden="true">{@render renderParts(parts, 1)}</span>
 </span>

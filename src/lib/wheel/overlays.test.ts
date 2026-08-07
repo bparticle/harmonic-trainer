@@ -90,7 +90,10 @@ describe('scale blocks and brightness', () => {
 	it('works from any tonic', () => {
 		for (const tonic of ['Eb', 'F#', 'B', 'Db']) {
 			const axis = brightnessAxis(key(tonic), config);
-			expect(axis.every((a) => a.block !== null), tonic).toBe(true);
+			expect(
+				axis.every((a) => a.block !== null),
+				tonic
+			).toBe(true);
 		}
 	});
 });
