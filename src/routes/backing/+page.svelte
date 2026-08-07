@@ -76,12 +76,31 @@
 	let level = $state<Record<Part, number>>({ bass: 1, drums: 1, comp: 1, metronome: 1 });
 
 	let playing = $state(false);
+	let paused = $state(false);
 	let counting = $state(false);
 	/** Bar of the whole form, not of the loop, so the chart highlight is right. */
 	let liveBar = $state(0);
 	let liveBeat = $state(0);
-	/** The bar being examined when nothing is playing. */
+	/** The bar being examined when nothing is playing — including the one paused on. */
 	let pinnedBar = $state(1);
+
+	/*
+	 * The chart list, collapsible.
+	 *
+	 * Persisted, because the point of collapsing it is to stop it competing for
+	 * attention during a practice sitting — it should stay out of the way across
+	 * a reload too, not spring back the moment the page is refreshed.
+	 */
+	const SIDEBAR_KEY = 'backing:sidebar-collapsed';
+	// svelte-ignore state_referenced_locally
+	let sidebarCollapsed = $state(
+		typeof localStorage !== 'undefined' && localStorage.getItem(SIDEBAR_KEY) === 'yes'
+	);
+	$effect(() => {
+		if (typeof localStorage !== 'undefined') {
+			localStorage.setItem(SIDEBAR_KEY, sidebarCollapsed ? 'yes' : 'no');
+		}
+	});
 
 	const seed = $derived(repertoire.find((c) => c.slug === slug) ?? CHARTS[0]);
 	const mineId = $derived(data.mine.find((c) => c.slug === slug)?.id ?? null);
@@ -166,16 +185,51 @@
 		};
 	}
 
+	/**
+	 * The hands-free control: space, the pedal, and the big button all reach
+	 * this. It cycles play → pause → resume rather than play → stop, because
+	 * stopping and going back to the top is not what "let me look at that
+	 * chord" means.
+	 */
 	async function toggle() {
 		if (playing) {
-			track.stop();
-			playing = false;
-			counting = false;
+			pause();
+		} else if (paused) {
+			await resumePlay();
 		} else {
 			counting = countIn;
 			await track.start(config());
 			playing = track.playing;
 		}
+	}
+
+	/** Freeze exactly here, so a shape can be found under the hands. */
+	function pause() {
+		track.pause();
+		// Pin the chord panel to the one just landed on — the same thing tapping
+		// a bar does when nothing is playing.
+		if (liveBar > 0) pinnedBar = liveBar;
+		playing = false;
+		paused = true;
+	}
+
+	/** Continue from `pause`, from the same beat if nothing changed meanwhile. */
+	async function resumePlay() {
+		const resumed = await track.resume(config());
+		paused = false;
+		playing = track.playing;
+		// If the key, chart, feel or loop changed while paused there was no
+		// "same place" to return to, and `resume` rebuilt from the top instead —
+		// that deserves the same count-in a fresh play would get.
+		counting = resumed ? false : countIn;
+	}
+
+	/** A full reset, back to the top of the form. Not on the hands-free path. */
+	function stopFully() {
+		track.stop();
+		playing = false;
+		paused = false;
+		counting = false;
 	}
 
 	/** Anything that changes the notes has to be rebuilt; tempo does not. */
@@ -261,51 +315,70 @@
 <svelte:head><title>Play along · Harmonic</title></svelte:head>
 
 <main class="mx-auto max-w-[1500px] px-5 py-7">
-	<header class="mb-5">
-		<h1
-			class="font-display text-ink flex items-baseline gap-3 text-2xl font-semibold tracking-tight"
+	<header class="mb-5 flex flex-wrap items-start justify-between gap-3">
+		<div>
+			<h1
+				class="font-display text-ink flex items-baseline gap-3 text-2xl font-semibold tracking-tight"
+			>
+				{seed.name}
+				{#if seed.published}
+					<span class="text-ink-dim font-mono text-xs font-normal">{seed.published}</span>
+				{/if}
+				<span class="text-ink-dim font-mono text-xs font-normal">
+					{barCount} bars · {keyLabel(keyName)}{seed.mode === 'minor' ? ' minor' : ''}
+				</span>
+			</h1>
+			<p class="text-ink-muted mt-1 max-w-3xl text-sm leading-relaxed">{seed.notes}</p>
+		</div>
+		<!-- A distraction is exactly what a wall of tune names becomes mid-practice. -->
+		<button
+			type="button"
+			class="chip shrink-0"
+			onclick={() => (sidebarCollapsed = !sidebarCollapsed)}
+			aria-pressed={sidebarCollapsed}
 		>
-			{seed.name}
-			{#if seed.published}
-				<span class="text-ink-dim font-mono text-xs font-normal">{seed.published}</span>
-			{/if}
-			<span class="text-ink-dim font-mono text-xs font-normal">
-				{barCount} bars · {keyLabel(keyName)}{seed.mode === 'minor' ? ' minor' : ''}
-			</span>
-		</h1>
-		<p class="text-ink-muted mt-1 max-w-3xl text-sm leading-relaxed">{seed.notes}</p>
+			{sidebarCollapsed ? '☰ Show charts' : '« Hide charts'}
+		</button>
 	</header>
 
-	<div class="grid gap-7 xl:grid-cols-[15rem_1fr_19rem] lg:grid-cols-[1fr_19rem]">
-		<!-- The repertoire, as a list. It was a wall of chips, and a wall of chips
-		     is not something you read — it is something you give up on. -->
-		<aside class="repertoire xl:max-h-[calc(100dvh-8rem)] xl:sticky xl:top-20 xl:overflow-y-auto">
-			{#each byCategory as group (group.category)}
-				<h2 class="panel-title mt-3 first:mt-0">{group.label}</h2>
-				<ul class="mb-1 flex flex-col">
-					{#each group.items as option (option.slug)}
-						<li>
-							<button
-								type="button"
-								class="entry"
-								class:is-on={option.slug === slug}
-								onclick={() => chooseChart(option.slug)}
-							>
-								<span class="entry-name">{option.name}</span>
-								<span class="entry-meta">
-									{option.grid.flat().length} bars{option.published ? ` · ${option.published}` : ''}
-								</span>
-							</button>
-						</li>
-					{/each}
-				</ul>
-			{/each}
+	<div
+		class={sidebarCollapsed
+			? 'grid gap-7 xl:grid-cols-[1fr_19rem] lg:grid-cols-[1fr_19rem]'
+			: 'grid gap-7 xl:grid-cols-[15rem_1fr_19rem] lg:grid-cols-[1fr_19rem]'}
+	>
+		{#if !sidebarCollapsed}
+			<!-- The repertoire, as a list. It was a wall of chips, and a wall of chips
+			     is not something you read — it is something you give up on. -->
+			<aside class="repertoire xl:max-h-[calc(100dvh-8rem)] xl:sticky xl:top-20 xl:overflow-y-auto">
+				{#each byCategory as group (group.category)}
+					<h2 class="panel-title mt-3 first:mt-0">{group.label}</h2>
+					<ul class="mb-1 flex flex-col">
+						{#each group.items as option (option.slug)}
+							<li>
+								<button
+									type="button"
+									class="entry"
+									class:is-on={option.slug === slug}
+									onclick={() => chooseChart(option.slug)}
+								>
+									<span class="entry-name">{option.name}</span>
+									<span class="entry-meta">
+										{option.grid.flat().length} bars{option.published
+											? ` · ${option.published}`
+											: ''}
+									</span>
+								</button>
+							</li>
+						{/each}
+					</ul>
+				{/each}
 
-			<button type="button" class="entry mt-2" onclick={() => (importing = !importing)}>
-				<span class="entry-name">+ Add a chart</span>
-				<span class="entry-meta">type in what is on the page</span>
-			</button>
-		</aside>
+				<button type="button" class="entry mt-2" onclick={() => (importing = !importing)}>
+					<span class="entry-name">+ Add a chart</span>
+					<span class="entry-meta">type in what is on the page</span>
+				</button>
+			</aside>
+		{/if}
 
 		<section>
 			{#if importing}
@@ -412,21 +485,44 @@
 				{/if}
 			</div>
 
-			<button type="button" class="transport mt-5" onclick={toggle}>
-				<span class="transport-mark" aria-hidden="true">{playing ? '■' : '▶'}</span>
-				<span class="transport-text">
-					{#if counting}
-						Counting in…
-					{:else if playing && liveBar > 0}
-						Stop — bar {liveBar}, beat {Math.floor(liveBeat % chart.beatsPerBar) + 1}
-					{:else if playing}
-						Stop
-					{:else}
-						Play in {keyLabel(keyName)} at {bpm}
-					{/if}
-				</span>
-				<span class="transport-hint" aria-hidden="true">space, or the sustain pedal</span>
-			</button>
+			<div class="mt-5 flex items-stretch gap-2">
+				{#if playing || paused}
+					<button
+						type="button"
+						class="stop-button"
+						onclick={stopFully}
+						aria-label="Stop and go back to the top"
+						title="Stop and go back to the top"
+					>
+						<span aria-hidden="true">■</span>
+					</button>
+				{/if}
+				<button type="button" class="transport flex-1" onclick={toggle}>
+					<span class="transport-mark" aria-hidden="true">{playing ? '❚❚' : '▶'}</span>
+					<span class="transport-text">
+						{#if counting}
+							Counting in…
+						{:else if playing && liveBar > 0}
+							Bar {liveBar}, beat {Math.floor(liveBeat % chart.beatsPerBar) + 1}
+						{:else if playing}
+							Playing…
+						{:else if paused}
+							Paused — bar {liveBar}, beat {Math.floor(liveBeat % chart.beatsPerBar) + 1}
+						{:else}
+							Play in {keyLabel(keyName)} at {bpm}
+						{/if}
+					</span>
+					<span class="transport-hint" aria-hidden="true">
+						{#if playing}
+							space to pause
+						{:else if paused}
+							space to resume
+						{:else}
+							space, or the sustain pedal
+						{/if}
+					</span>
+				</button>
+			</div>
 
 			<!-- What the chord under the cursor actually is ------------------- -->
 			{#if focused && focusedBar}
@@ -726,6 +822,23 @@
 
 	.stepper:hover {
 		background: var(--color-ground-overlay);
+	}
+
+	/* A full reset, deliberately smaller and quieter than the transport itself —
+	   the hands-free control is pause/resume; this is the mouse-only escape hatch. */
+	.stop-button {
+		flex: none;
+		width: 3.25rem;
+		border-radius: 12px;
+		border: 1px solid var(--color-ground-line);
+		background: var(--color-ground-raised);
+		color: var(--color-ink-muted);
+		font-size: 1rem;
+	}
+
+	.stop-button:hover {
+		background: var(--color-ground-overlay);
+		color: var(--color-ink);
 	}
 
 	input[type='range']:disabled {
