@@ -9,7 +9,7 @@ You need Node 22+, Docker (or any Postgres), and a browser with Web MIDI —
 Chrome, Edge or Firefox. See the README for why Safari cannot run it.
 
 ```bash
-git clone https://github.com/bparticle/siriuspiano.git
+git clone https://github.com/bparticle/harmonic-trainer.git
 cd harmonic-trainer
 npm install
 cp .env.example .env       # the defaults match docker-compose

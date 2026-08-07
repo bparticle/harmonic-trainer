@@ -17,11 +17,11 @@
 	],
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/bparticle/siriuspiano.git"
+		"url": "https://github.com/bparticle/harmonic-trainer.git"
 	},
-	"homepage": "https://github.com/bparticle/siriuspiano#readme",
+	"homepage": "https://github.com/bparticle/harmonic-trainer#readme",
 	"bugs": {
-		"url": "https://github.com/bparticle/siriuspiano/issues"
+		"url": "https://github.com/bparticle/harmonic-trainer/issues"
 	},
 	"engines": {
 		"node": ">=22"
