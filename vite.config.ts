@@ -25,7 +25,7 @@ export default defineConfig({
 			manifest: {
 				name: 'Harmonic Trainer',
 				short_name: 'Harmonic',
-				description: 'Name what your hands already do.',
+				description: 'A harmonic wheel for practising chord progressions.',
 				lang: 'en',
 				theme_color: '#0c0d11',
 				background_color: '#0c0d11',

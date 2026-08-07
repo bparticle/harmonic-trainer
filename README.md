@@ -1,21 +1,26 @@
 # Harmonic Trainer
 
-A practice tool for naming what your hands already do.
+A harmonic wheel for practising chord progressions — see how they move, hear
+them, and drill them until they are automatic in every key.
 
-Plenty of musicians can play far more than they can name. You improvise
-fluently, you hear where a chord wants to go, and you could not say what you
-just played or repeat it in another key. This is for that gap.
+A progression is the real unit of harmony, not the chords in isolation: a
+ii–V–I means something as a single shape, not three symbols to memorise
+separately. The wheel puts that shape in front of you — spin it, transpose it,
+watch a turnaround fall round the circle of fifths — while the rest of the app
+makes sure you can also hear it, recognise it on your own instrument, and find
+it again next week.
 
-Not a music theory course. Two jobs: **name** the chords and progressions
-already under your fingers, and **perturb** them one voicing or substitution at
-a time, so new material grows out of what you can already play.
+Not a music theory course. One loop, worked from every direction: put a
+progression on the wheel, hear it, drill it across all twelve keys, and apply
+it — recognising it as you play, or playing along with a generated rhythm
+section.
 
 ```
-NAME → PERTURB → RECOGNISE → APPLY
+SEE → HEAR → DRILL → APPLY
 ```
 
 **No staff notation, anywhere, ever.** Not as an option, a toggle or an
-advanced panel. Music is keyboard diagrams, a harmonic wheel, chord symbols,
+advanced panel. Music is keyboard diagrams, the wheel itself, chord symbols,
 scale-degree numbers, Roman numerals, intervals and colour. If you read chord
 charts fluently and staves not at all, nothing here will ask you to.
 
