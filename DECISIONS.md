@@ -1170,3 +1170,58 @@ in your database rather than in the code.
 The changes for the built-in standards are the commonly taught versions written
 out from knowledge, not copied from a source. They are worth checking against
 your ear — which is part of why the year is printed next to each one.
+
+---
+
+## M6 is parked
+
+Asked what M6 was, and decided against building it. It is recorded here rather
+than half-built, and the app now says nothing about it anywhere.
+
+### What it was going to be
+
+The other half of the brief's loop — `CAPTURE → NAME`, where the naming happens
+on your own playing rather than on a drill:
+
+1. **The vault.** Record yourself playing freely, then browse those takes: play
+   them back, name them, tag them, promote one into `repertoire` as a chart.
+2. **Analysis.** Run `recognise()` and `analyse()` over a take and flatten what
+   they find into `analysis_facts` — chords, keys, voicing types, devices,
+   register, tempo.
+3. **The blind-spot report.** A `GROUP BY` over those facts. "Every ii–V you
+   play is a 3–7 shell, never rootless." "You have never once played a ♭VI7."
+4. **Transfer detection.** Compare free playing against what has been drilled,
+   and when something drilled a fortnight ago turns up unprompted, write a
+   `transfer_events` row.
+
+### Why not now
+
+Transfer detection needs months of recorded playing before it can report
+anything, and it has lost its consumer: the mastery gate that consumed transfer
+events was deleted in the depth-first rebuild, so it would now feed a report and
+nothing else. The vault and the report could work sooner, but not without the
+capture habit that the transfer piece was supposed to justify.
+
+### What was removed
+
+The record button on **Play** saved takes to a table nothing read, and told you
+"Saved 12.4s, 340 events" about a recording there was no way to hear again. That
+is worse than no feature. It is gone, along with `/api/takes`.
+
+Also corrected: the README promised "prove transfer" in its first paragraph and
+offered the iPad "blind-spot reports and the vault", and its architecture map
+still listed a `mastery.ts` that the rebuild deleted. Documentation describing
+software that does not exist is the same bug as a button that does nothing.
+
+### What was kept
+
+- The `takes`, `analysis_facts`, `transfer_events` and `repertoire` tables. The
+  migrations are applied; dropping them would be a destructive migration for no
+  gain, and they are the shape the plan above needs.
+- `midi/smf.ts`, the Standard MIDI File codec, with its tests. Unreferenced now
+  and deliberately so — it is finished, correct work that M6 needs on day one.
+- `startRecording` / `stopRecording` on the MIDI session, which are part of the
+  MIDI layer rather than of the vault.
+
+M8 — songwriting mode and JSON export — is parked on the same terms: wanted
+later, absent for now, and not hinted at anywhere in the app.

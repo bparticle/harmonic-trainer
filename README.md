@@ -2,13 +2,12 @@
 
 A machine for naming what your hands already do.
 
-Not a music theory course. Three jobs: **name** the progressions already under
-your fingers, **perturb** them one voicing or substitution at a time so new
-material grows out of old, and **prove transfer** — catch a thing learned on
-Tuesday turning up unprompted in free playing two weeks later.
+Not a music theory course. Two jobs: **name** the chords and progressions
+already under your fingers, and **perturb** them one voicing or substitution at
+a time, so new material grows out of what you can already play.
 
 ```
-CAPTURE → NAME → PERTURB → RECOGNISE → TRANSFER
+NAME → PERTURB → RECOGNISE → APPLY
 ```
 
 No staff notation, anywhere, ever. Music is represented as keyboard diagrams,
@@ -26,7 +25,7 @@ browser is forced onto WebKit, so an iPad cannot run the parts of this app that
 matter. See `DECISIONS.md` for the detail.
 
 The iPad is still a first-class device for **Explore** mode: the wheel, the
-blind-spot reports, browsing the vault. It just is not where you play.
+chord browser, the play-along charts. It just is not where you play.
 
 Web MIDI also requires a secure context. Vercel serves HTTPS by default, so that
 is handled; a plain `http://` origin would silently disable MIDI.
@@ -128,13 +127,14 @@ src/
     curriculum/    The syllabus, as data
       skills.ts      The L0-L11 graph plus the application track
       cards.ts       Card generation from (skill, key, item, direction)
-      charts.ts      Blues, minor blues, rhythm changes, modal vamps
-      mastery.ts     Unlock gating; needs transfer, not just accuracy
+      ladder.ts      Twelve keys, seven rungs each; suggests, never gates
+      charts.ts      Forms, cycles and public-domain standards, as numerals
+      import.ts      Chord symbols you type in, stored as numerals
     srs/
       scheduler.ts   FSRS via ts-fsrs; direction and cold-key weighting
-    midi/          Web MIDI, clustering, take recording
+    midi/          Web MIDI and chord clustering
       cluster.ts     Note-ons gathered into chord events; pedal handling
-      smf.ts         Standard MIDI File encode and decode
+      smf.ts         Standard MIDI File encode and decode — parked, see M6
       session.svelte.ts  Devices, hot-plug, live state, recording
     components/
       Glyph.svelte       Musical accidentals as vectors
@@ -198,11 +198,23 @@ local Postgres for development and tests.
 | **M3** | MIDI layer                                   | done   |
 | **M4** | SRS + seeded skill graph                     | done   |
 | **M5** | Session engine                               | done   |
-| **M6** | Vault, blind-spot report, transfer detection | later  |
 | **M7** | Backing tracks and play-along                | done   |
-| **M8** | Songwriting mode and data export             |        |
 
 `DECISIONS.md` records every non-obvious choice and why it was made.
+
+### Not built, on purpose
+
+Two milestones from the original brief are deliberately unbuilt. Nothing in the
+app hints at either, because a menu item leading nowhere is worse than an
+absence.
+
+| M      | Deliverable                                  | Why it is parked |
+| ------ | -------------------------------------------- | ---------------- |
+| **M6** | Vault, blind-spot report, transfer detection | Needs months of recorded playing before it can say anything |
+| **M8** | Songwriting mode and data export             | Wanted later, not now |
+
+The plan for both is in `DECISIONS.md` under *M6 is parked*, along with what was
+kept for whoever builds it.
 
 ---
 
