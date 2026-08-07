@@ -1,0 +1,11 @@
+# Normalise line endings. Prettier enforces LF in the tree, so without this a
+# Windows checkout rewrites every file to CRLF and the format check fails on a
+# clean clone.
+* text=auto eol=lf
+
+# Binary and generated files git should not touch or diff.
+*.png binary
+*.jpg binary
+*.woff2 binary
+*.mid binary
+package-lock.json -diff linguist-generated
