@@ -1225,3 +1225,40 @@ software that does not exist is the same bug as a button that does nothing.
 
 M8 — songwriting mode and JSON export — is parked on the same terms: wanted
 later, absent for now, and not hinted at anywhere in the app.
+
+---
+
+## The screen stays awake while a backing track is playing
+
+### Held by the track, not by the page
+
+`WakeLock` lives inside `BackingTrack` rather than in the Play along page, so
+`BackingControls.svelte` — the same class, wired into session block five —
+gets it for free. Anywhere a rhythm section is actually sounding is somewhere
+a phone or iPad propped on a music stand should not be deciding to sleep.
+
+Held exactly as long as something is audible: requested when `start()` or a
+true `resume()` sets `#playing`, released on `pause()` and `stop()`. The
+count-in counts as playing on purpose — dozing off during the four clicks
+before the tune starts would be a strange place to draw the line — but a
+paused track releases it immediately, because nothing is asking to stay awake
+for a chord you have frozen the screen on to go and find.
+
+### Every failure is swallowed
+
+The Wake Lock API throws if the document is not visible at the moment of the
+request, is entirely absent on Safari before 16.4, and stops holding the
+instant a tab is backgrounded regardless — the spec releases it, correctly,
+the moment `visibilitychange` fires to hidden. None of that should ever be
+allowed to interrupt a rhythm section: asking for something optional must not
+put the thing that matters at risk. `WakeLock#acquire` catches everything and
+does nothing with it beyond letting the next real attempt succeed or fail on
+its own.
+
+The `visibilitychange` listener is what makes that last case self-healing:
+the lock is re-requested the moment the tab is visible again, provided
+something is still meant to be playing. Verified directly — patching
+`navigator.wakeLock.request` and watching it get called exactly once per
+`start()`, throwing `NotAllowedError` in the non-visible automation tab
+without that error reaching anywhere near the transport, which kept ticking
+through it regardless.
