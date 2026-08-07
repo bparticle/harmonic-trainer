@@ -3,7 +3,6 @@
 	import Keyboard from '$lib/components/Keyboard.svelte';
 	import Wheel from '$lib/wheel/Wheel.svelte';
 	import { midi as session } from '$lib/midi/shared.svelte';
-	import { encodeSmf } from '$lib/midi/smf';
 	import type { ChordEvent, MidiEvent } from '$lib/midi/cluster';
 	import { recognise, type Candidate } from '$lib/music/recognise';
 	import { key as makeKey, parseKey } from '$lib/music/key';
@@ -43,9 +42,6 @@
 	let attempts = $state(0);
 	let hits = $state(0);
 	let latencies = $state<number[]>([]);
-
-	let recording = $state(false);
-	let takeStatus = $state<string | null>(null);
 
 	const hitRate = $derived(attempts ? Math.round((hits / attempts) * 100) : 0);
 	const medianLatency = $derived.by(() => {
@@ -112,48 +108,6 @@
 		session.push(event);
 	};
 
-	let recorded: MidiEvent[] = [];
-
-	function toggleRecording() {
-		if (!recording) {
-			session.startRecording();
-			recording = true;
-			takeStatus = null;
-			return;
-		}
-		const { events, durationMs } = session.stopRecording();
-		recording = false;
-		recorded = events;
-		if (events.length === 0) {
-			takeStatus = 'Nothing played, nothing saved.';
-			return;
-		}
-		void saveTake(events, durationMs);
-	}
-
-	async function saveTake(events: MidiEvent[], durationMs: number) {
-		takeStatus = 'Saving…';
-		try {
-			const bytes = encodeSmf(events);
-			let binary = '';
-			for (const byte of bytes) binary += String.fromCharCode(byte);
-			const response = await fetch('/api/takes', {
-				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({
-					id: crypto.randomUUID(),
-					midiBase64: btoa(binary),
-					durationMs,
-					tags: ['free-play']
-				})
-			});
-			if (!response.ok) throw new Error(await response.text());
-			takeStatus = `Saved ${(durationMs / 1000).toFixed(1)}s, ${events.length} events.`;
-		} catch (e) {
-			takeStatus = e instanceof Error ? e.message : 'Could not save the take.';
-		}
-	}
-
 	/**
 	 * A one-line warning when the headline name is not simply the notes under the
 	 * hand — most importantly when it names a root that was never played.
@@ -208,20 +162,8 @@
 <svelte:window onkeydown={onKeydown} />
 
 <main class="mx-auto flex min-h-dvh max-w-[1400px] flex-col px-5 py-6">
-	<!-- Device management lives in the header's cog, on every page. What stays
-	     here is the one control that belongs to this screen. -->
+	<!-- Device management lives in the header's cog, on every page. -->
 	<section class="mb-5 flex items-center gap-3">
-		<button
-			class="rounded px-3 py-1.5 font-mono text-xs transition-colors"
-			style:background={recording ? 'var(--pc-0)' : 'var(--color-ground-overlay)'}
-			style:color={recording ? 'var(--pc-0-ink)' : 'var(--color-ink-muted)'}
-			onclick={toggleRecording}
-		>
-			{recording ? 'stop recording' : 'record a take'}
-		</button>
-		{#if takeStatus}
-			<p class="text-ink-dim font-mono text-xs">{takeStatus}</p>
-		{/if}
 		{#if session.unavailableReason}
 			<p class="text-ink-muted max-w-2xl text-xs leading-relaxed">
 				{session.unavailableReason}
