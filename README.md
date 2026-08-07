@@ -80,7 +80,7 @@ whole thing is a few hundred kilobytes.
 You need **Node 22+** and a **Postgres 15+**. Docker gives you the second one.
 
 ```bash
-git clone https://github.com/bparticle/siriuspiano.git
+git clone https://github.com/bparticle/harmonic-trainer.git
 cd harmonic-trainer
 npm install
 cp .env.example .env    # the defaults already match docker-compose
