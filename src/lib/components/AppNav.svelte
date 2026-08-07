@@ -35,7 +35,9 @@
 	<div class="mx-auto flex h-14 max-w-[1500px] items-center gap-5 px-5">
 		<a href="/" class="font-display text-ink text-base font-semibold tracking-tight">Harmonic</a>
 
-		<nav class="flex items-center gap-1" aria-label="Main">
+		<!-- The links scroll rather than push: a fourth destination was enough to
+		     make the whole page slide sideways on a narrow screen. -->
+		<nav class="no-scrollbar flex min-w-0 items-center gap-1 overflow-x-auto" aria-label="Main">
 			{#each LINKS as link (link.href)}
 				<a
 					href={link.href}
@@ -46,7 +48,7 @@
 			{/each}
 		</nav>
 
-		<div class="ml-auto flex items-center gap-3">
+		<div class="ml-auto flex shrink-0 items-center gap-3">
 			<LiveNotes {context} />
 			<SettingsMenu {prefs} />
 		</div>
@@ -54,7 +56,16 @@
 </header>
 
 <style>
+	.no-scrollbar {
+		scrollbar-width: none;
+	}
+
+	.no-scrollbar::-webkit-scrollbar {
+		display: none;
+	}
+
 	.nav-link {
+		flex: none;
 		padding: 0.35rem 0.7rem;
 		border-radius: 7px;
 		font-family: var(--font-mono);

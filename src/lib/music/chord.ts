@@ -144,6 +144,28 @@ export function chordPitchClasses(c: AbstractChord): number[] {
 	return chordNotes(c).map(pitchClass);
 }
 
+/** Semitones above the tonic for each degree of a major scale. */
+const MAJOR_STEPS = [0, 2, 4, 5, 7, 9, 11];
+
+/**
+ * What each note of a chord is called, as a scale degree.
+ *
+ * `1 3 5 ♭7` for a dominant seventh, `1 ♭3 ♭5 ♭♭7` for a diminished. This is
+ * the only vocabulary the app has for saying *which note is which* — there is
+ * no notation to point at — so it does the work that a stave would otherwise do
+ * and it needs to be right about the flats.
+ */
+export function degreeLabels(c: AbstractChord): Array<{ note: Note; degree: string }> {
+	const notes = chordNotes(c);
+	return chordIntervals(c).map((interval, i) => {
+		const octaves = Math.floor(interval.steps / 7);
+		const expected = MAJOR_STEPS[interval.steps % 7] + octaves * 12;
+		const delta = interval.semitones - expected;
+		const mark = delta < 0 ? '♭'.repeat(-delta) : '♯'.repeat(delta);
+		return { note: notes[i], degree: `${mark}${interval.steps + 1}` };
+	});
+}
+
 // ---------------------------------------------------------------------------
 // Voicings
 // ---------------------------------------------------------------------------

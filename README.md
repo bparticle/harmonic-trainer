@@ -206,12 +206,24 @@ local Postgres for development and tests.
 
 ---
 
+## Choosing what to practise
+
+The home screen is a picker, not a verdict. Every key, every rung and every
+progression is listed and startable, whether or not the ladder has got there —
+the ladder marks its suggestion and nothing else. Choosing something further
+along starts a session there and leaves the ladder where it was: exploring and
+advancing are separate decisions, and only the arrows at the bottom advance.
+
+Cards for a step you have never visited are created the moment you pick it.
+
+---
+
 ## Playing along
 
 **Play along** generates a rhythm section from a chord chart: walking bass,
-brushed drums, and comping that is off by default. Nothing is recorded — the
-line and the pattern are computed from the chart — so every form plays in all
-twelve keys at any tempo without a single audio file existing.
+drums, and comping that is off by default. Nothing is recorded — the line and
+the pattern are computed from the chart — so every form plays in all twelve keys
+at any tempo without a single audio file existing.
 
 Charts are stored as Roman numerals (`I7 · IV7 · V7`) and resolved into a key at
 the last moment, which is what makes "the same blues in E♭" a parameter rather
@@ -219,7 +231,26 @@ than a second chart. Tap a bar to loop it and another to stretch the loop out;
 tempo moves under a running track because every event is scheduled in musical
 time rather than seconds.
 
-The same rhythm section, with fewer knobs, is the "Apply it" block of a session.
+Every bar is tinted by its root, in the same twelve colours the wheel and the
+keyboard use, so a form's harmonic motion is visible before a note is played.
+Whichever bar is selected — the one sounding, or the last one tapped — is taken
+apart underneath: chord symbol, Roman numeral, each note with its scale degree,
+and the shape under the hands.
+
+The charts come in three kinds, and the difference is deliberate:
+
+| | |
+| --------- | ------------------------------------------------------------- |
+| Forms     | The generic shapes: blues, minor blues, rhythm changes, a vamp  |
+| Cycles    | Named devices — bird blues, the three-tonic cycle, ii–V round the wheel |
+| Standards | Real repertoire, public domain only: US publication ≤ 1930      |
+
+There is no fake book here. Every standard records its publication year, a test
+enforces that the year exists and is 1930 or earlier, and nothing in copyright
+is shipped — that is what the chart importer is for.
+
+The same rhythm section, with fewer knobs and the forms only, is the "Apply it"
+block of a session.
 
 ---
 

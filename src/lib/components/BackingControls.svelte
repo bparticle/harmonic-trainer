@@ -8,9 +8,14 @@
 	/*
 	 * A rhythm section, in as little space as a session block can spare.
 	 *
-	 * The full controls — loop points, key, the chart itself — live on the Play
-	 * along page. In a session the key is already decided and the point is to
+	 * The full controls — loop points, key, the mixer, the standards — live on the
+	 * Play along page. In a session the key is already decided and the point is to
 	 * play, so what is left is: which form, how fast, and go.
+	 *
+	 * Only the generic vehicles are offered here. A blues or a ii–V cycle is
+	 * somewhere to apply the one thing this session was about; a thirty-two bar
+	 * standard is a different activity, and choosing between thirteen charts is
+	 * not what the last five minutes of a session are for.
 	 */
 
 	let {
@@ -31,6 +36,8 @@
 	let playing = $state(false);
 	let counting = $state(false);
 	let liveBar = $state(0);
+
+	const OFFERED = CHARTS.filter((c) => c.category === 'form' || c.category === 'cycle');
 
 	const seed = $derived(chartBySlug(slug) ?? CHARTS[0]);
 	const chart = $derived(realiseChart(seed, keyName));
@@ -101,7 +108,7 @@
 
 <div class="flex w-full max-w-2xl flex-col gap-3">
 	<div class="flex flex-wrap justify-center gap-1.5">
-		{#each CHARTS as option (option.slug)}
+		{#each OFFERED as option (option.slug)}
 			<button
 				type="button"
 				class="chip"
@@ -124,7 +131,7 @@
 		</span>
 	</button>
 
-	<div class="flex items-center justify-center gap-2">
+	<div class="flex flex-wrap items-center justify-center gap-2">
 		<button type="button" class="stepper" onclick={() => nudge(-5)} aria-label="Slower">−</button>
 		<span class="text-ink font-mono text-lg tabular-nums">{bpm}</span>
 		<button type="button" class="stepper" onclick={() => nudge(5)} aria-label="Faster">+</button>
@@ -133,13 +140,12 @@
 
 		{#each [['comp', 'Comping'], ['metronome', 'Click']] as const as [part, label] (part)}
 			<label class="toggle">
-				<input
-					type="checkbox"
-					onchange={(e) => setMuted(part, !e.currentTarget.checked)}
-				/>
+				<input type="checkbox" onchange={(e) => setMuted(part, !e.currentTarget.checked)} />
 				{label}
 			</label>
 		{/each}
+
+		<a class="more" href="/backing">more, and the standards →</a>
 	</div>
 </div>
 
@@ -204,5 +210,17 @@
 		font-family: var(--font-mono);
 		font-size: 0.72rem;
 		color: var(--color-ink-muted);
+	}
+
+	.more {
+		margin-left: 0.4rem;
+		font-family: var(--font-mono);
+		font-size: 0.7rem;
+		color: var(--color-ink-dim);
+		transition: color 120ms ease;
+	}
+
+	.more:hover {
+		color: var(--color-ink);
 	}
 </style>

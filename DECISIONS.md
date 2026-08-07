@@ -1034,3 +1034,86 @@ effect wrote to state it also read. The pattern is worth naming.
 `chordFromNumeral` mapped both to a half-diminished seventh, which quietly turned
 the passing diminished in bar 6 of the jazz blues into a chord with a different
 function. A bare `°` is the triad; `°7` is the fully diminished seventh.
+
+---
+
+## Polish pass: repertoire, colour, and choosing your own work
+
+### Public domain, and the year on every one of them
+
+Asked for popular jazz tunes, which §7 of the brief rules out — no
+transcriptions of copyrighted standards. There are two honest ways to give real
+repertoire anyway, and both are here:
+
+**Public-domain standards.** US publication in 1930 or earlier, so the copyright
+has expired: Indiana (1917), Sweet Georgia Brown (1925), St. Louis Blues (1914),
+St. James Infirmary (1929), Bill Bailey (1902). Every one carries its year as a
+field, a test asserts the year exists and is ≤ 1930, and a second test asserts
+nothing else claims one. The claim is checkable rather than a promise.
+
+**Named devices.** A bird blues and a three-tonic cycle are harmonic patterns
+taught in every book, not compositions — named after the players who made them
+famous, which is not the same as being their property. The ii–V cycle round the
+wheel is nobody's at all.
+
+Still no melodies, anywhere. The changes are written from what these forms are
+commonly taught as; they are worth checking against your own ear rather than
+trusting, which is another reason the year is on the label.
+
+### An accidental keeps its letter
+
+Three spelling bugs, one cause. `chordFromNumeral` altered a degree by moving
+its pitch class and asking the key to re-spell the result, which throws away the
+one thing a numeral is telling you — which direction the note moved.
+
+- `♯I` in F came out G♭, a flat, for a numeral meaning "raised".
+- `♭V` in C came out F♯, sitting next to a D♭m7 in the same bar.
+
+Now the alteration moves and the letter stays. Two exceptions, both readability
+rather than theory: an accidental still standing on a natural pitch takes the
+plain letter (♭II in E♭ is E7, never F♭7), and anything past a single accidental
+falls back to the key's own spelling, because B𝄫 helps nobody.
+
+### Minor numerals count from the major scale
+
+The minor charts were read in aeolian so that `i` and `iv` came out minor
+without spelling every numeral. That is fine until an accidental appears: ♭VI in
+C minor flattened the already-flat sixth, produced A𝄫, and fell back to G — so
+bar 9 of the minor blues, which is meant to be the A♭7 leaning on the V, was a
+second G7. Numerals now resolve against the major scale everywhere, which is how
+every chart is written.
+
+### Colour is information, not decoration
+
+Play along was a list of names. It now tints each bar by its root in the same
+twelve colours as the wheel and the keyboard, which makes the shape of a form
+visible before it is played: the fifths cycle sweeps the whole palette, a modal
+vamp barely moves. Below the chart, the selected bar is taken apart — symbol,
+numeral, every note with its scale degree, and the shape under the hands.
+
+`degreeLabels` is in the music core rather than the component, because "which
+note is which" is the only vocabulary this app has for that job. There is no
+stave to point at, so it has to be right about the flats: a diminished seventh
+is `1 ♭3 ♭5 ♭♭7` and calling that last note a sixth would be a different chord.
+
+### The drums were 10dB down, measured
+
+Reported as "a little low, I can't hear the cymbals", and they were: MetalSynth
+is quiet by nature and the first pass trimmed it a further 30dB. Rather than
+nudge by ear, each part was metered alone at the destination — the kit peaked
+10dB under the bass. It now peaks about 2dB under, which for transients is what
+level sounds like. Per-part faders exist too, because whether the drums are loud
+enough depends on the room and the speakers.
+
+### The home screen asks instead of answering
+
+It used to be one button wired to wherever the ladder was, with everything else
+folded under a tab. Fine on the day you agree with it, a dead end on the day you
+want to spend twenty minutes on the thing that went badly.
+
+Now every key, rung and progression is visible and startable. Unreached ones are
+dimmer, never disabled — consistent with the manual-unlock decision, where the
+ladder suggests and never gates. Picking something further along starts a
+session there and creates its cards on the way; it does not move the ladder,
+because exploring and advancing are different decisions and only the arrows do
+the second one.

@@ -11,11 +11,13 @@ import {
 	reachedSoFar,
 	rungById,
 	stageByKey,
-	type Position
+	type Position,
+	type RungId
 } from '$lib/curriculum/ladder';
 import {
 	cardsForProgression,
 	cardsForReached,
+	cardsForRung,
 	rungSkillCode,
 	type GeneratedCard
 } from '$lib/curriculum/cards';
@@ -122,7 +124,7 @@ export async function advanceLadder(to: Position): Promise<Position> {
 	return to;
 }
 
-async function gatherPlanningData(position: Position) {
+async function gatherPlanningData(position: Position, extraKeys: string[] = []) {
 	const scheduled = await db
 		.select({
 			cardId: cards.id,
@@ -166,9 +168,10 @@ async function gatherPlanningData(position: Position) {
 	return {
 		schedulable,
 		reviewsByKey: new Map(perKey.map((r) => [r.keyCenter, r.n ?? 0])),
-		// Only keys that have been reached, so nothing can be planned in a key
-		// that has never been introduced.
-		allKeys: [...new Set(reachedSoFar(position).map((r) => r.key))],
+		// Keys that have been reached, plus anything explicitly asked for — so
+		// nothing gets planned in a key that has never come up, and a key you
+		// deliberately chose is never silently ignored.
+		allKeys: [...new Set([...reachedSoFar(position).map((r) => r.key), ...extraKeys])],
 		position
 	};
 }
@@ -212,6 +215,16 @@ export type SessionRequest = {
 	progressionId?: string | null;
 	/** Which key to practise a progression in. Defaults to the current one. */
 	progressionKey?: string | null;
+	/**
+	 * A key and a rung to work on instead of wherever the ladder is.
+	 *
+	 * Exploring is not the same as advancing: this builds a session around the
+	 * chosen step and leaves the ladder exactly where it was. Nothing here is
+	 * checked against how far you have got, because the ladder has never gated
+	 * anything — it suggests, and you decide.
+	 */
+	focusKey?: string | null;
+	focusRung?: string | null;
 };
 
 /**
@@ -234,16 +247,30 @@ export async function startOrResume(
 	let focusSkills: string[] | null = null;
 	let preferredKey: string | null = position.stage.key;
 
+	// Keys that exist in the card bank but are not on the ladder yet, because
+	// something outside the current step was asked for.
+	const extraKeys: string[] = [];
+
 	if (request.progressionId) {
 		const keyName = request.progressionKey ?? position.stage.key;
 		await ensureProgressionCards(request.progressionId, keyName);
 		focusSkills = [`prog:${request.progressionId}`];
 		preferredKey = keyName;
+		extraKeys.push(keyName);
+	} else if (request.focusKey && request.focusRung) {
+		const stage = stageByKey(request.focusKey);
+		const rung = rungById(request.focusRung);
+		if (stage && rung) {
+			await ensureCards(cardsForRung(rung.id as RungId, stage));
+			focusSkills = [rungSkillCode(rung.id)];
+			preferredKey = stage.key;
+			extraKeys.push(stage.key);
+		}
 	} else {
 		focusSkills = [rungSkillCode(position.rung.id)];
 	}
 
-	const { schedulable, reviewsByKey, allKeys } = await gatherPlanningData(position);
+	const { schedulable, reviewsByKey, allKeys } = await gatherPlanningData(position, extraKeys);
 
 	const plan = planSession({
 		lengthMinutes: request.lengthMinutes ?? 20,
