@@ -76,7 +76,10 @@ describe('inversions', () => {
 			for (let i = 0; i <= 3; i++) {
 				const voicing = invert(closeVoicing(parseChord(symbol), 3), i);
 				const numbers = voicing.map(midi);
-				expect([...numbers].sort((a, b) => a - b), `${symbol} inv ${i}`).toEqual(numbers);
+				expect(
+					[...numbers].sort((a, b) => a - b),
+					`${symbol} inv ${i}`
+				).toEqual(numbers);
 			}
 		}
 	});

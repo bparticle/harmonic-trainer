@@ -1,4 +1,10 @@
-import { chordPitchClasses, closeVoicing, diatonicSeventh, diatonicTriad, formatChord } from '$lib/music/chord';
+import {
+	chordPitchClasses,
+	closeVoicing,
+	diatonicSeventh,
+	diatonicTriad,
+	formatChord
+} from '$lib/music/chord';
 import { formatKey, key as makeKey, scale, type Key } from '$lib/music/key';
 import { formatNote, midi, pitchClass } from '$lib/music/note';
 import type { CardDirection } from '$lib/server/db/schema';
@@ -48,9 +54,19 @@ export const STAGES: Stage[] = [
 	{ key: 'Eb', relativeMinor: 'Cm', accidentals: -3, note: 'Three flats: B♭, E♭, A♭.' },
 	{ key: 'E', relativeMinor: 'C#m', accidentals: 4, note: 'Four sharps: F♯, C♯, G♯, D♯.' },
 	{ key: 'Ab', relativeMinor: 'Fm', accidentals: -4, note: 'Four flats: B♭, E♭, A♭, D♭.' },
-	{ key: 'B', relativeMinor: 'G#m', accidentals: 5, note: 'Five sharps. Only one white-key tonic left.' },
+	{
+		key: 'B',
+		relativeMinor: 'G#m',
+		accidentals: 5,
+		note: 'Five sharps. Only one white-key tonic left.'
+	},
 	{ key: 'Db', relativeMinor: 'Bbm', accidentals: -5, note: 'Five flats.' },
-	{ key: 'Gb', relativeMinor: 'Ebm', accidentals: -6, note: 'Six flats, and the far side of the wheel.' }
+	{
+		key: 'Gb',
+		relativeMinor: 'Ebm',
+		accidentals: -6,
+		note: 'Six flats, and the far side of the wheel.'
+	}
 ];
 
 export type RungId =
@@ -92,7 +108,8 @@ export const RUNGS: Rung[] = [
 	{
 		id: 'tonic-triad',
 		label: 'The home chord',
-		teaches: 'Three notes from the scale — the first, third and fifth. This is where the key rests.',
+		teaches:
+			'Three notes from the scale — the first, third and fifth. This is where the key rests.',
 		instruction: 'Play it, listen to it, and come back to it.',
 		suggestAfter: 6
 	},
@@ -106,7 +123,8 @@ export const RUNGS: Rung[] = [
 	{
 		id: 'all-triads',
 		label: 'All seven triads',
-		teaches: 'One chord on each note of the scale. Three are major, three are minor, one is diminished.',
+		teaches:
+			'One chord on each note of the scale. Three are major, three are minor, one is diminished.',
 		instruction: 'Play up the scale, building a chord on each note.',
 		suggestAfter: 12
 	},
@@ -120,14 +138,16 @@ export const RUNGS: Rung[] = [
 	{
 		id: 'all-sevenths',
 		label: 'All seven sevenths',
-		teaches: 'The same seven chords, each with its seventh. Two are major sevenths, one is dominant.',
+		teaches:
+			'The same seven chords, each with its seventh. Two are major sevenths, one is dominant.',
 		instruction: 'Up the scale again, four notes at a time.',
 		suggestAfter: 12
 	},
 	{
 		id: 'relative-minor',
 		label: 'The relative minor',
-		teaches: 'Exactly the same seven notes, starting from the sixth degree. A different feeling, no new notes.',
+		teaches:
+			'Exactly the same seven notes, starting from the sixth degree. A different feeling, no new notes.',
 		instruction: 'Play the minor scale, then its first, fourth and fifth chords.',
 		suggestAfter: 9
 	}
@@ -211,8 +231,7 @@ export type LadderItem = {
 const MAJOR_DEGREES = ['I', 'ii', 'iii', 'IV', 'V', 'vi', 'vii°'];
 const MINOR_DEGREES = ['i', 'ii°', '♭III', 'iv', 'v', '♭VI', '♭VII'];
 
-const voicingOf = (chord: Parameters<typeof closeVoicing>[0]) =>
-	closeVoicing(chord, 3).map(midi);
+const voicingOf = (chord: Parameters<typeof closeVoicing>[0]) => closeVoicing(chord, 3).map(midi);
 
 function triadItem(k: Key, degree: number, degrees: string[]): LadderItem {
 	const chord = diatonicTriad(k, degree);
@@ -266,10 +285,7 @@ export function itemsForRung(rungId: RungId, stage: Stage): LadderItem[] {
 		case 'all-sevenths':
 			return [1, 2, 3, 4, 5, 6, 7].map((d) => seventhItem(major, d, MAJOR_DEGREES));
 		case 'relative-minor':
-			return [
-				scaleItem(minor),
-				...[1, 4, 5].map((d) => triadItem(minor, d, MINOR_DEGREES))
-			];
+			return [scaleItem(minor), ...[1, 4, 5].map((d) => triadItem(minor, d, MINOR_DEGREES))];
 	}
 }
 

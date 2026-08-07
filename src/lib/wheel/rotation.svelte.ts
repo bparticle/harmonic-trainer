@@ -19,7 +19,7 @@ const REST_VELOCITY = 0.02;
 /** Above this it keeps coasting rather than snapping. */
 const COAST_VELOCITY = 0.6;
 
-export const normaliseAngle = (deg: number) => (((deg % 360) + 360) % 360);
+export const normaliseAngle = (deg: number) => ((deg % 360) + 360) % 360;
 
 /** Shortest signed distance from `from` to `to`, in -180..180. */
 export function angleDelta(from: number, to: number): number {

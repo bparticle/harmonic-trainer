@@ -36,20 +36,7 @@ describe('circle of fifths indexing', () => {
 
 	it('orders the circle of fifths from C', () => {
 		const order = Array.from({ length: 12 }, (_, i) => pitchClassOfCof(i));
-		expect(names(order)).toEqual([
-			'C',
-			'G',
-			'D',
-			'A',
-			'E',
-			'B',
-			'F#',
-			'Db',
-			'Ab',
-			'Eb',
-			'Bb',
-			'F'
-		]);
+		expect(names(order)).toEqual(['C', 'G', 'D', 'A', 'E', 'B', 'F#', 'Db', 'Ab', 'Eb', 'Bb', 'F']);
 	});
 });
 
@@ -59,7 +46,7 @@ describe('ring layout', () => {
 	});
 
 	it('makes the fifth ring duplicate the first', () => {
-		// The brief states this as a property to verify and then surface.
+		// A property worth verifying and then surfacing in the UI.
 		expect(DEFAULT_WHEEL_CONFIG.rings).toBe(5);
 		expect(isDuplicateRing(4, DEFAULT_WHEEL_CONFIG)).toBe(true);
 		for (let position = 0; position < 12; position++) {
@@ -89,7 +76,7 @@ describe('ring layout', () => {
 		expect(pitchClassAt({ ring: 0, position: 0 }, DEFAULT_WHEEL_CONFIG)).toBe(0);
 	});
 
-	it('follows the brief formula: cof index is position minus ring offset', () => {
+	it('follows the formula: cof index is position minus ring offset', () => {
 		const config = DEFAULT_WHEEL_CONFIG;
 		for (let ring = 0; ring < config.rings; ring++) {
 			for (let position = 0; position < 12; position++) {

@@ -45,7 +45,7 @@
 	 * Which keyboard to prefer, remembered across reloads and replugs.
 	 *
 	 * The name is stored rather than the id: Web MIDI ids are opaque and not
-	 * stable, so an id cannot express "always use the Matriarch". Writing back
+	 * stable, so an id cannot express "always use this keyboard". Writing back
 	 * happens whenever the choice changes, which is the only time it can.
 	 */
 	$effect(() => {

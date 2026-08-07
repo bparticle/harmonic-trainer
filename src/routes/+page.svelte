@@ -23,8 +23,7 @@
 	let length = $state<10 | 20 | 35>(data.settings.prefs.sessionLengthMinutes);
 
 	type Choice =
-		| { kind: 'rung'; key: string; rung: string }
-		| { kind: 'progression'; id: string; key: string };
+		{ kind: 'rung'; key: string; rung: string } | { kind: 'progression'; id: string; key: string };
 
 	/*
 	 * Starts on the ladder's own suggestion, so pressing play without touching
@@ -43,7 +42,8 @@
 	let openKey = $state(data.position.key);
 
 	const glyph = (s: string) => s.replace(/b/g, '♭').replace(/#/g, '♯');
-	const tint = (keyName: string) => `var(--pc-${pitchClass(parseKey(keyName.replace(/m$/, '')).tonic)})`;
+	const tint = (keyName: string) =>
+		`var(--pc-${pitchClass(parseKey(keyName.replace(/m$/, '')).tonic)})`;
 
 	const resuming = $derived(Boolean(data.active));
 	const reachedIndex = $derived(data.position.stageIndex);
@@ -129,8 +129,9 @@
 		<p class="text-ink-dim text-[0.78rem] leading-relaxed">
 			{openStage.note}
 			{#if data.stages.indexOf(openStage) > reachedIndex}
-				<span class="text-ink-muted">Further along than the ladder suggests — take it anyway if
-					you want it.</span>
+				<span class="text-ink-muted"
+					>Further along than the ladder suggests — take it anyway if you want it.</span
+				>
 			{/if}
 		</p>
 

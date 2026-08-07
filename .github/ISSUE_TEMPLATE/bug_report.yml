@@ -1,0 +1,58 @@
+name: Bug report
+description: Something behaves incorrectly
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Musical bugs are the interesting ones. If a chord is named wrong or a
+        progression resolves oddly, the exact notes and key are usually the
+        whole fix.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: Include exact chord symbols, notes or keys where relevant.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Go to Play along
+        2. Choose the twelve-bar blues in E♭
+        3. …
+    validations:
+      required: true
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and version
+      placeholder: Chrome 141 on Windows 11
+    validations:
+      required: true
+
+  - type: input
+    id: midi
+    attributes:
+      label: MIDI device, if one is involved
+      placeholder: None, or the make and model
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues
+          required: true

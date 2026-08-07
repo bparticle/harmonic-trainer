@@ -39,7 +39,7 @@ export type WheelGeometry = {
 
 const TAU = Math.PI * 2;
 
-export const mod12 = (n: number) => (((n % 12) + 12) % 12);
+export const mod12 = (n: number) => ((n % 12) + 12) % 12;
 
 function gcd(a: number, b: number): number {
 	return b === 0 ? Math.abs(a) : gcd(b, a % b);
@@ -78,7 +78,7 @@ function ringShift(ring: number, config: WheelConfig): number {
 	return ring * config.ringOffsetSteps * config.offsetDirection;
 }
 
-/** Circle-of-fifths index held by a cell. This is the brief's formula. */
+/** Circle-of-fifths index held by a cell. */
 export function cofIndexAt(cell: Cell, config: WheelConfig): number {
 	return mod12(cell.position - ringShift(cell.ring, config) + startCof(config));
 }
@@ -280,9 +280,8 @@ export function shapePolygonPath(cells: Cell[], geometry: WheelGeometry): string
 	);
 
 	return (
-		ordered
-			.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(2)} ${p.y.toFixed(2)}`)
-			.join(' ') + ' Z'
+		ordered.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join(' ') +
+		' Z'
 	);
 }
 

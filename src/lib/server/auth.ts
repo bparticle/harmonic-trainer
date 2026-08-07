@@ -4,7 +4,7 @@ import { env } from '$env/dynamic/private';
 /*
  * A single shared password and a signed cookie. That is the whole auth system.
  *
- * The brief lists accounts and login as anti-goals, but moving the database off
+ * User accounts are an explicit anti-goal, but moving the database off
  * a private NAS onto a public URL means *something* has to stand between the
  * internet and the practice vault. This is the smallest thing that does the
  * job: no users table, no sessions table, no registration, no email. One

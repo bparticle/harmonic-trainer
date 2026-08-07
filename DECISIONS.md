@@ -16,13 +16,13 @@ answers to the section 0 questions, not from a preference of mine.
 Consequences that follow, and that override the brief where they conflict:
 
 - **§2 "fully offline at runtime, everything self-hosted" is no longer literally
-  true.** A hosted database on a PaaS is neither. The intent — *practice must
-  never be blocked by the network* — is preserved by going local-first instead
+  true.** A hosted database on a PaaS is neither. The intent — _practice must
+  never be blocked by the network_ — is preserved by going local-first instead
   (see below).
 - **§16 lists "accounts, login, or a cloud backend" as anti-goals.** The cloud
   backend was chosen deliberately. Login follows from it: a public URL with no
   auth means the practice vault is readable by anyone who finds the hostname.
-  The mitigation is kept as small as possible (see *Auth*).
+  The mitigation is kept as small as possible (see _Auth_).
 - **Docker is no longer a deployment artifact.** `docker-compose.yml` survives
   only to run a local Postgres for development and tests.
 
@@ -38,7 +38,7 @@ auto-grading and transfer detection are all impossible — that is most of the
 product, not a degradation.
 
 **Decision:** practice sessions run on the laptop in Chrome, Edge or Firefox.
-The iPad is a first-class *Explore* device — wheel, reports, vault browsing —
+The iPad is a first-class _Explore_ device — wheel, reports, vault browsing —
 and the layouts are built for it, but it is not where you play. Capability is
 detected at runtime and the on-screen keyboard fallback stays supported so the
 app is never dead, but it is a fallback, not the plan.
@@ -61,7 +61,7 @@ instance keeps a pool of exactly one.
 
 ### Local-first, with client-generated UUID primary keys
 
-*Decided now, implemented from M3 when there is session data worth syncing.*
+_Decided now, implemented from M3 when there is session data worth syncing._
 
 The session runs out of IndexedDB and flushes to Postgres as an append-only
 outbox. A dropped tunnel, a closed laptop lid or a Neon cold start must never
@@ -79,7 +79,7 @@ looks enum-ish (`block_type`, `fact_type`, `category`, `style`) is `text`
 narrowed by a TypeScript union. Full type safety in code, no `ALTER TYPE`
 migration every time a new fact type is worth tracking.
 
-### `skills.prereq_ids_json` holds skill *codes*, not UUIDs
+### `skills.prereq_ids_json` holds skill _codes_, not UUIDs
 
 The curriculum is seeded and reseeded. Codes (`L4`, `L7`) survive a reseed and
 are readable in a `psql` session; UUIDs do neither.
@@ -99,7 +99,7 @@ kilobytes, so there is no reason to reach for object storage.
 ### Colour: OKLCH, seven anchors, five derived
 
 The palette is authored in OKLCH rather than hex because §4.1 requires a colour
-*editor* — dragging lightness must not shift hue, and dragging hue must not
+_editor_ — dragging lightness must not shift hue, and dragging hue must not
 shift perceived lightness. In sRGB hex that is guesswork.
 
 Only the seven diatonic anchors are authored. The five chromatics are
@@ -129,7 +129,7 @@ L 0.10 and L 0.99. Both keep a trace of the ground's hue rather than being pure
 Tailwind 4 generates utilities at build time and cannot read values out of
 TypeScript, so the ground and ink literals appear in both `palette.ts` and
 `layout.css`. `tokens.test.ts` reads the CSS file and fails if they drift. The
-twelve pitch colours are deliberately *not* in CSS at all — they are
+twelve pitch colours are deliberately _not_ in CSS at all — they are
 database-owned and injected at runtime, which is what makes the colour editor
 possible.
 
@@ -186,7 +186,7 @@ thousands, where scheduling efficiency actually pays.
 
 The library (`ts-fsrs`, MIT) is preferred over a hand-rolled implementation
 because FSRS has subtle edge cases — same-day reviews, fuzz, retrievability at
-zero elapsed time — where a hand-rolled version is *silently* wrong. A scheduler
+zero elapsed time — where a hand-rolled version is _silently_ wrong. A scheduler
 that is quietly mis-scheduling is the worst possible failure mode here, because
 nothing about the UI would reveal it. Wired up in M4.
 
@@ -216,7 +216,7 @@ gives C♭ rather than B.
 No table of key signatures. A scale is the mode's interval pattern transposed
 from the tonic, which makes G♭ major produce its C♭ and B major its A♯ for free,
 and makes every mode in every key work by the same code path. Key signature is
-*derived* by summing the alterations in the scale, which means it also works for
+_derived_ by summing the alterations in the scale, which means it also works for
 modal keys, where a lookup table would have needed a second table.
 
 ### The tritone above the tonic is the raised fourth
@@ -237,7 +237,7 @@ one small piece of encoding.
 
 ### Chord symbols are parsed quality-first
 
-`parseChord` reads the quality token *before* stripping alterations. The `b5` in
+`parseChord` reads the quality token _before_ stripping alterations. The `b5` in
 `m7b5` belongs to the quality, and stripping alterations first silently turned
 half-diminished chords into minor sevenths with a flat five — a different chord
 with a different function, and a bug that would have been invisible until some
@@ -259,7 +259,7 @@ in this music. It is the mechanism behind the brief's own example: E–G–B♭�
 `Em7♭5` exactly, with the root in the bass, and still loses to a rootless `C9`,
 because rootless dominants are everywhere and root-position half-diminished
 chords are not. Combined with a bonus for the specific shapes that are idiomatic
-*without* their root, this reproduces the required ranking without a special
+_without_ their root, this reproduces the required ranking without a special
 case, and generalises: B–D–F–A in C reads as `G9` before `Bm7♭5` for the same
 reason.
 
@@ -288,7 +288,7 @@ move to A minor. Detection therefore requires a full ii–V–I landing outside 
 current key, and additionally requires that the three chords are not all already
 diatonic at home.
 
-The pivot is then found by walking *backwards* for the last chord diatonic in
+The pivot is then found by walking _backwards_ for the last chord diatonic in
 both keys — the point where the ear changed key without noticing, and the cell
 the two key-shapes share on the wheel.
 
@@ -329,7 +329,7 @@ modulations at 1, 2, 3 and 6 steps on the circle of fifths.
 
 ### The brief's two geometric claims are true, and now enforced
 
-Ring *n* at angular position θ holds circle-of-fifths index `θ − n·offset·direction`.
+Ring _n_ at angular position θ holds circle-of-fifths index `θ − n·offset·direction`.
 With five rings and an offset of three that means moving inward one ring is a
 minor third, so a radial spoke spells a diminished seventh and the fifth ring
 duplicates the first. Both are asserted in `geometry.test.ts` for all twelve
@@ -409,7 +409,7 @@ not obvious by eye until it is on a music stand across the room.
 
 Recorded because the pattern keeps repeating. C∆7 and Dm7 share only one note,
 so three differ, not two. JavaScript's default `.sort()` is lexicographic, so
-`[10, 2, 7]` needs a numeric comparator. And a ii–V–I walks *anticlockwise*
+`[10, 2, 7]` needs a numeric comparator. And a ii–V–I walks _anticlockwise_
 round the circle — D to G is −1 fifth, not +1.
 
 ---
@@ -510,7 +510,7 @@ happening. The current key's seven notes are now drawn as a shape on the wheel,
 so the block visibly swings round to sit under the index mark — which is how you
 read a key off the real object.
 
-What rotation does *not* do is transpose what you are playing, and that is
+What rotation does _not_ do is transpose what you are playing, and that is
 correct: your hands are on the same three keys, so it is still Bm. The shape
 tracks the notes.
 
@@ -566,7 +566,7 @@ makes intervals deterministic so the tests can assert real numbers.
 ### Direction weighting is selection, not scheduling
 
 Play-to-name is the weakest link and the brief asks for it to be weighted up.
-That weight is applied when *choosing* which due card to ask, never to the
+That weight is applied when _choosing_ which due card to ask, never to the
 intervals themselves. Distorting FSRS's output would corrupt its model of your
 memory; changing which card gets picked from the due pile does not.
 
@@ -598,8 +598,8 @@ four directions for exactly this reason.
 
 ### Mastery gates on transfer, not just accuracy
 
-Three conditions: at least twelve reviews, 85% accuracy, and *at least one
-unprompted appearance in free play*. The third is the one that matters — a thing
+Three conditions: at least twelve reviews, 85% accuracy, and _at least one
+unprompted appearance in free play_. The third is the one that matters — a thing
 is not learned because it was answered correctly twelve times in a drill, it is
 learned when it turns up in playing nobody asked for. The brief calls that the
 app's real scoreboard, so it belongs in the gate rather than in a report.
@@ -802,7 +802,7 @@ MIDI hardware.
 ### An effect that reads MIDI state cannot also own MIDI's lifetime
 
 Pressing "connect a keyboard" did nothing at all, silently. The root layout's
-effect called `restoreMidi`, which reads `midi.status` — so the effect *depended*
+effect called `restoreMidi`, which reads `midi.status` — so the effect _depended_
 on the status. Connecting sets it to `requesting`, the effect re-ran, its cleanup
 fired `midi.destroy()`, and the connection was torn down before
 `requestMIDIAccess` could resolve.
@@ -834,12 +834,12 @@ remembering, and it survives clearing site data that the flag does not.
 `settings.midi_device` has existed since M0 and nothing ever wrote to it, so the
 chosen port was only ever in memory — and `#refreshDevices` dropped straight to
 the first device whenever the selected id went missing, which any hot-plug event
-causes. Choosing the Matriarch and then navigating quietly moved you to whatever
-port enumerated first.
+causes. Choosing a specific keyboard and then navigating quietly moved you to
+whatever port enumerated first.
 
 It is now remembered **by name**, not by id. Web MIDI ids are opaque and not
 stable across restarts or replugs, so an id cannot express "always use the
-Matriarch". The name can, and it is also the only part a person recognises.
+weighted one". A name can, and it is also the only part a person recognises.
 Selection order is: the device already selected if it is still present, then the
 remembered name, then whatever is plugged in.
 
@@ -864,7 +864,7 @@ Two rules keep it coherent:
   taught something about quartal voicings would make the choice feel decorative.
   Choosing ii–V–I in E♭ now yields the guide-tone atom, in E♭.
 
-`chosenKey` on the plan records whether the key was *honoured*, not merely
+`chosenKey` on the plan records whether the key was _honoured_, not merely
 requested — asking for a key that has no material should not read as having
 chosen it.
 
@@ -890,7 +890,7 @@ All three were true, and the causes were mine.
 
 `--history` invented four weeks of practice with deliberately uneven key
 coverage, so the blind-spot weighting did exactly what it was built to do and
-pushed towards B, F♯ and A♭ — keys chosen because a *simulation* had skipped
+pushed towards B, F♯ and A♭ — keys chosen because a _simulation_ had skipped
 them. Meanwhile all 3024 cards were created due at once, so altered dominants
 and quartal voicings from the top of the syllabus were as eligible as a C major
 triad.
@@ -902,7 +902,7 @@ the seed any more.
 ### Nothing exists until it is reached
 
 Cards are created when a rung is reached, not up front. A new account has
-exactly two: the C major scale, to see and to hear. Nothing else *can* be asked,
+exactly two: the C major scale, to see and to hear. Nothing else _can_ be asked,
 which is a much stronger guarantee than a scheduler promising not to.
 
 ### One key at a time, out from C
@@ -915,7 +915,7 @@ previous one plus one idea.
 
 The old model generated every key at once and let the scheduler choose, which
 assumed a broad familiarity with all twelve keys that the app is supposed to be
-*building*.
+_building_.
 
 ### Moving on is a decision
 
@@ -953,7 +953,7 @@ tone cluster, and it was being offered as the first thing anyone hears.
 `playSequence` existed, was imported, and was never called.
 
 The marking had the same bug from the other side. It compared the answer as a
-single handful, so all seven notes had to sound *at once* to be right — which is
+single handful, so all seven notes had to sound _at once_ to be right — which is
 unplayable, and reported "missing 4" at anything a person could actually do.
 Notes are now gathered as they arrive: any order, any octave, repeats and
 passing notes forgiven, complete when every one has been played.
@@ -1016,7 +1016,7 @@ instant.
 ### Draw is for drawing
 
 Tone's `Draw` queue runs on animation frames, so it stops completely when the
-tab is not compositing. The first version routed *everything* through it: the
+tab is not compositing. The first version routed _everything_ through it: the
 playing flag, the count-in ending, and the chart highlight. Two of those were
 wrong. Pressing play left the button reading "Play", and with the tab in the
 background the count-in click would carry on for as long as you were away.
@@ -1133,7 +1133,7 @@ was being drawn without its seventh, because `closeVoicing(chord, 4)` puts it at
 The widest chord in the repertoire spans eleven semitones, so nothing needed a
 bigger keyboard; the placement was simply never checked. `fitToRange` moves a
 voicing into the range by whole octaves, which keeps the shape — the chord still
-*looks* like the chord. Only if it genuinely will not fit does it re-stack from
+_looks_ like the chord. Only if it genuinely will not fit does it re-stack from
 the bottom, changing the inversion but showing every note.
 
 Nothing is ever dropped. A diagram missing the seventh is worse than one in an

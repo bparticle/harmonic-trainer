@@ -177,7 +177,11 @@
 		const direction = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
 		if (!direction) return;
 		event.preventDefault();
-		rotation = { angle: normaliseAngle(rotation.angle + direction * 30), velocity: 0, dragging: false };
+		rotation = {
+			angle: normaliseAngle(rotation.angle + direction * 30),
+			velocity: 0,
+			dragging: false
+		};
 		onrotate?.(stepsForAngle(rotation.angle));
 	}
 
@@ -244,49 +248,49 @@
 		{#each cells as cell (`${cell.ring}-${cell.position}`)}
 			{@const centre = cellCentre(cell, geometry)}
 			{@const isActive = activeSet.has(cell.pc)}
-				{@const isLit = litSet.has(cell.pc)}
-				{@const degree = isActive ? degrees?.get(cell.pc) : undefined}
-				{@const ink = isActive ? `var(--pc-${cell.pc}-ink)` : 'var(--color-ink-muted)'}
-				<g class="cell" class:is-duplicate={cell.duplicate}>
-					<path
-						d={cellSectorPath(cell, geometry)}
-						fill="var(--pc-{cell.pc})"
-						class="cell-fill"
-						opacity={fillOpacity(cell.pc, cell.duplicate)}
-						onclick={() => onselect?.({ ring: cell.ring, position: cell.position }, cell.pc)}
-						onkeydown={(e) =>
-							e.key === 'Enter' && onselect?.({ ring: cell.ring, position: cell.position }, cell.pc)}
-						role="button"
-						tabindex="-1"
-						aria-label={degree ? `${cell.name}, ${degree}` : cell.name}
-					/>
-					{#if isLit}
-						<path d={cellSectorPath(cell, geometry, 0.006, 0.5)} class="cell-lit" />
-					{/if}
-					<g transform="rotate({labelRotation} {centre.x} {centre.y})">
+			{@const isLit = litSet.has(cell.pc)}
+			{@const degree = isActive ? degrees?.get(cell.pc) : undefined}
+			{@const ink = isActive ? `var(--pc-${cell.pc}-ink)` : 'var(--color-ink-muted)'}
+			<g class="cell" class:is-duplicate={cell.duplicate}>
+				<path
+					d={cellSectorPath(cell, geometry)}
+					fill="var(--pc-{cell.pc})"
+					class="cell-fill"
+					opacity={fillOpacity(cell.pc, cell.duplicate)}
+					onclick={() => onselect?.({ ring: cell.ring, position: cell.position }, cell.pc)}
+					onkeydown={(e) =>
+						e.key === 'Enter' && onselect?.({ ring: cell.ring, position: cell.position }, cell.pc)}
+					role="button"
+					tabindex="-1"
+					aria-label={degree ? `${cell.name}, ${degree}` : cell.name}
+				/>
+				{#if isLit}
+					<path d={cellSectorPath(cell, geometry, 0.006, 0.5)} class="cell-lit" />
+				{/if}
+				<g transform="rotate({labelRotation} {centre.x} {centre.y})">
+					<text
+						x={centre.x}
+						y={centre.y + (degree ? -7 : 0)}
+						class="cell-label"
+						fill={ink}
+						opacity={hasFigure && !isActive ? 0.5 : cell.duplicate && !isActive ? 0.45 : 1}
+						text-anchor="middle"
+						dominant-baseline="central">{cell.name}</text
+					>
+					{#if degree}
+						<!-- The degree is the thing worth memorising: it is the same in
+							     all twelve keys, and the letter is not. -->
 						<text
 							x={centre.x}
-							y={centre.y + (degree ? -7 : 0)}
-							class="cell-label"
+							y={centre.y + 10}
+							class="cell-degree"
 							fill={ink}
-							opacity={hasFigure && !isActive ? 0.5 : cell.duplicate && !isActive ? 0.45 : 1}
 							text-anchor="middle"
-							dominant-baseline="central">{cell.name}</text
+							dominant-baseline="central">{degree}</text
 						>
-						{#if degree}
-							<!-- The degree is the thing worth memorising: it is the same in
-							     all twelve keys, and the letter is not. -->
-							<text
-								x={centre.x}
-								y={centre.y + 10}
-								class="cell-degree"
-								fill={ink}
-								text-anchor="middle"
-								dominant-baseline="central">{degree}</text
-							>
-						{/if}
-					</g>
+					{/if}
 				</g>
+			</g>
 		{/each}
 
 		{#each highlightPaths as highlight, i (i)}
@@ -311,10 +315,7 @@
 
 	<!-- The index mark does not turn: it is the fixed point you read against. -->
 	<g class="index">
-		<path
-			d="M 0 {-geometry.outerRadius - 30} l 9 -15 l -18 0 Z"
-			fill="var(--color-ink-muted)"
-		/>
+		<path d="M 0 {-geometry.outerRadius - 30} l 9 -15 l -18 0 Z" fill="var(--color-ink-muted)" />
 	</g>
 </svg>
 

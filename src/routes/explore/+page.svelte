@@ -40,9 +40,13 @@
 	const targetKey = $derived(makeKey(spell(targetTonic, C_MAJOR), targetMode));
 
 	const keyView = $derived(keyOverlay(currentKey, config, GEOMETRY));
-	const selectedChord = $derived<AbstractChord>(keyView.chords[selectedChordIndex]?.chord ?? keyView.chords[0].chord);
+	const selectedChord = $derived<AbstractChord>(
+		keyView.chords[selectedChordIndex]?.chord ?? keyView.chords[0].chord
+	);
 	const neighbourList = $derived(
-		overlay === 'chord' ? neighbourOverlays(selectedChord, currentKey, config, GEOMETRY, maxChanged) : []
+		overlay === 'chord'
+			? neighbourOverlays(selectedChord, currentKey, config, GEOMETRY, maxChanged)
+			: []
 	);
 	const brightness = $derived(brightnessAxis(currentKey, config));
 	const modulation = $derived(modulationOverlay(currentKey, targetKey, config, GEOMETRY));
@@ -54,7 +58,9 @@
 			return [{ cells: keyView.scaleCells, strength: 1, outline: true }];
 		}
 		if (overlay === 'chord') {
-			const base: Highlight[] = [{ cells: chordCells(selectedChord, config, GEOMETRY), strength: 1 }];
+			const base: Highlight[] = [
+				{ cells: chordCells(selectedChord, config, GEOMETRY), strength: 1 }
+			];
 			if (hoveredNeighbour !== null && neighbourList[hoveredNeighbour]) {
 				base.push({ cells: neighbourList[hoveredNeighbour].cells, strength: 0.55 });
 			}
@@ -134,8 +140,8 @@
 						: [...litPitchClasses, pc])}
 			/>
 			<p class="text-ink-dim max-w-lg text-center font-mono text-xs leading-relaxed">
-				Drag to turn. Every ring inward is a minor third, so a spoke spells a diminished seventh
-				and the fifth ring repeats the first. Click a cell to light it.
+				Drag to turn. Every ring inward is a minor third, so a spoke spells a diminished seventh and
+				the fifth ring repeats the first. Click a cell to light it.
 				{#if litPitchClasses.length}
 					<button
 						class="text-ink-muted hover:text-ink ml-2 underline underline-offset-2"
@@ -331,13 +337,9 @@
 							</h3>
 							<ul class="flex flex-col gap-0.5">
 								{#each modulation.pivots as pivot (pivot.symbol)}
-									<li
-										class="flex items-baseline justify-between px-2 py-1 font-mono text-xs"
-									>
+									<li class="flex items-baseline justify-between px-2 py-1 font-mono text-xs">
 										<span class="text-ink-muted font-display text-sm">{pivot.symbol}</span>
-										<span class="text-ink-dim"
-											>{pivot.romanInFrom} → {pivot.romanInTo}</span
-										>
+										<span class="text-ink-dim">{pivot.romanInFrom} → {pivot.romanInTo}</span>
 									</li>
 								{/each}
 							</ul>

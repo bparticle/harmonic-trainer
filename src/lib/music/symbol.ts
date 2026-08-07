@@ -17,7 +17,8 @@ export type SymbolPart =
 	| { kind: 'super'; parts: SymbolPart[] }
 	| { kind: 'slash' };
 
-export type Glyph = 'flat' | 'sharp' | 'doubleFlat' | 'doubleSharp' | 'triangle' | 'halfDim' | 'dim' | 'plus';
+export type Glyph =
+	'flat' | 'sharp' | 'doubleFlat' | 'doubleSharp' | 'triangle' | 'halfDim' | 'dim' | 'plus';
 
 function accidentalParts(alter: number): SymbolPart[] {
 	if (alter === 0) return [];
@@ -180,7 +181,9 @@ export function chordSymbolLabel(c: AbstractChord): string {
 	const alterations = c.alterations
 		.map((a) => ` ${a.startsWith('b') ? 'flat' : 'sharp'} ${a.slice(1)}`)
 		.join('');
-	const bass = c.bass ? ` over ${formatPitch(c.bass).replace('b', ' flat').replace('#', ' sharp')}` : '';
+	const bass = c.bass
+		? ` over ${formatPitch(c.bass).replace('b', ' flat').replace('#', ' sharp')}`
+		: '';
 
 	return `${root} ${spoken[c.quality]}${extension}${alterations}${bass}`;
 }

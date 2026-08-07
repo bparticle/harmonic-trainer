@@ -1,8 +1,28 @@
 {
 	"name": "harmonic-trainer",
-	"private": true,
 	"version": "0.1.0",
+	"description": "A practice tool for naming the chords and progressions already under your fingers. No staff notation, anywhere.",
+	"license": "AGPL-3.0-or-later",
+	"private": true,
 	"type": "module",
+	"keywords": [
+		"music",
+		"music-theory",
+		"jazz",
+		"piano",
+		"ear-training",
+		"web-midi",
+		"spaced-repetition",
+		"sveltekit"
+	],
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/OWNER/harmonic-trainer.git"
+	},
+	"homepage": "https://github.com/OWNER/harmonic-trainer#readme",
+	"bugs": {
+		"url": "https://github.com/OWNER/harmonic-trainer/issues"
+	},
 	"engines": {
 		"node": ">=22"
 	},
@@ -21,7 +41,10 @@
 		"db:studio": "drizzle-kit studio",
 		"db:seed": "vite-node scripts/seed.ts",
 		"db:up": "docker compose up -d db",
-		"db:down": "docker compose down"
+		"db:down": "docker compose down",
+		"format": "prettier --write .",
+		"format:check": "prettier --check .",
+		"verify": "npm run format:check && npm run check && npm run test"
 	},
 	"dependencies": {
 		"@fontsource-variable/space-grotesk": "^5.3.0",
@@ -32,7 +55,7 @@
 		"ts-fsrs": "^5.4.1"
 	},
 	"devDependencies": {
-		"@sveltejs/adapter-vercel": "^6.3.3",
+		"@sveltejs/adapter-auto": "^7.0.1",
 		"@sveltejs/kit": "^2.63.0",
 		"@sveltejs/vite-plugin-svelte": "^7.1.2",
 		"@tailwindcss/vite": "^4.3.0",
@@ -41,6 +64,8 @@
 		"@vite-pwa/sveltekit": "^1.1.0",
 		"dotenv": "^17.4.2",
 		"drizzle-kit": "^0.31.10",
+		"prettier": "^3.9.6",
+		"prettier-plugin-svelte": "^4.1.1",
 		"svelte": "^5.56.1",
 		"svelte-check": "^4.6.0",
 		"tailwindcss": "^4.3.0",

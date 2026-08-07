@@ -35,7 +35,7 @@ export function spell(
 	harmonicFunction?: HarmonicFunction,
 	octave = 4
 ): Note {
-	const target = (((pc % 12) + 12) % 12);
+	const target = ((pc % 12) + 12) % 12;
 
 	if (harmonicFunction?.kind === 'interval') {
 		const spelled = transpose(harmonicFunction.root, ivl(harmonicFunction.interval));
@@ -74,7 +74,7 @@ export function spell(
  * and never inventing a double one.
  */
 export function spellChromatic(pc: number, prefer: 'sharp' | 'flat'): Note {
-	const target = (((pc % 12) + 12) % 12);
+	const target = ((pc % 12) + 12) % 12;
 
 	// Natural first — a natural spelling is always better than an altered one.
 	for (const letter of LETTERS) {
@@ -125,8 +125,8 @@ export function spellSet(pcs: number[], context: Key, octave = 4): Note[] {
  */
 export function scaleDegree(n: Note, context: Key): { degree: number; alter: number } {
 	const interval = between(context.tonic, n);
-	const steps = (((interval.steps % 7) + 7) % 7);
-	const semitones = (((interval.semitones % 12) + 12) % 12);
+	const steps = ((interval.steps % 7) + 7) % 7;
+	const semitones = ((interval.semitones % 12) + 12) % 12;
 	const natural = [0, 2, 4, 5, 7, 9, 11][steps];
 	let alter = semitones - natural;
 	if (alter > 6) alter -= 12;

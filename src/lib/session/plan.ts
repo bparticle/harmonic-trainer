@@ -41,7 +41,7 @@ export type SessionPlan = {
 /**
  * How the minutes divide.
  *
- * The twenty-minute shape is the brief's, to the second. The other two lengths
+ * The twenty-minute shape is the canonical one. The other two lengths
  * keep the same proportions rather than dropping blocks, because a session that
  * silently loses its capture block stops producing the data the whole app runs
  * on.
@@ -99,17 +99,16 @@ const SHAPE: Array<{ type: BlockType; share: number; title: string; instruction:
  * cheerfully told you to warm up by playing a ii–V–i. A block that contradicts
  * its own instruction teaches you to stop reading them.
  */
-const DRILL_BLOCKS: Partial<
-	Record<BlockType, { directions: CardDirection[]; skills?: string[] }>
-> = {
-	// Everything now draws from wherever the ladder is. The warm-up used to be
-	// pinned to the old key-anchoring skills, which no longer exist — and which
-	// would have been wrong anyway, since the rung you are on *is* the thing to
-	// warm up on.
-	wheel_warmup: { directions: ['see_play'] },
-	name_what_you_play: { directions: ['play_name'] },
-	ear_drill: { directions: ['hear_name', 'hear_play'] }
-};
+const DRILL_BLOCKS: Partial<Record<BlockType, { directions: CardDirection[]; skills?: string[] }>> =
+	{
+		// Everything now draws from wherever the ladder is. The warm-up used to be
+		// pinned to the old key-anchoring skills, which no longer exist — and which
+		// would have been wrong anyway, since the rung you are on *is* the thing to
+		// warm up on.
+		wheel_warmup: { directions: ['see_play'] },
+		name_what_you_play: { directions: ['play_name'] },
+		ear_drill: { directions: ['hear_name', 'hear_play'] }
+	};
 
 /** Roughly how long one card takes, used to size each block's queue. */
 const SECONDS_PER_CARD = 12;
@@ -141,7 +140,7 @@ export type PlanInput = {
  * Choose the key for today.
  *
  * Weighted towards the least practised, but not purely — always drilling the
- * worst key would make every session a fight, and the brief wants the keys
+ * worst key would make every session a fight, and the point is that keys
  * cycled around the wheel rather than sorted by weakness. The coldest of the
  * four coldest is picked, which keeps it moving without ever settling into the
  * comfortable ones.
@@ -186,9 +185,7 @@ export function planSession(input: PlanInput): SessionPlan {
 	const pool = input.allKeys;
 	// An asked-for key wins outright, as long as it exists at all.
 	const honoured = Boolean(input.preferredKey && input.allKeys.includes(input.preferredKey));
-	const keyCenter = honoured
-		? input.preferredKey!
-		: chooseKey(input.reviewsByKey, pool, now);
+	const keyCenter = honoured ? input.preferredKey! : chooseKey(input.reviewsByKey, pool, now);
 
 	const durations = blockDurations(input.lengthMinutes);
 	const focus = input.focusSkills?.length ? input.focusSkills : null;

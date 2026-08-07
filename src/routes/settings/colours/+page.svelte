@@ -124,8 +124,8 @@
 
 		<aside class="flex flex-col gap-7">
 			<p class="text-ink-muted text-sm leading-relaxed">
-				Match these to your painted wheel and your Keystep. Lightness, chroma and hue move
-				independently — nudging one will not drag the others.
+				Match these to a physical wheel or coloured keys, if you have them. Lightness, chroma and
+				hue move independently — nudging one will not drag the others.
 			</p>
 
 			<section>

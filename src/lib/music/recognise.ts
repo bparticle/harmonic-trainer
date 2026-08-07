@@ -21,12 +21,7 @@ import { spell } from './spell';
  */
 
 export type Interpretation =
-	| 'tertian'
-	| 'shell'
-	| 'rootless'
-	| 'quartal'
-	| 'upper-structure'
-	| 'slash';
+	'tertian' | 'shell' | 'rootless' | 'quartal' | 'upper-structure' | 'slash';
 
 /** Which chord degree each alteration modifies. */
 const ALTERATION_DEGREE: Record<Alteration, number> = {
@@ -135,7 +130,7 @@ const TEMPLATES: Template[] = TEMPLATE_SPECS.map((spec) => {
 	const intervals = chordIntervals(probe);
 	return {
 		spec,
-		offsets: intervals.map((i) => (((i.semitones % 12) + 12) % 12)),
+		offsets: intervals.map((i) => ((i.semitones % 12) + 12) % 12),
 		degrees: intervals.map((i) => stepsToDegree(i.steps)),
 		prior: spec.prior
 	};
@@ -201,8 +196,8 @@ export function recognise(pitches: number[], context: RecogniseContext = {}): Ca
 
 	const sorted = [...pitches].sort((a, b) => a - b);
 	const bassMidi = context.bass ?? sorted[0];
-	const bassPc = (((bassMidi % 12) + 12) % 12);
-	const played = [...new Set(sorted.map((p) => (((p % 12) + 12) % 12)))];
+	const bassPc = ((bassMidi % 12) + 12) % 12;
+	const played = [...new Set(sorted.map((p) => ((p % 12) + 12) % 12))];
 
 	const candidates: Candidate[] = [];
 
@@ -402,7 +397,7 @@ function detectQuartal(sorted: number[], context: RecogniseContext): Candidate |
 	const isQuartal = fourths >= gaps.length - 1 && fourths >= 3;
 	if (!isQuartal) return null;
 
-	const bottom = (((sorted[0] % 12) + 12) % 12);
+	const bottom = ((sorted[0] % 12) + 12) % 12;
 	const root = spellRoot(bottom, context);
 	const topIsThird = gaps[gaps.length - 1] === 4;
 
@@ -461,14 +456,14 @@ function detectUpperStructure(
 ): Candidate | null {
 	if (sorted.length < 5) return null;
 
-	const top = [...new Set(sorted.slice(-3).map((p) => (((p % 12) + 12) % 12)))];
+	const top = [...new Set(sorted.slice(-3).map((p) => ((p % 12) + 12) % 12))];
 	const triad = triadRoot(top);
 	if (!triad) return null;
 	if (triad.root === bassPc) return null;
 
 	// The lower notes must supply a third and a seventh above the bass, or this
 	// is just a chord with a triad accidentally embedded in it.
-	const lower = new Set(sorted.slice(0, -3).map((p) => (((p % 12) + 12) % 12)));
+	const lower = new Set(sorted.slice(0, -3).map((p) => ((p % 12) + 12) % 12));
 	const hasThird = lower.has((bassPc + 4) % 12) || lower.has((bassPc + 3) % 12);
 	const hasSeventh = lower.has((bassPc + 10) % 12) || lower.has((bassPc + 11) % 12);
 	if (!hasThird || !hasSeventh) return null;

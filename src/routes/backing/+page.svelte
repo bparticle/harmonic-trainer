@@ -125,7 +125,9 @@
 	const KEYS_COUNT = 25;
 	const focusedVoicing = $derived(
 		focused
-			? fitToRange(closeVoicing(focused.chord, 4), KEYS_FROM, KEYS_FROM + KEYS_COUNT - 1).map(toMidi)
+			? fitToRange(closeVoicing(focused.chord, 4), KEYS_FROM, KEYS_FROM + KEYS_COUNT - 1).map(
+					toMidi
+				)
 			: []
 	);
 
@@ -260,7 +262,9 @@
 
 <main class="mx-auto max-w-[1500px] px-5 py-7">
 	<header class="mb-5">
-		<h1 class="font-display text-ink flex items-baseline gap-3 text-2xl font-semibold tracking-tight">
+		<h1
+			class="font-display text-ink flex items-baseline gap-3 text-2xl font-semibold tracking-tight"
+		>
 			{seed.name}
 			{#if seed.published}
 				<span class="text-ink-dim font-mono text-xs font-normal">{seed.published}</span>
@@ -289,9 +293,7 @@
 							>
 								<span class="entry-name">{option.name}</span>
 								<span class="entry-meta">
-									{option.grid.flat().length} bars{option.published
-										? ` · ${option.published}`
-										: ''}
+									{option.grid.flat().length} bars{option.published ? ` · ${option.published}` : ''}
 								</span>
 							</button>
 						</li>
@@ -315,9 +317,9 @@
 				>
 					<h2 class="panel-title mb-0">Add a chart</h2>
 					<p class="text-ink-dim text-xs leading-relaxed">
-						Write the chords out as they are on the page, with a <code>|</code> between bars and
-						a line per row. Say which key it is written in and it gets stored as numerals — so
-						typing it once gives you all twelve keys.
+						Write the chords out as they are on the page, with a <code>|</code> between bars and a line
+						per row. Say which key it is written in and it gets stored as numerals — so typing it once
+						gives you all twelve keys.
 					</p>
 
 					<div class="flex flex-wrap gap-2">
@@ -340,11 +342,7 @@
 						<input name="bpm" type="number" min="40" max="300" value="140" class="field w-20" />
 					</div>
 
-					<textarea
-						name="chart"
-						rows="6"
-						class="field font-mono text-sm"
-						placeholder={PLACEHOLDER}
+					<textarea name="chart" rows="6" class="field font-mono text-sm" placeholder={PLACEHOLDER}
 						>{form?.text ?? ''}</textarea
 					>
 
@@ -432,7 +430,9 @@
 
 			<!-- What the chord under the cursor actually is ------------------- -->
 			{#if focused && focusedBar}
-				<div class="border-ground-line mt-5 flex flex-wrap items-center gap-x-8 gap-y-4 border-t pt-5">
+				<div
+					class="border-ground-line mt-5 flex flex-wrap items-center gap-x-8 gap-y-4 border-t pt-5"
+				>
 					<div class="flex items-baseline gap-3">
 						<span class="text-ink" style:color="var(--pc-{pitchClass(focused.chord.root)})">
 							<ChordSymbol chord={focused.chord} size="3rem" />
@@ -562,8 +562,8 @@
 					{/each}
 				</div>
 				<p class="text-ink-dim mt-2 text-xs leading-snug">
-					Comping starts off. Two people voicing the same chord is one too many — turn it on to
-					hear the changes, off to be the one playing them.
+					Comping starts off. Two people voicing the same chord is one too many — turn it on to hear
+					the changes, off to be the one playing them.
 				</p>
 			</div>
 

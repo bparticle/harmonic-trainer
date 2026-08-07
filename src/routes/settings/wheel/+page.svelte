@@ -64,9 +64,7 @@
 		}[distinct] ?? `${distinct} notes`
 	);
 
-	const dirty = $derived(
-		JSON.stringify(config) !== JSON.stringify(data.settings.wheelConfig)
-	);
+	const dirty = $derived(JSON.stringify(config) !== JSON.stringify(data.settings.wheelConfig));
 
 	async function save() {
 		saving = true;
@@ -151,9 +149,7 @@
 
 			<section>
 				<div class="mb-2 flex items-baseline justify-between">
-					<h2 class="text-ink-dim font-mono text-[0.65rem] tracking-widest uppercase">
-						Rings
-					</h2>
+					<h2 class="text-ink-dim font-mono text-[0.65rem] tracking-widest uppercase">Rings</h2>
 					<span class="text-ink-muted font-mono text-xs">{config.rings}</span>
 				</div>
 				<input

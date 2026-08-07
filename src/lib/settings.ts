@@ -25,7 +25,7 @@ export type WheelConfig = {
 };
 
 export type Prefs = {
-	/** Minutes. The brief allows 10, 20 or 35. */
+	/** Minutes. Ten, twenty or thirty-five. */
 	sessionLengthMinutes: 10 | 20 | 35;
 	/** How long a chord's name is withheld so there is time to guess it first. */
 	revealDelayMs: number;

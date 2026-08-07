@@ -165,7 +165,7 @@ describe('choosing what to ask next', () => {
 		expect(selectDue(cards, { now: at(0) }).map((c) => c.cardId)).toEqual(['b', 'c', 'a']);
 	});
 
-	it('weights play-to-name above the others, the brief’s weakest link', () => {
+	it('weights play-to-name above the others, being the weakest link', () => {
 		expect(DIRECTION_WEIGHT.play_name).toBeGreaterThan(DIRECTION_WEIGHT.hear_name);
 		expect(DIRECTION_WEIGHT.play_name).toBeGreaterThan(DIRECTION_WEIGHT.see_play);
 		expect(DIRECTION_WEIGHT.play_name).toBeGreaterThan(DIRECTION_WEIGHT.hear_play);

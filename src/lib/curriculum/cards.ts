@@ -86,9 +86,7 @@ export function cardsForRung(rungId: RungId, stage: Stage): GeneratedCard[] {
 }
 
 /** Cards for a list of places already reached. */
-export function cardsForReached(
-	reached: Array<{ key: string; rungId: RungId }>
-): GeneratedCard[] {
+export function cardsForReached(reached: Array<{ key: string; rungId: RungId }>): GeneratedCard[] {
 	return reached.flatMap(({ key, rungId }) => {
 		const stage = STAGES.find((s) => s.key === key);
 		return stage ? cardsForRung(rungId, stage) : [];

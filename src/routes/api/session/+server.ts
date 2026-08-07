@@ -53,9 +53,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			await startOrResume({
 				lengthMinutes: length as SessionLength,
 				progressionId:
-					typeof body.progressionId === 'string' && body.progressionId
-						? body.progressionId
-						: null,
+					typeof body.progressionId === 'string' && body.progressionId ? body.progressionId : null,
 				progressionKey:
 					typeof body.progressionKey === 'string' && body.progressionKey
 						? body.progressionKey
@@ -105,7 +103,9 @@ function parseReviews(input: unknown): ReviewInput[] {
 				rating: rating as ReviewRating,
 				correct: Boolean(row.correct),
 				latencyMs: Number.isFinite(latency) && latency >= 0 ? Math.round(latency) : null,
-				played: Array.isArray(row.played) ? row.played.map(Number).filter(Number.isFinite) : undefined
+				played: Array.isArray(row.played)
+					? row.played.map(Number).filter(Number.isFinite)
+					: undefined
 			}
 		];
 	});

@@ -13,7 +13,7 @@ import type { Key } from './key';
 /**
  * Voice-leading distance and chord neighbourhoods.
  *
- * This is the machinery behind the wheel's neighbours mode. The brief's example
+ * This is the machinery behind the wheel's neighbours mode. The canonical example
  * is Gm7 → E♭∆: two chords a single note apart, which is obvious once you can
  * see it and invisible otherwise. Being able to browse outward from a chord you
  * already own — one note, then two — is the app's whole method for growing new
@@ -104,11 +104,7 @@ const NEIGHBOUR_SHAPES: Array<{ quality: ChordQuality; extensions: Extension[] }
  * Every chord reachable from this one by changing at most `maxChanged` notes,
  * ordered by how far the voices actually have to move.
  */
-export function neighbours(
-	source: AbstractChord,
-	context: Key,
-	maxChanged = 2
-): Neighbour[] {
+export function neighbours(source: AbstractChord, context: Key, maxChanged = 2): Neighbour[] {
 	const sourcePcs = chordPitchClasses(source);
 	const sourceSet = new Set(sourcePcs);
 	const sourceSymbol = formatChord(source);
@@ -171,8 +167,8 @@ export function sharedPitchClasses(a: number[], b: number[]): number[] {
 
 /** Root motion between two chords, in fifths, signed and reduced to -6..6. */
 export function rootMotionInFifths(a: AbstractChord, b: AbstractChord): number {
-	const from = ((pitchClass(a.root) * 7) % 12 + 12) % 12;
-	const to = ((pitchClass(b.root) * 7) % 12 + 12) % 12;
+	const from = (((pitchClass(a.root) * 7) % 12) + 12) % 12;
+	const to = (((pitchClass(b.root) * 7) % 12) + 12) % 12;
 	const raw = (((to - from) % 12) + 12) % 12;
 	return raw > 6 ? raw - 12 : raw;
 }

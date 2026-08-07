@@ -45,9 +45,7 @@ export type ActiveSession = {
 /** Where the ladder currently is, from settings, falling back to the very start. */
 export async function currentPosition(): Promise<Position> {
 	const settings = await loadSettings();
-	return (
-		positionOf(settings.prefs.ladderKey, settings.prefs.ladderRung) ?? FIRST_POSITION
-	);
+	return positionOf(settings.prefs.ladderKey, settings.prefs.ladderRung) ?? FIRST_POSITION;
 }
 
 /**

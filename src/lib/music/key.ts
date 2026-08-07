@@ -135,9 +135,7 @@ export function parseKey(text: string): Key {
 		// Match case-insensitively without lowercasing the result: the mode keys
 		// are a mix of lowercase ('dorian') and camelCase ('harmonicMinor').
 		const wanted = spaced[2].toLowerCase();
-		const mode = (Object.keys(MODE_INTERVALS) as Mode[]).find(
-			(m) => m.toLowerCase() === wanted
-		);
+		const mode = (Object.keys(MODE_INTERVALS) as Mode[]).find((m) => m.toLowerCase() === wanted);
 		if (!mode) throw new Error(`Unknown mode: ${spaced[2]}`);
 		return { tonic: parseNote(spaced[1]), mode };
 	}

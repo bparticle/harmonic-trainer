@@ -11,7 +11,8 @@ import type { ColorMap, Prefs, WheelConfig } from './settings';
  */
 
 export function parseWheelConfig(input: unknown): WheelConfig {
-	if (typeof input !== 'object' || input === null) throw new Error('Wheel config must be an object');
+	if (typeof input !== 'object' || input === null)
+		throw new Error('Wheel config must be an object');
 	const value = input as Record<string, unknown>;
 
 	const rings = Number(value.rings);

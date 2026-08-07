@@ -149,7 +149,10 @@ describe('modulation and pivot chords', () => {
 
 	it('does not mistake a secondary dominant for a modulation', () => {
 		// E7 - Am7 inside C is V7/vi, not a move to A minor.
-		const result = analyse(['Cmaj7', 'E7', 'Am7', 'Dm7', 'G7', 'Cmaj7'].map(parseChord), parseKey('C'));
+		const result = analyse(
+			['Cmaj7', 'E7', 'Am7', 'Dm7', 'G7', 'Cmaj7'].map(parseChord),
+			parseKey('C')
+		);
 		expect(result.every((a) => formatKey(a.key) === 'C')).toBe(true);
 		expect(result[1].roman).toBe('V7/vi');
 	});

@@ -138,7 +138,12 @@ describe('the repertoire', () => {
 
 	it('moves the three-tonic cycle by major thirds', () => {
 		expect(symbols('three-tonic-cycle', 'C').slice(0, 6)).toEqual([
-			'Cmaj7', 'Eb7', 'Abmaj7', 'B7', 'Emaj7', 'G7'
+			'Cmaj7',
+			'Eb7',
+			'Abmaj7',
+			'B7',
+			'Emaj7',
+			'G7'
 		]);
 	});
 
