@@ -230,6 +230,17 @@ function sliceToLoop(config: BackingConfig): BarChord[] {
 	return kept.length ? kept : config.bars;
 }
 
+/**
+ * Whether two configs would produce the same schedule.
+ *
+ * Plain data all the way down — chords, notes, numbers — so structural
+ * equality is exactly the right notion of "same": it decides whether a paused
+ * position still means anything or whether `resume` has to rebuild.
+ */
+function sameConfig(a: BackingConfig, b: BackingConfig): boolean {
+	return JSON.stringify(a) === JSON.stringify(b);
+}
+
 export type BackingState = {
 	playing: boolean;
 	/** Beats since the top of the loop, or negative during the count-in. */
@@ -251,6 +262,7 @@ export class BackingTrack {
 
 	#config: BackingConfig | null = null;
 	#playing = false;
+	#paused = false;
 	#beats = 0;
 	#countInBeats = 0;
 	#muted: Record<Part, boolean> = {
@@ -274,6 +286,11 @@ export class BackingTrack {
 	 */
 	get playing(): boolean {
 		return this.#playing;
+	}
+
+	/** Frozen mid-form by `pause`, with somewhere to `resume` back to. */
+	get paused(): boolean {
+		return this.#paused;
 	}
 
 	get beatsPerLoop(): number {
@@ -366,6 +383,7 @@ export class BackingTrack {
 
 	stop(): void {
 		this.#playing = false;
+		this.#paused = false;
 		if (!tone) return;
 		const transport = tone.getTransport();
 		transport.stop();
@@ -381,6 +399,49 @@ export class BackingTrack {
 		this.#voices?.bass.triggerRelease();
 		this.#voices?.comp.releaseAll();
 		this.onBeat?.({ playing: false, beat: 0, bar: 0 });
+	}
+
+	/**
+	 * Freeze exactly where the music is, to go and find a shape under the hands.
+	 *
+	 * Unlike `stop`, nothing is torn down: the schedule stays in place and the
+	 * transport's position is left untouched, so `resume` picks up on the same
+	 * beat rather than the top of the loop. `onBeat` is not fired here either —
+	 * with the transport stopped it will not fire again on its own, so whatever
+	 * bar and beat the chart was last showing simply stays on screen.
+	 */
+	pause(): void {
+		if (!this.#playing) return;
+		this.#playing = false;
+		this.#paused = true;
+		tone?.getTransport().pause();
+		// A note left ringing into the silence would be one more thing to listen
+		// past while trying to hear the shape just landed on.
+		this.#voices?.bass.triggerRelease();
+		this.#voices?.comp.releaseAll();
+	}
+
+	/**
+	 * Continue from `pause`.
+	 *
+	 * If the key, chart, feel or loop changed while paused, the schedule that
+	 * was paused no longer matches what should be playing — there is no "same
+	 * place" to return to — so this rebuilds fresh instead, exactly as `start`
+	 * would. Returns whether it actually resumed in place, so the caller knows
+	 * whether a count-in is called for.
+	 */
+	async resume(config: BackingConfig): Promise<boolean> {
+		if (!this.#paused) return false;
+
+		if (this.#config && sameConfig(this.#config, config)) {
+			this.#paused = false;
+			this.#playing = true;
+			tone?.getTransport().start();
+			return true;
+		}
+
+		await this.start(config);
+		return false;
 	}
 
 	/** Change tempo without stopping: musical time rescales under the events. */
