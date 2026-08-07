@@ -23,7 +23,7 @@
 			Harmonic&nbsp;Trainer
 		</h1>
 		<p class="text-ink-dim mt-2 font-mono text-xs tracking-widest uppercase">
-			Name what your hands already do
+			Chord progressions, on the wheel
 		</p>
 
 		<label class="mt-10 block">
