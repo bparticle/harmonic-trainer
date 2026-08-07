@@ -244,10 +244,29 @@ The charts come in three kinds, and the difference is deliberate:
 | Forms     | The generic shapes: blues, minor blues, rhythm changes, a vamp  |
 | Cycles    | Named devices — bird blues, the three-tonic cycle, ii–V round the wheel |
 | Standards | Real repertoire, public domain only: US publication ≤ 1930      |
+| Yours     | Whatever you typed in, kept in the database                     |
 
 There is no fake book here. Every standard records its publication year, a test
 enforces that the year exists and is 1930 or earlier, and nothing in copyright
-is shipped — that is what the chart importer is for.
+ships in the repo.
+
+### Typing in your own
+
+**+ Add a chart** takes a tune the way it is written on paper:
+
+```
+| Dm7 | G7 | Cmaj7 | Cmaj7 |
+| Am7 D7 | Dm7 G7 | Cmaj7 | Cmaj7 |
+```
+
+Say which key it is written in and it is stored as Roman numerals, so typing it
+once gives you all twelve keys. Bars are split on `|`, chords within a bar on
+spaces, and repeat marks are ignored. A chord it cannot read is named with its
+line number and the rest of the chart is kept — one typo should not cost you a
+re-type.
+
+Charts you add live only in your database. That is the right place for anything
+still in copyright, and it never enters the repo.
 
 The same rhythm section, with fewer knobs and the forms only, is the "Apply it"
 block of a session.
