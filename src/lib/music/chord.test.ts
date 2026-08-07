@@ -4,6 +4,7 @@ import {
 	chordNotes,
 	closeVoicing,
 	degreeLabels,
+	fitToRange,
 	diatonicSeventh,
 	diatonicTriad,
 	drop2,
@@ -200,5 +201,70 @@ describe('naming the notes of a chord by degree', () => {
 	it('hands back the spelled note alongside the number', () => {
 		const labels = degreeLabels(parseChord('Eb7'));
 		expect(labels.map((l) => formatNote(l.note))).toEqual(['Eb', 'G', 'Bb', 'Db']);
+	});
+});
+
+describe('fitting a voicing onto the keys there are', () => {
+	// Two octaves from C3, which is what the play-along diagram shows.
+	const LOW = 48;
+	const HIGH = 72;
+	const fit = (symbol: string, octave = 4) =>
+		fitToRange(closeVoicing(parseChord(symbol), octave), LOW, HIGH).map(midi);
+
+	it('brings a chord that sat above the keys back into them', () => {
+		// F7 built at octave 4 is 65-75, and the diagram stopped at 72: the
+		// seventh was simply not drawn, on a chord in the plainest blues there is.
+		expect(fit('F7')).toEqual([53, 57, 60, 63]);
+	});
+
+	it('brings a chord that sat below the keys back into them', () => {
+		expect(fit('C', 1).every((n) => n >= LOW && n <= HIGH)).toBe(true);
+	});
+
+	it('keeps the shape: the same intervals, moved by whole octaves', () => {
+		const before = closeVoicing(parseChord('G7'), 4).map(midi);
+		const after = fit('G7');
+		const gaps = (v: number[]) => v.slice(1).map((n, i) => n - v[i]);
+		expect(gaps(after)).toEqual(gaps(before));
+	});
+
+	it('leaves a chord that already fits exactly where it is', () => {
+		const before = closeVoicing(parseChord('Cmaj7'), 4).map(midi);
+		expect(fit('Cmaj7')).toEqual(before);
+	});
+
+	it('never drops a note', () => {
+		// A diagram missing the seventh is worse than an unexpected inversion.
+		const chord = parseChord('C13b9');
+		const before = closeVoicing(chord, 4);
+		expect(fitToRange(before, LOW, HIGH)).toHaveLength(before.length);
+	});
+
+	it('re-stacks rather than give up when the chord is wider than the range', () => {
+		const wide = closeVoicing(parseChord('C13'), 3);
+		const fitted = fitToRange(wide, 60, 71).map(midi);
+		expect(fitted).toHaveLength(wide.length);
+		expect(fitted[0]).toBeGreaterThanOrEqual(60);
+		expect([...fitted].sort((a, b) => a - b)).toEqual(fitted);
+	});
+
+	it('keeps every pitch class, whatever it had to do to fit', () => {
+		const chord = parseChord('Ab13');
+		const before = closeVoicing(chord, 4).map((n) => midi(n) % 12);
+		const after = fitToRange(closeVoicing(chord, 4), LOW, HIGH).map((n) => midi(n) % 12);
+		expect(after).toEqual(before);
+	});
+
+	it('copes with an empty voicing', () => {
+		expect(fitToRange([], LOW, HIGH)).toEqual([]);
+	});
+
+	it('puts every chord of every chart inside the keys on show', () => {
+		for (const symbol of ['C', 'F7', 'G7', 'Bm7b5', 'Ebmaj7', 'F#dim7', 'Dbm7', 'B7', 'Abmaj7']) {
+			for (const note of fit(symbol)) {
+				expect(note, symbol).toBeGreaterThanOrEqual(LOW);
+				expect(note, symbol).toBeLessThanOrEqual(HIGH);
+			}
+		}
 	});
 });

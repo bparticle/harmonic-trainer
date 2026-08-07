@@ -7,15 +7,16 @@
 	import {
 		CHARTS,
 		CHART_CATEGORIES,
-		chartBySlug,
 		realiseChart,
 		type ChartBar,
-		type ChartCategory
+		type ChartCategory,
+		type ChartSeed
 	} from '$lib/curriculum/charts';
-	import { closeVoicing, degreeLabels } from '$lib/music/chord';
+	import { closeVoicing, degreeLabels, fitToRange } from '$lib/music/chord';
 	import { parseKey } from '$lib/music/key';
 	import { formatNote, midi as toMidi, pitchClass } from '$lib/music/note';
 	import { midi as session } from '$lib/midi/shared.svelte';
+	import { page } from '$app/state';
 
 	/*
 	 * Playing along.
@@ -37,6 +38,8 @@
 	 * looking.
 	 */
 
+	let { data, form } = $props();
+
 	const KEYS = ['C', 'G', 'D', 'A', 'E', 'B', 'Gb', 'Db', 'Ab', 'Eb', 'Bb', 'F'];
 	const MIN_BPM = 40;
 	const MAX_BPM = 300;
@@ -47,7 +50,15 @@
 		['metronome', 'Click']
 	];
 
-	let slug = $state(CHARTS[0].slug);
+	/** The built-ins plus whatever you have typed in. Nothing downstream cares. */
+	const repertoire = $derived<ChartSeed[]>([...CHARTS, ...data.mine]);
+
+	// svelte-ignore state_referenced_locally
+	let slug = $state(page.url.searchParams.get('chart') ?? CHARTS[0].slug);
+	let importing = $state(false);
+
+	const PLACEHOLDER = `| Dm7 | G7 | Cmaj7 | Cmaj7 |
+| Am7 D7 | Dm7 G7 | Cmaj7 | Cmaj7 |`;
 	let keyName = $state('C');
 	let bpm = $state(CHARTS[0].defaultBpm);
 	let feel = $state<Feel>('swing');
@@ -72,17 +83,20 @@
 	/** The bar being examined when nothing is playing. */
 	let pinnedBar = $state(1);
 
-	const seed = $derived(chartBySlug(slug) ?? CHARTS[0]);
+	const seed = $derived(repertoire.find((c) => c.slug === slug) ?? CHARTS[0]);
+	const mineId = $derived(data.mine.find((c) => c.slug === slug)?.id ?? null);
 	const chart = $derived(realiseChart(seed, keyName));
 	const bars = $derived(chart.rows.flat());
 	const barCount = $derived(bars.length);
 	const looping = $derived(loopFrom !== null && loopTo !== null);
 	const byCategory = $derived(
-		(Object.keys(CHART_CATEGORIES) as ChartCategory[]).map((category) => ({
-			category,
-			label: CHART_CATEGORIES[category],
-			items: CHARTS.filter((c) => c.category === category)
-		}))
+		(Object.keys(CHART_CATEGORIES) as ChartCategory[])
+			.map((category) => ({
+				category,
+				label: CHART_CATEGORIES[category],
+				items: repertoire.filter((c) => c.category === category)
+			}))
+			.filter((group) => group.items.length > 0)
 	);
 
 	// Keys are held as ASCII so they survive a round trip through anything, and
@@ -101,7 +115,19 @@
 	);
 	const focused = $derived(focusedBar?.chords[0] ?? null);
 	const focusedNotes = $derived(focused ? degreeLabels(focused.chord) : []);
-	const focusedVoicing = $derived(focused ? closeVoicing(focused.chord, 4).map(toMidi) : []);
+	/*
+	 * The diagram shows two octaves from C3 and no more, so the chord is moved
+	 * into them rather than allowed to run off the end. Seventy per cent of the
+	 * chords in these charts used to fall partly outside it — including the F7 in
+	 * a C blues, which was drawn without its seventh.
+	 */
+	const KEYS_FROM = 48;
+	const KEYS_COUNT = 25;
+	const focusedVoicing = $derived(
+		focused
+			? fitToRange(closeVoicing(focused.chord, 4), KEYS_FROM, KEYS_FROM + KEYS_COUNT - 1).map(toMidi)
+			: []
+	);
 
 	const track = new BackingTrack();
 
@@ -206,7 +232,7 @@
 	// changes and 160 for a modal vamp are not the same request.
 	function chooseChart(next: string) {
 		slug = next;
-		bpm = chartBySlug(next)?.defaultBpm ?? bpm;
+		bpm = repertoire.find((c) => c.slug === next)?.defaultBpm ?? bpm;
 		pinnedBar = 1;
 		clearLoop();
 		void restartIfPlaying();
@@ -246,24 +272,96 @@
 		<p class="text-ink-muted mt-1 max-w-3xl text-sm leading-relaxed">{seed.notes}</p>
 	</header>
 
-	<div class="grid gap-7 lg:grid-cols-[1fr_19rem]">
-		<section>
-			<!-- The repertoire, grouped, because a form and a tune are different things -->
-			<div class="mb-4 flex flex-col gap-2">
-				{#each byCategory as group (group.category)}
-					<div class="flex flex-wrap items-baseline gap-2">
-						<span class="panel-title mb-0 w-16 shrink-0">{group.label}</span>
-						{#each group.items as option (option.slug)}
+	<div class="grid gap-7 xl:grid-cols-[15rem_1fr_19rem] lg:grid-cols-[1fr_19rem]">
+		<!-- The repertoire, as a list. It was a wall of chips, and a wall of chips
+		     is not something you read — it is something you give up on. -->
+		<aside class="repertoire xl:max-h-[calc(100dvh-8rem)] xl:sticky xl:top-20 xl:overflow-y-auto">
+			{#each byCategory as group (group.category)}
+				<h2 class="panel-title mt-3 first:mt-0">{group.label}</h2>
+				<ul class="mb-1 flex flex-col">
+					{#each group.items as option (option.slug)}
+						<li>
 							<button
 								type="button"
-								class="chip"
+								class="entry"
 								class:is-on={option.slug === slug}
-								onclick={() => chooseChart(option.slug)}>{option.name}</button
+								onclick={() => chooseChart(option.slug)}
 							>
-						{/each}
+								<span class="entry-name">{option.name}</span>
+								<span class="entry-meta">
+									{option.grid.flat().length} bars{option.published
+										? ` · ${option.published}`
+										: ''}
+								</span>
+							</button>
+						</li>
+					{/each}
+				</ul>
+			{/each}
+
+			<button type="button" class="entry mt-2" onclick={() => (importing = !importing)}>
+				<span class="entry-name">+ Add a chart</span>
+				<span class="entry-meta">type in what is on the page</span>
+			</button>
+		</aside>
+
+		<section>
+			{#if importing}
+				<!-- Typing is fine here: this is setting up, not practising. -->
+				<form
+					method="POST"
+					action="?/create"
+					class="border-ground-line bg-ground-raised mb-5 flex flex-col gap-3 rounded-xl border p-4"
+				>
+					<h2 class="panel-title mb-0">Add a chart</h2>
+					<p class="text-ink-dim text-xs leading-relaxed">
+						Write the chords out as they are on the page, with a <code>|</code> between bars and
+						a line per row. Say which key it is written in and it gets stored as numerals — so
+						typing it once gives you all twelve keys.
+					</p>
+
+					<div class="flex flex-wrap gap-2">
+						<input
+							name="name"
+							placeholder="Name"
+							value={form?.name ?? ''}
+							required
+							class="field flex-1"
+						/>
+						<select name="key" class="field w-24">
+							{#each KEYS as k (k)}
+								<option value={k} selected={k === (form?.key ?? keyName)}>{keyLabel(k)}</option>
+							{/each}
+						</select>
+						<select name="mode" class="field w-28">
+							<option value="major">major</option>
+							<option value="minor">minor</option>
+						</select>
+						<input name="bpm" type="number" min="40" max="300" value="140" class="field w-20" />
 					</div>
-				{/each}
-			</div>
+
+					<textarea
+						name="chart"
+						rows="6"
+						class="field font-mono text-sm"
+						placeholder={PLACEHOLDER}
+						>{form?.text ?? ''}</textarea
+					>
+
+					{#if form?.problems?.length}
+						<ul class="flex flex-col gap-0.5">
+							{#each form.problems as problem (problem)}
+								<li class="font-mono text-xs" style:color="var(--pc-0)">{problem}</li>
+							{/each}
+						</ul>
+					{/if}
+
+					<div class="flex items-center gap-2">
+						<button type="submit" class="chip is-on">Save it</button>
+						<button type="button" class="chip" onclick={() => (importing = false)}>Cancel</button>
+					</div>
+				</form>
+			{/if}
 
 			<div class="border-ground-line bg-ground-raised rounded-xl border p-3">
 				{#each chart.rows as row, r (r)}
@@ -299,14 +397,22 @@
 				{/each}
 			</div>
 
-			<p class="text-ink-dim mt-2.5 font-mono text-xs">
-				{#if looping}
-					Looping bars {loopFrom}–{loopTo}.
-					<button type="button" class="underline" onclick={clearLoop}>Whole form</button>
-				{:else}
-					Tap a bar to look at it and loop it, then another to stretch the loop out.
+			<div class="text-ink-dim mt-2.5 flex flex-wrap items-baseline gap-x-3 font-mono text-xs">
+				<span>
+					{#if looping}
+						Looping bars {loopFrom}–{loopTo}.
+						<button type="button" class="underline" onclick={clearLoop}>Whole form</button>
+					{:else}
+						Tap a bar to look at it and loop it, then another to stretch the loop out.
+					{/if}
+				</span>
+				{#if mineId}
+					<form method="POST" action="?/remove" class="ml-auto">
+						<button class="hover:text-ink underline transition-colors">delete this chart</button>
+						<input type="hidden" name="id" value={mineId} />
+					</form>
 				{/if}
-			</p>
+			</div>
 
 			<button type="button" class="transport mt-5" onclick={toggle}>
 				<span class="transport-mark" aria-hidden="true">{playing ? '■' : '▶'}</span>
@@ -354,7 +460,13 @@
 					</div>
 
 					<div class="ml-auto max-w-full overflow-x-auto">
-						<Keyboard from={48} count={25} lit={focusedVoicing} interactive={false} showLabels={false} />
+						<Keyboard
+							from={KEYS_FROM}
+							count={KEYS_COUNT}
+							lit={focusedVoicing}
+							interactive={false}
+							showLabels={false}
+						/>
 					</div>
 				</div>
 			{/if}
@@ -509,6 +621,78 @@
 		background: var(--color-ground-overlay);
 		border-color: var(--color-ink-dim);
 		color: var(--color-ink);
+	}
+
+	/*
+	 * The repertoire list.
+	 *
+	 * Rows rather than chips. Twenty-odd charts as tags is a wall you skim past;
+	 * as a list with the bar count and the year on each one it is something you
+	 * can actually read down and choose from.
+	 */
+	.repertoire {
+		scrollbar-width: thin;
+	}
+
+	.entry {
+		display: flex;
+		width: 100%;
+		flex-direction: column;
+		gap: 0.05rem;
+		padding: 0.35rem 0.55rem;
+		border-radius: 7px;
+		border-left: 2px solid transparent;
+		text-align: left;
+		transition:
+			background 110ms ease,
+			border-color 110ms ease;
+	}
+
+	.entry:hover {
+		background: var(--color-ground-raised);
+	}
+
+	.entry.is-on {
+		background: var(--color-ground-overlay);
+		border-left-color: var(--color-ink);
+	}
+
+	.entry-name {
+		font-family: var(--font-display);
+		font-size: 0.82rem;
+		font-weight: 600;
+		color: var(--color-ink-muted);
+		line-height: 1.2;
+	}
+
+	.entry.is-on .entry-name {
+		color: var(--color-ink);
+	}
+
+	.entry-meta {
+		font-family: var(--font-mono);
+		font-size: 0.6rem;
+		color: var(--color-ink-dim);
+	}
+
+	.field {
+		padding: 0.45rem 0.6rem;
+		border-radius: 8px;
+		border: 1px solid var(--color-ground-line);
+		background: var(--color-ground);
+		color: var(--color-ink);
+		font-family: var(--font-mono);
+		font-size: 0.8rem;
+	}
+
+	.field:focus {
+		outline: none;
+		border-color: var(--color-ink-dim);
+	}
+
+	code {
+		font-family: var(--font-mono);
+		color: var(--color-ink-muted);
 	}
 
 	/* The key chips carry their own pitch colour, as they do everywhere else. */

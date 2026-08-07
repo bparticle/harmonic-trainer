@@ -170,6 +170,48 @@ export function degreeLabels(c: AbstractChord): Array<{ note: Note; degree: stri
 // Voicings
 // ---------------------------------------------------------------------------
 
+/**
+ * Move a voicing so it sits inside a range of notes.
+ *
+ * For showing a chord on a keyboard that only has so many keys. Shifting the
+ * whole thing by octaves is tried first, because that keeps the shape — the
+ * chord still looks like the chord. Only when it genuinely will not fit is it
+ * re-stacked from the bottom of the range, which changes the inversion but at
+ * least shows every note.
+ *
+ * Nothing is dropped. A chord diagram missing its seventh is worse than one in
+ * an inversion you did not ask for.
+ */
+export function fitToRange(voicing: Note[], low: number, high: number): Note[] {
+	if (voicing.length === 0) return voicing;
+
+	const lowest = Math.min(...voicing.map(midi));
+	const highest = Math.max(...voicing.map(midi));
+
+	// Aim the middle of the chord at the middle of the range, in whole octaves.
+	let shift = Math.round((low + high) / 2 / 12 - (lowest + highest) / 2 / 12);
+	// …then nudge until it is actually inside, in case the rounding overshot.
+	while (lowest + shift * 12 < low) shift++;
+	while (highest + shift * 12 > high) shift--;
+
+	if (lowest + shift * 12 >= low && highest + shift * 12 <= high) {
+		return voicing.map((n) => ({ ...n, octave: n.octave + shift }));
+	}
+
+	// Wider than the range: stack the same notes upward from the bottom of it.
+	const out: Note[] = [];
+	let previous = low - 1;
+	for (const n of voicing) {
+		let candidate = { ...n };
+		while (midi(candidate) < low || midi(candidate) <= previous) {
+			candidate = { ...candidate, octave: candidate.octave + 1 };
+		}
+		previous = midi(candidate);
+		out.push(candidate);
+	}
+	return out;
+}
+
 /** Root position, stacked as tightly as the intervals allow. */
 export function closeVoicing(c: AbstractChord, octave = 3): Note[] {
 	const notes = chordNotes(c, octave);

@@ -1117,3 +1117,56 @@ ladder suggests and never gates. Picking something further along starts a
 session there and creates its cards on the way; it does not move the ladder,
 because exploring and advancing are different decisions and only the arrows do
 the second one.
+
+---
+
+## The keyboard diagram, the list, and bringing your own charts
+
+### Seventy per cent of chords were drawn wrong
+
+Reported as the piano "not always showing all the notes of the chord". Measuring
+it across every chart in every key: **2521 of 3600** chord instances fell partly
+outside the two octaves on screen. Not an edge case — the F7 in a plain C blues
+was being drawn without its seventh, because `closeVoicing(chord, 4)` puts it at
+65–75 and the diagram stops at 72.
+
+The widest chord in the repertoire spans eleven semitones, so nothing needed a
+bigger keyboard; the placement was simply never checked. `fitToRange` moves a
+voicing into the range by whole octaves, which keeps the shape — the chord still
+*looks* like the chord. Only if it genuinely will not fit does it re-stack from
+the bottom, changing the inversion but showing every note.
+
+Nothing is ever dropped. A diagram missing the seventh is worse than one in an
+inversion you did not ask for. Now 0 of 3600 fall outside, and 0 lose a note.
+
+### A list, not a wall of tags
+
+Eighteen charts as chips is a wall you skim past. As rows with the bar count and
+the publication year on each, it is something you read down and choose from —
+and it has room to grow, which the tag layout did not.
+
+### Typing a chart in stores numerals, not chords
+
+The answer to "I have a stack of paper sheet music". You write what is on the
+page — chord symbols, in the key it is printed in — and `romanNumeral` from M1
+converts it on the way into the database. Typing a tune in once therefore buys
+all twelve keys, exactly like the built-ins, and nothing downstream can tell an
+imported chart from a compiled one.
+
+That the M1 analyser turned out to be the exact inverse of the M7 numeral
+resolver was luck, but the round trip is now covered by tests in both directions.
+
+A typo names its line and its chord and the rest of the chart is kept. Rejecting
+a thirty-two bar tune over one unreadable symbol means re-typing thirty-two bars.
+
+### On sourcing standards in bulk
+
+There is no honest bulk source. Chord changes for tunes still in copyright are
+what fake books sell, and scraping them would put them in the repo, which §7
+rules out. Two things are available instead, and both are now here: more public
+domain tunes (ten, each with its year), and an importer so anything else lives
+in your database rather than in the code.
+
+The changes for the built-in standards are the commonly taught versions written
+out from knowledge, not copied from a source. They are worth checking against
+your ear — which is part of why the year is printed next to each one.

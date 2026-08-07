@@ -18,6 +18,8 @@ import { chordFromNumeral } from './progressions';
  *   standards  Real repertoire, and only where the copyright has expired: US
  *              publication in 1930 or earlier. The year is recorded on each one
  *              so the claim can be checked rather than taken on trust.
+ *   mine       Charts you typed in yourself, kept in the database rather than
+ *              here. Where anything still in copyright belongs.
  *
  * What is deliberately absent is a fake book. No melodies anywhere, and no
  * changes to tunes still in copyright — that is what the chart importer is for.
@@ -27,12 +29,13 @@ import { chordFromNumeral } from './progressions';
  * of four purely because that is how a chart is read.
  */
 
-export type ChartCategory = 'form' | 'cycle' | 'standard';
+export type ChartCategory = 'form' | 'cycle' | 'standard' | 'mine';
 
 export const CHART_CATEGORIES: Record<ChartCategory, string> = {
 	form: 'Forms',
 	cycle: 'Cycles',
-	standard: 'Standards'
+	standard: 'Standards',
+	mine: 'Yours'
 };
 
 export type ChartSeed = {
@@ -261,6 +264,88 @@ export const CHARTS: ChartSeed[] = [
 		],
 		notes:
 			'Eight bars, minor, traditional. Short enough that you go round it many times in a sitting, which is the point — it is somewhere to try one idea repeatedly rather than a form to get through.'
+	},
+	{
+		slug: 'ja-da',
+		name: 'Ja-Da',
+		style: 'custom',
+		category: 'standard',
+		mode: 'major',
+		defaultBpm: 170,
+		published: 1918,
+		grid: [
+			['I', 'I', 'VI7', 'VI7'],
+			['II7', 'II7', 'V7', 'V7'],
+			['I', 'I', 'VI7', 'VI7'],
+			['II7', 'V7', 'I', 'I']
+		],
+		notes:
+			'Sixteen bars and one idea: I–VI–II–V, round and round. Nothing else in the repertoire gives you that many repetitions of the turnaround with a tune attached.'
+	},
+	{
+		slug: 'salty-dog',
+		name: 'Salty Dog',
+		style: 'custom',
+		category: 'standard',
+		mode: 'major',
+		defaultBpm: 160,
+		published: 1924,
+		grid: [
+			['I', 'VI7', 'II7', 'V7'],
+			['I', 'VI7', 'II7 V7', 'I']
+		],
+		notes:
+			'Eight bars of the ragtime progression — every chord a dominant, each one pulling to the next. Short enough to go round it twenty times without noticing.'
+	},
+	{
+		slug: 'after-youve-gone',
+		name: "After You've Gone",
+		style: 'custom',
+		category: 'standard',
+		mode: 'major',
+		defaultBpm: 170,
+		published: 1918,
+		grid: [
+			['I', 'I', 'vi', 'vi'],
+			['I7', 'I7', 'IV', 'IV'],
+			['iv', 'iv', 'I', 'VI7'],
+			['ii7', 'V7', 'I', 'VI7'],
+			['ii7', 'V7', 'I', 'I']
+		],
+		notes:
+			'The I–I7–IV–iv walk in bars five to ten is the whole reason to know this one: the tonic turning into its own dominant, then the four turning minor underneath you.'
+	},
+	{
+		slug: 'basin-street-blues',
+		name: 'Basin Street Blues',
+		style: 'custom',
+		category: 'standard',
+		mode: 'major',
+		defaultBpm: 110,
+		published: 1928,
+		grid: [
+			['I', 'I', 'IV', 'iv'],
+			['I VI7', 'II7 V7', 'I', 'I']
+		],
+		notes:
+			'Eight bars, and the borrowed minor four in bar four does all the work. Slow enough that there is time to hear the one note that moves.'
+	},
+	{
+		slug: 'avalon',
+		name: 'Avalon',
+		style: 'custom',
+		category: 'standard',
+		mode: 'major',
+		defaultBpm: 200,
+		published: 1920,
+		grid: [
+			['V7', 'V7', 'I', 'I'],
+			['V7', 'V7', 'I', 'I'],
+			['I7', 'I7', 'IV', 'IV'],
+			['VI7', 'II7', 'V7', 'I']
+		],
+		notes:
+			'Opens on the dominant and takes eight bars to get home, then runs the dominant chain the other way. Fast, and mostly two chords, so there is room to think.'
 	},
 	{
 		slug: 'bill-bailey',
