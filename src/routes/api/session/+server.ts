@@ -91,14 +91,17 @@ function parseReviews(input: unknown): ReviewInput[] {
 		if (typeof entry !== 'object' || entry === null) return [];
 		const row = entry as Record<string, unknown>;
 
+		const id = row.id;
 		const cardId = row.cardId;
 		const rating = row.rating;
+		if (typeof id !== 'string' || !UUID.test(id)) return [];
 		if (typeof cardId !== 'string') return [];
 		if (typeof rating !== 'string' || !RATINGS.includes(rating as ReviewRating)) return [];
 
 		const latency = Number(row.latencyMs);
 		return [
 			{
+				id,
 				cardId,
 				rating: rating as ReviewRating,
 				correct: Boolean(row.correct),
@@ -110,3 +113,5 @@ function parseReviews(input: unknown): ReviewInput[] {
 		];
 	});
 }
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;

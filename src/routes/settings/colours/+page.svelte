@@ -48,15 +48,29 @@
 	const groundContrast = $derived(contrastRatio(current, GROUND.base));
 
 	const dirty = $derived(JSON.stringify(palette) !== JSON.stringify(data.settings.colorMap));
+	let originalInline: Array<[string, string]> | null = null;
 
 	// The live preview writes straight onto the document so the whole page —
 	// wheel, swatches, chrome — moves with the sliders.
 	$effect(() => {
+		const style = document.documentElement.style;
+		if (!originalInline) {
+			originalInline = palette.flatMap((_, i) => [
+				[`--pc-${i}`, style.getPropertyValue(`--pc-${i}`)] as [string, string],
+				[`--pc-${i}-ink`, style.getPropertyValue(`--pc-${i}-ink`)] as [string, string]
+			]);
+		}
 		for (const [i, colour] of palette.entries()) {
 			const { ink } = contrastSafeInk(colour, SWATCH_INK_DARK, SWATCH_INK_LIGHT);
-			document.documentElement.style.setProperty(`--pc-${i}`, css(colour));
-			document.documentElement.style.setProperty(`--pc-${i}-ink`, css(ink));
+			style.setProperty(`--pc-${i}`, css(colour));
+			style.setProperty(`--pc-${i}-ink`, css(ink));
 		}
+		return () => {
+			for (const [property, value] of originalInline ?? []) {
+				if (value) style.setProperty(property, value);
+				else style.removeProperty(property);
+			}
+		};
 	});
 
 	function update(patch: Partial<Oklch>) {
@@ -107,7 +121,7 @@
 		<section class="flex flex-col items-center gap-6">
 			<Wheel config={data.settings.wheelConfig} active={[...Array(12).keys()]} size={560} />
 
-			<div class="grid w-full max-w-xl grid-cols-12 gap-1">
+			<div class="grid w-full max-w-xl grid-cols-6 gap-1 sm:grid-cols-12">
 				{#each palette as colour, pc (pc)}
 					<button
 						class="flex aspect-square flex-col items-center justify-center rounded transition-transform"

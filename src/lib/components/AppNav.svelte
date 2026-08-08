@@ -32,8 +32,10 @@
 </script>
 
 <header class="border-ground-line bg-ground/90 sticky top-0 z-40 border-b backdrop-blur">
-	<div class="mx-auto flex h-14 max-w-[1500px] items-center gap-5 px-5">
-		<a href="/" class="font-display text-ink text-base font-semibold tracking-tight">Harmonic</a>
+	<div class="mx-auto flex h-14 max-w-[1500px] items-center gap-2 px-3 sm:gap-5 sm:px-5">
+		<a href="/" class="font-display text-ink hidden text-base font-semibold tracking-tight sm:block"
+			>Harmonic</a
+		>
 
 		<!-- The links scroll rather than push: a fourth destination was enough to
 		     make the whole page slide sideways on a narrow screen. -->
@@ -48,8 +50,8 @@
 			{/each}
 		</nav>
 
-		<div class="ml-auto flex shrink-0 items-center gap-3">
-			<LiveNotes {context} />
+		<div class="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
+			<div class="hidden sm:block"><LiveNotes {context} /></div>
 			<SettingsMenu {prefs} />
 		</div>
 	</div>

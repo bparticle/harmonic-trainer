@@ -9,7 +9,7 @@ import { MidiSession } from './session.svelte';
  * client-side routing because the module is only evaluated once.
  *
  * Constructing it here is safe during SSR: the class touches no browser API
- * until `detect`, `connect` or `startVirtual` is called, and the layout only
+ * until `detect`, `connect` or an input event is received, and the layout only
  * does that in the browser.
  */
 export const midi = new MidiSession();
@@ -26,7 +26,6 @@ const REMEMBER_KEY = 'harmonic:midi-connected';
  */
 export async function restoreMidi(): Promise<void> {
 	midi.detect();
-	midi.startVirtual();
 	if (midi.status !== 'idle') return;
 
 	if (await alreadyAllowed()) {

@@ -5,7 +5,7 @@ import type { Actions, PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
 import { charts } from '$lib/server/db/schema';
 import { CHARTS, type ChartSeed } from '$lib/curriculum/charts';
-import { importedToSeed, parseChartText, slugify } from '$lib/curriculum/import';
+import { importedToSeed, parseChartText, slugify, uniqueSlug } from '$lib/curriculum/import';
 
 /**
  * Charts you typed in yourself.
@@ -63,19 +63,31 @@ export const actions: Actions = {
 		const text = String(form.get('chart') ?? '');
 		const bpm = Number(form.get('bpm') ?? 140);
 		const mode = form.get('mode') === 'minor' ? 'minor' : 'major';
+		const allowPartial = form.get('allowPartial') === 'yes';
+		const safeBpm = Number.isFinite(bpm) ? Math.max(40, Math.min(300, bpm)) : 140;
+		const entered = { name, text, key: keyName, mode, bpm: safeBpm };
 
-		if (!name) return fail(400, { problems: ['Give it a name.'], name, text, key: keyName });
+		if (!name)
+			return fail(400, { problems: ['Give it a name.'], canSavePartial: false, ...entered });
 
 		const parsed = parseChartText(text, keyName);
 		if (parsed.rows.length === 0) {
-			return fail(400, { problems: parsed.problems, name, text, key: keyName });
+			return fail(400, { problems: parsed.problems, canSavePartial: false, ...entered });
+		}
+		if (parsed.problems.length > 0 && !allowPartial) {
+			return fail(400, { problems: parsed.problems, canSavePartial: true, ...entered });
 		}
 
 		const seed = importedToSeed(name, parsed.rows, {
-			defaultBpm: Number.isFinite(bpm) ? Math.max(40, Math.min(300, bpm)) : 140,
+			defaultBpm: safeBpm,
 			mode
 		});
 
+		const rows = await db.select({ gridJson: charts.gridJson }).from(charts);
+		const storedSlugs = rows
+			.map((row) => ((row.gridJson ?? {}) as StoredGrid).slug)
+			.filter((slug): slug is string => Boolean(slug));
+		seed.slug = uniqueSlug(seed.slug, [...BUILT_IN, ...storedSlugs]);
 		await db.insert(charts).values({
 			id: randomUUID(),
 			name: seed.name,

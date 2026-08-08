@@ -335,6 +335,7 @@ export async function finishSession(
 }
 
 export type ReviewInput = {
+	id: string;
 	cardId: string;
 	rating: ReviewRating;
 	correct: boolean;
@@ -361,16 +362,23 @@ export async function recordReviews(
 		const byCard = new Map(states.map((s) => [s.cardId, s]));
 
 		for (const review of batch) {
-			await tx.insert(reviews).values({
-				id: randomUUID(),
-				cardId: review.cardId,
-				sessionId,
-				ts: now,
-				rating: review.rating,
-				correct: review.correct,
-				latencyMs: review.latencyMs,
-				playedJson: review.played ? { notes: review.played } : null
-			});
+			const inserted = await tx
+				.insert(reviews)
+				.values({
+					id: review.id,
+					cardId: review.cardId,
+					sessionId,
+					ts: now,
+					rating: review.rating,
+					correct: review.correct,
+					latencyMs: review.latencyMs,
+					playedJson: review.played ? { notes: review.played } : null
+				})
+				.onConflictDoNothing({ target: reviews.id })
+				.returning({ id: reviews.id });
+
+			// Retried requests carry the same id: the review and SRS update happen once.
+			if (inserted.length === 0) continue;
 
 			const row = byCard.get(review.cardId);
 			const current: SrsState = row
@@ -390,6 +398,7 @@ export async function recordReviews(
 				.insert(srsState)
 				.values({ cardId: review.cardId, ...next })
 				.onConflictDoUpdate({ target: srsState.cardId, set: next });
+			byCard.set(review.cardId, { cardId: review.cardId, ...next });
 		}
 	});
 }

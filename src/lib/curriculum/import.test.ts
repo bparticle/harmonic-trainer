@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { realiseChart } from './charts';
-import { importedToSeed, parseChartText, slugify } from './import';
+import { importedToSeed, parseChartText, slugify, uniqueSlug } from './import';
 
 const flat = (rows: string[][]) => rows.flat();
 
@@ -112,5 +112,9 @@ describe('slugs', () => {
 
 	it('always returns something', () => {
 		expect(slugify('!!!')).toBe('chart');
+	});
+
+	it('adds the first free numeric suffix when a name is already taken', () => {
+		expect(uniqueSlug('my-tune', ['my-tune', 'my-tune-2', 'something-else'])).toBe('my-tune-3');
 	});
 });

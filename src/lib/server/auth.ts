@@ -60,6 +60,18 @@ export function verifyToken(token: string | undefined, now = Date.now()): boolea
 	return Number.isFinite(age) && age >= 0 && age < MAX_AGE_SECONDS;
 }
 
+/** Return a same-origin path, including its query, or the safe home fallback. */
+export function safeRedirectPath(raw: string | null, origin: string): string {
+	if (!raw) return '/';
+	try {
+		const destination = new URL(raw, origin);
+		if (destination.origin !== origin || !raw.startsWith('/') || raw.startsWith('//')) return '/';
+		return `${destination.pathname}${destination.search}${destination.hash}`;
+	} catch {
+		return '/';
+	}
+}
+
 export const cookieOptions = {
 	path: '/',
 	httpOnly: true,

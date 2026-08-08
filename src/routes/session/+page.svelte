@@ -18,6 +18,7 @@
 	import type { Highlight, WheelGeometry } from '$lib/wheel/geometry';
 	import { cellsFor } from '$lib/wheel/geometry';
 	import type { ReviewRating } from '$lib/server/db/schema';
+	import { shouldHandleSpace } from '$lib/shortcuts';
 
 	/*
 	 * The daily session.
@@ -52,8 +53,8 @@
 	 * the last twenty minutes had been thrown away.
 	 */
 	let justFinished = $state(false);
-	const finished = $derived(justFinished || (Boolean(plan) && index >= (plan?.blocks.length ?? 0)));
-	const summary = $state({ keyCenter: '', blocks: 0 });
+	const finished = $derived(justFinished);
+	const summary = $state({ keyCenter: '', blocks: 0, focus: '' });
 
 	let busy = $state(false);
 	let problem = $state<string | null>(null);
@@ -69,10 +70,20 @@
 	let gathered = $state<number[]>([]);
 	let showedAnswer = $state(false);
 	let logRatings = $state<Record<string, ReviewRating>>({});
+	let audioUnlocked = $state(false);
+	let playedPromptId = $state<string | null>(null);
+	let playingQuestion = $state(false);
+	let audioProblem = $state<string | null>(null);
 
 	/** Reviews gathered during this block, flushed when it finishes. */
 	let pending = $state<
-		Array<{ cardId: string; rating: ReviewRating; correct: boolean; latencyMs: number | null }>
+		Array<{
+			id: string;
+			cardId: string;
+			rating: ReviewRating;
+			correct: boolean;
+			latencyMs: number | null;
+		}>
 	>([]);
 
 	const blockCards = $derived(block ? (data.cards[block.type] ?? []) : []);
@@ -107,11 +118,14 @@
 		showedAnswer = false;
 		pending = [];
 		askedAt = performance.now();
+		audioProblem = null;
 	});
 
-	/** Play the question, if it has one. */
+	/** Once audio has been unlocked by a tap, later questions can play automatically. */
 	$effect(() => {
-		if (!prompt?.audible || answered) return;
+		const promptId = currentCard?.id;
+		if (!audioUnlocked || !prompt?.audible || answered || !promptId || playedPromptId === promptId)
+			return;
 		void playQuestion();
 	});
 
@@ -121,16 +135,28 @@
 	);
 
 	async function playQuestion() {
-		if (!prompt?.audible) return;
-		await startAudio();
-		/*
-		 * A scale is not a chord. Sounding all seven notes at once produced a tone
-		 * cluster nobody could identify, on the gentlest card in the app — and
-		 * then demanded all seven back simultaneously, which is not playable.
-		 */
-		if (isSequential) await playSequence(prompt.audible, 0.4);
-		else await playChord(prompt.audible, 1.9);
-		askedAt = performance.now();
+		if (!prompt?.audible || !currentCard || playingQuestion) return;
+		const promptId = currentCard.id;
+		playedPromptId = promptId;
+		playingQuestion = true;
+		audioProblem = null;
+		try {
+			await startAudio();
+			audioUnlocked = true;
+			/*
+			 * A scale is not a chord. Sounding all seven notes at once produced a tone
+			 * cluster nobody could identify, on the gentlest card in the app — and
+			 * then demanded all seven back simultaneously, which is not playable.
+			 */
+			if (isSequential) await playSequence(prompt.audible, 0.4);
+			else await playChord(prompt.audible, 1.9);
+			askedAt = performance.now();
+		} catch (error) {
+			if (playedPromptId === promptId) playedPromptId = null;
+			audioProblem = error instanceof Error ? error.message : 'Audio could not start.';
+		} finally {
+			playingQuestion = false;
+		}
 	}
 
 	// ---- answering --------------------------------------------------------
@@ -170,6 +196,7 @@
 		pending = [
 			...pending,
 			{
+				id: crypto.randomUUID(),
 				cardId: currentCard.id,
 				rating,
 				correct,
@@ -233,14 +260,17 @@
 			skipCard();
 			return;
 		}
-		if (currentCard) nextCard();
+		if (currentCard) {
+			nextCard();
+			return;
+		}
+		void finishBlock({ answered: pending.length, handsFree: true });
 	}
 
 	function onKeydown(event: KeyboardEvent) {
-		if (event.key === ' ') {
-			event.preventDefault();
-			advanceHandsFree();
-		}
+		if (!shouldHandleSpace(event)) return;
+		event.preventDefault();
+		advanceHandsFree();
 	}
 
 	// ---- block transitions -------------------------------------------------
@@ -262,9 +292,10 @@
 				})
 			});
 			if (!response.ok) throw new Error(await response.text());
+			const nextIndex = index + 1;
 			await stopAll();
-			index = index + 1;
-			if (index >= (plan?.blocks.length ?? 0)) await endSession();
+			if (nextIndex >= (plan?.blocks.length ?? 0)) await endSession(nextIndex);
+			else index = nextIndex;
 		} catch (e) {
 			problem = e instanceof Error ? e.message : 'Could not save that block.';
 		} finally {
@@ -272,12 +303,9 @@
 		}
 	}
 
-	async function endSession() {
+	async function endSession(nextIndex: number) {
 		if (!data.session) return;
-		summary.keyCenter = plan?.keyCenter ?? '';
-		summary.blocks = plan?.blocks.length ?? 0;
-		justFinished = true;
-		await fetch('/api/session', {
+		const response = await fetch('/api/session', {
 			method: 'POST',
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({
@@ -286,6 +314,13 @@
 				result: { completed: true }
 			})
 		});
+		if (!response.ok) throw new Error(await response.text());
+
+		summary.keyCenter = plan?.keyCenter ?? '';
+		summary.blocks = plan?.blocks.length ?? 0;
+		summary.focus = data.progression?.name ?? data.rung?.label ?? '';
+		index = nextIndex;
+		justFinished = true;
 		await invalidateAll();
 	}
 
@@ -336,10 +371,16 @@
 			<div class="max-w-md">
 				<h1 class="font-display text-ink mb-3 text-4xl font-semibold tracking-tight">Done.</h1>
 				<p class="text-ink-muted mb-6 leading-relaxed">
-					{summary.blocks || plan?.blocks.length} blocks in {summary.keyCenter || plan?.keyCenter}.
-					Everything is recorded.
+					{summary.blocks} blocks in {summary.keyCenter}{summary.focus
+						? ` ? ${summary.focus}`
+						: ''}. Everything is recorded.
 				</p>
-				<a href="/" class="bg-ink text-ground rounded-lg px-5 py-3 font-semibold">Home</a>
+				<div class="flex flex-wrap justify-center gap-3">
+					<a href="/" class="bg-ink text-ground rounded-lg px-5 py-3 font-semibold">Home</a>
+					<a href="/backing" class="border-ground-line rounded-lg border px-5 py-3 font-semibold"
+						>Play along</a
+					>
+				</div>
 			</div>
 		</div>
 	{:else if !data.session}
@@ -350,22 +391,22 @@
 			</div>
 		</div>
 	{:else if block}
-		<header class="mb-5 flex items-center justify-between gap-4">
-			<div class="flex items-baseline gap-3">
+		<header class="mb-5 flex flex-wrap items-center justify-between gap-3">
+			<div class="flex min-w-0 flex-wrap items-baseline gap-2 sm:gap-3">
 				<h1 class="font-display text-ink text-lg font-semibold tracking-tight">{block.title}</h1>
 				<span class="text-ink-muted font-mono text-[0.7rem]">
 					{progress} · {plan?.keyCenter}{focusLabel ? ` · ${focusLabel}` : ''}
 				</span>
 			</div>
-			<div class="flex items-center gap-4">
+			<div class="flex items-center gap-2 sm:gap-4">
 				<Timer seconds={block.duration} />
 				<button
-					class="text-ink-dim hover:text-ink font-mono text-xs transition-colors"
+					class="text-ink-dim hover:text-ink rounded-md px-2 py-2 font-mono text-xs transition-colors"
 					onclick={() => finishBlock({ skipped: true })}
 					disabled={busy}>skip</button
 				>
 				<button
-					class="text-ink-dim hover:text-ink font-mono text-xs transition-colors"
+					class="text-ink-dim hover:text-ink rounded-md px-2 py-2 font-mono text-xs transition-colors"
 					onclick={abandon}>leave</button
 				>
 			</div>
@@ -484,11 +525,17 @@
 						>
 					{:else}
 						<button
-							class="text-ink-dim hover:text-ink font-mono text-sm transition-colors"
-							onclick={playQuestion}>play it again</button
+							class="border-ground-line hover:border-ink-dim rounded-lg border px-5 py-3 font-mono text-sm transition-colors disabled:opacity-50"
+							onclick={playQuestion}
+							disabled={playingQuestion}
 						>
+							{playingQuestion ? 'playing?' : audioUnlocked ? 'play it again' : 'hear question'}
+						</button>
 					{/if}
 				</div>
+				{#if audioProblem}
+					<p class="font-mono text-xs" style="color: var(--pc-0)">{audioProblem}</p>
+				{/if}
 
 				{#if showedAnswer}
 					<p class="text-ink-muted font-display text-xl">{answerNotes.join('  ')}</p>

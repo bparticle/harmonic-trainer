@@ -10,6 +10,7 @@
 	import { spell } from '$lib/music/spell';
 	import { chordCells, keyOverlay } from '$lib/wheel/overlays';
 	import { mod12, pitchClassAt, type Highlight, type WheelGeometry } from '$lib/wheel/geometry';
+	import { shouldHandleSpace } from '$lib/shortcuts';
 
 	/*
 	 * Live naming.
@@ -92,10 +93,9 @@
 	});
 
 	function onKeydown(event: KeyboardEvent) {
-		if (event.key === ' ') {
-			event.preventDefault();
-			claim();
-		}
+		if (!shouldHandleSpace(event)) return;
+		event.preventDefault();
+		claim();
 	}
 
 	// The on-screen keyboard feeds exactly the same pipeline as the hardware.
@@ -262,6 +262,7 @@
 					step="250"
 					bind:value={revealDelayMs}
 					class="w-full"
+					aria-label="Reveal delay"
 				/>
 			</section>
 

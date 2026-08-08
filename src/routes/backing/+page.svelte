@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onDestroy } from 'svelte';
+	import { onDestroy, onMount } from 'svelte';
 	import ChordSymbol from '$lib/components/ChordSymbol.svelte';
 	import Keyboard from '$lib/components/Keyboard.svelte';
 	import { BackingTrack, type Part } from '$lib/audio/backing';
@@ -13,10 +13,17 @@
 		type ChartSeed
 	} from '$lib/curriculum/charts';
 	import { closeVoicing, degreeLabels, fitToRange } from '$lib/music/chord';
-	import { parseKey } from '$lib/music/key';
+	import { key as makeKey, parseKey } from '$lib/music/key';
+	import {
+		formatRoman,
+		formatStudyKey,
+		studyProgression,
+		type HarmonicStudy
+	} from '$lib/music/study';
 	import { formatNote, midi as toMidi, pitchClass } from '$lib/music/note';
 	import { midi as session } from '$lib/midi/shared.svelte';
 	import { page } from '$app/state';
+	import { shouldHandleSpace } from '$lib/shortcuts';
 
 	/*
 	 * Playing along.
@@ -51,16 +58,22 @@
 	];
 
 	/** The built-ins plus whatever you have typed in. Nothing downstream cares. */
+	// svelte-ignore state_referenced_locally
+	const initialRepertoire: ChartSeed[] = [...CHARTS, ...data.mine];
+	const requestedSlug = page.url.searchParams.get('chart');
+	const initialSeed = initialRepertoire.find((chart) => chart.slug === requestedSlug) ?? CHARTS[0];
 	const repertoire = $derived<ChartSeed[]>([...CHARTS, ...data.mine]);
 
 	// svelte-ignore state_referenced_locally
-	let slug = $state(page.url.searchParams.get('chart') ?? CHARTS[0].slug);
-	let importing = $state(false);
+	let slug = $state(initialSeed.slug);
+	// svelte-ignore state_referenced_locally
+	let importing = $state(Boolean(form));
+	let confirmingDelete = $state(false);
 
 	const PLACEHOLDER = `| Dm7 | G7 | Cmaj7 | Cmaj7 |
 | Am7 D7 | Dm7 G7 | Cmaj7 | Cmaj7 |`;
 	let keyName = $state('C');
-	let bpm = $state(CHARTS[0].defaultBpm);
+	let bpm = $state(initialSeed.defaultBpm);
 	let feel = $state<Feel>('swing');
 	let countIn = $state(true);
 
@@ -83,6 +96,10 @@
 	let liveBeat = $state(0);
 	/** The bar being examined when nothing is playing — including the one paused on. */
 	let pinnedBar = $state(1);
+	/** The exact half-bar chord being studied. */
+	let pinnedChord = $state(0);
+	/** Playback normally leads the inspector; selecting a chord pins it instead. */
+	let followPlayback = $state(true);
 
 	/*
 	 * The chart list, collapsible.
@@ -92,20 +109,34 @@
 	 * a reload too, not spring back the moment the page is refreshed.
 	 */
 	const SIDEBAR_KEY = 'backing:sidebar-collapsed';
-	// svelte-ignore state_referenced_locally
-	let sidebarCollapsed = $state(
-		typeof localStorage !== 'undefined' && localStorage.getItem(SIDEBAR_KEY) === 'yes'
-	);
+	let sidebarCollapsed = $state(false);
+	let sidebarReady = $state(false);
+	onMount(() => {
+		const saved = localStorage.getItem(SIDEBAR_KEY);
+		sidebarCollapsed = saved ? saved === 'yes' : matchMedia('(max-width: 1023px)').matches;
+		sidebarReady = true;
+	});
 	$effect(() => {
-		if (typeof localStorage !== 'undefined') {
-			localStorage.setItem(SIDEBAR_KEY, sidebarCollapsed ? 'yes' : 'no');
-		}
+		if (sidebarReady) localStorage.setItem(SIDEBAR_KEY, sidebarCollapsed ? 'yes' : 'no');
 	});
 
 	const seed = $derived(repertoire.find((c) => c.slug === slug) ?? CHARTS[0]);
 	const mineId = $derived(data.mine.find((c) => c.slug === slug)?.id ?? null);
 	const chart = $derived(realiseChart(seed, keyName));
 	const bars = $derived(chart.rows.flat());
+	const homeKey = $derived(makeKey(keyName, seed.mode === 'minor' ? 'aeolian' : 'ionian'));
+	const studies = $derived(
+		studyProgression(
+			bars.flatMap((bar) => bar.chords.map((entry) => entry.chord)),
+			homeKey
+		)
+	);
+	const studyByBar = $derived.by((): HarmonicStudy[][] => {
+		let cursor = 0;
+		return bars.map((bar) => bar.chords.map(() => studies[cursor++]));
+	});
+	const studyAt = (barNumber: number, chordIndex: number) =>
+		studyByBar[barNumber - 1]?.[chordIndex] ?? null;
 	const barCount = $derived(bars.length);
 	const looping = $derived(loopFrom !== null && loopTo !== null);
 	const byCategory = $derived(
@@ -129,11 +160,42 @@
 	 * which means the same tap that sets a loop point also asks "what is this
 	 * chord?" — the two things you want from a bar, without a mode switch.
 	 */
+	function chordIndexAtBeat(bar: ChartBar, beat: number): number {
+		const beatInBar = ((beat % chart.beatsPerBar) + chart.beatsPerBar) % chart.beatsPerBar;
+		let edge = 0;
+		for (let index = 0; index < bar.chords.length; index++) {
+			edge += bar.chords[index].beats;
+			if (beatInBar < edge) return index;
+		}
+		return Math.max(0, bar.chords.length - 1);
+	}
+
+	const followingPlayback = $derived(playing && followPlayback && liveBar > 0);
 	const focusedBar = $derived<ChartBar | null>(
-		bars.find((b) => b.number === (playing && liveBar > 0 ? liveBar : pinnedBar)) ?? bars[0] ?? null
+		bars.find((bar) => bar.number === (followingPlayback ? liveBar : pinnedBar)) ?? bars[0] ?? null
 	);
-	const focused = $derived(focusedBar?.chords[0] ?? null);
+	const focusedChordIndex = $derived(
+		focusedBar
+			? followingPlayback
+				? chordIndexAtBeat(focusedBar, liveBeat)
+				: Math.min(pinnedChord, focusedBar.chords.length - 1)
+			: 0
+	);
+	const focused = $derived(focusedBar?.chords[focusedChordIndex] ?? null);
+	const focusedStudy = $derived(focusedBar ? studyAt(focusedBar.number, focusedChordIndex) : null);
 	const focusedNotes = $derived(focused ? degreeLabels(focused.chord) : []);
+	const otherContexts = $derived(
+		focusedStudy?.compatibleKeys.filter(
+			(context) =>
+				pitchClass(context.key.tonic) !== pitchClass(focusedStudy.key.tonic) ||
+				context.key.mode !== focusedStudy.key.mode
+		) ?? []
+	);
+	const focusedExplanation = $derived(
+		focusedStudy
+			? focusedStudy.explanation.replace(focusedStudy.roman, formatRoman(focusedStudy.roman))
+			: ''
+	);
 	/*
 	 * The diagram shows two octaves from C3 and no more, so the chord is moved
 	 * into them rather than allowed to run off the end. Seventy per cent of the
@@ -151,6 +213,50 @@
 	);
 
 	const track = new BackingTrack();
+
+	const PLAYER_KEY = 'backing:player-v1';
+	let playerReady = $state(false);
+
+	onMount(() => {
+		try {
+			const raw = localStorage.getItem(PLAYER_KEY);
+			if (raw) {
+				const saved = JSON.parse(raw) as Record<string, unknown>;
+				const savedSeed = repertoire.find((chart) => chart.slug === saved.slug);
+				if (!requestedSlug && savedSeed) slug = savedSeed.slug;
+				if (typeof saved.keyName === 'string' && KEYS.includes(saved.keyName))
+					keyName = saved.keyName;
+				if (!requestedSlug && typeof saved.bpm === 'number' && Number.isFinite(saved.bpm)) {
+					bpm = Math.max(MIN_BPM, Math.min(MAX_BPM, Number(saved.bpm)));
+				}
+				if (saved.feel === 'swing' || saved.feel === 'straight') feel = saved.feel;
+				if (typeof saved.countIn === 'boolean') countIn = saved.countIn;
+				for (const [part] of PARTS) {
+					const savedMuted = (saved.muted as Partial<Record<Part, unknown>> | undefined)?.[part];
+					const savedLevel = (saved.level as Partial<Record<Part, unknown>> | undefined)?.[part];
+					if (typeof savedMuted === 'boolean') muted = { ...muted, [part]: savedMuted };
+					if (typeof savedLevel === 'number' && Number.isFinite(savedLevel)) {
+						level = { ...level, [part]: Math.max(0, Math.min(1, savedLevel)) };
+					}
+				}
+			}
+		} catch {
+			// A malformed preference should never stop the player from opening.
+		}
+		for (const [part] of PARTS) {
+			track.setMuted(part, muted[part]);
+			track.setLevel(part, level[part]);
+		}
+		playerReady = true;
+	});
+
+	$effect(() => {
+		if (!playerReady) return;
+		localStorage.setItem(
+			PLAYER_KEY,
+			JSON.stringify({ slug, keyName, bpm, feel, countIn, muted, level })
+		);
+	});
 
 	/*
 	 * The highlight, and only the highlight.
@@ -177,7 +283,7 @@
 			bars: chart.bars,
 			bpm,
 			feel,
-			key: parseKey(keyName),
+			key: homeKey,
 			loopFrom: loopFrom ?? undefined,
 			loopTo: loopTo ?? undefined,
 			beatsPerBar: chart.beatsPerBar,
@@ -208,7 +314,11 @@
 		track.pause();
 		// Pin the chord panel to the one just landed on — the same thing tapping
 		// a bar does when nothing is playing.
-		if (liveBar > 0) pinnedBar = liveBar;
+		if (liveBar > 0) {
+			pinnedBar = liveBar;
+			const live = bars.find((bar) => bar.number === liveBar);
+			if (live) pinnedChord = chordIndexAtBeat(live, liveBeat);
+		}
 		playing = false;
 		paused = true;
 	}
@@ -260,8 +370,13 @@
 	 * leaves it selected. Drilling two bars is most of what a backing track is
 	 * for, so it should not be buried in a menu.
 	 */
-	function tapBar(number: number) {
+	function selectChord(number: number, chordIndex: number) {
 		pinnedBar = number;
+		pinnedChord = chordIndex;
+		followPlayback = false;
+	}
+
+	function tapBar(number: number) {
 		if (loopFrom === number && loopTo === number) {
 			loopFrom = null;
 			loopTo = null;
@@ -289,16 +404,19 @@
 	function chooseChart(next: string) {
 		slug = next;
 		bpm = repertoire.find((c) => c.slug === next)?.defaultBpm ?? bpm;
+		pinnedChord = 0;
+		followPlayback = true;
 		pinnedBar = 1;
-		clearLoop();
+		confirmingDelete = false;
+		loopFrom = null;
+		loopTo = null;
 		void restartIfPlaying();
 	}
 
 	function onKeydown(event: KeyboardEvent) {
-		if (event.key === ' ' && !(event.target instanceof HTMLInputElement)) {
-			event.preventDefault();
-			void toggle();
-		}
+		if (!shouldHandleSpace(event)) return;
+		event.preventDefault();
+		void toggle();
 	}
 
 	// The pedal is the other hands-free control, exactly as it is on /play.
@@ -395,74 +513,134 @@
 						gives you all twelve keys.
 					</p>
 
-					<div class="flex flex-wrap gap-2">
-						<input
-							name="name"
-							placeholder="Name"
-							value={form?.name ?? ''}
-							required
-							class="field flex-1"
-						/>
-						<select name="key" class="field w-24">
-							{#each KEYS as k (k)}
-								<option value={k} selected={k === (form?.key ?? keyName)}>{keyLabel(k)}</option>
-							{/each}
-						</select>
-						<select name="mode" class="field w-28">
-							<option value="major">major</option>
-							<option value="minor">minor</option>
-						</select>
-						<input name="bpm" type="number" min="40" max="300" value="140" class="field w-20" />
+					<div class="grid grid-cols-2 gap-3 sm:grid-cols-[1fr_7rem_8rem]">
+						<label class="col-span-2 flex flex-col gap-1 sm:col-span-3">
+							<span class="field-label">Chart name</span>
+							<input name="name" value={form?.name ?? ''} required class="field w-full" />
+						</label>
+						<label class="flex flex-col gap-1">
+							<span class="field-label">Written key</span>
+							<select name="key" class="field w-full">
+								{#each KEYS as k (k)}
+									<option value={k} selected={k === (form?.key ?? keyName)}>{keyLabel(k)}</option>
+								{/each}
+							</select>
+						</label>
+						<label class="flex flex-col gap-1">
+							<span class="field-label">Mode</span>
+							<select name="mode" class="field w-full">
+								<option value="major" selected={form?.mode !== 'minor'}>major</option>
+								<option value="minor" selected={form?.mode === 'minor'}>minor</option>
+							</select>
+						</label>
+						<label class="col-span-2 flex flex-col gap-1 sm:col-span-1">
+							<span class="field-label">Tempo</span>
+							<input
+								name="bpm"
+								type="number"
+								min="40"
+								max="300"
+								value={form?.bpm ?? 140}
+								class="field w-full"
+							/>
+						</label>
 					</div>
 
-					<textarea name="chart" rows="6" class="field font-mono text-sm" placeholder={PLACEHOLDER}
-						>{form?.text ?? ''}</textarea
-					>
+					<label class="flex flex-col gap-1">
+						<span class="field-label">Chords, one row per line</span>
+						<textarea
+							name="chart"
+							rows="6"
+							class="field font-mono text-sm"
+							placeholder={PLACEHOLDER}>{form?.text ?? ''}</textarea
+						>
+					</label>
 
 					{#if form?.problems?.length}
-						<ul class="flex flex-col gap-0.5">
-							{#each form.problems as problem (problem)}
-								<li class="font-mono text-xs" style:color="var(--pc-0)">{problem}</li>
-							{/each}
-						</ul>
+						<div role="alert" class="border-ground-line rounded-lg border p-3">
+							<p class="mb-1 text-sm font-semibold">Check these before saving:</p>
+							<ul class="flex flex-col gap-0.5">
+								{#each form.problems as problem (problem)}
+									<li class="font-mono text-xs" style:color="var(--pc-0)">{problem}</li>
+								{/each}
+							</ul>
+						</div>
 					{/if}
 
-					<div class="flex items-center gap-2">
-						<button type="submit" class="chip is-on">Save it</button>
+					<div class="flex flex-wrap items-center gap-2">
+						{#if form?.canSavePartial}
+							<button type="submit" name="allowPartial" value="yes" class="chip is-on"
+								>Save the understood bars</button
+							>
+						{:else}
+							<button type="submit" class="chip is-on">Save chart</button>
+						{/if}
 						<button type="button" class="chip" onclick={() => (importing = false)}>Cancel</button>
 					</div>
 				</form>
 			{/if}
 
+			<div class="tonal-centre">
+				<span class="study-kicker">Harmonic map</span>
+				<strong>Main key: {formatStudyKey(homeKey)}</strong>
+				<span>Roman function and departures are shown on every chord.</span>
+			</div>
+
 			<div class="border-ground-line bg-ground-raised rounded-xl border p-3">
 				{#each chart.rows as row, r (r)}
-					<div class="grid grid-cols-4 gap-2" class:mt-2={r > 0}>
+					<div class="grid grid-cols-2 gap-2 sm:grid-cols-4" class:mt-2={r > 0}>
 						{#each row as bar (bar.number)}
 							{@const pc = pitchClass(bar.chords[0].chord.root)}
 							{@const now = playing && liveBar === bar.number}
-							<button
-								type="button"
+							<div
 								class="bar"
 								class:is-now={now}
-								class:is-pinned={!playing && pinnedBar === bar.number}
+								class:is-study-bar={!followingPlayback && pinnedBar === bar.number}
 								class:is-dim={!inLoop(bar.number)}
 								class:is-loop-start={looping && bar.number === loopFrom}
 								class:is-loop-end={looping && bar.number === loopTo}
 								style:--tint="var(--pc-{pc})"
 								style:--tint-ink="var(--pc-{pc}-ink)"
-								onclick={() => tapBar(bar.number)}
-								aria-label={`Bar ${bar.number}: ${bar.chords.map((c) => c.symbol).join(', ')}`}
 							>
-								<span class="bar-head">
-									<span class="bar-number">{bar.number}</span>
-									<span class="bar-numeral">{bar.chords.map((c) => c.numeral).join(' ')}</span>
-								</span>
-								<span class="bar-chords">
+								<button
+									type="button"
+									class="bar-head"
+									onclick={() => tapBar(bar.number)}
+									aria-label={'Set bar ' + bar.number + ' as a loop point'}
+									title="Set loop point"
+								>
+									<span class="bar-number">Bar {bar.number}</span>
+									<span class="bar-loop-action">loop</span>
+								</button>
+								<div class="bar-chords">
 									{#each bar.chords as entry, i (i)}
-										<ChordSymbol chord={entry.chord} size="1.55rem" />
+										{@const context = studyAt(bar.number, i)}
+										{@const chordNow = now && chordIndexAtBeat(bar, liveBeat) === i}
+										<button
+											type="button"
+											class="bar-chord"
+											class:is-selected={!followingPlayback &&
+												pinnedBar === bar.number &&
+												pinnedChord === i}
+											class:is-live={chordNow}
+											style:--chord-tint="var(--pc-{pitchClass(entry.chord.root)})"
+											onclick={() => selectChord(bar.number, i)}
+											aria-pressed={!followingPlayback &&
+												pinnedBar === bar.number &&
+												pinnedChord === i}
+											aria-label={'Study ' + entry.symbol + ' in bar ' + bar.number}
+										>
+											<span class="bar-symbol">
+												<ChordSymbol chord={entry.chord} size="1.45rem" />
+											</span>
+											<span class="chord-analysis">
+												<strong>{formatRoman(context?.roman ?? entry.numeral)}</strong>
+												<span>{context?.annotation ?? 'Analyse'}</span>
+											</span>
+										</button>
 									{/each}
-								</span>
-							</button>
+								</div>
+							</div>
 						{/each}
 					</div>
 				{/each}
@@ -474,14 +652,28 @@
 						Looping bars {loopFrom}–{loopTo}.
 						<button type="button" class="underline" onclick={clearLoop}>Whole form</button>
 					{:else}
-						Tap a bar to look at it and loop it, then another to stretch the loop out.
+						Select a chord to study it. Use a bar header to set the loop range.
 					{/if}
 				</span>
 				{#if mineId}
-					<form method="POST" action="?/remove" class="ml-auto">
-						<button class="hover:text-ink underline transition-colors">delete this chart</button>
-						<input type="hidden" name="id" value={mineId} />
-					</form>
+					{#if confirmingDelete}
+						<form method="POST" action="?/remove" class="ml-auto flex flex-wrap items-center gap-2">
+							<span>Delete {seed.name}?</span>
+							<input type="hidden" name="id" value={mineId} />
+							<button class="rounded-md px-2 py-1 underline">Yes, delete</button>
+							<button
+								type="button"
+								class="rounded-md px-2 py-1 underline"
+								onclick={() => (confirmingDelete = false)}>Cancel</button
+							>
+						</form>
+					{:else}
+						<button
+							type="button"
+							class="ml-auto rounded-md px-2 py-1 underline"
+							onclick={() => (confirmingDelete = true)}>delete this chart</button
+						>
+					{/if}
 				{/if}
 			</div>
 
@@ -524,47 +716,113 @@
 				</button>
 			</div>
 
-			<!-- What the chord under the cursor actually is ------------------- -->
-			{#if focused && focusedBar}
-				<div
-					class="border-ground-line mt-5 flex flex-wrap items-center gap-x-8 gap-y-4 border-t pt-5"
-				>
-					<div class="flex items-baseline gap-3">
-						<span class="text-ink" style:color="var(--pc-{pitchClass(focused.chord.root)})">
-							<ChordSymbol chord={focused.chord} size="3rem" />
-						</span>
-						<div class="flex flex-col">
-							<span class="font-mono text-ink-muted text-sm">{focused.numeral}</span>
-							<span class="text-ink-dim font-mono text-[0.7rem]">
-								bar {focusedBar.number}{focusedBar.chords.length > 1 ? ', first half' : ''}
+			<!-- The selected chord as a compact, progressive theory lesson. -->
+			{#if focused && focusedBar && focusedStudy}
+				<section class="study-inspector" aria-label="Chord study">
+					<header class="study-inspector-head">
+						<div class="study-identity">
+							<span class="study-symbol" style:color="var(--pc-{pitchClass(focused.chord.root)})">
+								<ChordSymbol chord={focused.chord} size="3rem" />
 							</span>
+							<div>
+								<div class="study-function">
+									<strong>{formatRoman(focusedStudy.roman)}</strong>
+									<span>{focusedStudy.annotation}</span>
+								</div>
+								<p class="study-location">
+									bar {focusedBar.number}{focusedBar.chords.length > 1
+										? focusedChordIndex === 0
+											? ', first half'
+											: ', second half'
+										: ''}
+									&middot; {formatStudyKey(focusedStudy.key)}
+								</p>
+							</div>
+						</div>
+
+						<button
+							type="button"
+							class="follow-button"
+							class:is-on={followPlayback}
+							onclick={() => (followPlayback = true)}
+							aria-pressed={followPlayback}
+						>
+							<span class="follow-dot" aria-hidden="true"></span>
+							Follow playback
+						</button>
+					</header>
+
+					{#if focusedStudy.modulation}
+						<p class="modulation-note">
+							Key centre changes here: {formatStudyKey(focusedStudy.modulation.from)} &rarr;
+							<strong>{formatStudyKey(focusedStudy.modulation.to)}</strong>
+						</p>
+					{/if}
+
+					<div class="study-overview">
+						<div class="study-copy">
+							<span class="study-kicker">In this song</span>
+							<p>{focusedExplanation}</p>
+						</div>
+
+						<div class="degree-row" aria-label="Chord tones">
+							{#each focusedNotes as entry, i (i)}
+								{@const pc = pitchClass(entry.note)}
+								<div
+									class="degree"
+									style:background="var(--pc-{pc})"
+									style:color="var(--pc-{pc}-ink)"
+								>
+									<span class="degree-note">{formatNote(entry.note, { unicode: true })}</span>
+									<span class="degree-number">{entry.degree}</span>
+								</div>
+							{/each}
 						</div>
 					</div>
 
-					<div class="flex gap-2">
-						{#each focusedNotes as entry, i (i)}
-							{@const pc = pitchClass(entry.note)}
-							<div
-								class="degree"
-								style:background="var(--pc-{pc})"
-								style:color="var(--pc-{pc}-ink)"
-							>
-								<span class="degree-note">{formatNote(entry.note, { unicode: true })}</span>
-								<span class="degree-number">{entry.degree}</span>
+					<div class="study-options">
+						<section>
+							<h3>Try over it</h3>
+							<ul class="scale-list">
+								{#each focusedStudy.scales as suggestion (suggestion.name)}
+									<li>
+										<strong>{suggestion.name}</strong>
+										<span>{suggestion.reason}</span>
+									</li>
+								{/each}
+							</ul>
+						</section>
+
+						<details class="context-details">
+							<summary>
+								<span>Other useful contexts</span>
+								<span class="context-count">{otherContexts.length}</span>
+							</summary>
+							<div class="context-list">
+								{#each otherContexts as context (formatStudyKey(context.key) + '-' + context.roman)}
+									<div class="context-row">
+										<strong>{formatStudyKey(context.key)}</strong>
+										<span class="context-roman">{formatRoman(context.roman)}</span>
+										<span>{context.description}</span>
+									</div>
+								{/each}
 							</div>
-						{/each}
+						</details>
 					</div>
 
-					<div class="ml-auto max-w-full overflow-x-auto">
-						<Keyboard
-							from={KEYS_FROM}
-							count={KEYS_COUNT}
-							lit={focusedVoicing}
-							interactive={false}
-							showLabels={false}
-						/>
+					<div class="study-keyboard">
+						<span class="study-kicker">Chord tones under the hands</span>
+						<div class="max-w-full overflow-x-auto">
+							<Keyboard
+								from={KEYS_FROM}
+								count={KEYS_COUNT}
+								lit={focusedVoicing}
+								interactive={false}
+								showLabels={false}
+							/>
+						</div>
 					</div>
-				</div>
+				</section>
 			{/if}
 		</section>
 
@@ -737,7 +995,7 @@
 		gap: 0.05rem;
 		padding: 0.35rem 0.55rem;
 		border-radius: 7px;
-		border-left: 2px solid transparent;
+		border: 1px solid transparent;
 		text-align: left;
 		transition:
 			background 110ms ease,
@@ -750,7 +1008,7 @@
 
 	.entry.is-on {
 		background: var(--color-ground-overlay);
-		border-left-color: var(--color-ink);
+		border-color: var(--color-ink-dim);
 	}
 
 	.entry-name {
@@ -771,6 +1029,12 @@
 		color: var(--color-ink-dim);
 	}
 
+	.field-label {
+		font-family: var(--font-mono);
+		font-size: 0.68rem;
+		color: var(--color-ink-dim);
+	}
+
 	.field {
 		padding: 0.45rem 0.6rem;
 		border-radius: 8px;
@@ -782,8 +1046,12 @@
 	}
 
 	.field:focus {
-		outline: none;
 		border-color: var(--color-ink-dim);
+	}
+
+	.field:focus-visible {
+		outline: 2px solid var(--color-ink);
+		outline-offset: 2px;
 	}
 
 	code {
@@ -845,27 +1113,48 @@
 		opacity: 0.35;
 	}
 
+	.tonal-centre {
+		display: grid;
+		grid-template-columns: auto auto minmax(0, 1fr);
+		align-items: baseline;
+		gap: 0.45rem 1rem;
+		padding: 0 0.25rem 0.7rem;
+		color: var(--color-ink-dim);
+		font-family: var(--font-mono);
+		font-size: 0.7rem;
+	}
+
+	.tonal-centre strong {
+		color: var(--color-ink);
+		font-family: var(--font-display);
+		font-size: 0.9rem;
+	}
+
+	.study-kicker {
+		color: var(--color-ink-dim);
+		font-family: var(--font-mono);
+		font-size: 0.62rem;
+		letter-spacing: 0.09em;
+		text-transform: uppercase;
+	}
+
 	/*
-	 * A bar of the chart.
-	 *
-	 * Tinted by its root, faintly enough that a chord symbol still reads white on
-	 * top of it. The colour is doing real work: on the fifths cycle you can see
-	 * the whole palette go past, and on a modal vamp you can see that it doesn't.
+	 * A chart bar is now a small group: its header controls the loop and each
+	 * chord is its own study target. Keeping those actions separate means a
+	 * theory question never restarts the track.
 	 */
 	.bar {
 		position: relative;
 		display: flex;
+		min-width: 0;
 		flex-direction: column;
-		justify-content: space-between;
-		gap: 0.4rem;
-		min-height: 5.25rem;
-		padding: 0.45rem 0.65rem 0.6rem;
+		gap: 0.25rem;
+		min-height: 6.5rem;
+		padding: 0.28rem 0.38rem 0.42rem;
 		border-radius: 9px;
 		border: 1px solid var(--color-ground-line);
 		background: color-mix(in oklab, var(--tint) 14%, var(--color-ground));
-		border-left: 3px solid color-mix(in oklab, var(--tint) 55%, var(--color-ground-line));
 		color: var(--color-ink);
-		text-align: left;
 		transition:
 			background 90ms linear,
 			border-color 90ms linear,
@@ -874,50 +1163,128 @@
 
 	.bar-head {
 		display: flex;
-		align-items: baseline;
+		width: 100%;
+		min-height: 2.4rem;
+		align-items: center;
 		justify-content: space-between;
 		gap: 0.5rem;
-		font-family: var(--font-mono);
-		font-size: 0.62rem;
-	}
-
-	.bar-number {
+		padding: 0.25rem 0.35rem;
+		border-radius: 6px;
 		color: var(--color-ink-dim);
+		font-family: var(--font-mono);
+		font-size: 0.6rem;
+		text-align: left;
 	}
 
-	.bar-numeral {
-		color: color-mix(in oklab, var(--tint) 70%, var(--color-ink-muted));
-		letter-spacing: 0.02em;
+	.bar-head:hover {
+		background: color-mix(in oklab, var(--color-ground-overlay) 70%, transparent);
+		color: var(--color-ink-muted);
+	}
+
+	.bar-head:focus-visible,
+	.bar-chord:focus-visible,
+	.follow-button:focus-visible,
+	.context-details summary:focus-visible {
+		outline: 2px solid var(--color-ink);
+		outline-offset: 2px;
+	}
+
+	.bar-loop-action {
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+	}
+
+	.bar.is-loop-start .bar-loop-action,
+	.bar.is-loop-end .bar-loop-action {
+		color: var(--color-ink);
+	}
+
+	.bar.is-loop-start .bar-loop-action::before {
+		content: 'start / ';
+	}
+
+	.bar.is-loop-end:not(.is-loop-start) .bar-loop-action::before {
+		content: 'end / ';
 	}
 
 	.bar-chords {
+		display: grid;
+		min-width: 0;
+		flex: 1;
+		grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+		gap: 0.3rem;
+	}
+
+	.bar-chord {
 		display: flex;
-		flex-wrap: wrap;
-		align-items: baseline;
-		gap: 0.55rem;
+		min-width: 0;
+		min-height: 3.5rem;
+		flex-direction: column;
+		justify-content: space-between;
+		gap: 0.3rem;
+		padding: 0.38rem 0.45rem;
+		border-radius: 7px;
+		border: 1px solid transparent;
+		background: color-mix(in oklab, var(--chord-tint) 8%, transparent);
+		color: var(--color-ink);
+		text-align: left;
+		transition:
+			background 90ms linear,
+			border-color 90ms linear;
+	}
+
+	.bar-chord:hover {
+		background: color-mix(in oklab, var(--chord-tint) 18%, var(--color-ground));
+		border-color: color-mix(in oklab, var(--chord-tint) 58%, var(--color-ground-line));
+	}
+
+	.bar-symbol {
 		line-height: 1;
 	}
 
+	.chord-analysis {
+		display: flex;
+		min-width: 0;
+		flex-wrap: wrap;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 0.15rem 0.45rem;
+		font-family: var(--font-mono);
+		font-size: 0.56rem;
+		line-height: 1.2;
+	}
+
+	.chord-analysis strong {
+		color: color-mix(in oklab, var(--chord-tint) 72%, var(--color-ink));
+		font-size: 0.64rem;
+	}
+
+	.chord-analysis span {
+		color: var(--color-ink-dim);
+	}
+
 	.bar.is-now {
-		background: color-mix(in oklab, var(--tint) 42%, var(--color-ground));
+		background: color-mix(in oklab, var(--tint) 30%, var(--color-ground));
 		border-color: var(--tint);
+	}
+
+	.bar.is-study-bar {
+		border-color: var(--color-ink-dim);
+	}
+
+	.bar-chord.is-live {
+		background: color-mix(in oklab, var(--chord-tint) 42%, var(--color-ground));
+		border-color: var(--chord-tint);
 		color: var(--tint-ink);
 	}
 
-	.bar.is-pinned {
-		border-color: var(--color-ink-dim);
+	.bar-chord.is-selected {
+		border-color: var(--chord-tint);
+		box-shadow: inset 0 0 0 1px var(--chord-tint);
 	}
 
 	.bar.is-dim {
 		opacity: 0.3;
-	}
-
-	.bar.is-loop-start {
-		border-left-color: var(--color-ink-muted);
-	}
-
-	.bar.is-loop-end {
-		border-right: 3px solid var(--color-ink-muted);
 	}
 
 	/* One note of the focused chord: what it is called, and what number it is. */
@@ -942,6 +1309,286 @@
 		font-family: var(--font-mono);
 		font-size: 0.65rem;
 		opacity: 0.8;
+	}
+	.study-inspector {
+		margin-top: 1.25rem;
+		padding-top: 1.15rem;
+		border-top: 1px solid var(--color-ground-line);
+	}
+
+	.study-inspector-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+	}
+
+	.study-identity {
+		display: flex;
+		min-width: 0;
+		align-items: center;
+		gap: 1rem;
+	}
+
+	.study-symbol {
+		flex: none;
+		line-height: 1;
+	}
+
+	.study-function {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: 0.45rem 0.8rem;
+	}
+
+	.study-function strong {
+		color: var(--color-ink);
+		font-family: var(--font-mono);
+		font-size: 1rem;
+	}
+
+	.study-function span {
+		color: var(--color-ink-muted);
+		font-family: var(--font-display);
+		font-size: 0.9rem;
+		font-weight: 600;
+	}
+
+	.study-location {
+		margin-top: 0.18rem;
+		color: var(--color-ink-dim);
+		font-family: var(--font-mono);
+		font-size: 0.68rem;
+	}
+
+	.follow-button {
+		display: flex;
+		min-height: 2.75rem;
+		flex: none;
+		align-items: center;
+		gap: 0.45rem;
+		padding: 0.45rem 0.7rem;
+		border-radius: 7px;
+		border: 1px solid var(--color-ground-line);
+		color: var(--color-ink-dim);
+		font-family: var(--font-mono);
+		font-size: 0.68rem;
+	}
+
+	.follow-button:hover,
+	.follow-button.is-on {
+		border-color: var(--color-ink-dim);
+		color: var(--color-ink);
+	}
+
+	.follow-dot {
+		width: 0.45rem;
+		height: 0.45rem;
+		border-radius: 50%;
+		background: var(--color-ground-line);
+	}
+
+	.follow-button.is-on .follow-dot {
+		background: var(--color-ink);
+	}
+
+	.modulation-note {
+		margin-top: 0.9rem;
+		padding: 0.65rem 0.75rem;
+		border: 1px solid var(--color-ground-line);
+		border-radius: 7px;
+		background: color-mix(in oklab, var(--color-ground-overlay) 65%, transparent);
+		color: var(--color-ink-muted);
+		font-family: var(--font-mono);
+		font-size: 0.72rem;
+	}
+
+	.modulation-note strong {
+		color: var(--color-ink);
+	}
+
+	.study-overview {
+		display: grid;
+		grid-template-columns: minmax(15rem, 1fr) auto;
+		align-items: center;
+		gap: 1.25rem 2rem;
+		padding: 1.15rem 0;
+	}
+
+	.study-copy p {
+		max-width: 46rem;
+		margin-top: 0.35rem;
+		color: var(--color-ink-muted);
+		font-size: 0.88rem;
+		line-height: 1.55;
+	}
+
+	.degree-row {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.45rem;
+	}
+
+	.study-options {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+		border-block: 1px solid var(--color-ground-line);
+	}
+
+	.study-options > section,
+	.context-details {
+		padding: 1rem 0;
+	}
+
+	.study-options > section {
+		padding-right: 1.25rem;
+	}
+
+	.study-options h3,
+	.context-details summary {
+		color: var(--color-ink);
+		font-family: var(--font-display);
+		font-size: 0.86rem;
+		font-weight: 600;
+	}
+
+	.scale-list {
+		margin-top: 0.55rem;
+	}
+
+	.scale-list li {
+		display: grid;
+		grid-template-columns: minmax(8rem, 0.8fr) minmax(0, 1.5fr);
+		gap: 0.6rem 1rem;
+		padding: 0.45rem 0;
+		border-top: 1px solid color-mix(in oklab, var(--color-ground-line) 65%, transparent);
+	}
+
+	.scale-list strong {
+		color: var(--color-ink-muted);
+		font-family: var(--font-mono);
+		font-size: 0.7rem;
+	}
+
+	.scale-list span {
+		color: var(--color-ink-dim);
+		font-size: 0.76rem;
+		line-height: 1.35;
+	}
+
+	.context-details {
+		padding-left: 1.25rem;
+		border-left: 1px solid var(--color-ground-line);
+	}
+
+	.context-details summary {
+		display: flex;
+		min-height: 2rem;
+		cursor: pointer;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		list-style-position: inside;
+	}
+
+	.context-count {
+		color: var(--color-ink-dim);
+		font-family: var(--font-mono);
+		font-size: 0.65rem;
+	}
+
+	.context-count::before {
+		content: '+ ';
+	}
+
+	.context-details[open] .context-count::before {
+		content: '- ';
+	}
+
+	.context-list {
+		margin-top: 0.45rem;
+	}
+
+	.context-row {
+		display: grid;
+		grid-template-columns: minmax(7rem, 0.8fr) minmax(4rem, auto) minmax(7rem, 1fr);
+		align-items: baseline;
+		gap: 0.5rem 0.8rem;
+		padding: 0.4rem 0;
+		border-top: 1px solid color-mix(in oklab, var(--color-ground-line) 65%, transparent);
+		color: var(--color-ink-dim);
+		font-size: 0.7rem;
+	}
+
+	.context-row strong {
+		color: var(--color-ink-muted);
+		font-family: var(--font-display);
+		font-size: 0.76rem;
+	}
+
+	.context-roman {
+		color: var(--color-ink);
+		font-family: var(--font-mono);
+	}
+
+	.study-keyboard {
+		display: grid;
+		grid-template-columns: minmax(8rem, auto) minmax(0, 1fr);
+		align-items: center;
+		gap: 1rem 1.5rem;
+		padding-top: 1rem;
+	}
+
+	@media (max-width: 700px) {
+		.tonal-centre {
+			grid-template-columns: 1fr;
+			gap: 0.15rem;
+		}
+
+		.study-inspector-head {
+			align-items: flex-start;
+		}
+
+		.study-identity {
+			align-items: flex-start;
+		}
+
+		.follow-button {
+			padding-inline: 0.55rem;
+		}
+
+		.study-overview,
+		.study-keyboard {
+			grid-template-columns: 1fr;
+		}
+
+		.study-options {
+			grid-template-columns: 1fr;
+		}
+
+		.study-options > section {
+			padding-right: 0;
+		}
+
+		.context-details {
+			padding-left: 0;
+			border-top: 1px solid var(--color-ground-line);
+			border-left: 0;
+		}
+
+		.scale-list li {
+			grid-template-columns: 1fr;
+			gap: 0.2rem;
+		}
+
+		.context-row {
+			grid-template-columns: minmax(0, 1fr) auto;
+		}
+
+		.context-row > :last-child {
+			grid-column: 1 / -1;
+		}
 	}
 
 	/* One giant target, per the standing rule that hands stay on the keys. */
