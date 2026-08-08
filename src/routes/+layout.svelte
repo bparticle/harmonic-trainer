@@ -31,11 +31,13 @@
 	 * the tab.
 	 */
 	$effect(() => {
+		if (!data.authed) return;
 		untrack(() => void restoreMidi());
 	});
 
 	// Keep a running session's clustering in step with the saved preferences.
 	$effect(() => {
+		if (!data.authed) return;
 		midi.windowMs = data.settings.prefs.chordClusterWindowMs;
 		midi.latencyOffsetMs = data.settings.prefs.midiLatencyOffsetMs;
 	});
@@ -48,10 +50,12 @@
 	 * happens whenever the choice changes, which is the only time it can.
 	 */
 	$effect(() => {
+		if (!data.authed) return;
 		midi.preferredName = data.settings.midiDevice;
 	});
 
 	$effect(() => {
+		if (!data.authed) return;
 		midi.onDeviceChosen((name) => {
 			void fetch('/api/settings', {
 				method: 'POST',
@@ -62,8 +66,8 @@
 		return () => midi.onDeviceChosen(null);
 	});
 
-	// The login screen is the one place without the shell.
-	const bare = $derived(page.url.pathname.startsWith('/login'));
+	// Public pages do not initialise or display the private practice shell.
+	const bare = $derived(!data.authed || page.url.pathname.startsWith('/login'));
 </script>
 
 <svelte:head>
