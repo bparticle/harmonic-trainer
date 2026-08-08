@@ -125,3 +125,13 @@ export function slugify(name: string): string {
 			.slice(0, 60) || 'chart'
 	);
 }
+
+/** Keep human-readable chart URLs unique without overwriting an existing tune. */
+export function uniqueSlug(base: string, taken: Iterable<string>): string {
+	const used = new Set(taken);
+	if (!used.has(base)) return base;
+
+	let suffix = 2;
+	while (used.has(`${base}-${suffix}`)) suffix++;
+	return `${base}-${suffix}`;
+}

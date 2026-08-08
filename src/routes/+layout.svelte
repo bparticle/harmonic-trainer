@@ -3,7 +3,6 @@
 	import '@fontsource/ibm-plex-mono/400.css';
 	import '@fontsource/ibm-plex-mono/500.css';
 	import './layout.css';
-	import favicon from '$lib/assets/favicon.svg';
 	import { untrack } from 'svelte';
 	import { page } from '$app/state';
 	import AppNav from '$lib/components/AppNav.svelte';
@@ -68,7 +67,7 @@
 </script>
 
 <svelte:head>
-	<link rel="icon" href={favicon} />
+	<link rel="icon" href="/icon.svg" />
 	<meta name="theme-color" content="#101218" />
 	{@html `<style>:root{${paletteCss}}</style>`}
 </svelte:head>

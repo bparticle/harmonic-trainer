@@ -49,7 +49,7 @@ export class MidiSession {
 
 	#access: MIDIAccess | null = null;
 	#cluster: ClusterState = emptyCluster();
-	#timer: ReturnType<typeof setInterval> | null = null;
+	#timer: ReturnType<typeof setTimeout> | null = null;
 	#onChord: ((chord: ChordEvent) => void) | null = null;
 	#onPedal: ((down: boolean) => void) | null = null;
 
@@ -101,7 +101,6 @@ export class MidiSession {
 		this.#refreshDevices();
 		// Hot-plug: a piano switched on after the page loaded should just appear.
 		this.#access.onstatechange = () => this.#refreshDevices();
-		this.#startPolling();
 	}
 
 	/**
@@ -185,6 +184,7 @@ export class MidiSession {
 
 		this.#cluster = reduceCluster(this.#cluster, event);
 		this.live = sounding(this.#cluster);
+		this.#scheduleFlush();
 
 		if (event.type === 'sustain') {
 			this.pedalDown = event.down;
@@ -216,9 +216,18 @@ export class MidiSession {
 	 * app that has quietly stopped listening is the worst failure this thing
 	 * could have.
 	 */
-	#startPolling() {
-		if (this.#timer) return;
-		this.#timer = setInterval(() => this.#tick(), 16);
+	#scheduleFlush() {
+		if (!this.#cluster.dirty) return;
+		if (this.#timer) clearTimeout(this.#timer);
+		const remaining = this.#cluster.lastNoteOn + this.windowMs - performance.now();
+		this.#timer = setTimeout(
+			() => {
+				this.#timer = null;
+				this.#tick();
+				if (this.#cluster.dirty) this.#scheduleFlush();
+			},
+			Math.max(0, remaining) + 1
+		);
 	}
 
 	#tick() {
@@ -228,11 +237,6 @@ export class MidiSession {
 			this.lastChord = result.chord;
 			this.#onChord?.(result.chord);
 		}
-	}
-
-	/** Start polling without a MIDI device, for the on-screen keyboard. */
-	startVirtual() {
-		this.#startPolling();
 	}
 
 	startRecording(now = performance.now()) {
@@ -256,7 +260,7 @@ export class MidiSession {
 	}
 
 	destroy() {
-		if (this.#timer) clearInterval(this.#timer);
+		if (this.#timer) clearTimeout(this.#timer);
 		this.#timer = null;
 		if (this.#access) {
 			this.#access.onstatechange = null;

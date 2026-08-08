@@ -5,7 +5,7 @@ vi.mock('$env/dynamic/private', () => ({
 	env: { AUTH_SECRET: 'test-secret-aaaaaaaaaaaaaaaaaaaaaaaa', APP_PASSWORD: 'correct horse' }
 }));
 
-const { checkPassword, issueToken, verifyToken } = await import('./auth');
+const { checkPassword, issueToken, safeRedirectPath, verifyToken } = await import('./auth');
 
 describe('password check', () => {
 	it('accepts the configured password', () => {
@@ -62,4 +62,19 @@ describe('session token', () => {
 		const now = Date.now();
 		expect(verifyToken(issueToken(now + 60_000), now)).toBe(false);
 	});
+});
+
+describe('post-login redirect', () => {
+	const origin = 'https://practice.example';
+
+	it('keeps an internal path and query', () => {
+		expect(safeRedirectPath('/backing?chart=blues', origin)).toBe('/backing?chart=blues');
+	});
+
+	it.each(['https://evil.example', '//evil.example/path', '/\\evil.example/path', 'backing'])(
+		'rejects unsafe destination %s',
+		(destination) => {
+			expect(safeRedirectPath(destination, origin)).toBe('/');
+		}
+	);
 });

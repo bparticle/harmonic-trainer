@@ -72,6 +72,12 @@
 		}
 	}
 
+	@media (max-width: 639px) {
+		.pill:nth-child(n + 3) {
+			display: none;
+		}
+	}
+
 	@media (prefers-reduced-motion: reduce) {
 		.pill {
 			animation: none;

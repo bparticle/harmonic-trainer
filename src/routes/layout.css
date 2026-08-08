@@ -57,6 +57,11 @@ body {
 	min-height: 100dvh;
 }
 
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+	outline: 2px solid var(--color-ink);
+	outline-offset: 3px;
+}
+
 /* Chord symbols and degree numbers must never be selected by a stray palm. */
 .no-select {
 	-webkit-user-select: none;

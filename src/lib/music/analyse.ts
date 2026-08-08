@@ -20,7 +20,14 @@ import { scaleDegree } from './spell';
  */
 
 export type ChordCategory =
-	'diatonic' | 'secondary-dominant' | 'tritone-sub' | 'backdoor' | 'borrowed' | 'chromatic';
+	| 'diatonic'
+	| 'blues-dominant'
+	| 'minor-dominant'
+	| 'secondary-dominant'
+	| 'tritone-sub'
+	| 'backdoor'
+	| 'borrowed'
+	| 'chromatic';
 
 export type HarmonicRole = 'tonic' | 'subdominant' | 'dominant' | 'other';
 
@@ -41,11 +48,16 @@ export type Analysis = {
 		romanInFrom: string;
 		romanInTo: string;
 	};
+	/** Set on the first chord heard in a newly established key centre. */
+	modulation?: { from: Key; to: Key };
 };
 
 const NUMERALS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
 
 /** Qualities written with a lowercase numeral. */
+/** Qualities stable enough to establish a new tonic, rather than merely point onward. */
+const TONIC_ISH = new Set(['maj', 'min', 'maj6', 'min6']);
+
 const MINOR_ISH = new Set(['min', 'min7b5', 'dim7', 'min6']);
 
 function accidentalPrefix(alter: number): string {
@@ -109,7 +121,7 @@ function roleFor(degree: number, alter: number, category: ChordCategory): Harmon
  * correctly calls it ♭6 — that alteration is measured against the major scale,
  * which is right for a Roman numeral and wrong for a membership test.
  */
-function isDiatonicChord(c: AbstractChord, k: Key): boolean {
+export function isDiatonicChord(c: AbstractChord, k: Key): boolean {
 	const scalePcs = scalePitchClasses(k);
 	const chordPcs = chordPitchClasses(c);
 	if (!chordPcs.every((pc) => scalePcs.has(pc))) return false;
@@ -127,18 +139,24 @@ function isDiatonicChord(c: AbstractChord, k: Key): boolean {
 // Analysis of a single chord
 // ---------------------------------------------------------------------------
 
-function analyseChord(c: AbstractChord, k: Key): Omit<Analysis, 'key' | 'pivot'> {
+function analyseChord(
+	c: AbstractChord,
+	k: Key,
+	next?: AbstractChord
+): Omit<Analysis, 'key' | 'pivot'> {
 	const symbol = formatChord(c);
 	const { degree, alter } = scaleDegree(c.root, k);
 
 	if (isDiatonicChord(c, k)) {
 		const roman = romanNumeral(c, k);
+		const scaleDegreeIndex =
+			scale(k).findIndex((note) => pitchClass(note) === pitchClass(c.root)) + 1;
 		return {
 			chord: c,
 			symbol,
 			roman,
 			category: 'diatonic',
-			role: roleFor(degree, alter, 'diatonic'),
+			role: roleFor(scaleDegreeIndex, 0, 'diatonic'),
 			explanation: `${roman} — the diatonic chord on degree ${degree} of ${formatKey(k)}`
 		};
 	}
@@ -148,8 +166,22 @@ function analyseChord(c: AbstractChord, k: Key): Omit<Analysis, 'key' | 'pivot'>
 		const targetRoot = transpose(c.root, ivl('P4'));
 		const target = scaleDegree(targetRoot, k);
 		const scalePcs = scalePitchClasses(k);
+		// Natural minor writes a minor v, but jazz and common-practice harmony use
+		// a major V7 for its leading tone. Treating that chord as merely chromatic
+		// hides the most important cadence in a minor key.
+		if (pitchClass(targetRoot) === pitchClass(k.tonic) && k.mode === 'aeolian') {
+			const roman = `V${romanSuffix(c)}`;
+			return {
+				chord: c,
+				symbol,
+				roman,
+				category: 'minor-dominant',
+				role: 'dominant',
+				explanation: `${roman} - the dominant of ${formatKey(k)}, borrowing its leading tone from harmonic minor`
+			};
+		}
 
-		if (target.alter === 0 && scalePcs.has(pitchClass(targetRoot)) && target.degree !== 1) {
+		if (scalePcs.has(pitchClass(targetRoot)) && target.degree !== 1) {
 			const targetChord = diatonicSeventh(k, target.degree);
 			const targetNumeral = numeralFor(targetRoot, k, targetChord.quality);
 			const roman = `V${romanSuffix(c)}/${targetNumeral}`;
@@ -162,6 +194,20 @@ function analyseChord(c: AbstractChord, k: Key): Omit<Analysis, 'key' | 'pivot'>
 				explanation: `${roman} — the dominant of ${formatChord(targetChord)}, pulling to the ${targetNumeral} chord`
 			};
 		}
+		// The dominant seventh on IV is the defining blues colour: its seventh is
+		// the blue flat third of the home key. It is not a tritone substitute
+		// unless it actually resolves down a semitone.
+		if (k.mode === 'ionian' && degree === 4 && alter === 0) {
+			const roman = `IV${romanSuffix(c)}`;
+			return {
+				chord: c,
+				symbol,
+				roman,
+				category: 'blues-dominant',
+				role: 'subdominant',
+				explanation: `${roman} - the blues IV dominant, adding the blue flat third of ${formatKey(k)}`
+			};
+		}
 
 		/*
 		 * The backdoor is checked before the tritone sub, because Bb7 in C also
@@ -169,7 +215,7 @@ function analyseChord(c: AbstractChord, k: Key): Omit<Analysis, 'key' | 'pivot'>
 		 * a substitute for V7/vi. Its real job is approaching the tonic from
 		 * below, which is a different sound and a different lesson.
 		 */
-		if (degree === 7 && alter === -1) {
+		if (degree === 7 && alter === -1 && next && pitchClass(next.root) === pitchClass(k.tonic)) {
 			const roman = `bVII${romanSuffix(c)}`;
 			return {
 				chord: c,
@@ -192,7 +238,12 @@ function analyseChord(c: AbstractChord, k: Key): Omit<Analysis, 'key' | 'pivot'>
 		 */
 		const subTargetRoot = transpose(c.root, ivl('M7'));
 		const subTarget = scaleDegree(subTargetRoot, k);
-		if (subTarget.alter === 0 && scalePcs.has(pitchClass(subTargetRoot))) {
+		if (
+			next &&
+			pitchClass(next.root) === pitchClass(subTargetRoot) &&
+			subTarget.alter === 0 &&
+			scalePcs.has(pitchClass(subTargetRoot))
+		) {
 			const roman = `${accidentalPrefix(alter)}${NUMERALS[degree - 1]}${romanSuffix(c)}`;
 			const replacing =
 				subTarget.degree === 1
@@ -277,6 +328,9 @@ function detectModulations(chords: AbstractChord[], startKey: Key): Modulation[]
 		const looksLikeTwoFive =
 			MINOR_ISH.has(two.quality) && five.quality === 'dom' && isFifthAbove(two, five);
 		if (!looksLikeTwoFive || !isFifthAbove(five, one)) continue;
+		// A blues IV7 is still a dominant sound pointing onward. Landing on it
+		// tonicizes IV, but does not establish a new key centre.
+		if (!TONIC_ISH.has(one.quality)) continue;
 
 		const target: Key = {
 			tonic: one.root,
@@ -321,7 +375,12 @@ export function analyse(chords: AbstractChord[], key: Key): Analysis[] {
 		const modulation = modulations.findLast((m) => m.from <= index);
 		const activeKey = modulation ? modulation.to : key;
 
-		const analysis: Analysis = { ...analyseChord(c, activeKey), key: activeKey };
+		const analysis: Analysis = { ...analyseChord(c, activeKey, chords[index + 1]), key: activeKey };
+		const changesHere = modulations.find((m) => m.from === index);
+		if (changesHere) {
+			const previous = modulations.findLast((m) => m.from < index);
+			analysis.modulation = { from: previous ? previous.to : key, to: changesHere.to };
+		}
 
 		const startsHere = modulations.find((m) => m.pivotIndex === index);
 		if (startsHere) {

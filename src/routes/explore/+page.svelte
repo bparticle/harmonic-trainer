@@ -21,6 +21,7 @@
 	const config = $derived(data.settings.wheelConfig);
 
 	const TONICS = [0, 7, 2, 9, 4, 11, 6, 1, 8, 3, 10, 5];
+	const PITCH_CLASSES = Array.from({ length: 12 }, (_, pc) => pc);
 
 	type OverlayMode = 'key' | 'chord' | 'brightness' | 'modulation';
 
@@ -28,6 +29,7 @@
 	let mode = $state<Mode>('ionian');
 	let overlay = $state<OverlayMode>('key');
 	let selectedChordIndex = $state(0);
+	let exploredChord = $state<AbstractChord | null>(null);
 	let maxChanged = $state(1);
 	let targetTonic = $state(7);
 	let targetMode = $state<Mode>('ionian');
@@ -41,7 +43,7 @@
 
 	const keyView = $derived(keyOverlay(currentKey, config, GEOMETRY));
 	const selectedChord = $derived<AbstractChord>(
-		keyView.chords[selectedChordIndex]?.chord ?? keyView.chords[0].chord
+		exploredChord ?? keyView.chords[selectedChordIndex]?.chord ?? keyView.chords[0].chord
 	);
 	const neighbourList = $derived(
 		overlay === 'chord'
@@ -139,6 +141,25 @@
 						? litPitchClasses.filter((p) => p !== pc)
 						: [...litPitchClasses, pc])}
 			/>
+			<div
+				class="grid w-full max-w-lg grid-cols-6 gap-1 sm:grid-cols-12"
+				aria-label="Light notes on the wheel"
+			>
+				{#each PITCH_CLASSES as pc (pc)}
+					<button
+						type="button"
+						class="border-ground-line min-h-11 rounded-md border font-display text-sm font-semibold"
+						class:is-selected={litPitchClasses.includes(pc)}
+						style:background={litPitchClasses.includes(pc) ? `var(--pc-${pc})` : undefined}
+						style:color={litPitchClasses.includes(pc) ? `var(--pc-${pc}-ink)` : undefined}
+						aria-pressed={litPitchClasses.includes(pc)}
+						onclick={() =>
+							(litPitchClasses = litPitchClasses.includes(pc)
+								? litPitchClasses.filter((p) => p !== pc)
+								: [...litPitchClasses, pc])}>{noteName(pc)}</button
+					>
+				{/each}
+			</div>
 			<p class="text-ink-dim max-w-lg text-center font-mono text-xs leading-relaxed">
 				Drag to turn. Every ring inward is a minor third, so a spoke spells a diminished seventh and
 				the fifth ring repeats the first. Click a cell to light it.
@@ -201,9 +222,12 @@
 							<li>
 								<button
 									class="border-ground-line/0 hover:bg-ground-raised flex w-full items-baseline justify-between rounded border px-2 py-1.5 text-left transition-colors"
-									class:is-selected={overlay === 'chord' && selectedChordIndex === i}
+									class:is-selected={overlay === 'chord' &&
+										exploredChord === null &&
+										selectedChordIndex === i}
 									onclick={() => {
 										selectedChordIndex = i;
+										exploredChord = null;
 										overlay = 'chord';
 									}}
 								>
@@ -241,6 +265,10 @@
 							<li>
 								<button
 									class="hover:bg-ground-raised flex w-full items-baseline justify-between gap-2 rounded px-2 py-1 text-left transition-colors"
+									onclick={() => {
+										exploredChord = neighbour.chord;
+										hoveredNeighbour = null;
+									}}
 									onmouseenter={() => (hoveredNeighbour = i)}
 									onmouseleave={() => (hoveredNeighbour = null)}
 									onfocus={() => (hoveredNeighbour = i)}

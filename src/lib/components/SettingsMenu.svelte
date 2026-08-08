@@ -21,10 +21,12 @@
 
 	// svelte-ignore state_referenced_locally
 	let draft = $state<Prefs>({ ...prefs });
+	// svelte-ignore state_referenced_locally
+	let baseline = $state<Prefs>({ ...prefs });
 
 	let panel = $state<HTMLDivElement>();
 
-	const dirty = $derived(JSON.stringify(draft) !== JSON.stringify(prefs));
+	const dirty = $derived(JSON.stringify(draft) !== JSON.stringify(baseline));
 
 	const statusLabel = $derived.by(() => {
 		if (midi.status === 'ready') {
@@ -62,6 +64,7 @@
 			// Apply immediately to the running session rather than waiting for a reload.
 			midi.windowMs = draft.chordClusterWindowMs;
 			midi.latencyOffsetMs = draft.midiLatencyOffsetMs;
+			baseline = { ...draft };
 			saved = true;
 			setTimeout(() => (saved = false), 1600);
 		} catch (e) {
@@ -100,7 +103,7 @@
 
 	{#if open}
 		<div
-			class="border-ground-line bg-ground-raised absolute right-0 z-50 mt-2 w-80 rounded-xl border p-4 shadow-2xl"
+			class="border-ground-line bg-ground-raised absolute right-0 z-50 mt-2 w-[min(20rem,calc(100vw-2rem))] rounded-xl border p-4 shadow-2xl"
 			role="dialog"
 			aria-label="Settings"
 		>
@@ -111,15 +114,18 @@
 
 				{#if midi.status === 'ready'}
 					{#if midi.devices.length}
-						<select
-							class="border-ground-line bg-ground text-ink-muted w-full rounded border px-2 py-1.5 font-mono text-xs"
-							value={midi.selectedId}
-							onchange={(e) => midi.select(e.currentTarget.value)}
-						>
-							{#each midi.devices as device (device.id)}
-								<option value={device.id}>{device.name}</option>
-							{/each}
-						</select>
+						<label class="block">
+							<span class="sr-only">MIDI input</span>
+							<select
+								class="border-ground-line bg-ground text-ink-muted w-full rounded border px-2 py-1.5 font-mono text-xs"
+								value={midi.selectedId}
+								onchange={(e) => midi.select(e.currentTarget.value)}
+							>
+								{#each midi.devices as device (device.id)}
+									<option value={device.id}>{device.name}</option>
+								{/each}
+							</select>
+						</label>
 					{:else}
 						<p class="text-ink-dim font-mono text-xs">
 							Connected, but nothing is plugged in. Switch the piano on and it will appear.
@@ -167,6 +173,9 @@
 						bind:value={draft.revealDelayMs}
 						class="w-full"
 					/>
+					<span class="text-ink-dim mt-1 block text-[0.65rem]"
+						>Time to name the chord before its answer appears.</span
+					>
 				</label>
 
 				<label class="block">
@@ -181,6 +190,9 @@
 						bind:value={draft.chordClusterWindowMs}
 						class="w-full"
 					/>
+					<span class="text-ink-dim mt-1 block text-[0.65rem]"
+						>How close together notes must land to count as one chord.</span
+					>
 				</label>
 
 				<label class="block">
@@ -195,6 +207,9 @@
 						bind:value={draft.midiLatencyOffsetMs}
 						class="w-full"
 					/>
+					<span class="text-ink-dim mt-1 block text-[0.65rem]"
+						>Shift incoming timing to compensate for device delay.</span
+					>
 				</label>
 
 				<div>

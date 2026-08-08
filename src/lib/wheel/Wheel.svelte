@@ -258,11 +258,7 @@
 					class="cell-fill"
 					opacity={fillOpacity(cell.pc, cell.duplicate)}
 					onclick={() => onselect?.({ ring: cell.ring, position: cell.position }, cell.pc)}
-					onkeydown={(e) =>
-						e.key === 'Enter' && onselect?.({ ring: cell.ring, position: cell.position }, cell.pc)}
-					role="button"
-					tabindex="-1"
-					aria-label={degree ? `${cell.name}, ${degree}` : cell.name}
+					aria-hidden="true"
 				/>
 				{#if isLit}
 					<path d={cellSectorPath(cell, geometry, 0.006, 0.5)} class="cell-lit" />

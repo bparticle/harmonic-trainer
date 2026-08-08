@@ -69,6 +69,26 @@
 	const labelFor = (note: number) =>
 		`${NAMES[((note % 12) + 12) % 12]}${Math.floor(note / 12) - 1}`;
 
+	const COMPUTER_KEYS = 'awsedftgyhujkolp;';
+	const noteForKey = (key: string) => {
+		const offset = COMPUTER_KEYS.indexOf(key.toLowerCase());
+		return offset >= 0 && offset < count ? from + offset : null;
+	};
+
+	function onkeydown(event: KeyboardEvent) {
+		const note = noteForKey(event.key);
+		if (note === null) return;
+		event.preventDefault();
+		press(note);
+	}
+
+	function onkeyup(event: KeyboardEvent) {
+		const note = noteForKey(event.key);
+		if (note === null) return;
+		event.preventDefault();
+		release(note);
+	}
+
 	function press(note: number) {
 		if (!interactive || pressed.has(note)) return;
 		pressed = new Set(pressed).add(note);
@@ -91,11 +111,19 @@
 
 <svelte:window onpointerup={releaseAll} onblur={releaseAll} />
 
+<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <svg
 	class="keyboard no-select"
 	viewBox="0 0 {width} {WHITE_HEIGHT}"
 	role="group"
-	aria-label="On-screen keyboard"
+	aria-label={interactive
+		? 'On-screen keyboard. Focus here, then use A through semicolon to play.'
+		: 'Piano keyboard diagram'}
+	tabindex={interactive ? 0 : -1}
+	{onkeydown}
+	{onkeyup}
+	onblur={releaseAll}
 >
 	{#each whites as key (key.note)}
 		{@const isLit = litSet.has(key.note) || pressed.has(key.note)}
@@ -113,9 +141,7 @@
 				onpointerenter={(e) => e.buttons === 1 && press(key.note)}
 				onpointerup={() => release(key.note)}
 				onpointerleave={() => release(key.note)}
-				role="button"
-				tabindex="-1"
-				aria-label={labelFor(key.note)}
+				aria-hidden="true"
 			/>
 			{#if showLabels && key.pc === 0}
 				<text
@@ -144,9 +170,7 @@
 			onpointerenter={(e) => e.buttons === 1 && press(key.note)}
 			onpointerup={() => release(key.note)}
 			onpointerleave={() => release(key.note)}
-			role="button"
-			tabindex="-1"
-			aria-label={labelFor(key.note)}
+			aria-hidden="true"
 		/>
 	{/each}
 </svg>
@@ -157,6 +181,13 @@
 		width: 100%;
 		height: auto;
 		touch-action: none;
+		outline: none;
+	}
+
+	.keyboard:focus-visible {
+		outline: 2px solid var(--color-ink-dim);
+		outline-offset: 3px;
+		border-radius: 6px;
 	}
 
 	.key {

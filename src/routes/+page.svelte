@@ -104,137 +104,152 @@
 		</p>
 	</section>
 
-	<!-- The picker ---------------------------------------------------------- -->
-	<section class="flex flex-col gap-4">
-		<h2 class="panel-title">The keys</h2>
+	{#if !data.active}
+		<details class="border-ground-line bg-ground-raised rounded-xl border p-4">
+			<summary class="text-ink cursor-pointer font-mono text-sm font-semibold"
+				>Choose something else</summary
+			>
+			<div class="mt-5 flex flex-col gap-7">
+				<!-- The picker ---------------------------------------------------------- -->
+				<section class="flex flex-col gap-4">
+					<h2 class="panel-title">The keys</h2>
 
-		<!-- Every key, always. Dim is "not suggested yet", never "not allowed". -->
-		<div class="flex flex-wrap gap-1.5">
-			{#each data.stages as stage, i (stage.key)}
-				<button
-					type="button"
-					class="key"
-					class:is-open={stage.key === openKey}
-					class:is-ahead={i > reachedIndex}
-					style:--tint={tint(stage.key)}
-					onclick={() => (openKey = stage.key)}
-					aria-pressed={stage.key === openKey}
-				>
-					<span class="key-name">{glyph(stage.key)}</span>
-					<span class="key-minor">{glyph(stage.relativeMinor)}</span>
-				</button>
-			{/each}
-		</div>
+					<!-- Every key, always. Dim is "not suggested yet", never "not allowed". -->
+					<div class="flex flex-wrap gap-1.5">
+						{#each data.stages as stage, i (stage.key)}
+							<button
+								type="button"
+								class="key"
+								class:is-open={stage.key === openKey}
+								class:is-ahead={i > reachedIndex}
+								style:--tint={tint(stage.key)}
+								onclick={() => (openKey = stage.key)}
+								aria-pressed={stage.key === openKey}
+							>
+								<span class="key-name">{glyph(stage.key)}</span>
+								<span class="key-minor">{glyph(stage.relativeMinor)}</span>
+							</button>
+						{/each}
+					</div>
 
-		<p class="text-ink-dim text-[0.78rem] leading-relaxed">
-			{openStage.note}
-			{#if data.stages.indexOf(openStage) > reachedIndex}
-				<span class="text-ink-muted"
-					>Further along than the ladder suggests — take it anyway if you want it.</span
-				>
-			{/if}
-		</p>
-
-		<!-- The rungs of whichever key is open ----------------------------- -->
-		<ol class="grid gap-1.5 sm:grid-cols-2">
-			{#each data.rungs as rung, i (rung.id)}
-				{@const selected =
-					choice.kind === 'rung' && choice.key === openKey && choice.rung === rung.id}
-				{@const here = isHere(openKey, rung.id)}
-				<li>
-					<button
-						type="button"
-						class="rung w-full"
-						class:is-selected={selected}
-						style:--tint={tint(openKey)}
-						onclick={() => (choice = { kind: 'rung', key: openKey, rung: rung.id })}
-						aria-pressed={selected}
-					>
-						<span class="rung-index">{i + 1}</span>
-						<span class="min-w-0 flex-1">
-							<span class="rung-label">{rung.label}</span>
-							<span class="rung-teaches">{rung.teaches}</span>
-						</span>
-						{#if here}
-							<span class="badge">you are here</span>
+					<p class="text-ink-dim text-[0.78rem] leading-relaxed">
+						{openStage.note}
+						{#if data.stages.indexOf(openStage) > reachedIndex}
+							<span class="text-ink-muted"
+								>Further along than the ladder suggests — take it anyway if you want it.</span
+							>
 						{/if}
-					</button>
-				</li>
-			{/each}
-		</ol>
-	</section>
+					</p>
 
-	<!-- Progressions, as their own thing ------------------------------------ -->
-	<section class="border-ground-line flex flex-col gap-3 border-t pt-6">
-		<h2 class="panel-title">Chord progressions</h2>
-		<p class="text-ink-dim -mt-1 text-[0.78rem] leading-relaxed">
-			Separate from the keys, on purpose. Pick one and a key — the same progression gets easier
-			every time you meet it somewhere new.
-		</p>
-
-		{#each byLevel as group (group.level)}
-			<div>
-				<h3 class="text-ink-dim mt-2 mb-1 font-mono text-[0.65rem] tracking-widest uppercase">
-					{group.name}
-				</h3>
-				<ul class="flex flex-col gap-1">
-					{#each group.items as progression (progression.id)}
-						{@const chosen = choice.kind === 'progression' && choice.id === progression.id}
-						<li class="rounded-lg px-2.5 py-2" class:is-open-row={chosen}>
-							<div class="flex items-baseline justify-between gap-3">
+					<!-- The rungs of whichever key is open ----------------------------- -->
+					<ol class="grid gap-1.5 sm:grid-cols-2">
+						{#each data.rungs as rung, i (rung.id)}
+							{@const selected =
+								choice.kind === 'rung' && choice.key === openKey && choice.rung === rung.id}
+							{@const here = isHere(openKey, rung.id)}
+							<li>
 								<button
 									type="button"
-									class="text-left"
-									onclick={() =>
-										(choice = {
-											kind: 'progression',
-											id: progression.id,
-											key: keyFor(progression.mode, openKey)
-										})}
+									class="rung w-full"
+									class:is-selected={selected}
+									style:--tint={tint(openKey)}
+									onclick={() => (choice = { kind: 'rung', key: openKey, rung: rung.id })}
+									aria-pressed={selected}
 								>
-									<span
-										class="font-display text-sm font-semibold"
-										style:color={chosen ? 'var(--color-ink)' : 'var(--color-ink-muted)'}
-										>{progression.name}</span
-									>
-									<span class="text-ink-dim block text-[0.72rem] leading-snug"
-										>{progression.describes}</span
-									>
+									<span class="rung-index">{i + 1}</span>
+									<span class="min-w-0 flex-1">
+										<span class="rung-label">{rung.label}</span>
+										<span class="rung-teaches">{rung.teaches}</span>
+									</span>
+									{#if here}
+										<span class="badge">you are here</span>
+									{/if}
 								</button>
-							</div>
+							</li>
+						{/each}
+					</ol>
+				</section>
 
-							{#if chosen}
-								<div class="mt-2 flex flex-wrap gap-1">
-									{#each progressionKeys as k (k.key)}
-										{@const value = keyFor(progression.mode, k.key)}
-										<button
-											type="button"
-											class="key-pill"
-											class:is-selected={choice.kind === 'progression' && choice.key === value}
-											class:is-ahead={!k.reached}
-											style:--tint={tint(k.key)}
-											onclick={() =>
-												(choice = { kind: 'progression', id: progression.id, key: value })}
-											>{glyph(value)}</button
-										>
-									{/each}
-								</div>
-							{/if}
-						</li>
+				<!-- Progressions, as their own thing ------------------------------------ -->
+				<section class="border-ground-line flex flex-col gap-3 border-t pt-6">
+					<h2 class="panel-title">Chord progressions</h2>
+					<p class="text-ink-dim -mt-1 text-[0.78rem] leading-relaxed">
+						Separate from the keys, on purpose. Pick one and a key — the same progression gets
+						easier every time you meet it somewhere new.
+					</p>
+
+					{#each byLevel as group (group.level)}
+						<div>
+							<h3 class="text-ink-dim mt-2 mb-1 font-mono text-[0.65rem] tracking-widest uppercase">
+								{group.name}
+							</h3>
+							<ul class="flex flex-col gap-1">
+								{#each group.items as progression (progression.id)}
+									{@const chosen = choice.kind === 'progression' && choice.id === progression.id}
+									<li class="rounded-lg px-2.5 py-2" class:is-open-row={chosen}>
+										<div class="flex items-baseline justify-between gap-3">
+											<button
+												type="button"
+												class="text-left"
+												onclick={() =>
+													(choice = {
+														kind: 'progression',
+														id: progression.id,
+														key: keyFor(progression.mode, openKey)
+													})}
+											>
+												<span
+													class="font-display text-sm font-semibold"
+													style:color={chosen ? 'var(--color-ink)' : 'var(--color-ink-muted)'}
+													>{progression.name}</span
+												>
+												<span class="text-ink-dim block text-[0.72rem] leading-snug"
+													>{progression.describes}</span
+												>
+											</button>
+										</div>
+
+										{#if chosen}
+											<div class="mt-2 flex flex-wrap gap-1">
+												{#each progressionKeys as k (k.key)}
+													{@const value = keyFor(progression.mode, k.key)}
+													<button
+														type="button"
+														class="key-pill"
+														class:is-selected={choice.kind === 'progression' &&
+															choice.key === value}
+														class:is-ahead={!k.reached}
+														style:--tint={tint(k.key)}
+														onclick={() =>
+															(choice = { kind: 'progression', id: progression.id, key: value })}
+														>{glyph(value)}</button
+													>
+												{/each}
+											</div>
+										{/if}
+									</li>
+								{/each}
+							</ul>
+						</div>
 					{/each}
-				</ul>
+				</section>
 			</div>
-		{/each}
-	</section>
+		</details>
+	{/if}
 
 	<!-- Do it --------------------------------------------------------------- -->
 	<section
-		class="border-ground-line bg-ground/95 sticky bottom-0 flex flex-col items-center gap-3 border-t pt-4 pb-4 backdrop-blur"
+		class="border-ground-line bg-ground/95 sticky bottom-0 flex flex-col items-center gap-3 border-t pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] backdrop-blur"
 	>
+		<p class="panel-title">{resuming ? 'Session in progress' : 'Suggested today'}</p>
 		<p class="text-ink-muted max-w-lg text-center text-sm leading-relaxed">
-			{choice.kind === 'rung'
-				? (chosenRung?.instruction ?? '')
-				: (chosenProgression?.listenFor ?? '')}
+			{#if data.active}
+				Your saved session in {glyph(data.active.plan.keyCenter)} is ready where you left it.
+			{:else}
+				{choice.kind === 'rung'
+					? (chosenRung?.instruction ?? '')
+					: (chosenProgression?.listenFor ?? '')}
+			{/if}
 		</p>
 
 		<form method="POST" action="?/start" class="flex w-full flex-col items-center gap-3">
@@ -254,50 +269,56 @@
 
 			<button type="submit" class="start">
 				<span class="start-verb">{resuming ? 'Carry on' : 'Practise'}</span>
-				<span class="start-what">{resuming ? '' : summary}</span>
+				<span class="start-what"
+					>{resuming ? glyph(data.active?.plan.keyCenter ?? '') : summary}</span
+				>
 			</button>
 
-			<div class="flex gap-1">
-				{#each [10, 20, 35] as const as m (m)}
-					<button
-						type="button"
-						class="minutes"
-						class:is-selected={length === m}
-						onclick={() => (length = m)}>{m}m</button
-					>
-				{/each}
-			</div>
+			{#if !resuming}
+				<div class="flex gap-1" aria-label="Session length">
+					{#each [10, 20, 35] as const as m (m)}
+						<button
+							type="button"
+							class="minutes"
+							class:is-selected={length === m}
+							onclick={() => (length = m)}>{m}m</button
+						>
+					{/each}
+				</div>
+			{/if}
 		</form>
 
 		<!-- Moving the ladder is a separate decision from what to play today, so
 		     these sit outside the form that starts a session. -->
-		<div class="flex items-center gap-3">
-			<form method="POST" action="?/back">
-				<button
-					class="text-ink-dim hover:text-ink font-mono text-[0.7rem] transition-colors"
-					disabled={reachedIndex === 0 && data.position.rungIndex === 0}>← step back</button
-				>
-			</form>
-			{#if data.next}
-				<form method="POST" action="?/advance">
+		{#if !resuming}
+			<div class="flex flex-wrap items-center justify-center gap-3">
+				<form method="POST" action="?/back">
 					<button
-						class="border-ground-line hover:border-ink-dim rounded-lg border px-2.5 py-1 font-mono text-[0.7rem] transition-colors"
-						class:is-suggested={data.progress.looksSolid}
+						class="text-ink-dim hover:text-ink font-mono text-[0.7rem] transition-colors"
+						disabled={reachedIndex === 0 && data.position.rungIndex === 0}>← step back</button
 					>
-						{data.progress.looksSolid ? 'ready for' : 'move on to'}
-						{data.next.rung.id === 'scale' && data.next.key !== data.position.key
-							? glyph(data.next.key)
-							: data.next.rung.label.toLowerCase()} →
-					</button>
 				</form>
-			{/if}
-			{#if data.progress.reviews > 0}
-				<span class="text-ink-dim font-mono text-[0.68rem]">
-					{data.progress.correct}/{data.progress.reviews} right here
-					{#if data.progress.looksSolid}· solid{/if}
-				</span>
-			{/if}
-		</div>
+				{#if data.next}
+					<form method="POST" action="?/advance">
+						<button
+							class="border-ground-line hover:border-ink-dim rounded-lg border px-2.5 py-1 font-mono text-[0.7rem] transition-colors"
+							class:is-suggested={data.progress.looksSolid}
+						>
+							{data.progress.looksSolid ? 'ready for' : 'move on to'}
+							{data.next.rung.id === 'scale' && data.next.key !== data.position.key
+								? glyph(data.next.key)
+								: data.next.rung.label.toLowerCase()} →
+						</button>
+					</form>
+				{/if}
+				{#if data.progress.reviews > 0}
+					<span class="text-ink-dim font-mono text-[0.68rem]">
+						{data.progress.correct}/{data.progress.reviews} right here
+						{#if data.progress.looksSolid}· solid{/if}
+					</span>
+				{/if}
+			</div>
+		{/if}
 	</section>
 </main>
 

@@ -35,9 +35,7 @@
 				autocomplete="current-password"
 				autofocus
 				required
-				class="border-ground-line bg-ground-raised text-ink focus:border-ink-dim mt-2 w-full
-				       rounded-lg border px-4 py-3 text-lg outline-none
-				       focus:ring-0"
+				class="border-ground-line bg-ground-raised text-ink focus:border-ink-dim mt-2 w-full rounded-lg border px-4 py-3 text-lg"
 			/>
 		</label>
 

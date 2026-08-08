@@ -1,14 +1,14 @@
 import { fail, redirect, type Actions, type ServerLoad } from '@sveltejs/kit';
-import { SESSION_COOKIE, checkPassword, cookieOptions, issueToken } from '$lib/server/auth';
-
-/** Only ever redirect to a same-origin path, never to an attacker-supplied URL. */
-function safeNext(raw: string | null): string {
-	if (!raw || !raw.startsWith('/') || raw.startsWith('//')) return '/';
-	return raw;
-}
+import {
+	SESSION_COOKIE,
+	checkPassword,
+	cookieOptions,
+	issueToken,
+	safeRedirectPath
+} from '$lib/server/auth';
 
 export const load: ServerLoad = ({ locals, url }) => {
-	if (locals.authed) redirect(303, safeNext(url.searchParams.get('next')));
+	if (locals.authed) redirect(303, safeRedirectPath(url.searchParams.get('next'), url.origin));
 	return {};
 };
 
@@ -27,6 +27,6 @@ export const actions: Actions = {
 			secure: url.protocol === 'https:'
 		});
 
-		redirect(303, safeNext(url.searchParams.get('next')));
+		redirect(303, safeRedirectPath(url.searchParams.get('next'), url.origin));
 	}
 };
