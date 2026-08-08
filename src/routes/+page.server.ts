@@ -22,7 +22,39 @@ import { saveSettings, loadSettings } from '$lib/server/db/settings';
  * is a ladder, you are somewhere on it, and you move when you decide to.
  */
 export const load: PageServerLoad = async ({ parent }) => {
-	const { settings } = await parent();
+	const { settings, authed } = await parent();
+
+	// The project presentation must not depend on a working personal database.
+	// Return the normal page shape so the client can hydrate one route without
+	// loading any private state for a visitor.
+	if (!authed) {
+		const firstStage = STAGES[0];
+		const firstRung = RUNGS[0];
+		return {
+			public: true,
+			settings,
+			active: null,
+			position: {
+				key: firstStage.key,
+				relativeMinor: firstStage.relativeMinor,
+				accidentals: firstStage.note,
+				stageIndex: 0,
+				rungIndex: 0,
+				rung: firstRung
+			},
+			next: null,
+			progress: { reviews: 0, correct: 0, looksSolid: false },
+			stages: STAGES,
+			rungs: RUNGS,
+			progressions: PROGRESSIONS,
+			progressionLevels: PROGRESSION_LEVELS,
+			due: 0,
+			totalCards: 0,
+			reviewsThisWeek: 0,
+			blockPreview: blockDurations(settings.prefs.sessionLengthMinutes)
+		};
+	}
+
 	const position = await currentPosition();
 	const progress = await rungProgress(position);
 
@@ -41,6 +73,7 @@ export const load: PageServerLoad = async ({ parent }) => {
 	const next = nextPosition(position);
 
 	return {
+		public: false,
 		settings,
 		active: await todaysSession(),
 		position: {
