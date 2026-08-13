@@ -52,6 +52,7 @@ export class MidiSession {
 	#timer: ReturnType<typeof setTimeout> | null = null;
 	#onChord: ((chord: ChordEvent) => void) | null = null;
 	#onPedal: ((down: boolean) => void) | null = null;
+	#onNote: ((note: number, time: number) => void) | null = null;
 
 	/** Recording */
 	recording = $state(false);
@@ -186,6 +187,20 @@ export class MidiSession {
 		this.live = sounding(this.#cluster);
 		this.#scheduleFlush();
 
+		/*
+		 * Reported before clustering settles anything, and carrying the event's own
+		 * timestamp. A line played one note at a time is still playing the chord,
+		 * so anything marking against a moving target needs the notes as they land
+		 * rather than the handful they eventually add up to.
+		 *
+		 * Zero velocity is a note-off — the reducer above normalises that for
+		 * everything downstream of it, and this is not downstream of it, so the
+		 * same rule has to be applied here or a release counts as a press.
+		 */
+		if (event.type === 'noteon' && event.velocity > 0) {
+			this.#onNote?.(event.note, event.time);
+		}
+
 		if (event.type === 'sustain') {
 			this.pedalDown = event.down;
 			if (event.down) this.#onPedal?.(true);
@@ -204,6 +219,18 @@ export class MidiSession {
 	/** Sustain pedal as navigation: CC64 advances when both hands are busy. */
 	onPedal(handler: ((down: boolean) => void) | null) {
 		this.#onPedal = handler;
+	}
+
+	/**
+	 * Every note as it is pressed, ahead of clustering.
+	 *
+	 * `onChord` reports settled gestures, which is the right grain for "name what
+	 * you just played" and the wrong one for marking against music that is
+	 * moving underneath you — by the time a gesture has settled, the chord it was
+	 * played over may have changed.
+	 */
+	onNote(handler: ((note: number, time: number) => void) | null) {
+		this.#onNote = handler;
 	}
 
 	/**
