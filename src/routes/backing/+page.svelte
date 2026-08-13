@@ -131,6 +131,25 @@
 		if (sidebarReady) localStorage.setItem(SIDEBAR_KEY, sidebarCollapsed ? 'yes' : 'no');
 	});
 
+	/*
+	 * The setup panel, collapsible for the same reason the chart list is: key,
+	 * tempo, feel and the mix are things you dial in before playing, not things
+	 * worth spending space on once your hands are on the keys. Unlike the chart
+	 * list it defaults open, since a fresh chart usually wants at least a key
+	 * and a tempo checked before the first pass.
+	 */
+	const SETUP_KEY = 'backing:setup-open';
+	let settingsOpen = $state(true);
+	let settingsReady = $state(false);
+	onMount(() => {
+		const saved = localStorage.getItem(SETUP_KEY);
+		settingsOpen = saved ? saved === 'yes' : true;
+		settingsReady = true;
+	});
+	$effect(() => {
+		if (settingsReady) localStorage.setItem(SETUP_KEY, settingsOpen ? 'yes' : 'no');
+	});
+
 	const seed = $derived(repertoire.find((c) => c.slug === slug) ?? CHARTS[0]);
 	const mineId = $derived(data.mine.find((c) => c.slug === slug)?.id ?? null);
 	const chart = $derived(realiseChart(seed, keyName));
@@ -623,20 +642,30 @@
 			<p class="text-ink-muted mt-1 max-w-3xl text-sm leading-relaxed">{seed.notes}</p>
 		</div>
 		<!-- A distraction is exactly what a wall of tune names becomes mid-practice. -->
-		<button
-			type="button"
-			class="chip shrink-0"
-			onclick={() => (sidebarCollapsed = !sidebarCollapsed)}
-			aria-pressed={sidebarCollapsed}
-		>
-			{sidebarCollapsed ? '☰ Show charts' : '« Hide charts'}
-		</button>
+		<div class="flex shrink-0 gap-2">
+			<button
+				type="button"
+				class="chip"
+				onclick={() => (sidebarCollapsed = !sidebarCollapsed)}
+				aria-pressed={sidebarCollapsed}
+			>
+				{sidebarCollapsed ? '☰ Show charts' : '« Hide charts'}
+			</button>
+			<button
+				type="button"
+				class="chip"
+				onclick={() => (settingsOpen = !settingsOpen)}
+				aria-pressed={settingsOpen}
+			>
+				{settingsOpen ? '⚙ Hide setup' : '⚙ Setup'}
+			</button>
+		</div>
 	</header>
 
 	<div
 		class={sidebarCollapsed
-			? 'grid gap-7 xl:grid-cols-[1fr_19rem] lg:grid-cols-[1fr_19rem]'
-			: 'grid gap-7 xl:grid-cols-[15rem_1fr_19rem] lg:grid-cols-[1fr_19rem]'}
+			? 'grid gap-7 xl:grid-cols-[1fr_22rem] lg:grid-cols-[1fr_22rem]'
+			: 'grid gap-7 xl:grid-cols-[15rem_1fr_22rem] lg:grid-cols-[1fr_22rem]'}
 	>
 		{#if !sidebarCollapsed}
 			<!-- The repertoire, as a list. It was a wall of chips, and a wall of chips
@@ -851,6 +880,122 @@
 				{/if}
 			</div>
 
+			{#if settingsOpen}
+				<div
+					class="setup-panel border-ground-line bg-ground-raised mt-5 grid grid-cols-2 gap-x-6 gap-y-5 rounded-xl border p-4 sm:grid-cols-3 xl:grid-cols-5"
+				>
+					<div>
+						<h2 class="panel-title">Key</h2>
+						<div class="grid grid-cols-4 gap-1.5">
+							{#each KEYS as k (k)}
+								{@const pc = pitchClass(parseKey(k).tonic)}
+								<button
+									type="button"
+									class="chip key-chip justify-center"
+									class:is-on={k === keyName}
+									style:--tint="var(--pc-{pc})"
+									onclick={() => {
+										keyName = k;
+										void restartIfPlaying();
+									}}>{keyLabel(k)}</button
+								>
+							{/each}
+						</div>
+					</div>
+
+					<div>
+						<h2 class="panel-title">Tempo</h2>
+						<div class="flex items-center gap-2">
+							<button
+								type="button"
+								class="stepper"
+								onclick={() => nudgeTempo(-5)}
+								aria-label="Slower">−</button
+							>
+							<span class="font-mono text-ink flex-1 text-center text-3xl tabular-nums">{bpm}</span>
+							<button type="button" class="stepper" onclick={() => nudgeTempo(5)} aria-label="Faster"
+								>+</button
+							>
+						</div>
+						<input
+							type="range"
+							min={MIN_BPM}
+							max={MAX_BPM}
+							step="1"
+							bind:value={bpm}
+							oninput={() => track.setBpm(bpm)}
+							class="mt-2.5 w-full"
+							aria-label="Tempo in beats per minute"
+						/>
+					</div>
+
+					<div>
+						<h2 class="panel-title">Feel</h2>
+						<div class="flex gap-1.5">
+							{#each ['swing', 'straight'] as const as option (option)}
+								<button
+									type="button"
+									class="chip flex-1 justify-center"
+									class:is-on={feel === option}
+									onclick={() => {
+										feel = option;
+										void restartIfPlaying();
+									}}>{option}</button
+								>
+							{/each}
+						</div>
+						<div class="mt-4">
+							<h2 class="panel-title">Count-in</h2>
+							<button
+								type="button"
+								class="chip w-full"
+								class:is-on={countIn}
+								onclick={() => (countIn = !countIn)}
+								aria-pressed={countIn}
+							>
+								<span class="dot" class:is-lit={countIn}></span>
+								One bar of clicks
+							</button>
+						</div>
+					</div>
+
+					<div class="col-span-2">
+						<h2 class="panel-title">Mix</h2>
+						<div class="flex flex-col gap-2">
+							{#each PARTS as [part, label] (part)}
+								<div class="flex items-center gap-2">
+									<button
+										type="button"
+										class="chip w-[7.5rem] shrink-0"
+										class:is-on={!muted[part]}
+										onclick={() => setMuted(part, !muted[part])}
+										aria-pressed={!muted[part]}
+									>
+										<span class="dot" class:is-lit={!muted[part]}></span>
+										{label}
+									</button>
+									<input
+										type="range"
+										min="0"
+										max="1"
+										step="0.05"
+										value={level[part]}
+										oninput={(e) => setLevel(part, Number(e.currentTarget.value))}
+										class="min-w-0 flex-1"
+										disabled={muted[part]}
+										aria-label={`${label} level`}
+									/>
+								</div>
+							{/each}
+						</div>
+						<p class="text-ink-dim mt-2 text-xs leading-snug">
+							Comping starts off. Two people voicing the same chord is one too many — turn it on to
+							hear the changes, off to be the one playing them.
+						</p>
+					</div>
+				</div>
+			{/if}
+
 			<div class="mt-5 flex items-stretch gap-2">
 				{#if playing || paused}
 					<button
@@ -945,227 +1090,123 @@
 				</section>
 			{/if}
 
-			<!-- The selected chord as a compact, progressive theory lesson. -->
+		</section>
+
+		<!--
+			The chord under study, kept on screen the whole time you are playing —
+			this is the thing your eyes actually need mid-tune, so it does not
+			compete with the setup panel or scroll out of view with the chart.
+		-->
+		<aside
+			class="study-inspector xl:max-h-[calc(100dvh-8rem)] xl:sticky xl:top-20 xl:overflow-y-auto"
+			aria-label="Chord study"
+		>
 			{#if focused && focusedBar && focusedStudy}
-				<section class="study-inspector" aria-label="Chord study">
-					<header class="study-inspector-head">
-						<div class="study-identity">
-							<span class="study-symbol" style:color="var(--pc-{pitchClass(focused.chord.root)})">
-								<ChordSymbol chord={focused.chord} size="3rem" />
-							</span>
-							<div>
-								<div class="study-function">
-									<strong>{formatRoman(focusedStudy.roman)}</strong>
-									<span>{focusedStudy.annotation}</span>
-								</div>
-								<p class="study-location">
-									bar {focusedBar.number}{focusedBar.chords.length > 1
-										? focusedChordIndex === 0
-											? ', first half'
-											: ', second half'
-										: ''}
-									&middot; {formatStudyKey(focusedStudy.key)}
-								</p>
+				<header class="study-inspector-head">
+					<div class="study-identity">
+						<span class="study-symbol" style:color="var(--pc-{pitchClass(focused.chord.root)})">
+							<ChordSymbol chord={focused.chord} size="3rem" />
+						</span>
+						<div>
+							<div class="study-function">
+								<strong>{formatRoman(focusedStudy.roman)}</strong>
+								<span>{focusedStudy.annotation}</span>
 							</div>
+							<p class="study-location">
+								bar {focusedBar.number}{focusedBar.chords.length > 1
+									? focusedChordIndex === 0
+										? ', first half'
+										: ', second half'
+									: ''}
+								&middot; {formatStudyKey(focusedStudy.key)}
+							</p>
 						</div>
+					</div>
 
-						<button
-							type="button"
-							class="follow-button"
-							class:is-on={followPlayback}
-							onclick={() => (followPlayback = true)}
-							aria-pressed={followPlayback}
+					<button
+						type="button"
+						class="follow-button"
+						class:is-on={followPlayback}
+						onclick={() => (followPlayback = true)}
+						aria-pressed={followPlayback}
+					>
+						<span class="follow-dot" aria-hidden="true"></span>
+						Follow playback
+					</button>
+				</header>
+
+				<!-- The chord tones, and — while the track is running — which of them
+				     you have actually played since this chord came round. -->
+				<div class="degree-row" class:is-marking={marking} aria-label="Chord tones">
+					{#each focusedNotes as entry, i (i)}
+						{@const pc = pitchClass(entry.note)}
+						<div
+							class="degree"
+							class:is-played={litTones.has(pc)}
+							style:background="var(--pc-{pc})"
+							style:color="var(--pc-{pc}-ink)"
 						>
-							<span class="follow-dot" aria-hidden="true"></span>
-							Follow playback
-						</button>
-					</header>
-
-					{#if focusedStudy.modulation}
-						<p class="modulation-note">
-							Key centre changes here: {formatStudyKey(focusedStudy.modulation.from)} &rarr;
-							<strong>{formatStudyKey(focusedStudy.modulation.to)}</strong>
-						</p>
-					{/if}
-
-					<div class="study-overview">
-						<div class="study-copy">
-							<span class="study-kicker">In this song</span>
-							<p>{focusedExplanation}</p>
+							<span class="degree-note">{formatNote(entry.note, { unicode: true })}</span>
+							<span class="degree-number">{entry.degree}</span>
 						</div>
+					{/each}
+				</div>
 
-						<!-- The chord tones, and — while the track is running — which of them
-						     you have actually played since this chord came round. -->
-						<div class="degree-row" class:is-marking={marking} aria-label="Chord tones">
-							{#each focusedNotes as entry, i (i)}
-								{@const pc = pitchClass(entry.note)}
-								<div
-									class="degree"
-									class:is-played={litTones.has(pc)}
-									style:background="var(--pc-{pc})"
-									style:color="var(--pc-{pc}-ink)"
-								>
-									<span class="degree-note">{formatNote(entry.note, { unicode: true })}</span>
-									<span class="degree-number">{entry.degree}</span>
+				<div class="study-keyboard">
+					<span class="study-kicker">Under the hands</span>
+					<div class="max-w-full overflow-x-auto">
+						<Keyboard
+							from={KEYS_FROM}
+							count={KEYS_COUNT}
+							lit={focusedVoicing}
+							interactive={false}
+							showLabels={false}
+						/>
+					</div>
+				</div>
+
+				{#if focusedStudy.modulation}
+					<p class="modulation-note">
+						Key centre changes here: {formatStudyKey(focusedStudy.modulation.from)} &rarr;
+						<strong>{formatStudyKey(focusedStudy.modulation.to)}</strong>
+					</p>
+				{/if}
+
+				<div class="study-copy">
+					<span class="study-kicker">In this song</span>
+					<p>{focusedExplanation}</p>
+				</div>
+
+				<div class="study-options">
+					<section>
+						<h3>Try over it</h3>
+						<ul class="scale-list">
+							{#each focusedStudy.scales as suggestion (suggestion.name)}
+								<li>
+									<strong>{suggestion.name}</strong>
+									<span>{suggestion.reason}</span>
+								</li>
+							{/each}
+						</ul>
+					</section>
+
+					<details class="context-details">
+						<summary>
+							<span>Other useful contexts</span>
+							<span class="context-count">{otherContexts.length}</span>
+						</summary>
+						<div class="context-list">
+							{#each otherContexts as context (formatStudyKey(context.key) + '-' + context.roman)}
+								<div class="context-row">
+									<strong>{formatStudyKey(context.key)}</strong>
+									<span class="context-roman">{formatRoman(context.roman)}</span>
+									<span>{context.description}</span>
 								</div>
 							{/each}
 						</div>
-					</div>
-
-					<div class="study-options">
-						<section>
-							<h3>Try over it</h3>
-							<ul class="scale-list">
-								{#each focusedStudy.scales as suggestion (suggestion.name)}
-									<li>
-										<strong>{suggestion.name}</strong>
-										<span>{suggestion.reason}</span>
-									</li>
-								{/each}
-							</ul>
-						</section>
-
-						<details class="context-details">
-							<summary>
-								<span>Other useful contexts</span>
-								<span class="context-count">{otherContexts.length}</span>
-							</summary>
-							<div class="context-list">
-								{#each otherContexts as context (formatStudyKey(context.key) + '-' + context.roman)}
-									<div class="context-row">
-										<strong>{formatStudyKey(context.key)}</strong>
-										<span class="context-roman">{formatRoman(context.roman)}</span>
-										<span>{context.description}</span>
-									</div>
-								{/each}
-							</div>
-						</details>
-					</div>
-
-					<div class="study-keyboard">
-						<span class="study-kicker">Chord tones under the hands</span>
-						<div class="max-w-full overflow-x-auto">
-							<Keyboard
-								from={KEYS_FROM}
-								count={KEYS_COUNT}
-								lit={focusedVoicing}
-								interactive={false}
-								showLabels={false}
-							/>
-						</div>
-					</div>
-				</section>
+					</details>
+				</div>
 			{/if}
-		</section>
-
-		<aside class="flex flex-col gap-5">
-			<div>
-				<h2 class="panel-title">Key</h2>
-				<div class="grid grid-cols-4 gap-1.5">
-					{#each KEYS as k (k)}
-						{@const pc = pitchClass(parseKey(k).tonic)}
-						<button
-							type="button"
-							class="chip key-chip justify-center"
-							class:is-on={k === keyName}
-							style:--tint="var(--pc-{pc})"
-							onclick={() => {
-								keyName = k;
-								void restartIfPlaying();
-							}}>{keyLabel(k)}</button
-						>
-					{/each}
-				</div>
-			</div>
-
-			<div>
-				<h2 class="panel-title">Tempo</h2>
-				<div class="flex items-center gap-2">
-					<button type="button" class="stepper" onclick={() => nudgeTempo(-5)} aria-label="Slower"
-						>−</button
-					>
-					<span class="font-mono text-ink flex-1 text-center text-3xl tabular-nums">{bpm}</span>
-					<button type="button" class="stepper" onclick={() => nudgeTempo(5)} aria-label="Faster"
-						>+</button
-					>
-				</div>
-				<input
-					type="range"
-					min={MIN_BPM}
-					max={MAX_BPM}
-					step="1"
-					bind:value={bpm}
-					oninput={() => track.setBpm(bpm)}
-					class="mt-2.5 w-full"
-					aria-label="Tempo in beats per minute"
-				/>
-			</div>
-
-			<div>
-				<h2 class="panel-title">Feel</h2>
-				<div class="flex gap-1.5">
-					{#each ['swing', 'straight'] as const as option (option)}
-						<button
-							type="button"
-							class="chip flex-1 justify-center"
-							class:is-on={feel === option}
-							onclick={() => {
-								feel = option;
-								void restartIfPlaying();
-							}}>{option}</button
-						>
-					{/each}
-				</div>
-			</div>
-
-			<div>
-				<h2 class="panel-title">Mix</h2>
-				<div class="flex flex-col gap-2">
-					{#each PARTS as [part, label] (part)}
-						<div class="flex items-center gap-2">
-							<button
-								type="button"
-								class="chip w-[7.5rem] shrink-0"
-								class:is-on={!muted[part]}
-								onclick={() => setMuted(part, !muted[part])}
-								aria-pressed={!muted[part]}
-							>
-								<span class="dot" class:is-lit={!muted[part]}></span>
-								{label}
-							</button>
-							<input
-								type="range"
-								min="0"
-								max="1"
-								step="0.05"
-								value={level[part]}
-								oninput={(e) => setLevel(part, Number(e.currentTarget.value))}
-								class="min-w-0 flex-1"
-								disabled={muted[part]}
-								aria-label={`${label} level`}
-							/>
-						</div>
-					{/each}
-				</div>
-				<p class="text-ink-dim mt-2 text-xs leading-snug">
-					Comping starts off. Two people voicing the same chord is one too many — turn it on to hear
-					the changes, off to be the one playing them.
-				</p>
-			</div>
-
-			<div>
-				<h2 class="panel-title">Count-in</h2>
-				<button
-					type="button"
-					class="chip w-full"
-					class:is-on={countIn}
-					onclick={() => (countIn = !countIn)}
-					aria-pressed={countIn}
-				>
-					<span class="dot" class:is-lit={countIn}></span>
-					One bar of clicks
-				</button>
-			</div>
 		</aside>
 	</div>
 </main>
@@ -1705,23 +1746,34 @@
 			transition: none;
 		}
 	}
+	/*
+	 * The chord study column. Narrow and permanent rather than wide and
+	 * occasional, so everything in it stacks in one column by default — this
+	 * used to be the >700px-wide layout's job; now the >700px layout is what
+	 * the mobile stack always looked like, because the column never gets wider
+	 * than the old mobile breakpoint.
+	 */
 	.study-inspector {
-		margin-top: 1.25rem;
-		padding-top: 1.15rem;
-		border-top: 1px solid var(--color-ground-line);
+		display: flex;
+		flex-direction: column;
+		gap: 1.15rem;
+		padding: 1.1rem 1.15rem 1.35rem;
+		border: 1px solid var(--color-ground-line);
+		border-radius: 12px;
+		background: color-mix(in oklab, var(--color-ground-raised) 55%, transparent);
 	}
 
 	.study-inspector-head {
 		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 1rem;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 0.75rem;
 	}
 
 	.study-identity {
 		display: flex;
 		min-width: 0;
-		align-items: center;
+		align-items: flex-start;
 		gap: 1rem;
 	}
 
@@ -1759,11 +1811,10 @@
 
 	.follow-button {
 		display: flex;
-		min-height: 2.75rem;
-		flex: none;
+		min-height: 2.5rem;
 		align-items: center;
 		gap: 0.45rem;
-		padding: 0.45rem 0.7rem;
+		padding: 0.45rem 0.55rem;
 		border-radius: 7px;
 		border: 1px solid var(--color-ground-line);
 		color: var(--color-ink-dim);
@@ -1788,8 +1839,19 @@
 		background: var(--color-ink);
 	}
 
+	.degree-row {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.45rem;
+	}
+
+	.study-keyboard {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
 	.modulation-note {
-		margin-top: 0.9rem;
 		padding: 0.65rem 0.75rem;
 		border: 1px solid var(--color-ground-line);
 		border-radius: 7px;
@@ -1803,41 +1865,22 @@
 		color: var(--color-ink);
 	}
 
-	.study-overview {
-		display: grid;
-		grid-template-columns: minmax(15rem, 1fr) auto;
-		align-items: center;
-		gap: 1.25rem 2rem;
-		padding: 1.15rem 0;
-	}
-
 	.study-copy p {
-		max-width: 46rem;
 		margin-top: 0.35rem;
 		color: var(--color-ink-muted);
 		font-size: 0.88rem;
 		line-height: 1.55;
 	}
 
-	.degree-row {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.45rem;
-	}
-
 	.study-options {
-		display: grid;
-		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+		display: flex;
+		flex-direction: column;
 		border-block: 1px solid var(--color-ground-line);
 	}
 
 	.study-options > section,
 	.context-details {
 		padding: 1rem 0;
-	}
-
-	.study-options > section {
-		padding-right: 1.25rem;
 	}
 
 	.study-options h3,
@@ -1853,9 +1896,9 @@
 	}
 
 	.scale-list li {
-		display: grid;
-		grid-template-columns: minmax(8rem, 0.8fr) minmax(0, 1.5fr);
-		gap: 0.6rem 1rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.2rem;
 		padding: 0.45rem 0;
 		border-top: 1px solid color-mix(in oklab, var(--color-ground-line) 65%, transparent);
 	}
@@ -1873,8 +1916,7 @@
 	}
 
 	.context-details {
-		padding-left: 1.25rem;
-		border-left: 1px solid var(--color-ground-line);
+		border-top: 1px solid var(--color-ground-line);
 	}
 
 	.context-details summary {
@@ -1907,13 +1949,17 @@
 
 	.context-row {
 		display: grid;
-		grid-template-columns: minmax(7rem, 0.8fr) minmax(4rem, auto) minmax(7rem, 1fr);
+		grid-template-columns: minmax(0, 1fr) auto;
 		align-items: baseline;
 		gap: 0.5rem 0.8rem;
 		padding: 0.4rem 0;
 		border-top: 1px solid color-mix(in oklab, var(--color-ground-line) 65%, transparent);
 		color: var(--color-ink-dim);
 		font-size: 0.7rem;
+	}
+
+	.context-row > :last-child {
+		grid-column: 1 / -1;
 	}
 
 	.context-row strong {
@@ -1927,62 +1973,10 @@
 		font-family: var(--font-mono);
 	}
 
-	.study-keyboard {
-		display: grid;
-		grid-template-columns: minmax(8rem, auto) minmax(0, 1fr);
-		align-items: center;
-		gap: 1rem 1.5rem;
-		padding-top: 1rem;
-	}
-
 	@media (max-width: 700px) {
 		.tonal-centre {
 			grid-template-columns: 1fr;
 			gap: 0.15rem;
-		}
-
-		.study-inspector-head {
-			align-items: flex-start;
-		}
-
-		.study-identity {
-			align-items: flex-start;
-		}
-
-		.follow-button {
-			padding-inline: 0.55rem;
-		}
-
-		.study-overview,
-		.study-keyboard {
-			grid-template-columns: 1fr;
-		}
-
-		.study-options {
-			grid-template-columns: 1fr;
-		}
-
-		.study-options > section {
-			padding-right: 0;
-		}
-
-		.context-details {
-			padding-left: 0;
-			border-top: 1px solid var(--color-ground-line);
-			border-left: 0;
-		}
-
-		.scale-list li {
-			grid-template-columns: 1fr;
-			gap: 0.2rem;
-		}
-
-		.context-row {
-			grid-template-columns: minmax(0, 1fr) auto;
-		}
-
-		.context-row > :last-child {
-			grid-column: 1 / -1;
 		}
 	}
 
