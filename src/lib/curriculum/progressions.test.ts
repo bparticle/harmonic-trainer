@@ -36,6 +36,43 @@ describe('Roman numerals into chords', () => {
 		expect(symbolOf('vii°', 'C')).toBe('Bdim');
 	});
 
+	it('reads the augmented triad and the augmented seventh', () => {
+		// Charts write it +, the analysis writes it aug, and both have to come back
+		// with the raised fifth still on them.
+		expect(symbolOf('Iaug', 'C')).toBe('Caug');
+		expect(symbolOf('IIIaug7', 'Ab')).toBe('Caug7');
+		expect(symbolOf('III+7', 'Ab')).toBe('Caug7');
+	});
+
+	it('reads the upper extensions without losing the seventh underneath', () => {
+		// A suffix it did not recognise used to fall through to a bare triad, so a
+		// V13 came back as a major chord — the ninth gone and the seventh with it.
+		expect(symbolOf('ii9', 'C')).toBe('Dm9');
+		expect(symbolOf('V13', 'C')).toBe('G13');
+		expect(symbolOf('Imaj9', 'C')).toBe('Cmaj9');
+		expect(symbolOf('ii11', 'C')).toBe('Dm11');
+	});
+
+	it('keeps a half-diminished chord half-diminished', () => {
+		// Written m7b5 by the analysis and ø7 by hand. Read as a plain seventh, the
+		// ii of every minor ii–V quietly turned major-key.
+		expect(symbolOf('viim7b5', 'C')).toBe('Bm7b5');
+		expect(symbolOf('viiø7', 'C')).toBe('Bm7b5');
+	});
+
+	it('reads suspensions and alterations', () => {
+		expect(symbolOf('Isus4', 'C')).toBe('Csus4');
+		expect(symbolOf('I7sus4', 'C')).toBe('C7sus4');
+		expect(symbolOf('V7b9', 'C')).toBe('G7b9');
+		expect(symbolOf('V7#11', 'C')).toBe('G7#11');
+	});
+
+	it('takes a bare lowercase numeral to mean whatever the key makes it', () => {
+		// vii in a major key is diminished; ii is not.
+		expect(symbolOf('vii', 'C')).toBe('Bdim');
+		expect(symbolOf('ii', 'C')).toBe('Dm');
+	});
+
 	it('reads chromatic roots', () => {
 		expect(symbolOf('bVII7', 'C')).toBe('Bb7');
 		expect(symbolOf('bII7', 'C')).toBe('Db7');

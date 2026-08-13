@@ -3,6 +3,7 @@ import {
 	closeVoicing,
 	diatonicTriad,
 	formatChord,
+	parseChord,
 	shellVoicing,
 	type AbstractChord
 } from '$lib/music/chord';
@@ -265,32 +266,31 @@ export function chordFromNumeral(numeral: string, k: Key): AbstractChord {
 		}
 	}
 
-	const has = (s: string) => suffix.includes(s);
-
-	if (has('ø')) return chord(root, 'min7b5', [7]);
-	// °7 is the fully diminished seventh; a bare ° is only the triad. Checked in
-	// this order because the diminished seventh contains the other one.
-	if (has('°7') || has('dim7')) return chord(root, 'dim7', []);
-	if (has('°')) return chord(root, 'min7b5', []);
-	if (has('maj7')) return chord(root, 'maj', [7]);
-	if (has('7')) return isMinor ? chord(root, 'min', [7]) : chord(root, 'dom', []);
-	if (has('6')) return chord(root, isMinor ? 'min6' : 'maj6', []);
-
-	// No suffix: a plain triad, unless the key itself makes it diminished.
-	if (!accidental && !isMinor) return chord(root, 'maj', []);
-	if (!accidental && isMinor) {
+	/*
+	 * A bare lowercase numeral takes its quality from the key: vii in a major key
+	 * is the diminished triad, not a minor one. Only in the plain diatonic case —
+	 * an accidental or a suffix means the numeral is naming the quality itself.
+	 */
+	if (!suffix && !accidental && isMinor) {
 		const diatonic = diatonicTriad(k, degree);
-		return diatonic.quality === 'min7b5' ? diatonic : chord(root, 'min', []);
+		if (diatonic.quality === 'min7b5') return diatonic;
 	}
-	return chord(root, isMinor ? 'min' : 'maj', []);
-}
 
-function chord(
-	root: Note,
-	quality: AbstractChord['quality'],
-	extensions: AbstractChord['extensions']
-): AbstractChord {
-	return { root, quality, extensions, alterations: [] };
+	/*
+	 * Everything after the numeral is ordinary chord-symbol vocabulary — maj9,
+	 * m7b5, °7, 7sus4, 13, +7 — so the chord-symbol parser reads it, rather than
+	 * a second and poorer copy of it living here.
+	 *
+	 * The copy is how ii9 used to come back as a bare Dm. It knew `7` and `6` and
+	 * silently dropped everything else, which takes the seventh off a chord as
+	 * well as the ninth, and turned every half-diminished ii into a minor one.
+	 *
+	 * Case carries the quality on a chart, so a lowercase numeral whose suffix
+	 * names no quality of its own — ii7, vi9 — is minor.
+	 */
+	const namesItsOwnQuality = /^(m|min|-|ø|°|o|dim|maj|M|∆|aug|\+|sus)/.test(suffix);
+	const symbol = isMinor && !namesItsOwnQuality ? `m${suffix}` : suffix;
+	return { ...parseChord(`C${symbol}`), root };
 }
 
 export type ProgressionStep = {
