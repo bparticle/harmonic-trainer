@@ -303,6 +303,7 @@
 		} else if (paused) {
 			await resumePlay();
 		} else {
+			followPlayback = true;
 			counting = countIn;
 			await track.start(config());
 			playing = track.playing;
@@ -325,6 +326,7 @@
 
 	/** Continue from `pause`, from the same beat if nothing changed meanwhile. */
 	async function resumePlay() {
+		followPlayback = true;
 		const resumed = await track.resume(config());
 		paused = false;
 		playing = track.playing;
