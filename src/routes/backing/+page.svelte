@@ -22,6 +22,17 @@
 	} from '$lib/music/study';
 	import { formatNote, midi as toMidi, pitchClass } from '$lib/music/note';
 	import { midi as session } from '$lib/midi/shared.svelte';
+	import {
+		accuracy,
+		add as addAttempt,
+		coverage,
+		emptyTally,
+		judge,
+		targetFor,
+		type Tally,
+		type Target
+	} from '$lib/practice/match';
+	import { target as sharedTarget } from '$lib/practice/target.svelte';
 	import { page } from '$app/state';
 	import { shouldHandleSpace } from '$lib/shortcuts';
 
@@ -214,6 +225,151 @@
 
 	const track = new BackingTrack();
 
+	/*
+	 * Am I playing the chord that is sounding?
+	 *
+	 * The question was already being answered by eye — comparing the note
+	 * colours in the header against the chord colours on the chart — which is
+	 * the app handing back a job it is better placed to do than you are while
+	 * both hands are busy.
+	 *
+	 * Where the notes are attributed from is the part worth being careful about.
+	 * `liveBar` and `liveBeat` arrive through Tone's `Draw` queue, which runs on
+	 * animation frames and stops dead when the tab is not compositing — fine for
+	 * a highlight, and unusable for a score, which would silently stop counting
+	 * with nothing on screen to say so. So every note asks the transport where
+	 * the music is at the instant it lands: the MIDI clock reading the audio
+	 * clock, with no frame in between.
+	 */
+
+	/** The chord occurrence notes are currently being gathered into. */
+	let openSlot: string | null = null;
+	let openTarget = $state<Target | null>(null);
+	/** Where that occurrence is, without the pass count, for the display to match on. */
+	let openWhere = $state<string | null>(null);
+	/** Pitch classes played over it so far. */
+	let heard = $state<number[]>([]);
+	let tally = $state<Tally>(emptyTally());
+	/** Held after stopping, so the run does not vanish the moment it ends. */
+	let lastRun = $state<Tally | null>(null);
+
+	/** The chord sounding right now, as opposed to the one being studied. */
+	const liveEntry = $derived.by(() => {
+		if (!playing || liveBar <= 0) return null;
+		const bar = bars.find((entry) => entry.number === liveBar);
+		if (!bar) return null;
+		const index = chordIndexAtBeat(bar, liveBeat);
+		const study = studyAt(bar.number, index);
+		if (!study) return null;
+		return { bar, index, chord: bar.chords[index].chord, study };
+	});
+
+	const liveTarget = $derived(liveEntry ? targetFor(liveEntry.chord, liveEntry.study.key) : null);
+
+	/*
+	 * Lend the target to the header.
+	 *
+	 * The row of sounding notes is on every screen and is where the eyes already
+	 * are; giving it the chord means each pill can say whether it belongs. Given
+	 * back on the way out, on the same terms as the pedal handler above — the
+	 * header outlives this page and would otherwise go on marking notes against
+	 * a chord that stopped sounding when you navigated away.
+	 */
+	$effect(() => {
+		sharedTarget.set(liveTarget);
+		return () => sharedTarget.clear();
+	});
+
+	const liveWhere = $derived(liveEntry ? `${liveEntry.bar.number}:${liveEntry.index}` : null);
+
+	/** Chord tones actually played during the chord now sounding. */
+	const litTones = $derived(
+		openWhere !== null && openWhere === liveWhere
+			? new Set(heard.map((note) => ((note % 12) + 12) % 12))
+			: new Set<number>()
+	);
+
+	/** Whether the inspector is describing the chord you are being marked against. */
+	const marking = $derived(playing && liveTarget !== null && followingPlayback);
+
+	function recordNote(note: number) {
+		// Null while stopped, paused, or still counting in — none of which is a
+		// moment when a note belongs to a bar of the form.
+		const position = track.position;
+		if (!position) return;
+
+		const number = (loopFrom ?? 1) + position.bar - 1;
+		const bar = bars.find((entry) => entry.number === number);
+		if (!bar) return;
+		const index = chordIndexAtBeat(bar, position.beat);
+		// The pass is what makes bar 1 the second time round a different chord to
+		// answer for than bar 1 the first time.
+		const slot = `${position.pass}:${number}:${index}`;
+
+		if (slot !== openSlot) {
+			closeSlot();
+			const study = studyAt(number, index);
+			if (!study) return;
+			openSlot = slot;
+			openWhere = `${number}:${index}`;
+			openTarget = targetFor(bar.chords[index].chord, study.key);
+		}
+
+		if (openTarget) heard = [...heard, note];
+	}
+
+	/** Fold the open chord into the run. Silence is dropped rather than failed. */
+	function closeSlot() {
+		if (openTarget && heard.length > 0) tally = addAttempt(tally, judge(heard, openTarget));
+		openSlot = null;
+		openTarget = null;
+		openWhere = null;
+		heard = [];
+	}
+
+	function resetRun() {
+		closeSlot();
+		tally = emptyTally();
+		lastRun = null;
+	}
+
+	$effect(() => {
+		session.onNote((note) => recordNote(note));
+		return () => session.onNote(null);
+	});
+
+	/**
+	 * The run so far, counting the chord still under the hands.
+	 *
+	 * A chord cannot be finally judged until it is over — you may yet play the
+	 * note that lands it — so the tally proper only takes it once it has passed.
+	 * Showing only that, though, means playing a perfect first chord and watching
+	 * the panel go on insisting you have not started, which reads as broken. The
+	 * open chord is therefore folded in provisionally: the number is live and
+	 * honest, and firms up rather than jumping when the bar turns.
+	 */
+	const provisional = $derived<Tally>(
+		openTarget && heard.length > 0 ? addAttempt(tally, judge(heard, openTarget)) : tally
+	);
+
+	/** The run on show: the one just finished, or the one under way. */
+	const shown = $derived<Tally>(lastRun ?? provisional);
+	const shownAccuracy = $derived(accuracy(shown));
+	const shownCoverage = $derived(coverage(shown));
+
+	/** How the notes played were spread, as percentages of the whole run. */
+	const spread = $derived.by(() => {
+		const { chord, colour, outside } = shown.notes;
+		const total = chord + colour + outside;
+		if (total === 0) return null;
+		return {
+			chord: (chord / total) * 100,
+			colour: (colour / total) * 100,
+			outside: (outside / total) * 100,
+			total
+		};
+	});
+
 	const PLAYER_KEY = 'backing:player-v1';
 	let playerReady = $state(false);
 
@@ -304,6 +460,9 @@
 			await resumePlay();
 		} else {
 			followPlayback = true;
+			// A run is one press of play to one press of stop, so this is where the
+			// previous one is cleared away.
+			resetRun();
 			counting = countIn;
 			await track.start(config());
 			playing = track.playing;
@@ -312,6 +471,10 @@
 
 	/** Freeze exactly here, so a shape can be found under the hands. */
 	function pause() {
+		// Bank the chord being played over. Without this, the notes found while
+		// paused and hunting for a shape would be credited to it as though they
+		// had been played in time.
+		closeSlot();
 		track.pause();
 		// Pin the chord panel to the one just landed on — the same thing tapping
 		// a bar does when nothing is playing.
@@ -338,6 +501,10 @@
 
 	/** A full reset, back to the top of the form. Not on the hands-free path. */
 	function stopFully() {
+		// The run ends here, so the last chord is banked and the total is held on
+		// screen rather than being cleared along with the transport.
+		closeSlot();
+		lastRun = tally.voiced > 0 ? tally : null;
 		track.stop();
 		playing = false;
 		paused = false;
@@ -347,6 +514,9 @@
 	/** Anything that changes the notes has to be rebuilt; tempo does not. */
 	async function restartIfPlaying() {
 		if (!playing) return;
+		// The form goes back to the top and the chords may not even be the same
+		// ones, so what was counted up to here is not part of what follows.
+		resetRun();
 		counting = countIn;
 		await track.start(config());
 	}
@@ -412,6 +582,8 @@
 		confirmingDelete = false;
 		loopFrom = null;
 		loopTo = null;
+		// A score against a tune you have moved on from is just a stale number.
+		resetRun();
 		void restartIfPlaying();
 	}
 
@@ -718,6 +890,61 @@
 				</button>
 			</div>
 
+			<!--
+				How the playing is going: the same strip live and afterwards, because a
+				running total and a final one are the same fact caught at two moments,
+				and a separate results panel appearing at the end would be a second
+				thing to learn to read.
+			-->
+			{#if playing || paused || lastRun}
+				<section class="match" class:is-final={Boolean(lastRun)} aria-label="Chord matching">
+					<div class="match-figure">
+						<strong class="match-percent">
+							{shownAccuracy ?? '–'}{#if shownAccuracy !== null}<span>%</span>{/if}
+						</strong>
+						<span class="study-kicker">{lastRun ? 'last run' : 'landed'}</span>
+					</div>
+
+					<div class="match-detail">
+						{#if shown.voiced === 0}
+							<p class="match-hint">
+								Play along and each chord is counted as it goes by. Up in the header, a solid note
+								is a chord tone, a faded one is in the key, and an outlined one is outside it.
+							</p>
+						{:else}
+							<p class="match-counts">
+								<strong>{shown.landed}</strong> of <strong>{shown.voiced}</strong>
+								chords landed{#if shown.partial > 0}, {shown.partial} half{/if}{#if shown.missed > 0},
+									{shown.missed}
+									missed{/if}
+								{#if shownCoverage !== null}
+									&middot; {shownCoverage}% of the guide tones
+								{/if}
+							</p>
+
+							{#if spread}
+								<!-- Where the notes sat. Reported, never scored: a note outside the
+								     key is a blue note as often as it is a mistake. -->
+								<div
+									class="spread"
+									role="img"
+									aria-label={`Of ${spread.total} notes played, ${Math.round(spread.chord)}% chord tones, ${Math.round(spread.colour)}% elsewhere in the key, ${Math.round(spread.outside)}% outside it`}
+								>
+									<span class="spread-chord" style:width="{spread.chord}%"></span>
+									<span class="spread-colour" style:width="{spread.colour}%"></span>
+									<span class="spread-outside" style:width="{spread.outside}%"></span>
+								</div>
+								<p class="spread-legend">
+									<span><i class="key-chord"></i>{Math.round(spread.chord)}% chord tones</span>
+									<span><i class="key-colour"></i>{Math.round(spread.colour)}% in key</span>
+									<span><i class="key-outside"></i>{Math.round(spread.outside)}% outside</span>
+								</p>
+							{/if}
+						{/if}
+					</div>
+				</section>
+			{/if}
+
 			<!-- The selected chord as a compact, progressive theory lesson. -->
 			{#if focused && focusedBar && focusedStudy}
 				<section class="study-inspector" aria-label="Chord study">
@@ -767,11 +994,14 @@
 							<p>{focusedExplanation}</p>
 						</div>
 
-						<div class="degree-row" aria-label="Chord tones">
+						<!-- The chord tones, and — while the track is running — which of them
+						     you have actually played since this chord came round. -->
+						<div class="degree-row" class:is-marking={marking} aria-label="Chord tones">
 							{#each focusedNotes as entry, i (i)}
 								{@const pc = pitchClass(entry.note)}
 								<div
 									class="degree"
+									class:is-played={litTones.has(pc)}
 									style:background="var(--pc-{pc})"
 									style:color="var(--pc-{pc}-ink)"
 								>
@@ -1311,6 +1541,169 @@
 		font-family: var(--font-mono);
 		font-size: 0.65rem;
 		opacity: 0.8;
+	}
+
+	/*
+	 * While a track is running the degree row doubles as a checklist: the tones
+	 * you have played since this chord came round stay lit, the ones you have
+	 * not recede. Nothing is added to the layout — the chips were already there
+	 * and already the right colours, so this is the same object answering a
+	 * second question rather than a second object asking one.
+	 *
+	 * Outside a run every chip is fully lit, exactly as before.
+	 */
+	.degree-row.is-marking .degree {
+		opacity: 0.26;
+		transform: scale(0.94);
+		transition:
+			opacity 160ms ease,
+			transform 160ms ease,
+			box-shadow 160ms ease;
+	}
+
+	.degree-row.is-marking .degree.is-played {
+		opacity: 1;
+		transform: scale(1);
+		box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-ink) 45%, transparent);
+	}
+
+	/*
+	 * The running total, and the same strip once the run has stopped.
+	 *
+	 * Quiet by construction: mono type at caption size, no colour of its own,
+	 * and no green or red anywhere. This app already spends its entire palette
+	 * on pitch, and a score that shouted would compete with the chart it is
+	 * meant to be commenting on.
+	 */
+	.match {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr);
+		align-items: center;
+		gap: 0.5rem 1.4rem;
+		margin-top: 0.85rem;
+		padding: 0.85rem 1rem;
+		border: 1px solid var(--color-ground-line);
+		border-radius: 11px;
+		background: color-mix(in oklab, var(--color-ground-raised) 60%, transparent);
+	}
+
+	/* Finished runs are the thing to look at, so they get a little more edge. */
+	.match.is-final {
+		background: var(--color-ground-raised);
+		border-color: var(--color-ink-dim);
+	}
+
+	.match-figure {
+		display: flex;
+		min-width: 4.5rem;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 0.1rem;
+	}
+
+	.match-percent {
+		color: var(--color-ink);
+		font-family: var(--font-mono);
+		font-size: 1.9rem;
+		font-variant-numeric: tabular-nums;
+		line-height: 1;
+	}
+
+	.match-percent span {
+		font-size: 0.9rem;
+		color: var(--color-ink-dim);
+	}
+
+	.match-detail {
+		min-width: 0;
+	}
+
+	.match-counts {
+		color: var(--color-ink-muted);
+		font-family: var(--font-mono);
+		font-size: 0.74rem;
+		line-height: 1.45;
+	}
+
+	.match-counts strong {
+		color: var(--color-ink);
+	}
+
+	.match-hint {
+		max-width: 44rem;
+		color: var(--color-ink-dim);
+		font-size: 0.78rem;
+		line-height: 1.5;
+	}
+
+	/* Where the notes sat, as one bar. Weight, not hue — the same language the
+	   header pills use, for the same reason. */
+	.spread {
+		display: flex;
+		width: 100%;
+		height: 6px;
+		margin-top: 0.5rem;
+		border-radius: 3px;
+		overflow: hidden;
+		background: var(--color-ground-line);
+	}
+
+	.spread > span {
+		transition: width 220ms ease;
+	}
+
+	.spread-chord {
+		background: var(--color-ink);
+	}
+
+	.spread-colour {
+		background: var(--color-ink-dim);
+	}
+
+	.spread-outside {
+		background: repeating-linear-gradient(-45deg, var(--color-ink-dim) 0 2px, transparent 2px 4px);
+	}
+
+	.spread-legend {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.25rem 1rem;
+		margin-top: 0.4rem;
+		color: var(--color-ink-dim);
+		font-family: var(--font-mono);
+		font-size: 0.64rem;
+	}
+
+	.spread-legend span {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+	}
+
+	.spread-legend i {
+		width: 0.6rem;
+		height: 0.6rem;
+		border-radius: 2px;
+		flex: none;
+	}
+
+	.key-chord {
+		background: var(--color-ink);
+	}
+
+	.key-colour {
+		background: var(--color-ink-dim);
+	}
+
+	.key-outside {
+		border: 1px dashed var(--color-ink-dim);
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.degree-row.is-marking .degree,
+		.spread > span {
+			transition: none;
+		}
 	}
 	.study-inspector {
 		margin-top: 1.25rem;

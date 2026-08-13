@@ -297,6 +297,38 @@ export class BackingTrack {
 		return this.#paused;
 	}
 
+	/**
+	 * Where the music actually is, read straight off the audio clock.
+	 *
+	 * `onBeat` cannot answer this. It is delivered through `Draw`, which runs on
+	 * animation frames and therefore stops entirely when the tab is not
+	 * compositing — correct for a highlight, and quietly catastrophic for
+	 * anything being *recorded* against the position, which would simply stop
+	 * happening with no sign that it had.
+	 *
+	 * So this is a pull rather than a push: whoever needs to know where the form
+	 * is asks at the moment they need it, on their own clock. `pass` counts
+	 * complete times round the loop, which is what makes the same bar on the
+	 * second time round a different event from the first.
+	 */
+	get position(): { beat: number; bar: number; pass: number } | null {
+		if (!tone || !this.#playing || this.#beats === 0) return null;
+
+		const transport = tone.getTransport();
+		const beatsPerBar = this.#config?.beatsPerBar ?? DEFAULT_BEATS_PER_BAR;
+		const elapsed = transport.ticks / transport.PPQ - this.#countInBeats;
+		// Still counting in: the form has not started, so there is no position in
+		// it to report and nothing played yet belongs to any bar of it.
+		if (elapsed < 0) return null;
+
+		const beat = elapsed % this.#beats;
+		return {
+			beat,
+			bar: Math.floor(beat / beatsPerBar) + 1,
+			pass: Math.floor(elapsed / this.#beats)
+		};
+	}
+
 	get beatsPerLoop(): number {
 		return this.#beats;
 	}

@@ -1262,3 +1262,113 @@ something is still meant to be playing. Verified directly — patching
 `start()`, throwing `NotAllowedError` in the non-visible automation tab
 without that error reaching anywhere near the transport, which kept ticking
 through it regardless.
+
+---
+
+## Are you playing the chord that is sounding?
+
+Reported from real use: comparing the note colours in the header against the
+chord colours on the chart, by eye, mid-tune, to see whether the last handful
+had landed. The colours have always agreed — that is what the palette is for —
+so the only thing missing was the app saying so.
+
+### The score reads the audio clock, not the frame clock
+
+`liveBar` and `liveBeat` reach the page through Tone's `Draw` queue, which runs
+on animation frames. Attributing notes to bars from those would have been the
+obvious wiring and quietly wrong: **measured in the automation tab, a hidden
+document renders zero animation frames per second**, so the marking would have
+stopped dead the moment the window lost focus, with a plausible-looking score
+frozen on screen and nothing anywhere to say it had stopped counting.
+
+`BackingTrack.position` is therefore a _pull_, reading `transport.ticks`
+directly, and every note asks where the music is at the instant it lands — the
+MIDI clock sampling the audio clock, with no frame in between. Verified by
+playing a whole run through with rAF confirmed stopped: the scoring was exact
+throughout.
+
+This is the fourth time in this project a bug has come from state flowing
+through the wrong clock — the chord-detection flush loop on rAF, the MIDI
+restore effect writing state it read, the count-in click carrying on in a
+background tab — so this time the shape was assumed rather than discovered.
+
+The cosmetic half is deliberately left on the frame clock. The header pills and
+the degree row are driven by `liveBar`, because nobody is reading them in a tab
+that is not painting, and a highlight is exactly what `Draw` is for.
+
+### Guide tones, not all the notes
+
+A chord is landed when its **third and seventh** are played — not its root and
+not its fifth. Requiring either would have marked down the rootless voicings the
+curriculum spends its time teaching, and this app has said since M1 that "the
+fifth of a dominant is the note nobody misses". The bass is playing the root
+anyway, which is why comping is muted by default.
+
+So F–A–C–E over a Dm7 is a hundred per cent, with no D in it anywhere. A sus
+chord has no third and its fourth does that job; a sixth chord has no seventh
+and its sixth does; a plain triad falls back to the third alone.
+
+Notes are gathered over the chord rather than grabbed as a handful, for the same
+reason `markGathered` was split out of `markPlayed` for scales: comping it,
+arpeggiating it and running a line through it are all playing the chord, and
+only the first survives being marked as one simultaneous grab.
+
+### Silence is not a failure, and outside notes are not either
+
+Two things are deliberately not scored.
+
+**Chord occurrences nothing was played over are dropped, not failed.** Resting
+through four bars, listening for where the form has got to, and sitting out the
+count-in are all things a musician does on purpose. A score that fell every time
+the hands came off the keys would measure how busy you are, not how well you are
+playing.
+
+**A note outside the key is reported and never counted against you.** The app
+cannot tell a blue note from a wrong one — over the twelve-bar blues that is the
+same E♭ either way — and the study panel already teaches going outside on
+purpose. So the three tiers (chord tone, in the key, outside it) are descriptive
+only, and the score rests entirely on guide-tone coverage. Nothing anywhere goes
+red.
+
+The key each note is judged against is the chord's **local** centre, which
+`studyProgression` has already worked out. That is what makes the F♯ of a D7 in
+C read as the chord rather than as an accident.
+
+### Nothing new was added to look at
+
+Three things say how it is going, and two of them were already on screen.
+
+The **header pills** mark each sounding note by where it sits — solid for a
+chord tone, faded for the key, outlined for outside. That row is where the eyes
+already were; it is the feature, and the rest is support. Weight rather than
+hue, because hue is carrying pitch everywhere in this app and cannot be asked to
+carry a second meaning.
+
+The **degree row** in the study inspector doubles as a checklist: tones played
+since this chord came round stay lit, the others recede. Outside a run every
+chip is fully lit exactly as before.
+
+Only the **match strip** is new, and it is one element rather than two — the
+running total and the final summary are the same fact caught at two moments, so
+a separate results panel appearing at the end would have been a second thing to
+learn to read.
+
+### The open chord is folded in provisionally
+
+Caught in the browser rather than reasoned out. A chord cannot be finally judged
+until it is over — you may yet play the note that lands it — so the tally only
+took it once it had passed, which meant playing a perfect first chord and
+watching the panel go on insisting you had not started. It reads as broken.
+
+The chord still under the hands is now folded into the displayed total
+provisionally, so the number is live and firms up rather than jumping when the
+bar turns. The tally proper is still only committed when the chord closes, which
+is what keeps an occurrence from being counted twice.
+
+### Nothing is written down
+
+The run lives for as long as the page does. Persisting it would mean a schema, a
+sync path and a place to read it back, and none of that was asked for — the
+question was "did I get that one", which is a question about the last three
+minutes. The tables M6 would need for the long view are still there, unused, and
+this is not the thing that should quietly start filling them.
