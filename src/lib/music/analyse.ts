@@ -66,7 +66,19 @@ function accidentalPrefix(alter: number): string {
 	return '';
 }
 
+/**
+ * The part of a numeral after the degree.
+ *
+ * Alterations are written out — V7♭9 rather than V7 — because they are the
+ * reason the chord was chosen. Dropping them made the numeral a lie about the
+ * chord it came from, and anything storing a chart as numerals got the plain
+ * dominant back.
+ */
 function romanSuffix(c: AbstractChord): string {
+	return qualitySuffix(c) + c.alterations.join('');
+}
+
+function qualitySuffix(c: AbstractChord): string {
 	const highest = [...c.extensions].sort((a, b) => b - a)[0];
 	switch (c.quality) {
 		case 'maj':
