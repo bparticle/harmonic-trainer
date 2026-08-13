@@ -33,6 +33,18 @@ export type BackingConfig = {
 
 const DEFAULT_BEATS_PER_BAR = 4;
 
+/**
+ * Headroom given to the transport instead of starting it at literal "now".
+ *
+ * On a cold start the audio clock can still be catching up when the first
+ * events come due, and Tone clamps each one to whatever `currentTime` it sees
+ * at that moment — two events landing on the same clamped instant is what
+ * throws "Start time must be strictly greater than previous start time".
+ * 100ms is inaudible ahead of a count-in click but comfortably outruns that
+ * startup jank.
+ */
+const START_BUFFER = '+0.1';
+
 let tone: Tone | null = null;
 
 async function load(): Promise<Tone> {
@@ -414,7 +426,7 @@ export class BackingTrack {
 		}, '4n');
 
 		this.#playing = true;
-		transport.start();
+		transport.start(START_BUFFER);
 		// The count-in counts as playing for this purpose: dozing off during the
 		// four clicks before the tune starts would be a strange place to draw
 		// the line.
@@ -478,7 +490,7 @@ export class BackingTrack {
 		if (this.#config && sameConfig(this.#config, config)) {
 			this.#paused = false;
 			this.#playing = true;
-			tone?.getTransport().start();
+			tone?.getTransport().start(START_BUFFER);
 			void this.#wakeLock.request();
 			return true;
 		}
