@@ -880,122 +880,6 @@
 				{/if}
 			</div>
 
-			{#if settingsOpen}
-				<div
-					class="setup-panel border-ground-line bg-ground-raised mt-5 grid grid-cols-2 gap-x-6 gap-y-5 rounded-xl border p-4 sm:grid-cols-3 xl:grid-cols-5"
-				>
-					<div>
-						<h2 class="panel-title">Key</h2>
-						<div class="grid grid-cols-4 gap-1.5">
-							{#each KEYS as k (k)}
-								{@const pc = pitchClass(parseKey(k).tonic)}
-								<button
-									type="button"
-									class="chip key-chip justify-center"
-									class:is-on={k === keyName}
-									style:--tint="var(--pc-{pc})"
-									onclick={() => {
-										keyName = k;
-										void restartIfPlaying();
-									}}>{keyLabel(k)}</button
-								>
-							{/each}
-						</div>
-					</div>
-
-					<div>
-						<h2 class="panel-title">Tempo</h2>
-						<div class="flex items-center gap-2">
-							<button
-								type="button"
-								class="stepper"
-								onclick={() => nudgeTempo(-5)}
-								aria-label="Slower">−</button
-							>
-							<span class="font-mono text-ink flex-1 text-center text-3xl tabular-nums">{bpm}</span>
-							<button type="button" class="stepper" onclick={() => nudgeTempo(5)} aria-label="Faster"
-								>+</button
-							>
-						</div>
-						<input
-							type="range"
-							min={MIN_BPM}
-							max={MAX_BPM}
-							step="1"
-							bind:value={bpm}
-							oninput={() => track.setBpm(bpm)}
-							class="mt-2.5 w-full"
-							aria-label="Tempo in beats per minute"
-						/>
-					</div>
-
-					<div>
-						<h2 class="panel-title">Feel</h2>
-						<div class="flex gap-1.5">
-							{#each ['swing', 'straight'] as const as option (option)}
-								<button
-									type="button"
-									class="chip flex-1 justify-center"
-									class:is-on={feel === option}
-									onclick={() => {
-										feel = option;
-										void restartIfPlaying();
-									}}>{option}</button
-								>
-							{/each}
-						</div>
-						<div class="mt-4">
-							<h2 class="panel-title">Count-in</h2>
-							<button
-								type="button"
-								class="chip w-full"
-								class:is-on={countIn}
-								onclick={() => (countIn = !countIn)}
-								aria-pressed={countIn}
-							>
-								<span class="dot" class:is-lit={countIn}></span>
-								One bar of clicks
-							</button>
-						</div>
-					</div>
-
-					<div class="col-span-2">
-						<h2 class="panel-title">Mix</h2>
-						<div class="flex flex-col gap-2">
-							{#each PARTS as [part, label] (part)}
-								<div class="flex items-center gap-2">
-									<button
-										type="button"
-										class="chip w-[7.5rem] shrink-0"
-										class:is-on={!muted[part]}
-										onclick={() => setMuted(part, !muted[part])}
-										aria-pressed={!muted[part]}
-									>
-										<span class="dot" class:is-lit={!muted[part]}></span>
-										{label}
-									</button>
-									<input
-										type="range"
-										min="0"
-										max="1"
-										step="0.05"
-										value={level[part]}
-										oninput={(e) => setLevel(part, Number(e.currentTarget.value))}
-										class="min-w-0 flex-1"
-										disabled={muted[part]}
-										aria-label={`${label} level`}
-									/>
-								</div>
-							{/each}
-						</div>
-						<p class="text-ink-dim mt-2 text-xs leading-snug">
-							Comping starts off. Two people voicing the same chord is one too many — turn it on to
-							hear the changes, off to be the one playing them.
-						</p>
-					</div>
-				</div>
-			{/if}
-
 			<div class="mt-5 flex items-stretch gap-2">
 				{#if playing || paused}
 					<button
@@ -1090,6 +974,125 @@
 				</section>
 			{/if}
 
+			<!--
+				Settings, underneath the thing they configure. Each panel keeps its
+				sidebar-era width rather than stretching to fill the row — most end
+				up stacked, and only pair up where the row has room to spare.
+			-->
+			{#if settingsOpen}
+				<div class="setup-panel border-ground-line bg-ground-raised mt-5 flex flex-wrap gap-x-8 gap-y-6 rounded-xl border p-4">
+					<div class="w-60">
+						<h2 class="panel-title">Key</h2>
+						<div class="grid grid-cols-4 gap-1.5">
+							{#each KEYS as k (k)}
+								{@const pc = pitchClass(parseKey(k).tonic)}
+								<button
+									type="button"
+									class="chip key-chip justify-center"
+									class:is-on={k === keyName}
+									style:--tint="var(--pc-{pc})"
+									onclick={() => {
+										keyName = k;
+										void restartIfPlaying();
+									}}>{keyLabel(k)}</button
+								>
+							{/each}
+						</div>
+					</div>
+
+					<div class="w-60">
+						<h2 class="panel-title">Tempo</h2>
+						<div class="flex items-center gap-2">
+							<button
+								type="button"
+								class="stepper"
+								onclick={() => nudgeTempo(-5)}
+								aria-label="Slower">−</button
+							>
+							<span class="font-mono text-ink flex-1 text-center text-3xl tabular-nums">{bpm}</span>
+							<button type="button" class="stepper" onclick={() => nudgeTempo(5)} aria-label="Faster"
+								>+</button
+							>
+						</div>
+						<input
+							type="range"
+							min={MIN_BPM}
+							max={MAX_BPM}
+							step="1"
+							bind:value={bpm}
+							oninput={() => track.setBpm(bpm)}
+							class="mt-2.5 w-full"
+							aria-label="Tempo in beats per minute"
+						/>
+					</div>
+
+					<div class="w-60">
+						<h2 class="panel-title">Feel</h2>
+						<div class="flex gap-1.5">
+							{#each ['swing', 'straight'] as const as option (option)}
+								<button
+									type="button"
+									class="chip flex-1 justify-center"
+									class:is-on={feel === option}
+									onclick={() => {
+										feel = option;
+										void restartIfPlaying();
+									}}>{option}</button
+								>
+							{/each}
+						</div>
+					</div>
+
+					<div class="w-60">
+						<h2 class="panel-title">Count-in</h2>
+						<button
+							type="button"
+							class="chip w-full"
+							class:is-on={countIn}
+							onclick={() => (countIn = !countIn)}
+							aria-pressed={countIn}
+						>
+							<span class="dot" class:is-lit={countIn}></span>
+							One bar of clicks
+						</button>
+					</div>
+
+					<div class="w-full">
+						<h2 class="panel-title">Mix</h2>
+						<div class="flex flex-col gap-2">
+							{#each PARTS as [part, label] (part)}
+								<div class="flex items-center gap-2">
+									<button
+										type="button"
+										class="chip w-[7.5rem] shrink-0"
+										class:is-on={!muted[part]}
+										onclick={() => setMuted(part, !muted[part])}
+										aria-pressed={!muted[part]}
+									>
+										<span class="dot" class:is-lit={!muted[part]}></span>
+										{label}
+									</button>
+									<input
+										type="range"
+										min="0"
+										max="1"
+										step="0.05"
+										value={level[part]}
+										oninput={(e) => setLevel(part, Number(e.currentTarget.value))}
+										class="min-w-0 flex-1"
+										disabled={muted[part]}
+										aria-label={`${label} level`}
+									/>
+								</div>
+							{/each}
+						</div>
+						<p class="text-ink-dim mt-2 text-xs leading-snug">
+							Comping starts off. Two people voicing the same chord is one too many — turn it on to
+							hear the changes, off to be the one playing them.
+						</p>
+					</div>
+				</div>
+			{/if}
 		</section>
 
 		<!--
@@ -1208,6 +1211,30 @@
 				</div>
 			{/if}
 		</aside>
+	</div>
+
+	<!--
+		The transport and score, pinned in the corner. The page is chart, then
+		settings, then chord study, all stacked — this is the one control you
+		should never have to scroll back up to reach.
+	-->
+	<div class="floating-transport" class:is-final={Boolean(lastRun)}>
+		{#if playing || paused || lastRun}
+			<span class="floating-accuracy">
+				{shownAccuracy ?? '–'}{#if shownAccuracy !== null}<span class="floating-accuracy-unit"
+						>%</span
+					>{/if}
+			</span>
+		{/if}
+		<button
+			type="button"
+			class="floating-play"
+			onclick={toggle}
+			aria-label={playing ? 'Pause' : paused ? 'Resume playing' : 'Play'}
+			title={playing ? 'Pause' : paused ? 'Resume' : 'Play'}
+		>
+			<span aria-hidden="true">{counting ? '···' : playing ? '❚❚' : '▶'}</span>
+		</button>
 	</div>
 </main>
 
@@ -2012,5 +2039,70 @@
 		font-family: var(--font-mono);
 		font-size: 0.72rem;
 		color: var(--color-ink-dim);
+	}
+
+	/*
+	 * The floating transport. A shortcut to the same `toggle`, not a second
+	 * state machine — it exists purely so play/pause and the running score
+	 * are reachable without a scroll, on a page that now has settings and a
+	 * chord-study column between the chart and the foot of the page.
+	 */
+	.floating-transport {
+		position: fixed;
+		right: 1.25rem;
+		bottom: 1.25rem;
+		z-index: 40;
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		padding: 0.4rem;
+		border-radius: 999px;
+		border: 1px solid var(--color-ground-line);
+		background: color-mix(in oklab, var(--color-ground-raised) 92%, transparent);
+		box-shadow: 0 8px 24px color-mix(in oklab, black 35%, transparent);
+		backdrop-filter: blur(8px);
+	}
+
+	.floating-transport.is-final {
+		border-color: var(--color-ink-dim);
+	}
+
+	.floating-accuracy {
+		padding-left: 0.75rem;
+		color: var(--color-ink);
+		font-family: var(--font-mono);
+		font-size: 1.1rem;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.floating-accuracy-unit {
+		margin-left: 0.05rem;
+		color: var(--color-ink-dim);
+		font-size: 0.7rem;
+	}
+
+	.floating-play {
+		display: flex;
+		width: 2.75rem;
+		height: 2.75rem;
+		flex: none;
+		align-items: center;
+		justify-content: center;
+		border-radius: 50%;
+		background: var(--color-ground-overlay);
+		color: var(--color-ink);
+		font-size: 1.1rem;
+	}
+
+	.floating-play:hover {
+		background: var(--color-ink-dim);
+		color: var(--color-ground);
+	}
+
+	@media (max-width: 640px) {
+		.floating-transport {
+			right: 0.85rem;
+			bottom: 0.85rem;
+		}
 	}
 </style>
