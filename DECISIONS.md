@@ -1372,3 +1372,115 @@ sync path and a place to read it back, and none of that was asked for — the
 question was "did I get that one", which is a question about the last three
 minutes. The tables M6 would need for the long view are still there, unused, and
 this is not the thing that should quietly start filling them.
+
+## The chart follows you, and the screen is allowed to celebrate
+
+Two requests, one page. The first is plain: a sixty-bar form does not fit on a
+screen alongside the setup panel and the chord study column, so the bar being
+played walks off the bottom somewhere around the bridge — with both hands on
+the keys and nobody free to scroll. The second is not plain at all: make
+playing along _fun_, in the way the games on a phone are fun, with sparkles and
+glow and a combo counter.
+
+### The chart follows the music, and hands scrolling back when you take it
+
+The live bar is kept in view with `scrollIntoView({ block: 'nearest' })`, which
+was chosen because it does the least: a bar already fully visible causes no
+scroll at all, so the page moves at row boundaries rather than shuffling every
+bar.
+
+Two details do the real work. `scroll-margin-bottom` is a whole row deep, so
+the minimum scroll leaves the _next_ row on screen — landing the current bar
+flush against the bottom edge is technically in view and useless to read from,
+because you play towards the next chord and not at this one. And a deliberate
+scroll wins for four seconds, read from `wheel` and `touchmove` rather than
+from the `scroll` event, which cannot tell a person from our own
+`scrollIntoView`. Without that, reaching for the tempo slider while the track
+runs means being yanked back up on the next bar line.
+
+Following stops the moment a chord is pinned for study, on the same terms as
+the inspector: the same tap hands back both.
+
+**One bug, worth writing down.** The first version read `liveBar` _after_ its
+early returns. One turn of the wheel and the chart stopped following for good —
+the run that returned early registered no dependency on `liveBar`, so the
+effect never woke again. Every dependency is now read at the top of the effect,
+before anything decides not to use it. This is the second time on this page
+that the order of reads has been the whole bug.
+
+### The fireworks are a switch, and the score is not behind it
+
+On by default, and separated from the scoring by construction: `Tally` is what
+happened, `Streak` is how loud to be about it. Nothing in the celebration feeds
+the percentage on screen, so turning it off changes what the app celebrates and
+never what it reports.
+
+The rest of this app is built to stay out of the way of the music — flat
+surfaces, motion that only explains a state change, no decorative anything.
+That rule is suspended here by request, which is exactly why it needed a
+switch rather than a redesign.
+
+### Nothing goes red, still
+
+The tone rules from the marking work survive intact. There is no effect for a
+missed chord, no sound, no colour, no shake. A half-landed chord _holds_ a
+combo rather than growing or breaking it, and only an outright miss resets it —
+a combo that shattered on a missed seventh would be the first thing in the app
+to tell you off, on a page whose whole design says silence is not a failure and
+an outside note is a blue note as often as a wrong one.
+
+The confetti at the end of a run is deliberately hard to earn: four chords
+minimum and seventy per cent. A cannon that went off every time the stop button
+was pressed would be worth precisely nothing.
+
+### Colour is never invented
+
+Every particle carries a pitch class and looks its colour up in the same
+palette the wheel, the keyboard and the chart use — the edited one, passed in
+from settings, not a copy. A spark that picked its own hue would be the first
+thing in the app to lie about which note it belongs to.
+
+That is also what makes the effects legible rather than merely busy: a chord
+tone found sparks in _that note's_ colour, on the chip that just lit up; a
+chord landed bursts out of the bar on the chart it was played over, in the
+chord's colour; the glow around the edges of the screen is the colour of
+whatever is sounding, so the room changes colour with the harmony.
+
+### The physics is pure, and frame-rate independent
+
+`sparkle.ts` is a particle simulation with the randomness injected, so a burst
+can be asserted on exactly and the whole thing is testable without a canvas.
+Drag is exponential and position is integrated by the trapezoid rule rather
+than by Euler, which is what keeps a burst the same shape at 60Hz and at 120Hz
+— a per-frame multiplier would have made the tablet and the laptop disagree.
+An enormous `dt` is clamped rather than simulated, because Tone's draw queue
+stops with the tab and coming back to a burst that has teleported off the
+bottom of the screen looks like a bug.
+
+The renderer stops scheduling frames the instant nothing is left to draw, so a
+quiet page costs nothing at all.
+
+### The glow sits behind the page, and that limit is the point
+
+The obvious complaint about putting it behind is that every panel on this screen
+is opaque, so most of it never shows — what you get is the gutters, the page
+margins and the space under the chart. Blending it on top with
+`mix-blend-mode: screen` reaches far more of the screen, and was tried and
+rejected: it lands on the chart as well as the margins, and washing a second
+colour over bars that are already tinted by their own root muddles the one thing
+on this page that has to stay exact.
+
+So the masking is not a shortcoming to work around. Being confined to the empty
+parts of the screen is what makes it read as the room being lit from the edges
+rather than as a filter laid over the work — and it is the only arrangement in
+which a chord's colour on the chart still means only that chord.
+
+Beat pulses run through the Web Animations API from the same `onBeat` the chart
+highlight uses, cancelled rather than layered — at 300bpm the beats arrive
+faster than a pulse decays, and stacked animations drift out of time with the
+music. A CSS loop tuned to the tempo would have drifted from the first bar.
+
+### Reduced motion turns the whole layer off
+
+Not softened — off. It is an opt-in layer of decoration, and someone who has
+asked their system for less motion has already answered the question.
