@@ -1375,6 +1375,222 @@ this is not the thing that should quietly start filling them.
 
 ---
 
+## The chart follows you, and the screen is allowed to celebrate
+
+Two requests, one page. The first is plain: a sixty-bar form does not fit on a
+screen alongside the setup panel and the chord study column, so the bar being
+played walks off the bottom somewhere around the bridge — with both hands on
+the keys and nobody free to scroll. The second is not plain at all: make
+playing along _fun_, in the way the games on a phone are fun, with sparkles and
+glow and a combo counter.
+
+### The chart follows the music, and hands scrolling back when you take it
+
+The live bar is kept in view with `scrollIntoView({ block: 'nearest' })`, which
+was chosen because it does the least: a bar already fully visible causes no
+scroll at all, so the page moves at row boundaries rather than shuffling every
+bar.
+
+Two details do the real work. `scroll-margin-bottom` is a whole row deep, so
+the minimum scroll leaves the _next_ row on screen — landing the current bar
+flush against the bottom edge is technically in view and useless to read from,
+because you play towards the next chord and not at this one. And a deliberate
+scroll wins for four seconds, read from `wheel` and `touchmove` rather than
+from the `scroll` event, which cannot tell a person from our own
+`scrollIntoView`. Without that, reaching for the tempo slider while the track
+runs means being yanked back up on the next bar line.
+
+Following stops the moment a chord is pinned for study, on the same terms as
+the inspector: the same tap hands back both.
+
+**One bug, worth writing down.** The first version read `liveBar` _after_ its
+early returns. One turn of the wheel and the chart stopped following for good —
+the run that returned early registered no dependency on `liveBar`, so the
+effect never woke again. Every dependency is now read at the top of the effect,
+before anything decides not to use it. This is the second time on this page
+that the order of reads has been the whole bug.
+
+### The fireworks are a switch, and the score is not behind it
+
+On by default, and separated from the scoring by construction: `Tally` is what
+happened, `Streak` is how loud to be about it. Nothing in the celebration feeds
+the percentage on screen, so turning it off changes what the app celebrates and
+never what it reports.
+
+The rest of this app is built to stay out of the way of the music — flat
+surfaces, motion that only explains a state change, no decorative anything.
+That rule is suspended here by request, which is exactly why it needed a
+switch rather than a redesign.
+
+### Nothing goes red, still
+
+The tone rules from the marking work survive intact. There is no effect for a
+missed chord, no sound, no colour, no shake. A half-landed chord _holds_ a
+combo rather than growing or breaking it, and only an outright miss resets it —
+a combo that shattered on a missed seventh would be the first thing in the app
+to tell you off, on a page whose whole design says silence is not a failure and
+an outside note is a blue note as often as a wrong one.
+
+The confetti at the end of a run is deliberately hard to earn: four chords
+minimum and seventy per cent. A cannon that went off every time the stop button
+was pressed would be worth precisely nothing.
+
+### Colour is never invented
+
+Every particle carries a pitch class and looks its colour up in the same
+palette the wheel, the keyboard and the chart use — the edited one, passed in
+from settings, not a copy. A spark that picked its own hue would be the first
+thing in the app to lie about which note it belongs to.
+
+That is also what makes the effects legible rather than merely busy: a chord
+tone found sparks in _that note's_ colour, on the chip that just lit up; a
+chord landed bursts out of the bar on the chart it was played over, in the
+chord's colour; the glow around the edges of the screen is the colour of
+whatever is sounding, so the room changes colour with the harmony.
+
+### The physics is pure, and frame-rate independent
+
+`sparkle.ts` is a particle simulation with the randomness injected, so a burst
+can be asserted on exactly and the whole thing is testable without a canvas.
+Drag is exponential and position is integrated by the trapezoid rule rather
+than by Euler, which is what keeps a burst the same shape at 60Hz and at 120Hz
+— a per-frame multiplier would have made the tablet and the laptop disagree.
+An enormous `dt` is clamped rather than simulated, because Tone's draw queue
+stops with the tab and coming back to a burst that has teleported off the
+bottom of the screen looks like a bug.
+
+The renderer stops scheduling frames the instant nothing is left to draw, so a
+quiet page costs nothing at all.
+
+### The glow sits behind the page, and that limit is the point
+
+The obvious complaint about putting it behind is that every panel on this screen
+is opaque, so most of it never shows — what you get is the gutters, the page
+margins and the space under the chart. Blending it on top with
+`mix-blend-mode: screen` reaches far more of the screen, and was tried and
+rejected: it lands on the chart as well as the margins, and washing a second
+colour over bars that are already tinted by their own root muddles the one thing
+on this page that has to stay exact.
+
+So the masking is not a shortcoming to work around. Being confined to the empty
+parts of the screen is what makes it read as the room being lit from the edges
+rather than as a filter laid over the work — and it is the only arrangement in
+which a chord's colour on the chart still means only that chord.
+
+Beat pulses run through the Web Animations API from the same `onBeat` the chart
+highlight uses, cancelled rather than layered — at 300bpm the beats arrive
+faster than a pulse decays, and stacked animations drift out of time with the
+music. A CSS loop tuned to the tempo would have drifted from the first bar.
+
+### Reduced motion turns the whole layer off
+
+Not softened — off. It is an opt-in layer of decoration, and someone who has
+asked their system for less motion has already answered the question.
+
+---
+
+## The suggested scales are drawn, not only named
+
+"Try over it" has always answered the right question and answered it in words:
+G♭ Lydian dominant, C harmonic minor, D♭ whole-half diminished. That is a
+complete answer for someone who already knows the scale, and no answer at all
+for the case it exists to serve — sitting at the keys wanting to know which
+sharps and flats this chord will take.
+
+So each suggestion now carries a keyboard.
+
+### A suggestion had to stop being two strings
+
+`ScaleSuggestion` was `{ name, reason }`, which is not something a diagram can
+be built from. Parsing the notes back out of "G♭ Lydian dominant" was the
+tempting shortcut and would have been backwards: the module that decided to
+suggest that scale is the one that knows what it is, and a display string is
+not an interchange format.
+
+It now carries `root` and `scale` alongside the phrase — deliberately as well
+as the name rather than instead of it, because the name is not always the
+scale's own: the parent key of a diatonic chord reads as "B♭ major", not
+"B♭ Ionian", and it should go on doing so.
+
+`scales.ts` builds the notes the way `key.ts` builds a key — by stacking
+spelled intervals from the root — and defers to `key.ts` outright for anything
+that is already a mode, rather than writing the seven patterns out a second
+time. The awkward-looking spellings in the table are load-bearing: the altered
+scale has a _diminished fourth_ rather than a major third because it is the
+seventh mode of melodic minor, which is what puts a C♭ in G altered rather than
+a B.
+
+### One octave, C to B, and never root to root
+
+Root to root shows a scale's shape. A fixed C-to-B frame shows what you need
+here: three suggestions stacked in a column are drawn on the same twelve keys,
+so they can be compared at a glance, and any one of them maps straight onto the
+instrument you are sitting at. Where the scale starts is already written
+directly above the picture.
+
+### Two weights, because hue is taken
+
+A chord tone is solid and the rest of the scale is the same colour held back —
+the same device the header pills and the degree row use, for the same reason:
+hue is carrying pitch everywhere in this app and cannot be asked to carry a
+second meaning. Keys outside the scale are left as plain piano keys rather than
+being greyed out, which is what keeps the thing readable as an instrument
+instead of as a chart of twelve cells.
+
+The one picture therefore answers two questions at once. Which notes are
+available, and which of them are home.
+
+### The one place the spelling rule is relaxed
+
+This app spells by stacking intervals and stands by the awkward results — G♭
+major really does have a C♭ in it. That rule rests on one letter per degree,
+and these scales are where the assumption runs out. The diminished scale has
+eight degrees and there are only seven letters. The altered scale's diminished
+fourth compounds every flat already in the root.
+
+Spelled strictly, D♭ whole-half diminished comes out as
+`D♭ E♭ F♭ G♭ A𝄫 B𝄫 C𝄫 C`. That is correct, and nobody has ever written it on
+a chart or wanted to read it off a diagram. So double accidentals — and only
+double accidentals — are traded for the plain enharmonic through the existing
+`spellChromatic`, leaning whichever way the note was already leaning:
+`D♭ E♭ F♭ G♭ G A B♭ C`. Single accidentals are left exactly as the intervals
+produced them, C♭ included, and a test walks every scale in every key to make
+sure no double accidental ever reaches a diagram.
+
+### Dimming a swatch is not the same as diluting it
+
+Reported from looking at it: the diagrams came out muddy, and the colours read
+as slightly _different_ colours from the ones on the chart beside them.
+
+Both were true and both were the same mistake. Each in-scale key was mixed
+towards the key it sat on — `color-mix` to a light grey under the white keys
+and to the dark ground under the black ones. Mixing a swatch with a neutral
+takes its chroma down roughly in proportion, so every held-back note landed at
+about half the chroma the palette authored, next to a chart and a keyboard
+drawing the same twelve colours at full strength. And because the two mixes
+pulled in opposite directions, one pitch class wore two visibly different
+colours depending on which key it happened to fall on.
+
+The fix is a third derived variable. `--pc-N-deep` joins `--pc-N` and
+`--pc-N-ink`: the swatch with its lightness at seven tenths, hue held exactly,
+chroma given up only where the gamut demands it. Seven of the twelve lose no
+chroma at all; the tightest is F♯, the cyan sRGB already could not reach at
+full lightness, which keeps about seven tenths of it.
+
+It is computed in `palette.ts` with the existing `clampToGamut` rather than in
+CSS. `oklch(from var(--tone) calc(l * 0.7) c h)` is the shorter route and was
+tried first: relative colour syntax resolves fine through the custom property,
+and it walks the reds and the yellow straight out of sRGB, where the browser
+clips channels and takes the hue with them. Hue is the one thing these twelve
+colours cannot afford to lose, which is why `clampToGamut` exists at all.
+
+A multiplier rather than a fixed target lightness, because these swatches are
+_meant_ to differ in lightness — E is a bright yellow and A a deep indigo — and
+flattening them to one value would be a second kind of normalising nobody
+asked for.
+
+---
+
 ## Three things on screen, two columns to put them in
 
 The chord study panel was meant to stay beside the chart for as long as you are

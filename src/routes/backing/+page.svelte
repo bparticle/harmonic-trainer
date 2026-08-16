@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
 	import ChordSymbol from '$lib/components/ChordSymbol.svelte';
+	import Fireworks, { type FireworksApi } from '$lib/components/Fireworks.svelte';
 	import Keyboard from '$lib/components/Keyboard.svelte';
+	import ScaleKeys from '$lib/components/ScaleKeys.svelte';
 	import { BackingTrack, type Part } from '$lib/audio/backing';
 	import type { Feel } from '$lib/audio/groove';
 	import {
@@ -12,7 +14,8 @@
 		type ChartCategory,
 		type ChartSeed
 	} from '$lib/curriculum/charts';
-	import { closeVoicing, degreeLabels, fitToRange } from '$lib/music/chord';
+	import { chordPitchClasses, closeVoicing, degreeLabels, fitToRange } from '$lib/music/chord';
+	import { scaleNotes } from '$lib/music/scales';
 	import { key as makeKey, parseKey } from '$lib/music/key';
 	import {
 		formatRoman,
@@ -29,9 +32,17 @@
 		emptyTally,
 		judge,
 		targetFor,
+		type Attempt,
 		type Tally,
 		type Target
 	} from '$lib/practice/match';
+	import {
+		advance as advanceStreak,
+		callout as streakCallout,
+		noStreak,
+		tierFor,
+		type Streak
+	} from '$lib/effects/streak';
 	import { target as sharedTarget } from '$lib/practice/target.svelte';
 	import { page } from '$app/state';
 	import { shouldHandleSpace } from '$lib/shortcuts';
@@ -111,6 +122,55 @@
 	let pinnedChord = $state(0);
 	/** Playback normally leads the inspector; selecting a chord pins it instead. */
 	let followPlayback = $state(true);
+
+	/*
+	 * Keeping the chord you are playing on screen.
+	 *
+	 * A thirty-two bar form does not fit on a laptop screen alongside the setup
+	 * panel and the study column, so the bar being played walks off the bottom
+	 * of the window somewhere around the bridge. Hands are on the keys; nobody
+	 * is going to scroll.
+	 *
+	 * `block: 'nearest'` rather than 'center' because it does the least: a bar
+	 * already fully visible causes no scroll at all, so the page only moves at
+	 * row boundaries rather than shuffling on every bar.
+	 */
+	let chartEl = $state<HTMLDivElement | null>(null);
+	let motionOK = $state(true);
+
+	/**
+	 * Deliberate scrolling wins, for a few seconds.
+	 *
+	 * Without this, reaching for the tempo slider below the chart while the
+	 * track is running means being yanked back up on the next bar line. Read
+	 * from wheel and touch rather than from the scroll event, which cannot tell
+	 * a person from our own `scrollIntoView`.
+	 */
+	let scrollHeldUntil = 0;
+	const holdAutoScroll = () => (scrollHeldUntil = performance.now() + 4000);
+
+	onMount(() => {
+		const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+		motionOK = !reduced.matches;
+		const onPreference = () => (motionOK = !reduced.matches);
+		reduced.addEventListener('change', onPreference);
+		return () => reduced.removeEventListener('change', onPreference);
+	});
+
+	/*
+	 * The fireworks.
+	 *
+	 * Everything from here to `celebrateRun` is decoration, on a switch, and
+	 * deliberately kept apart from the scoring above it: the tally is what
+	 * happened and this is how loud to be about it. Turning it off changes what
+	 * the app celebrates and never what it reports.
+	 */
+	let fireworks = $state(true);
+	let fx = $state<FireworksApi | null>(null);
+	let streak = $state<Streak>(noStreak());
+	const tier = $derived(tierFor(streak.count));
+	let transportEl = $state<HTMLDivElement | null>(null);
+	let transportBeat: Animation | null = null;
 
 	/*
 	 * The chart list, collapsible.
@@ -219,6 +279,8 @@
 	const focused = $derived(focusedBar?.chords[focusedChordIndex] ?? null);
 	const focusedStudy = $derived(focusedBar ? studyAt(focusedBar.number, focusedChordIndex) : null);
 	const focusedNotes = $derived(focused ? degreeLabels(focused.chord) : []);
+	/** The chord's own notes, for marking them out inside each suggested scale. */
+	const focusedTones = $derived(focused ? chordPitchClasses(focused.chord) : []);
 	const otherContexts = $derived(
 		focusedStudy?.compatibleKeys.filter(
 			(context) =>
@@ -271,6 +333,8 @@
 	let openTarget = $state<Target | null>(null);
 	/** Where that occurrence is, without the pass count, for the display to match on. */
 	let openWhere = $state<string | null>(null);
+	/** Its root's colour, held so a celebration fired after it closes is still its own. */
+	let openPc = 0;
 	/** Pitch classes played over it so far. */
 	let heard = $state<number[]>([]);
 	let tally = $state<Tally>(emptyTally());
@@ -306,6 +370,9 @@
 
 	const liveWhere = $derived(liveEntry ? `${liveEntry.bar.number}:${liveEntry.index}` : null);
 
+	/** The colour the room is lit in: whatever chord is sounding, or nothing at all. */
+	const livePc = $derived(liveEntry ? pitchClass(liveEntry.chord.root) : null);
+
 	/** Chord tones actually played during the chord now sounding. */
 	const litTones = $derived(
 		openWhere !== null && openWhere === liveWhere
@@ -331,35 +398,161 @@
 		const slot = `${position.pass}:${number}:${index}`;
 
 		if (slot !== openSlot) {
-			closeSlot();
+			// The chord that just ended is the only thing worth celebrating, and
+			// this is the one place a chord ends while the music carries on — the
+			// other callers of `closeSlot` are stopping, pausing or resetting.
+			celebrateChord(closeSlot());
 			const study = studyAt(number, index);
 			if (!study) return;
 			openSlot = slot;
 			openWhere = `${number}:${index}`;
+			openPc = pitchClass(bar.chords[index].chord.root);
 			openTarget = targetFor(bar.chords[index].chord, study.key);
 		}
 
-		if (openTarget) heard = [...heard, note];
+		if (!openTarget) return;
+
+		// A tone is sparked the first time it turns up under this chord, not on
+		// every repeat of it: holding a voicing down should not fountain.
+		const pc = ((note % 12) + 12) % 12;
+		const isNew = !heard.some((played) => ((played % 12) + 12) % 12 === pc);
+		const isChordTone = openTarget.chord.has(pc);
+		heard = [...heard, note];
+		if (isNew && isChordTone) sparkTone(pc);
 	}
 
-	/** Fold the open chord into the run. Silence is dropped rather than failed. */
-	function closeSlot() {
-		if (openTarget && heard.length > 0) tally = addAttempt(tally, judge(heard, openTarget));
+	/**
+	 * Fold the open chord into the run, and hand back what it was.
+	 *
+	 * Silence is dropped rather than failed. The return is for the fireworks:
+	 * where the chord was on screen and what colour it is, both of which are
+	 * cleared here and would otherwise have moved on by the time anything could
+	 * be drawn about them.
+	 */
+	function closeSlot(): { attempt: Attempt; where: string | null; pc: number } | null {
+		let finished: { attempt: Attempt; where: string | null; pc: number } | null = null;
+
+		if (openTarget && heard.length > 0) {
+			const attempt = judge(heard, openTarget);
+			tally = addAttempt(tally, attempt);
+			finished = { attempt, where: openWhere, pc: openPc };
+		}
+
 		openSlot = null;
 		openTarget = null;
 		openWhere = null;
 		heard = [];
+		return finished;
 	}
 
 	function resetRun() {
 		closeSlot();
 		tally = emptyTally();
 		lastRun = null;
+		streak = noStreak();
 	}
 
 	$effect(() => {
 		session.onNote((note) => recordNote(note));
 		return () => session.onNote(null);
+	});
+
+	/*
+	 * Where a celebration goes off.
+	 *
+	 * At the thing it is about, rather than in the middle of the screen: a chord
+	 * tone found sparks on the chip that just lit up in the study column, and a
+	 * chord landed bursts out of the bar on the chart it was played over. Both
+	 * are places the eyes were already pointed.
+	 */
+	const slotEl = (where: string | null) =>
+		where ? chartEl?.querySelector(`[data-slot="${where}"]`) : null;
+
+	let degreeRowEl = $state<HTMLDivElement | null>(null);
+
+	function sparkTone(pc: number) {
+		const power = 0.3 + 0.55 * tier.intensity;
+		// The degree chips describe the focused chord, which is only the chord
+		// being marked while the inspector is following the music.
+		const chip =
+			marking && openWhere === liveWhere
+				? degreeRowEl?.querySelector(`[data-degree="${pc}"]`)
+				: null;
+		fx?.spark(chip ?? slotEl(openWhere), pc, power);
+	}
+
+	/** One chord, judged and over. The streak moves whether or not anyone can see it. */
+	function celebrateChord(finished: ReturnType<typeof closeSlot>) {
+		if (!finished) return;
+
+		const before = streak;
+		streak = advanceStreak(streak, finished.attempt.landing);
+
+		if (finished.attempt.landing === 'landed') {
+			fx?.land(slotEl(finished.where), finished.pc, 0.55 + 0.45 * tier.intensity);
+		}
+
+		const words = streakCallout(before, streak);
+		if (words) fx?.say(words, finished.pc);
+	}
+
+	/**
+	 * The end of a run, if it was one worth marking.
+	 *
+	 * Every colour in the tune rather than the last chord's, because what is
+	 * being celebrated is the whole form. Deliberately hard enough to earn that
+	 * it does not go off every time the stop button is pressed — a confetti
+	 * cannon for four bars of noodling would be worth precisely nothing.
+	 */
+	function celebrateRun() {
+		if (!lastRun || lastRun.voiced < 4) return;
+		const scored = accuracy(lastRun);
+		if (scored === null || scored < 70) return;
+
+		const colours = [
+			...new Set(bars.flatMap((bar) => bar.chords.map((entry) => pitchClass(entry.chord.root))))
+		];
+		fx?.finale(colours, scored === 100 ? 'flawless' : `${scored}%`);
+	}
+
+	/** The floating transport taps its foot, on the audio clock rather than a CSS loop. */
+	function pulseTransport(strength: number) {
+		if (!fireworks || !motionOK || !transportEl) return;
+		transportBeat?.cancel();
+		transportBeat = transportEl.animate(
+			[{ transform: `scale(${1 + 0.085 * strength})` }, { transform: 'scale(1)' }],
+			{ duration: 120 + 220 * strength, easing: 'cubic-bezier(0.15, 0.9, 0.3, 1)' }
+		);
+	}
+
+	/*
+	 * The chart follows the music.
+	 *
+	 * Only while it is actually leading — pinning a chord to study it hands
+	 * scrolling back to you, exactly as it hands the inspector back.
+	 */
+	$effect(() => {
+		/*
+		 * Read first, decide second.
+		 *
+		 * Every early return below has to come *after* `liveBar` is read, or the
+		 * run that returns early registers no dependency on it and the effect
+		 * never wakes again. Caught in the browser: one scroll of the wheel and
+		 * the chart stopped following for good, because the held run dropped the
+		 * only dependency that would have restarted it.
+		 */
+		const number = liveBar;
+		const following = followingPlayback;
+		const root = chartEl;
+
+		if (!following || !root) return;
+		if (performance.now() < scrollHeldUntil) return;
+
+		root.querySelector(`[data-bar="${number}"]`)?.scrollIntoView({
+			block: 'nearest',
+			inline: 'nearest',
+			behavior: motionOK ? 'smooth' : 'auto'
+		});
 	});
 
 	/**
@@ -411,6 +604,7 @@
 				}
 				if (saved.feel === 'swing' || saved.feel === 'straight') feel = saved.feel;
 				if (typeof saved.countIn === 'boolean') countIn = saved.countIn;
+				if (typeof saved.fireworks === 'boolean') fireworks = saved.fireworks;
 				for (const [part] of PARTS) {
 					const savedMuted = (saved.muted as Partial<Record<Part, unknown>> | undefined)?.[part];
 					const savedLevel = (saved.level as Partial<Record<Part, unknown>> | undefined)?.[part];
@@ -434,7 +628,7 @@
 		if (!playerReady) return;
 		localStorage.setItem(
 			PLAYER_KEY,
-			JSON.stringify({ slug, keyName, bpm, feel, countIn, muted, level })
+			JSON.stringify({ slug, keyName, bpm, feel, countIn, fireworks, muted, level })
 		);
 	});
 
@@ -454,6 +648,14 @@
 		}
 		liveBeat = state.beat;
 		liveBar = state.bar === 0 ? 0 : (loopFrom ?? 1) + state.bar - 1;
+
+		// The count-in gets its pulses too — it is the one moment the screen can
+		// say "here it comes". Its beats are negative, hence the two-step modulo.
+		const beat = Math.round(state.beat);
+		const inBar = ((beat % chart.beatsPerBar) + chart.beatsPerBar) % chart.beatsPerBar;
+		const strength = inBar === 0 ? 1 : 0.4;
+		fx?.pulse(strength);
+		pulseTransport(strength);
 	};
 
 	track.onStart = () => (counting = false);
@@ -533,6 +735,7 @@
 		playing = false;
 		paused = false;
 		counting = false;
+		celebrateRun();
 	}
 
 	/** Anything that changes the notes has to be rebuilt; tempo does not. */
@@ -626,7 +829,9 @@
 	onDestroy(() => track.dispose());
 </script>
 
-<svelte:window onkeydown={onKeydown} />
+<!-- Wheel and touch, not the scroll event: only those two can tell a person
+     scrolling from the chart following the music. -->
+<svelte:window onkeydown={onKeydown} onwheel={holdAutoScroll} ontouchmove={holdAutoScroll} />
 
 <svelte:head><title>Play along · Harmonic</title></svelte:head>
 
@@ -803,7 +1008,11 @@
 				<span>Roman function and departures are shown on every chord.</span>
 			</div>
 
-			<div class="border-ground-line bg-ground-raised rounded-xl border p-3">
+			<div
+				class="chart border-ground-line bg-ground-raised rounded-xl border p-3"
+				class:is-party={fireworks}
+				bind:this={chartEl}
+			>
 				{#each chart.rows as row, r (r)}
 					<div class="grid grid-cols-2 gap-2 sm:grid-cols-4" class:mt-2={r > 0}>
 						{#each row as bar (bar.number)}
@@ -811,6 +1020,7 @@
 							{@const now = playing && liveBar === bar.number}
 							<div
 								class="bar"
+								data-bar={bar.number}
 								class:is-now={now}
 								class:is-study-bar={!followingPlayback && pinnedBar === bar.number}
 								class:is-dim={!inLoop(bar.number)}
@@ -836,6 +1046,7 @@
 										<button
 											type="button"
 											class="bar-chord"
+											data-slot={`${bar.number}:${i}`}
 											class:is-selected={!followingPlayback &&
 												pinnedBar === bar.number &&
 												pinnedChord === i}
@@ -963,6 +1174,9 @@
 								{#if shownCoverage !== null}
 									&middot; {shownCoverage}% of the guide tones
 								{/if}
+								{#if fireworks && streak.best >= 3}
+									&middot; best run {streak.best} in a row
+								{/if}
 							</p>
 
 							{#if spread}
@@ -1076,6 +1290,24 @@
 						</button>
 					</div>
 
+					<div class="w-60">
+						<h2 class="panel-title">Fireworks</h2>
+						<button
+							type="button"
+							class="chip w-full"
+							class:is-on={fireworks}
+							onclick={() => (fireworks = !fireworks)}
+							aria-pressed={fireworks}
+						>
+							<span class="dot" class:is-lit={fireworks}></span>
+							Sparks, glow and combos
+						</button>
+						<p class="text-ink-dim mt-2 text-xs leading-snug">
+							Every chord tone you find throws off its own colour, and landing chords in a row
+							lights the room up. The score underneath is the same either way.
+						</p>
+					</div>
+
 					<div class="w-full">
 						<h2 class="panel-title">Mix</h2>
 						<div class="flex flex-col gap-2">
@@ -1159,12 +1391,20 @@
 
 				<!-- The chord tones, and — while the track is running — which of them
 				     you have actually played since this chord came round. -->
-				<div class="degree-row" class:is-marking={marking} aria-label="Chord tones">
+				<div
+					class="degree-row"
+					class:is-marking={marking}
+					class:is-party={fireworks}
+					bind:this={degreeRowEl}
+					aria-label="Chord tones"
+				>
 					{#each focusedNotes as entry, i (i)}
 						{@const pc = pitchClass(entry.note)}
 						<div
 							class="degree"
+							data-degree={pc}
 							class:is-played={litTones.has(pc)}
+							style:--tone="var(--pc-{pc})"
 							style:background="var(--pc-{pc})"
 							style:color="var(--pc-{pc}-ink)"
 						>
@@ -1202,11 +1442,27 @@
 				<div class="study-options">
 					<section>
 						<h3>Try over it</h3>
+						<!--
+							Each suggestion is drawn as well as named. Which sharps and flats
+							a scale actually gives you is a question about the keyboard, and
+							"G♭ Lydian dominant" only answers it for someone who already
+							knew. The chord tones are solid on the diagram and the rest of
+							the scale is held back, so the same picture says both what is
+							available and what is home.
+						-->
 						<ul class="scale-list">
 							{#each focusedStudy.scales as suggestion (suggestion.name)}
+								{@const notes = scaleNotes(suggestion.root, suggestion.scale)}
 								<li>
 									<strong>{suggestion.name}</strong>
 									<span>{suggestion.reason}</span>
+									<ScaleKeys
+										{notes}
+										chordTones={focusedTones}
+										label={`${suggestion.name}: ${notes
+											.map((note) => formatNote(note, { unicode: true }))
+											.join(' ')}`}
+									/>
 								</li>
 							{/each}
 						</ul>
@@ -1237,7 +1493,26 @@
 		settings, then chord study, all stacked — this is the one control you
 		should never have to scroll back up to reach.
 	-->
-	<div class="floating-transport" class:is-final={Boolean(lastRun)}>
+	<div
+		class="floating-transport"
+		class:is-final={Boolean(lastRun)}
+		class:is-lit={fireworks && streak.count >= 3}
+		style:--glow={livePc === null ? 'var(--color-ink-dim)' : `var(--pc-${livePc})`}
+		bind:this={transportEl}
+	>
+		<!--
+			The combo, next to the honest number rather than instead of it. It only
+			appears once a streak is real: two landed chords in a row happens inside
+			any ii–V and is not an achievement.
+		-->
+		{#if fireworks && streak.count >= 2}
+			{#key streak.count}
+				<span class="floating-combo" aria-hidden="true">
+					<b>{streak.count}×</b>
+					{#if tier.name}<em>{tier.name}</em>{/if}
+				</span>
+			{/key}
+		{/if}
 		{#if playing || paused || lastRun}
 			<span class="floating-accuracy">
 				{shownAccuracy ?? '–'}{#if shownAccuracy !== null}<span class="floating-accuracy-unit"
@@ -1255,6 +1530,20 @@
 			<span aria-hidden="true">{counting ? '···' : playing ? '❚❚' : '▶'}</span>
 		</button>
 	</div>
+
+	<!--
+		The optional half of playing along: sparks, an edge glow in the colour of
+		whatever chord is sounding, and a combo. Mounted whether or not it is
+		switched on, because the page holds a handle on it rather than props —
+		everything it does is fired at a moment rather than being state.
+	-->
+	<Fireworks
+		enabled={fireworks}
+		palette={data.settings.colorMap}
+		pc={livePc}
+		intensity={tier.intensity}
+		onready={(api) => (fx = api)}
+	/>
 </main>
 
 <style>
@@ -1469,6 +1758,16 @@
 		flex-direction: column;
 		gap: 0.25rem;
 		min-height: 6.5rem;
+		/*
+		 * What "scrolled into view" has to mean here.
+		 *
+		 * Above: below the sticky header, or the bar lands underneath it.
+		 * Below: a whole row of bars further down than the bar itself, so the
+		 * minimum scroll leaves the *next* row on screen. Landing the current
+		 * bar flush against the bottom edge is technically in view and useless
+		 * to read from — you play towards the next chord, not at this one.
+		 */
+		scroll-margin: 4.75rem 0 9rem;
 		padding: 0.28rem 0.38rem 0.42rem;
 		border-radius: 9px;
 		border: 1px solid var(--color-ground-line);
@@ -1604,6 +1903,74 @@
 
 	.bar.is-dim {
 		opacity: 0.3;
+	}
+
+	/*
+	 * The chart with the fireworks on.
+	 *
+	 * The same information, turned up: the bar being played is lifted off the
+	 * page and lit from behind in its own colour, and the exact chord announces
+	 * itself as it arrives. Nothing here is new meaning — `is-now` and `is-live`
+	 * already said both of these things quietly — so switching it off loses
+	 * decoration and never a fact.
+	 */
+	/* On the bar rather than on `.is-now`, so it settles back down as smoothly as
+	   it lifted when the music moves on. */
+	.chart.is-party .bar {
+		transition:
+			background 90ms linear,
+			border-color 90ms linear,
+			opacity 160ms ease,
+			box-shadow 220ms ease,
+			transform 220ms var(--ease-wheel);
+	}
+
+	.chart.is-party .bar.is-now {
+		transform: scale(1.02);
+		border-color: color-mix(in oklab, var(--tint) 85%, var(--color-ink));
+		box-shadow:
+			0 0 0 1px color-mix(in oklab, var(--tint) 60%, transparent),
+			0 6px 34px -6px var(--tint);
+	}
+
+	.chart.is-party .bar-chord.is-live {
+		/* Runs once each time the class lands, which is once per chord — no
+		   looping animation sitting on the compositor between changes. */
+		animation: chord-arrive 480ms var(--ease-wheel);
+	}
+
+	@keyframes chord-arrive {
+		0% {
+			transform: scale(0.94);
+			box-shadow: 0 0 0 0 color-mix(in oklab, var(--chord-tint) 80%, transparent);
+		}
+		45% {
+			transform: scale(1.03);
+		}
+		100% {
+			transform: scale(1);
+			box-shadow: 0 0 0 14px color-mix(in oklab, var(--chord-tint) 0%, transparent);
+		}
+	}
+
+	/* A tone found lands rather than fades in, and keeps a halo in its own colour. */
+	.degree-row.is-party.is-marking .degree.is-played {
+		box-shadow:
+			0 0 0 2px color-mix(in oklab, var(--color-ink) 55%, transparent),
+			0 0 22px -2px var(--tone);
+		animation: degree-found 420ms var(--ease-wheel);
+	}
+
+	@keyframes degree-found {
+		0% {
+			transform: scale(0.86) rotate(-3deg);
+		}
+		50% {
+			transform: scale(1.12) rotate(2deg);
+		}
+		100% {
+			transform: scale(1) rotate(0deg);
+		}
 	}
 
 	/* One note of the focused chord: what it is called, and what number it is. */
@@ -1788,8 +2155,13 @@
 
 	@media (prefers-reduced-motion: reduce) {
 		.degree-row.is-marking .degree,
-		.spread > span {
+		.spread > span,
+		.chart.is-party .bar {
 			transition: none;
+		}
+
+		.chart.is-party .bar.is-now {
+			transform: none;
 		}
 	}
 	/*
@@ -1945,7 +2317,9 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.2rem;
-		padding: 0.45rem 0;
+		/* Roomier than the other lists: each entry now carries a drawing as well
+		   as a line of prose, and three of them run together without it. */
+		padding: 0.65rem 0 0.8rem;
 		border-top: 1px solid color-mix(in oklab, var(--color-ground-line) 65%, transparent);
 	}
 
@@ -1959,6 +2333,10 @@
 		color: var(--color-ink-dim);
 		font-size: 0.76rem;
 		line-height: 1.35;
+	}
+
+	.scale-list :global(.scale-keys) {
+		margin-top: 0.4rem;
 	}
 
 	.context-details {
@@ -2084,6 +2462,51 @@
 
 	.floating-transport.is-final {
 		border-color: var(--color-ink-dim);
+	}
+
+	/* Lit in the sounding chord's colour once a streak is running, which makes
+	   the corner of the screen change colour with the harmony. */
+	.floating-transport.is-lit {
+		border-color: color-mix(in oklab, var(--glow) 70%, var(--color-ground-line));
+		box-shadow:
+			0 8px 24px color-mix(in oklab, black 35%, transparent),
+			0 0 26px -4px var(--glow);
+	}
+
+	.floating-combo {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		padding-left: 0.75rem;
+		line-height: 1;
+		animation: combo-bump 320ms var(--ease-wheel);
+	}
+
+	.floating-combo b {
+		color: var(--glow);
+		font-family: var(--font-display);
+		font-size: 1.25rem;
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+		text-shadow: 0 0 16px color-mix(in oklab, var(--glow) 60%, transparent);
+	}
+
+	.floating-combo em {
+		color: var(--color-ink-dim);
+		font-family: var(--font-mono);
+		font-size: 0.55rem;
+		font-style: normal;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+	}
+
+	@keyframes combo-bump {
+		0% {
+			transform: scale(1.5) translateY(2px);
+		}
+		100% {
+			transform: scale(1) translateY(0);
+		}
 	}
 
 	.floating-accuracy {

@@ -102,6 +102,29 @@ export const INK = {
 export const SWATCH_INK_DARK: Oklch = { l: 0.1, c: 0.012, h: 265 };
 export const SWATCH_INK_LIGHT: Oklch = { l: 0.99, c: 0.002, h: 265 };
 
+/** How much lightness a deepened swatch keeps. */
+const DEEP_LIGHTNESS = 0.7;
+
+/**
+ * A dimmed companion to a swatch, for surfaces that need the same colour
+ * turned down rather than a different colour.
+ *
+ * Lightness only. Mixing a swatch towards the ground — the obvious way to dim
+ * one, and what most of this app does for a background tint — takes the chroma
+ * down with it, which is fine behind text and wrong wherever the dimmed colour
+ * has to be recognised as the *same* note as the full-strength one sitting next
+ * to it. Halving the chroma is exactly what makes a palette look muddy.
+ *
+ * Clamped rather than left to the browser. Dropping lightness at constant
+ * chroma walks several of these swatches out of sRGB — the reds and the yellow
+ * especially — and clipping there would shift the hue, which is the one thing
+ * the twelve colours cannot afford. `clampToGamut` gives up chroma instead and
+ * holds hue and lightness exactly.
+ */
+export function deepen(swatch: Oklch): Oklch {
+	return clampToGamut({ ...swatch, l: swatch.l * DEEP_LIGHTNESS });
+}
+
 /**
  * Emit the palette as CSS custom properties. The colour map lives in the
  * database, so these are injected at runtime rather than compiled into a
@@ -113,6 +136,7 @@ export function paletteToCssVars(palette: Oklch[] = DEFAULT_PALETTE): Record<str
 		const { ink } = contrastSafeInk(swatch, SWATCH_INK_DARK, SWATCH_INK_LIGHT);
 		vars[`--pc-${pc}`] = css(swatch);
 		vars[`--pc-${pc}-ink`] = css(ink);
+		vars[`--pc-${pc}-deep`] = css(deepen(swatch));
 	});
 	return vars;
 }

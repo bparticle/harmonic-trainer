@@ -5,8 +5,11 @@
  *
  * The twelve pitch-class colours are deliberately NOT here. They live in the
  * database so they can be matched to a physical painted wheel, and they are
- * injected as --pc-0 … --pc-11 (plus a contrast-safe --pc-N-ink for each) by
- * the root layout. Everything below is structural and not user-editable.
+ * injected as --pc-0 … --pc-11 by the root layout, each with two derived
+ * companions: --pc-N-ink, contrast-safe for text on the swatch, and
+ * --pc-N-deep, the same hue turned down for surfaces that need the colour
+ * held back without losing it. Everything below is structural and not
+ * user-editable.
  *
  * Source of truth for the ground and ink values is src/lib/design/palette.ts;
  * tokens.test.ts fails if these literals drift from it.
