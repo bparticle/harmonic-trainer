@@ -1484,3 +1484,71 @@ music. A CSS loop tuned to the tempo would have drifted from the first bar.
 
 Not softened — off. It is an opt-in layer of decoration, and someone who has
 asked their system for less motion has already answered the question.
+
+## The suggested scales are drawn, not only named
+
+"Try over it" has always answered the right question and answered it in words:
+G♭ Lydian dominant, C harmonic minor, D♭ whole-half diminished. That is a
+complete answer for someone who already knows the scale, and no answer at all
+for the case it exists to serve — sitting at the keys wanting to know which
+sharps and flats this chord will take.
+
+So each suggestion now carries a keyboard.
+
+### A suggestion had to stop being two strings
+
+`ScaleSuggestion` was `{ name, reason }`, which is not something a diagram can
+be built from. Parsing the notes back out of "G♭ Lydian dominant" was the
+tempting shortcut and would have been backwards: the module that decided to
+suggest that scale is the one that knows what it is, and a display string is
+not an interchange format.
+
+It now carries `root` and `scale` alongside the phrase — deliberately as well
+as the name rather than instead of it, because the name is not always the
+scale's own: the parent key of a diatonic chord reads as "B♭ major", not
+"B♭ Ionian", and it should go on doing so.
+
+`scales.ts` builds the notes the way `key.ts` builds a key — by stacking
+spelled intervals from the root — and defers to `key.ts` outright for anything
+that is already a mode, rather than writing the seven patterns out a second
+time. The awkward-looking spellings in the table are load-bearing: the altered
+scale has a _diminished fourth_ rather than a major third because it is the
+seventh mode of melodic minor, which is what puts a C♭ in G altered rather than
+a B.
+
+### One octave, C to B, and never root to root
+
+Root to root shows a scale's shape. A fixed C-to-B frame shows what you need
+here: three suggestions stacked in a column are drawn on the same twelve keys,
+so they can be compared at a glance, and any one of them maps straight onto the
+instrument you are sitting at. Where the scale starts is already written
+directly above the picture.
+
+### Two weights, because hue is taken
+
+A chord tone is solid and the rest of the scale is the same colour held back —
+the same device the header pills and the degree row use, for the same reason:
+hue is carrying pitch everywhere in this app and cannot be asked to carry a
+second meaning. Keys outside the scale are left as plain piano keys rather than
+being greyed out, which is what keeps the thing readable as an instrument
+instead of as a chart of twelve cells.
+
+The one picture therefore answers two questions at once. Which notes are
+available, and which of them are home.
+
+### The one place the spelling rule is relaxed
+
+This app spells by stacking intervals and stands by the awkward results — G♭
+major really does have a C♭ in it. That rule rests on one letter per degree,
+and these scales are where the assumption runs out. The diminished scale has
+eight degrees and there are only seven letters. The altered scale's diminished
+fourth compounds every flat already in the root.
+
+Spelled strictly, D♭ whole-half diminished comes out as
+`D♭ E♭ F♭ G♭ A𝄫 B𝄫 C𝄫 C`. That is correct, and nobody has ever written it on
+a chart or wanted to read it off a diagram. So double accidentals — and only
+double accidentals — are traded for the plain enharmonic through the existing
+`spellChromatic`, leaning whichever way the note was already leaning:
+`D♭ E♭ F♭ G♭ G A B♭ C`. Single accidentals are left exactly as the intervals
+produced them, C♭ included, and a test walks every scale in every key to make
+sure no double accidental ever reaches a diagram.
