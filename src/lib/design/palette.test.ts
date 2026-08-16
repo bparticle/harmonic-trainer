@@ -14,6 +14,7 @@ import {
 	INK,
 	SWATCH_INK_DARK,
 	SWATCH_INK_LIGHT,
+	deepen,
 	derivePalette,
 	outOfGamut,
 	paletteToCssVars
@@ -138,11 +139,65 @@ describe('pitch-class palette', () => {
 		expect(wrapped[1].h).toBeCloseTo(0, 5);
 	});
 
-	it('emits a css variable and an ink variable per pitch class', () => {
+	it('emits a colour, an ink and a deepened variable per pitch class', () => {
 		const vars = paletteToCssVars();
-		expect(Object.keys(vars)).toHaveLength(24);
+		expect(Object.keys(vars)).toHaveLength(36);
 		expect(vars['--pc-0']).toMatch(/^oklch\(/);
 		expect(vars['--pc-11-ink']).toMatch(/^oklch\(/);
+		expect(vars['--pc-11-deep']).toMatch(/^oklch\(/);
+	});
+});
+
+/*
+ * The dimmed companion to each swatch, used wherever a surface needs the same
+ * note turned down rather than a different colour — the scale diagrams, so far.
+ */
+describe('deepened swatches', () => {
+	it('holds the hue exactly, which is the whole point', () => {
+		for (const [i, swatch] of DEFAULT_PALETTE.entries()) {
+			expect(deepen(swatch).h, NOTE_NAMES[i]).toBe(swatch.h);
+		}
+	});
+
+	it('is darker than the swatch it came from', () => {
+		for (const [i, swatch] of DEFAULT_PALETTE.entries()) {
+			expect(deepen(swatch).l, NOTE_NAMES[i]).toBeLessThan(swatch.l);
+		}
+	});
+
+	it('stays inside sRGB, so no browser has to guess', () => {
+		const bad = DEFAULT_PALETTE.map((swatch, i) => ({ note: NOTE_NAMES[i], deep: deepen(swatch) }))
+			.filter((entry) => !isInSrgbGamut(entry.deep))
+			.map((entry) => entry.note);
+		expect(bad).toEqual([]);
+	});
+
+	/*
+	 * The failure this exists to prevent. Mixing a swatch towards the ground —
+	 * the old way of dimming one — roughly halves its chroma, and a palette at
+	 * half chroma is what "muddy" means. Giving up a little chroma at the gamut
+	 * boundary is fine; giving up half of it is not.
+	 */
+	it('keeps most of the chroma, unlike mixing towards the ground', () => {
+		// Seven of the twelve lose nothing at all. The tightest is F♯ at about
+		// 0.70 — the cyan that sRGB already could not reach at full lightness,
+		// and which has even less room once darkened. Mixing towards the ground
+		// leaves roughly 0.5 across the board, which is what looked muddy.
+		for (const [i, swatch] of DEFAULT_PALETTE.entries()) {
+			expect(deepen(swatch).c, NOTE_NAMES[i]).toBeGreaterThan(swatch.c * 0.65);
+		}
+	});
+
+	it('never adds chroma a swatch did not have', () => {
+		for (const [i, swatch] of DEFAULT_PALETTE.entries()) {
+			expect(deepen(swatch).c, NOTE_NAMES[i]).toBeLessThanOrEqual(swatch.c);
+		}
+	});
+
+	it('stays distinct from the ground it is drawn on', () => {
+		for (const [i, swatch] of DEFAULT_PALETTE.entries()) {
+			expect(contrastRatio(deepen(swatch), GROUND.base), NOTE_NAMES[i]).toBeGreaterThan(1.4);
+		}
 	});
 });
 

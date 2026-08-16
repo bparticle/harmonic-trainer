@@ -1552,3 +1552,35 @@ double accidentals — are traded for the plain enharmonic through the existing
 `D♭ E♭ F♭ G♭ G A B♭ C`. Single accidentals are left exactly as the intervals
 produced them, C♭ included, and a test walks every scale in every key to make
 sure no double accidental ever reaches a diagram.
+
+### Dimming a swatch is not the same as diluting it
+
+Reported from looking at it: the diagrams came out muddy, and the colours read
+as slightly _different_ colours from the ones on the chart beside them.
+
+Both were true and both were the same mistake. Each in-scale key was mixed
+towards the key it sat on — `color-mix` to a light grey under the white keys
+and to the dark ground under the black ones. Mixing a swatch with a neutral
+takes its chroma down roughly in proportion, so every held-back note landed at
+about half the chroma the palette authored, next to a chart and a keyboard
+drawing the same twelve colours at full strength. And because the two mixes
+pulled in opposite directions, one pitch class wore two visibly different
+colours depending on which key it happened to fall on.
+
+The fix is a third derived variable. `--pc-N-deep` joins `--pc-N` and
+`--pc-N-ink`: the swatch with its lightness at seven tenths, hue held exactly,
+chroma given up only where the gamut demands it. Seven of the twelve lose no
+chroma at all; the tightest is F♯, the cyan sRGB already could not reach at
+full lightness, which keeps about seven tenths of it.
+
+It is computed in `palette.ts` with the existing `clampToGamut` rather than in
+CSS. `oklch(from var(--tone) calc(l * 0.7) c h)` is the shorter route and was
+tried first: relative colour syntax resolves fine through the custom property,
+and it walks the reds and the yellow straight out of sRGB, where the browser
+clips channels and takes the hue with them. Hue is the one thing these twelve
+colours cannot afford to lose, which is why `clampToGamut` exists at all.
+
+A multiplier rather than a fixed target lightness, because these swatches are
+_meant_ to differ in lightness — E is a bright yellow and A a deep indigo — and
+flattening them to one value would be a second kind of normalising nobody
+asked for.
