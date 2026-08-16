@@ -91,7 +91,11 @@
 	{#each whites as key (key.pc)}
 		{@const inScale = spelling.has(key.pc)}
 		{@const isChord = inScale && chordSet.has(key.pc)}
-		<g style:--tone="var(--pc-{key.pc})" style:--tone-ink="var(--pc-{key.pc}-ink)">
+		<g
+			style:--tone="var(--pc-{key.pc})"
+			style:--tone-deep="var(--pc-{key.pc}-deep)"
+			style:--tone-ink="var(--pc-{key.pc}-ink)"
+		>
 			<rect
 				x={key.x + 1}
 				y="0"
@@ -117,7 +121,11 @@
 	{#each blacks as key (key.pc)}
 		{@const inScale = spelling.has(key.pc)}
 		{@const isChord = inScale && chordSet.has(key.pc)}
-		<g style:--tone="var(--pc-{key.pc})" style:--tone-ink="var(--pc-{key.pc}-ink)">
+		<g
+			style:--tone="var(--pc-{key.pc})"
+			style:--tone-deep="var(--pc-{key.pc}-deep)"
+			style:--tone-ink="var(--pc-{key.pc}-ink)"
+		>
 			<rect
 				x={key.x}
 				y="0"
@@ -152,7 +160,10 @@
 		height: auto;
 	}
 
+	/* One structural outline on every key, in the ground, so the separation
+	   between keys never tints the fill it sits next to. */
 	.key {
+		stroke: var(--color-ground);
 		stroke-width: 1;
 	}
 
@@ -164,48 +175,58 @@
 	 */
 	.key-white {
 		fill: var(--color-ink-muted);
-		stroke: var(--color-ground);
 	}
 
 	.key-black {
 		fill: var(--color-ground);
-		stroke: var(--color-ground-line);
 	}
 
-	/* In the scale: the note's own colour, held back towards the key it sits on
-	   so a white key stays light and a black key stays dark. */
-	.key-white.is-in {
-		fill: color-mix(in oklab, var(--tone) 52%, var(--color-ink-muted));
-		stroke: color-mix(in oklab, var(--tone) 70%, var(--color-ground));
+	/*
+	 * In the scale: the note's own colour, dimmed.
+	 *
+	 * *Dimmed*, not diluted, and the difference is the whole of what went wrong
+	 * first time round. The original mixed each swatch towards the key it sat on
+	 * — a light grey under the white keys, the dark ground under the black ones
+	 * — which did two things wrong at once. It roughly halved the chroma, so
+	 * every held-back note read as muddy beside the chart and the keyboard above
+	 * it, both of which draw the same twelve colours at full strength. And
+	 * because the two mixes pulled in opposite directions, a single pitch class
+	 * wore two different colours depending on which key it happened to land on.
+	 *
+	 * `--pc-N-deep` is the swatch with its lightness turned down and its hue
+	 * held exactly, gamut-clamped in the palette module rather than here — see
+	 * `deepen`. Doing it in CSS with relative colour syntax was the shorter
+	 * route and walked the reds and the yellow straight out of sRGB, where a
+	 * browser clipping the channels would have shifted the hue.
+	 */
+	.key.is-in {
+		fill: var(--tone-deep);
 	}
 
-	.key-black.is-in {
-		fill: color-mix(in oklab, var(--tone) 55%, var(--color-ground));
-		stroke: color-mix(in oklab, var(--tone) 75%, var(--color-ground));
-	}
-
-	/* A chord tone is solid, on both. This is the note you are aiming at; the
-	   rest of the scale is what you pass through on the way. */
+	/* A chord tone is the swatch itself, untouched. This is the note you are
+	   aiming at; the rest of the scale is what you pass through on the way. */
 	.key.is-chord {
 		fill: var(--tone);
-		stroke: color-mix(in oklab, var(--tone) 60%, var(--color-ink));
 	}
 
+	/*
+	 * A label only ever sits on a coloured key, so there are two cases: the
+	 * dimmed fill, which is dark enough for plain ink whatever the hue, and the
+	 * swatch itself, which brings the contrast-safe ink the palette computed for
+	 * it. The two sizes are the keys' widths, not their colours.
+	 */
 	.key-name {
 		font-family: var(--font-mono);
+		fill: var(--color-ink);
 		pointer-events: none;
 	}
 
-	/* Dark ink on a pale key, light ink on a dark one, and the swatch's own
-	   contrast-safe ink wherever a key is filled solid. */
 	.on-white {
 		font-size: 12px;
-		fill: var(--color-ground);
 	}
 
 	.on-black {
 		font-size: 11px;
-		fill: var(--color-ink-muted);
 	}
 
 	.key-name.on-chord {
