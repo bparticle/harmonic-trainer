@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { formatNote, parseNote, pitchClass } from './note';
-import { EXTRA_IDS, intervalsFor, scaleNotes, type ScaleId } from './scales';
+import { EXTRA_IDS, intervalsFor, romanDegrees, scaleNotes, type ScaleId } from './scales';
 
 const spell = (root: string, id: ScaleId) =>
 	scaleNotes(parseNote(root), id).map((note) => formatNote(note));
 
 const semitones = (root: string, id: ScaleId) =>
 	scaleNotes(parseNote(root), id).map((note) => pitchClass(note));
+
+const numerals = (root: string, id: ScaleId) => romanDegrees(scaleNotes(parseNote(root), id));
 
 describe('the modes come from the key module, not a second copy', () => {
 	it('spells a major scale', () => {
@@ -71,6 +73,49 @@ describe('the other scales a chord symbol asks for', () => {
 	});
 });
 
+describe('the degrees, as Roman numerals', () => {
+	it('numbers a major scale straight up', () => {
+		expect(numerals('C', 'ionian')).toEqual(['I', 'II', 'III', 'IV', 'V', 'VI', 'VII']);
+	});
+
+	it('measures against the major scale, so a mode wears its own flats', () => {
+		expect(numerals('D', 'dorian')).toEqual(['I', 'II', '♭III', 'IV', 'V', 'VI', '♭VII']);
+		expect(numerals('E', 'phrygian')).toEqual(['I', '♭II', '♭III', 'IV', 'V', '♭VI', '♭VII']);
+		expect(numerals('F', 'lydian')).toEqual(['I', 'II', 'III', '♯IV', 'V', 'VI', 'VII']);
+	});
+
+	it('keeps the altered scale a flat of everything', () => {
+		// Its third degree above the root is a diminished *fourth*, so it is ♭IV
+		// and not III — the same spelling the notes themselves stand by.
+		expect(numerals('C', 'altered')).toEqual(['I', '♭II', '♭III', '♭IV', '♭V', '♭VI', '♭VII']);
+	});
+
+	it('names the blues scale the way a player would', () => {
+		expect(numerals('C', 'blues')).toEqual(['I', '♭III', 'IV', '♭V', 'V', '♭VII']);
+	});
+
+	it('relaxes a double accidental rather than printing one', () => {
+		// F♯ whole-half diminished reaches an E♭, strictly the ♭♭7. Nobody calls
+		// it that; it is the 6, and the diagram has 25 pixels to say so.
+		expect(numerals('F#', 'wholeHalfDiminished')).toEqual([
+			'I',
+			'II',
+			'♭III',
+			'IV',
+			'♭V',
+			'♭VI',
+			'VI',
+			'VII'
+		]);
+	});
+
+	it('starts every scale on its own root', () => {
+		for (const id of [...EXTRA_IDS, 'ionian' as const, 'aeolian' as const]) {
+			expect(numerals('Eb', id)[0], id).toBe('I');
+		}
+	});
+});
+
 describe('every scale, in every key', () => {
 	const ROOTS = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
 	const ALL: ScaleId[] = [
@@ -131,6 +176,31 @@ describe('every scale, in every key', () => {
 				for (const note of scaleNotes(parseNote(root), id)) {
 					expect(Math.abs(note.alter), `${root} ${id}: ${formatNote(note)}`).toBeLessThan(2);
 				}
+			}
+		}
+	});
+
+	/*
+	 * A black key is 25 units wide on the diagram and the numeral has to fit
+	 * inside one. Four glyphs is `♭VII`, which is the longest thing a degree can
+	 * be once double accidentals are relaxed away.
+	 */
+	it('never writes a numeral longer than the narrowest key', () => {
+		for (const id of ALL) {
+			for (const root of ROOTS) {
+				for (const numeral of numerals(root, id)) {
+					expect(numeral.length, `${root} ${id}: ${numeral}`).toBeLessThanOrEqual(4);
+					expect(numeral, `${root} ${id}`).not.toMatch(/[♭♯]{2}/);
+				}
+			}
+		}
+	});
+
+	it('gives every note of a scale a different degree', () => {
+		for (const id of ALL) {
+			for (const root of ROOTS) {
+				const written = numerals(root, id);
+				expect(new Set(written).size, `${root} ${id}: ${written.join(' ')}`).toBe(written.length);
 			}
 		}
 	});

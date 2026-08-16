@@ -8,7 +8,7 @@ import {
 import { transpose, ivl } from './interval';
 import { formatKey, parallelKey, scale, scalePitchClasses, type Key } from './key';
 import { pitchClass, type Note } from './note';
-import { scaleDegree } from './spell';
+import { formatRomanDegree, scaleDegree } from './spell';
 
 /**
  * Roman numeral analysis.
@@ -52,19 +52,11 @@ export type Analysis = {
 	modulation?: { from: Key; to: Key };
 };
 
-const NUMERALS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
-
 /** Qualities written with a lowercase numeral. */
 /** Qualities stable enough to establish a new tonic, rather than merely point onward. */
 const TONIC_ISH = new Set(['maj', 'min', 'maj6', 'min6']);
 
 const MINOR_ISH = new Set(['min', 'min7b5', 'dim7', 'min6']);
-
-function accidentalPrefix(alter: number): string {
-	if (alter < 0) return 'b'.repeat(-alter);
-	if (alter > 0) return '#'.repeat(alter);
-	return '';
-}
 
 /**
  * The part of a numeral after the degree.
@@ -105,9 +97,8 @@ function qualitySuffix(c: AbstractChord): string {
 
 /** The bare numeral for a root in a key, without any quality suffix. */
 function numeralFor(root: Note, k: Key, quality: string): string {
-	const { degree, alter } = scaleDegree(root, k);
-	const numeral = NUMERALS[degree - 1];
-	return accidentalPrefix(alter) + (MINOR_ISH.has(quality) ? numeral.toLowerCase() : numeral);
+	const numeral = formatRomanDegree(scaleDegree(root, k));
+	return MINOR_ISH.has(quality) ? numeral.toLowerCase() : numeral;
 }
 
 export function romanNumeral(c: AbstractChord, k: Key): string {
@@ -256,7 +247,7 @@ function analyseChord(
 			subTarget.alter === 0 &&
 			scalePcs.has(pitchClass(subTargetRoot))
 		) {
-			const roman = `${accidentalPrefix(alter)}${NUMERALS[degree - 1]}${romanSuffix(c)}`;
+			const roman = `${formatRomanDegree({ degree, alter })}${romanSuffix(c)}`;
 			const replacing =
 				subTarget.degree === 1
 					? 'V7'

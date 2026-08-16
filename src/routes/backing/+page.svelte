@@ -15,7 +15,7 @@
 		type ChartSeed
 	} from '$lib/curriculum/charts';
 	import { chordPitchClasses, closeVoicing, degreeLabels, fitToRange } from '$lib/music/chord';
-	import { scaleNotes } from '$lib/music/scales';
+	import { scaleDegreeIn, scaleNotes } from '$lib/music/scales';
 	import { key as makeKey, parseKey } from '$lib/music/key';
 	import {
 		formatRoman,
@@ -23,7 +23,8 @@
 		studyProgression,
 		type HarmonicStudy
 	} from '$lib/music/study';
-	import { formatNote, midi as toMidi, pitchClass } from '$lib/music/note';
+	import { formatNote, midi as toMidi, pitchClass, type Note } from '$lib/music/note';
+	import { formatDegree } from '$lib/music/spell';
 	import { midi as session } from '$lib/midi/shared.svelte';
 	import {
 		accuracy,
@@ -327,6 +328,21 @@
 			? focusedStudy.explanation.replace(focusedStudy.roman, formatRoman(focusedStudy.roman))
 			: ''
 	);
+	/*
+	 * The scale diagram in words, for a screen reader.
+	 *
+	 * Its degrees are drawn as Roman numerals and read out as plain numbers:
+	 * speech has no use for a numeral — "flat seven" is the degree, and
+	 * "flat vee eye eye" is what a numeral becomes out loud.
+	 */
+	const describeScale = (name: string, notes: Note[]) =>
+		`${name}: ` +
+		notes
+			.map(
+				(note) =>
+					`${formatNote(note, { unicode: true })} ${formatDegree(scaleDegreeIn(notes[0], note), true)}`
+			)
+			.join(', ');
 	/*
 	 * The diagram shows two octaves from C3 and no more, so the chord is moved
 	 * into them rather than allowed to run off the end. Seventy per cent of the
@@ -1522,7 +1538,8 @@
 							"G♭ Lydian dominant" only answers it for someone who already
 							knew. The chord tones are solid on the diagram and the rest of
 							the scale is held back, so the same picture says both what is
-							available and what is home.
+							available and what is home — and each key carries its degree, so
+							it also says what every note is doing there.
 						-->
 						<ul class="scale-list">
 							{#each focusedStudy.scales as suggestion (suggestion.name)}
@@ -1533,9 +1550,7 @@
 									<ScaleKeys
 										{notes}
 										chordTones={focusedTones}
-										label={`${suggestion.name}: ${notes
-											.map((note) => formatNote(note, { unicode: true }))
-											.join(' ')}`}
+										label={describeScale(suggestion.name, notes)}
 									/>
 								</li>
 							{/each}

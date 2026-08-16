@@ -1,7 +1,7 @@
 import { ivl, transpose, type Interval } from './interval';
-import { scaleIntervals, type Mode } from './key';
+import { key, scaleIntervals, type Mode } from './key';
 import { LETTER_SEMITONES, pitchClass, type Note } from './note';
-import { spellChromatic } from './spell';
+import { formatRomanDegree, scaleDegree, spellChromatic } from './spell';
 
 /**
  * The scales the study panel names, as spelled notes.
@@ -106,4 +106,43 @@ function readable(note: Note): Note {
  */
 export function scaleNotes(root: Note, id: ScaleId): Note[] {
 	return intervalsFor(id).map((interval) => readable(transpose(root, interval)));
+}
+
+/** C major, as the frame a relaxed degree is read back out of. */
+const FROM_C = key('C');
+
+/**
+ * Where a note sits in a scale, as a degree above that scale's own root.
+ *
+ * Spelled first, like everything else: the degree is the letter distance and
+ * the alteration is measured against the major scale, so the F♭ in C altered
+ * is a ♭4 rather than a 3. That is the same rule the Roman numerals in
+ * `analyse.ts` follow, one level down — a chord's numeral and a note's degree
+ * should not disagree about what a fourth is.
+ *
+ * And it is relaxed in the same one place, for the same reason `readable` above
+ * relaxes the spelling. F♯ whole-half diminished contains an E♭, which is
+ * strictly the ♭♭7 and which every player calls the 6. When the strict answer
+ * needs a double accidental the plain enharmonic degree is used instead,
+ * leaning the way the note was already leaning.
+ */
+export function scaleDegreeIn(root: Note, note: Note): { degree: number; alter: number } {
+	const strict = scaleDegree(note, key(root));
+	if (Math.abs(strict.alter) < 2) return strict;
+
+	const distance = (((pitchClass(note) - pitchClass(root)) % 12) + 12) % 12;
+	return scaleDegree(spellChromatic(distance, strict.alter < 0 ? 'flat' : 'sharp'), FROM_C);
+}
+
+/**
+ * The degrees of a scale as Roman numerals, in the order the notes came in.
+ *
+ * Uppercase throughout — see `formatRomanDegree`. These label single notes and
+ * are not claiming a chord quality on each degree, which would be a promise
+ * this app cannot keep for the scales that have no thirds to stack: the blues
+ * scale has six notes and the diminished eight.
+ */
+export function romanDegrees(notes: Note[]): string[] {
+	const root = notes[0];
+	return notes.map((note) => formatRomanDegree(scaleDegreeIn(root, note), true));
 }
