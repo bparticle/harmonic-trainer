@@ -3,6 +3,7 @@
 	import ChordSymbol from '$lib/components/ChordSymbol.svelte';
 	import Fireworks, { type FireworksApi } from '$lib/components/Fireworks.svelte';
 	import Keyboard from '$lib/components/Keyboard.svelte';
+	import ScaleKeys from '$lib/components/ScaleKeys.svelte';
 	import { BackingTrack, type Part } from '$lib/audio/backing';
 	import type { Feel } from '$lib/audio/groove';
 	import {
@@ -13,7 +14,8 @@
 		type ChartCategory,
 		type ChartSeed
 	} from '$lib/curriculum/charts';
-	import { closeVoicing, degreeLabels, fitToRange } from '$lib/music/chord';
+	import { chordPitchClasses, closeVoicing, degreeLabels, fitToRange } from '$lib/music/chord';
+	import { scaleNotes } from '$lib/music/scales';
 	import { key as makeKey, parseKey } from '$lib/music/key';
 	import {
 		formatRoman,
@@ -272,6 +274,8 @@
 	const focused = $derived(focusedBar?.chords[focusedChordIndex] ?? null);
 	const focusedStudy = $derived(focusedBar ? studyAt(focusedBar.number, focusedChordIndex) : null);
 	const focusedNotes = $derived(focused ? degreeLabels(focused.chord) : []);
+	/** The chord's own notes, for marking them out inside each suggested scale. */
+	const focusedTones = $derived(focused ? chordPitchClasses(focused.chord) : []);
 	const otherContexts = $derived(
 		focusedStudy?.compatibleKeys.filter(
 			(context) =>
@@ -1424,11 +1428,27 @@
 				<div class="study-options">
 					<section>
 						<h3>Try over it</h3>
+						<!--
+							Each suggestion is drawn as well as named. Which sharps and flats
+							a scale actually gives you is a question about the keyboard, and
+							"G♭ Lydian dominant" only answers it for someone who already
+							knew. The chord tones are solid on the diagram and the rest of
+							the scale is held back, so the same picture says both what is
+							available and what is home.
+						-->
 						<ul class="scale-list">
 							{#each focusedStudy.scales as suggestion (suggestion.name)}
+								{@const notes = scaleNotes(suggestion.root, suggestion.scale)}
 								<li>
 									<strong>{suggestion.name}</strong>
 									<span>{suggestion.reason}</span>
+									<ScaleKeys
+										{notes}
+										chordTones={focusedTones}
+										label={`${suggestion.name}: ${notes
+											.map((note) => formatNote(note, { unicode: true }))
+											.join(' ')}`}
+									/>
 								</li>
 							{/each}
 						</ul>
@@ -2283,7 +2303,9 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.2rem;
-		padding: 0.45rem 0;
+		/* Roomier than the other lists: each entry now carries a drawing as well
+		   as a line of prose, and three of them run together without it. */
+		padding: 0.65rem 0 0.8rem;
 		border-top: 1px solid color-mix(in oklab, var(--color-ground-line) 65%, transparent);
 	}
 
@@ -2297,6 +2319,10 @@
 		color: var(--color-ink-dim);
 		font-size: 0.76rem;
 		line-height: 1.35;
+	}
+
+	.scale-list :global(.scale-keys) {
+		margin-top: 0.4rem;
 	}
 
 	.context-details {

@@ -2,11 +2,21 @@ import { analyse, type Analysis, type ChordCategory } from './analyse';
 import type { AbstractChord } from './chord';
 import { fifthsDistance, key as makeKey, parallelKey, scale, type Key, type Mode } from './key';
 import { ivl, transpose } from './interval';
-import { formatNote, pitchClass } from './note';
+import type { ScaleId } from './scales';
+import { formatNote, pitchClass, type Note } from './note';
 
 export type ScaleSuggestion = {
 	name: string;
 	reason: string;
+	/**
+	 * The same scale as notes rather than as a phrase.
+	 *
+	 * `name` is for reading and these are for drawing. Both are needed: a
+	 * keyboard diagram cannot be built from "G♭ Lydian dominant", and a panel
+	 * that only showed the diagram would have stopped teaching the name.
+	 */
+	root: Note;
+	scale: ScaleId;
 };
 
 export type CompatibleContext = {
@@ -136,8 +146,16 @@ function suggestionsFor(analysis: Analysis, next: AbstractChord | undefined): Sc
 	const chord = analysis.chord;
 	const root = formatNote(chord.root, { unicode: true });
 	const out: ScaleSuggestion[] = [];
-	const add = (name: string, reason: string) => {
-		if (!out.some((suggestion) => suggestion.name === name)) out.push({ name, reason });
+	/*
+	 * `name` is the phrase and `from`/`id` are the same scale as notes. They are
+	 * passed separately rather than derived from one another because the phrase
+	 * is not always the scale's own name: the parent key of a diatonic chord
+	 * reads as "B♭ major", not "B♭ Ionian".
+	 */
+	const add = (name: string, reason: string, from: Note, id: ScaleId) => {
+		if (!out.some((suggestion) => suggestion.name === name)) {
+			out.push({ name, reason, root: from, scale: id });
+		}
 	};
 
 	const alteredDominant =
@@ -145,70 +163,173 @@ function suggestionsFor(analysis: Analysis, next: AbstractChord | undefined): Sc
 		chord.alterations.some((alteration) => ['b9', '#9', '#5', 'b13'].includes(alteration));
 
 	if (alteredDominant) {
-		add(root + ' altered', 'Maximum dominant tension; resolve altered notes by step.');
-		const parent = formatNote(transpose(chord.root, ivl('m2')), { unicode: true });
-		add(parent + ' melodic minor', 'The parent scale of ' + root + ' altered.');
+		add(
+			root + ' altered',
+			'Maximum dominant tension; resolve altered notes by step.',
+			chord.root,
+			'altered'
+		);
+		const parentRoot = transpose(chord.root, ivl('m2'));
+		const parent = formatNote(parentRoot, { unicode: true });
+		add(
+			parent + ' melodic minor',
+			'The parent scale of ' + root + ' altered.',
+			parentRoot,
+			'melodicMinor'
+		);
 	}
 
 	if (chord.quality === 'dim7') {
 		add(
 			root + ' whole-half diminished',
-			'Repeats the chord tones and adds symmetrical passing tones.'
+			'Repeats the chord tones and adds symmetrical passing tones.',
+			chord.root,
+			'wholeHalfDiminished'
 		);
 	} else if (chord.quality === 'min7b5') {
-		add(root + ' Locrian natural 2', 'A smoother minor ii sound with a natural ninth.');
-		add(root + ' Locrian', 'The strict diatonic choice.');
+		add(
+			root + ' Locrian natural 2',
+			'A smoother minor ii sound with a natural ninth.',
+			chord.root,
+			'locrianNatural2'
+		);
+		add(root + ' Locrian', 'The strict diatonic choice.', chord.root, 'locrian');
 	} else if (chord.quality === 'aug') {
-		add(root + ' whole-tone', 'Matches the augmented fifth and keeps the sound open.');
+		add(
+			root + ' whole-tone',
+			'Matches the augmented fifth and keeps the sound open.',
+			chord.root,
+			'wholeTone'
+		);
 	}
 
 	if (analysis.category === 'minor-dominant') {
 		const tonic = formatNote(analysis.key.tonic, { unicode: true });
-		add(tonic + ' harmonic minor', 'Supplies the leading tone that gives this V chord its pull.');
-		add(root + ' Phrygian dominant', 'The same notes heard from the dominant root.');
+		add(
+			tonic + ' harmonic minor',
+			'Supplies the leading tone that gives this V chord its pull.',
+			analysis.key.tonic,
+			'harmonicMinor'
+		);
+		add(
+			root + ' Phrygian dominant',
+			'The same notes heard from the dominant root.',
+			chord.root,
+			'phrygianDominant'
+		);
 	} else if (analysis.category === 'blues-dominant') {
-		add(root + ' Mixolydian', 'The inside sound for the blues IV dominant.');
+		add(
+			root + ' Mixolydian',
+			'The inside sound for the blues IV dominant.',
+			chord.root,
+			'mixolydian'
+		);
 		const tonic = formatNote(analysis.key.tonic, { unicode: true });
-		add(tonic + ' blues', 'Keeps the improvisation tied to the home blues sound.');
-		add(root + ' blues', 'Leans fully into the local IV chord colour.');
+		add(
+			tonic + ' blues',
+			'Keeps the improvisation tied to the home blues sound.',
+			analysis.key.tonic,
+			'blues'
+		);
+		add(root + ' blues', 'Leans fully into the local IV chord colour.', chord.root, 'blues');
 	} else if (analysis.category === 'tritone-sub' || analysis.category === 'backdoor') {
 		add(
 			root + ' Lydian dominant',
-			'Keeps the dominant shell and gives the substitute its characteristic sharp 11.'
+			'Keeps the dominant shell and gives the substitute its characteristic sharp 11.',
+			chord.root,
+			'lydianDominant'
 		);
-		add(root + ' Mixolydian', 'A plainer dominant sound with less altered colour.');
+		add(
+			root + ' Mixolydian',
+			'A plainer dominant sound with less altered colour.',
+			chord.root,
+			'mixolydian'
+		);
 	} else if (analysis.category === 'secondary-dominant') {
 		const targetRoot = transpose(chord.root, ivl('P4'));
 		const resolvesToMinor =
 			next && pitchClass(next.root) === pitchClass(targetRoot) && MINOR_ISH.has(next.quality);
 		if (resolvesToMinor) {
 			const target = formatNote(targetRoot, { unicode: true });
-			add(target + ' harmonic minor', 'Makes the target minor chord sound temporarily tonic.');
-			add(root + ' Phrygian dominant', 'The dominant-root view of that harmonic-minor sound.');
+			add(
+				target + ' harmonic minor',
+				'Makes the target minor chord sound temporarily tonic.',
+				targetRoot,
+				'harmonicMinor'
+			);
+			add(
+				root + ' Phrygian dominant',
+				'The dominant-root view of that harmonic-minor sound.',
+				chord.root,
+				'phrygianDominant'
+			);
 		} else {
-			add(root + ' Mixolydian', 'The clear inside sound for an unaltered secondary dominant.');
-			add(root + ' altered', 'Adds more tension when the resolution can carry it.');
+			add(
+				root + ' Mixolydian',
+				'The clear inside sound for an unaltered secondary dominant.',
+				chord.root,
+				'mixolydian'
+			);
+			add(
+				root + ' altered',
+				'Adds more tension when the resolution can carry it.',
+				chord.root,
+				'altered'
+			);
 		}
 	} else if (analysis.category === 'borrowed') {
 		const source = parallelKey(analysis.key);
-		add(formatStudyKey(source), 'The parallel key this chord is borrowed from.');
+		add(
+			formatStudyKey(source),
+			'The parallel key this chord is borrowed from.',
+			source.tonic,
+			source.mode
+		);
 		const mode = modeAtChordRoot(chord, source);
-		if (mode)
-			add(root + ' ' + MODE_LABEL[mode], 'The borrowed parent scale heard from the chord root.');
+		if (mode) {
+			add(
+				root + ' ' + MODE_LABEL[mode],
+				'The borrowed parent scale heard from the chord root.',
+				chord.root,
+				mode
+			);
+		}
 	} else if (analysis.category === 'diatonic') {
-		add(formatStudyKey(analysis.key), 'The parent scale of the current key centre.');
+		add(
+			formatStudyKey(analysis.key),
+			'The parent scale of the current key centre.',
+			analysis.key.tonic,
+			analysis.key.mode
+		);
 		const mode = modeAtChordRoot(chord, analysis.key);
 		if (mode && mode !== analysis.key.mode) {
-			add(root + ' ' + MODE_LABEL[mode], 'The same seven notes, centred on this chord.');
+			add(
+				root + ' ' + MODE_LABEL[mode],
+				'The same seven notes, centred on this chord.',
+				chord.root,
+				mode
+			);
 		}
 	}
 
 	if (out.length === 0) {
-		if (chord.quality === 'dom')
-			add(root + ' Mixolydian', 'A stable starting point for an unaltered dominant chord.');
-		else if (MINOR_ISH.has(chord.quality))
-			add(root + ' Dorian', 'A flexible minor sound with a natural sixth.');
-		else add(root + ' major pentatonic', 'A clear chord-tone-led starting point.');
+		if (chord.quality === 'dom') {
+			add(
+				root + ' Mixolydian',
+				'A stable starting point for an unaltered dominant chord.',
+				chord.root,
+				'mixolydian'
+			);
+		} else if (MINOR_ISH.has(chord.quality)) {
+			add(root + ' Dorian', 'A flexible minor sound with a natural sixth.', chord.root, 'dorian');
+		} else {
+			add(
+				root + ' major pentatonic',
+				'A clear chord-tone-led starting point.',
+				chord.root,
+				'majorPentatonic'
+			);
+		}
 	}
 
 	return out.slice(0, 3);
