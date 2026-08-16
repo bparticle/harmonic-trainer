@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { analyse } from './analyse';
 import { parseChord } from './chord';
 import { parseKey } from './key';
-import { formatStudyKey, studyProgression } from './study';
+import { formatNote } from './note';
+import { scaleNotes } from './scales';
+import { formatStudyKey, studyProgression, type ScaleSuggestion } from './study';
+
+const notesOf = (suggestion: ScaleSuggestion) =>
+	scaleNotes(suggestion.root, suggestion.scale).map((note) => formatNote(note));
 
 describe('harmonic study context', () => {
 	it('treats the major dominant in a minor key as functional harmony', () => {
@@ -35,6 +40,56 @@ describe('harmonic study context', () => {
 
 		expect(study.scales.map((scale) => scale.name)).toEqual(['C major', 'D Dorian']);
 		expect(study.annotation).toBe('In key');
+	});
+
+	/*
+	 * Every suggestion has to be drawable, not only sayable. The names alone
+	 * were all this returned until the study panel started putting the scales
+	 * on a keyboard, and a name is not something a diagram can be built from.
+	 */
+	describe('each suggestion carries the scale itself', () => {
+		it('hands back the notes the name describes', () => {
+			const [study] = studyProgression([parseChord('Dm7')], parseKey('C'));
+
+			expect(notesOf(study.scales[0])).toEqual(['C', 'D', 'E', 'F', 'G', 'A', 'B']);
+			expect(notesOf(study.scales[1])).toEqual(['D', 'E', 'F', 'G', 'A', 'B', 'C']);
+		});
+
+		it('names the parent key as a key and still spells it as a scale', () => {
+			// "B♭ major", not "B♭ Ionian" — but the same seven notes either way.
+			const [study] = studyProgression([parseChord('Cm7')], parseKey('Bb'));
+
+			expect(study.scales[0].name).toBe('B♭ major');
+			expect(notesOf(study.scales[0])).toEqual(['Bb', 'C', 'D', 'Eb', 'F', 'G', 'A']);
+		});
+
+		it('roots an altered scale on the chord and its parent a semitone up', () => {
+			const [study] = studyProgression([parseChord('G7b9')], parseKey('C'));
+			const altered = study.scales.find((scale) => scale.name.endsWith('altered'));
+			const parent = study.scales.find((scale) => scale.name.endsWith('melodic minor'));
+
+			expect(altered && notesOf(altered)).toEqual(['G', 'Ab', 'Bb', 'Cb', 'Db', 'Eb', 'F']);
+			expect(parent && notesOf(parent)).toEqual(['Ab', 'Bb', 'Cb', 'Db', 'Eb', 'F', 'G']);
+		});
+
+		it('gives every suggestion a scale that starts where it says it does', () => {
+			const studies = studyProgression(
+				['Cmaj7', 'A7b9', 'Dm7', 'G7', 'Bm7b5', 'Bb7', 'Caug', 'C#dim7', 'F7'].map(parseChord),
+				parseKey('C')
+			);
+
+			for (const study of studies) {
+				expect(study.scales.length).toBeGreaterThan(0);
+				for (const suggestion of study.scales) {
+					const notes = notesOf(suggestion);
+					expect(notes.length).toBeGreaterThanOrEqual(5);
+					// The name always opens with the root the scale is built on.
+					expect(suggestion.name.startsWith(formatNote(suggestion.root, { unicode: true }))).toBe(
+						true
+					);
+				}
+			}
+		});
 	});
 
 	it('marks the exact chord where a new key centre becomes established', () => {
