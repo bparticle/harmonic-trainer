@@ -1372,3 +1372,54 @@ sync path and a place to read it back, and none of that was asked for — the
 question was "did I get that one", which is a question about the last three
 minutes. The tables M6 would need for the long view are still there, unused, and
 this is not the thing that should quietly start filling them.
+
+---
+
+## Three things on screen, two columns to put them in
+
+The chord study panel was meant to stay beside the chart for as long as you are
+playing. Between 1024 and 1279px it did not — it sat underneath it, a full
+chart's worth of scrolling away, which is the one place it was built never to
+be.
+
+### The template stopped describing the page
+
+The grid wrapper picked its columns from whether the chart list was showing,
+but only the `xl` template ever grew a third track. The `lg` template said two
+columns in both cases. So with the list open there were three children and two
+tracks, and grid did the only thing it can do: put the third one on a new
+implicit row, in the wide column, 685px across and thousands of pixels down.
+
+Nothing looked broken. That is what made it survive — the study panel was still
+there, still correct, just no longer anywhere near your eyes, and only in a
+256px-wide band of viewport that a desktop browser does not sit in by default.
+
+### Narrower columns, not a wrapped one
+
+Three ways out were on the table, and the other two both give something up.
+
+Letting the list **span a row of its own** above the chart keeps the chart at
+full width, but a full-bleed band of tune names is precisely the wall this list
+was rewritten to stop being, and it pushes the chart down the page to make
+room.
+
+**Collapsing the list by default below `xl`** is not a fix at all, only a better
+default. The preference is remembered, so anyone who chose to show the list on
+a wide screen carries that choice down to a narrow one; and opening the list at
+1100px to go and find a tune is a reasonable thing to want. The layout has to
+hold when you do it.
+
+So `lg` gets a real three-column template — `12rem`, the chart, `20rem` — with
+the list and the study each giving up a couple of rem rather than the chart
+giving up its place beside the study. The default did move to below `xl` as
+well, because three columns are genuinely comfortable only at 1280 and up: the
+narrow arrangement is now something you opt into for as long as it takes to
+pick a tune, not the state you land in to practise.
+
+### Sticky from `lg`, not from `xl`
+
+Both side columns pinned themselves and scrolled internally only at `xl`, which
+was consistent while `xl` was the only width they were columns at. Now that
+they are columns from `lg` up, the pinning follows them down — otherwise the
+study panel would have been placed correctly and then scrolled off the top of
+the screen on the first chorus, which is the same defeat by a slower route.
