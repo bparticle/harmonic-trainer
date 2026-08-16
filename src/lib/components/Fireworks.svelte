@@ -7,6 +7,14 @@
 	 * component hands out this handle on mount rather than being driven by props
 	 * that the page would then have to remember to unset.
 	 */
+	/**
+	 * A callout either celebrates something or marks the end of it. The second
+	 * kind exists because a streak that reset silently was a streak nobody
+	 * noticed resetting — it states the number reached, in ink rather than in
+	 * colour, and drifts down rather than up.
+	 */
+	export type CalloutKind = 'win' | 'end';
+
 	export type FireworksApi = {
 		/** A chord tone found, at the element it was found on. */
 		spark: (at: Element | null | undefined, pc: number, power?: number) => void;
@@ -15,7 +23,7 @@
 		/** One beat gone by. `strength` is 1 on a downbeat. */
 		pulse: (strength: number) => void;
 		/** A few words, briefly, in the middle of the screen. */
-		say: (text: string, pc: number) => void;
+		say: (text: string, pc: number, kind?: CalloutKind) => void;
 		/** The end of a good run: confetti in every colour the tune used. */
 		finale: (pitchClasses: number[], text: string) => void;
 		/** Take it all off the screen at once. */
@@ -98,7 +106,7 @@
 	const rgb = $derived(palette.map(oklchToRgb));
 
 	let nextCalloutId = 0;
-	let callouts = $state<Array<{ id: number; text: string; pc: number }>>([]);
+	let callouts = $state<Array<{ id: number; text: string; pc: number; kind: CalloutKind }>>([]);
 
 	/*
 	 * How bright the edges glow.
@@ -323,12 +331,12 @@
 		add(landBurst({ x, y, pc: note, power }));
 	}
 
-	function say(text: string, note: number) {
+	function say(text: string, note: number, kind: CalloutKind = 'win') {
 		if (!live) return;
 		const id = nextCalloutId++;
 		// Three at once is already a pile-up; the fourth would be covering the
 		// first, which is how a callout stops being readable.
-		callouts = [...callouts, { id, text, pc: note }].slice(-3);
+		callouts = [...callouts, { id, text, pc: note, kind }].slice(-3);
 		setTimeout(() => (callouts = callouts.filter((entry) => entry.id !== id)), 1300);
 	}
 
@@ -370,7 +378,11 @@
 	     strip already says in words. -->
 	<div class="callouts" aria-hidden="true">
 		{#each callouts as entry (entry.id)}
-			<strong class="callout" style:--glow="var(--pc-{entry.pc})">{entry.text}</strong>
+			<strong
+				class="callout"
+				class:is-end={entry.kind === 'end'}
+				style:--glow="var(--pc-{entry.pc})">{entry.text}</strong
+			>
 		{/each}
 	</div>
 {/if}
@@ -459,6 +471,22 @@
 		animation: callout 1300ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
 	}
 
+	/*
+	 * The end of a streak, stated rather than celebrated.
+	 *
+	 * Ink instead of the chord's colour, smaller, and drifting down instead of
+	 * up — enough to be sure you saw the number reset, and nothing like a
+	 * penalty. Nothing on this page goes red and this is not the place to start.
+	 */
+	.callout.is-end {
+		color: var(--color-ink-muted);
+		font-family: var(--font-mono);
+		font-size: clamp(1.5rem, 5vw, 2.6rem);
+		font-weight: 400;
+		text-shadow: 0 2px 10px color-mix(in oklab, black 70%, transparent);
+		animation: callout-end 1300ms cubic-bezier(0.33, 0, 0.2, 1) forwards;
+	}
+
 	@keyframes callout {
 		0% {
 			opacity: 0;
@@ -479,6 +507,25 @@
 		100% {
 			opacity: 0;
 			transform: scale(1.05) translateY(-2.5rem);
+		}
+	}
+
+	@keyframes callout-end {
+		0% {
+			opacity: 0;
+			transform: scale(1.04) translateY(-0.6rem);
+		}
+		18% {
+			opacity: 1;
+			transform: scale(1) translateY(0);
+		}
+		60% {
+			opacity: 1;
+			transform: scale(1) translateY(0.3rem);
+		}
+		100% {
+			opacity: 0;
+			transform: scale(0.94) translateY(2rem);
 		}
 	}
 </style>

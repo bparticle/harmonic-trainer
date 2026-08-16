@@ -1639,3 +1639,92 @@ was consistent while `xl` was the only width they were columns at. Now that
 they are columns from `lg` up, the pinning follows them down — otherwise the
 study panel would have been placed correctly and then scrolled off the top of
 the screen on the first chorus, which is the same defeat by a slower route.
+
+---
+
+## The streaks are kept
+
+Three things, reported from actually using it. The combo did not reset when a
+chord went wrong. The ladder ran out at sixteen when runs were reaching fifty.
+And whatever you managed vanished the moment the transport stopped.
+
+### A half-landed chord is a chord you got wrong
+
+The first version let a `partial` hold the streak. The reasoning was the tone
+rule this page is built on — silence is dropped, outside notes are reported and
+never scored, nothing goes red — and a combo that shattered on a missed seventh
+looked like the first thing here to tell you off.
+
+It was right about the score and wrong about the combo. **Landing one guide
+tone out of two is the commonest way to get a chord wrong**, which meant a run
+of mistakes sailed past fifty untouched. A counter that survives your mistakes
+is not counting anything, and the number stopped meaning what it appeared to
+mean — which is a worse failure than being told you dropped one.
+
+Only a fully landed chord continues a streak now. The non-punishment rule still
+holds where it belongs: a chord you played _nothing_ over is still dropped
+rather than failed, so resting through four bars costs you nothing, and a broken
+streak still costs nothing but the number.
+
+### A streak that ends says what it reached
+
+Making it break is not enough if you cannot see it break. So a run of three or
+more that ends puts its own number on the screen — `31×`, in ink rather than in
+the chord's colour, drifting down where a celebration drifts up.
+
+Stating the number reached rather than the mistake that ended it is the whole
+distinction. `31×` is the record of a good run. Anything phrased as a loss would
+be the exact scolding the previous section was trying to avoid, and would have
+solved the first problem by creating the one it was afraid of.
+
+### Six rungs, and the top one is a sitting's work
+
+`3, 6, 12, 20, 32, 50` — the gaps widening by roughly half each time, so every
+badge costs meaningfully more than the last. Fifty in a row is three passes of a
+blues without dropping one.
+
+Every tier carries a stable `id` as well as a name. Badges are stored under the
+id, so the names stay free to change and a tier that disappears takes its badge
+with it rather than leaving an unreadable entry behind.
+
+### A badge wears the colour of the chord that won it
+
+Badges needed a colour and the app has exactly one colour system, which is
+already spoken for: hue means pitch, everywhere, and handing it a second meaning
+would be the first crack in the thing the whole interface rests on. Bronze,
+silver and gold were the obvious way out and belong to a different product.
+
+So a badge simply remembers the pitch class of the chord it was clinched on, and
+wears it. Nothing is invented, the rule is not bent, and the shelf becomes a
+record of what you have actually been practising — a row of greens is a lot of
+time on F.
+
+A badge is kept from the **first** time it was earned, not the best. `best`
+already answers "how far have you got"; a badge answers "when did you first get
+there", and overwriting it on every pass would turn six dated milestones into
+six copies of the same afternoon.
+
+### All six on show, earned or not
+
+A collection that displayed only what you had already won would be a trophy
+cabinet. This is a ladder, and the use of it is seeing that twenty is next and
+that fifty exists — so an unearned badge is an empty socket with the number it
+costs written in it, and the only thing missing is the colour.
+
+Two different "next"s turned out to matter, and collapsing them was a bug caught
+in the browser: with five badges and a best of thirty-four the shelf said _three
+more in a row for nice_. The rung the current run is climbing towards and the
+first badge still missing from the shelf are different questions, and only the
+first of them exists while nothing is playing.
+
+### Local storage, not the database
+
+The record is a `best`, a `best` per chart, and six badges — kept alongside the
+player's other preferences. The tables the long view would need are still parked
+and a combo counter is not the thing that should quietly start filling them.
+
+`parseRecord` is unforgiving about shape and forgiving about failure: anything
+that does not parse is dropped and the rest is kept, so a hand-edited or
+half-written entry costs one badge rather than the whole shelf. A stored `best`
+lower than a badge that was actually earned is corrected upwards — the badges
+are the harder evidence.
