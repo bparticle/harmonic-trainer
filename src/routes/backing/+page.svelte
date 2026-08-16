@@ -118,13 +118,18 @@
 	 * Persisted, because the point of collapsing it is to stop it competing for
 	 * attention during a practice sitting — it should stay out of the way across
 	 * a reload too, not spring back the moment the page is refreshed.
+	 *
+	 * Collapsed by default below `xl` rather than below `lg`: three columns only
+	 * genuinely fit at 1280px and up. Between 1024 and 1279 they do fit, but the
+	 * chart pays for it, so that arrangement is something you opt into to go and
+	 * find a tune — not what you land on to practise.
 	 */
 	const SIDEBAR_KEY = 'backing:sidebar-collapsed';
 	let sidebarCollapsed = $state(false);
 	let sidebarReady = $state(false);
 	onMount(() => {
 		const saved = localStorage.getItem(SIDEBAR_KEY);
-		sidebarCollapsed = saved ? saved === 'yes' : matchMedia('(max-width: 1023px)').matches;
+		sidebarCollapsed = saved ? saved === 'yes' : matchMedia('(max-width: 1279px)').matches;
 		sidebarReady = true;
 	});
 	$effect(() => {
@@ -662,15 +667,24 @@
 		</div>
 	</header>
 
+	<!--
+		Every column actually on screen gets a track of its own. The chart list is
+		optional, so the template has to change with it: when it was left out of
+		the `lg` template the list still needed somewhere to go, and the study
+		panel got pushed onto a second row underneath the chart — which is exactly
+		the thing it is supposed to never do. Between 1024 and 1279 the list and
+		the study each give up a couple of rem to make three columns fit; below
+		1024 the whole thing stacks.
+	-->
 	<div
 		class={sidebarCollapsed
-			? 'grid gap-7 xl:grid-cols-[1fr_22rem] lg:grid-cols-[1fr_22rem]'
-			: 'grid gap-7 xl:grid-cols-[15rem_1fr_22rem] lg:grid-cols-[1fr_22rem]'}
+			? 'grid gap-7 lg:grid-cols-[minmax(0,1fr)_22rem]'
+			: 'grid gap-7 lg:grid-cols-[12rem_minmax(0,1fr)_20rem] xl:grid-cols-[15rem_minmax(0,1fr)_22rem]'}
 	>
 		{#if !sidebarCollapsed}
 			<!-- The repertoire, as a list. It was a wall of chips, and a wall of chips
 			     is not something you read — it is something you give up on. -->
-			<aside class="repertoire xl:max-h-[calc(100dvh-8rem)] xl:sticky xl:top-20 xl:overflow-y-auto">
+			<aside class="repertoire lg:max-h-[calc(100dvh-8rem)] lg:sticky lg:top-20 lg:overflow-y-auto">
 				{#each byCategory as group (group.category)}
 					<h2 class="panel-title mt-3 first:mt-0">{group.label}</h2>
 					<ul class="mb-1 flex flex-col">
@@ -980,7 +994,9 @@
 				up stacked, and only pair up where the row has room to spare.
 			-->
 			{#if settingsOpen}
-				<div class="setup-panel border-ground-line bg-ground-raised mt-5 flex flex-wrap gap-x-8 gap-y-6 rounded-xl border p-4">
+				<div
+					class="setup-panel border-ground-line bg-ground-raised mt-5 flex flex-wrap gap-x-8 gap-y-6 rounded-xl border p-4"
+				>
 					<div class="w-60">
 						<h2 class="panel-title">Key</h2>
 						<div class="grid grid-cols-4 gap-1.5">
@@ -1010,8 +1026,11 @@
 								aria-label="Slower">−</button
 							>
 							<span class="font-mono text-ink flex-1 text-center text-3xl tabular-nums">{bpm}</span>
-							<button type="button" class="stepper" onclick={() => nudgeTempo(5)} aria-label="Faster"
-								>+</button
+							<button
+								type="button"
+								class="stepper"
+								onclick={() => nudgeTempo(5)}
+								aria-label="Faster">+</button
 							>
 						</div>
 						<input
@@ -1101,7 +1120,7 @@
 			compete with the setup panel or scroll out of view with the chart.
 		-->
 		<aside
-			class="study-inspector xl:max-h-[calc(100dvh-8rem)] xl:sticky xl:top-20 xl:overflow-y-auto"
+			class="study-inspector lg:max-h-[calc(100dvh-8rem)] lg:sticky lg:top-20 lg:overflow-y-auto"
 			aria-label="Chord study"
 		>
 			{#if focused && focusedBar && focusedStudy}
