@@ -39,10 +39,13 @@
 	import {
 		advance as advanceStreak,
 		callout as streakCallout,
+		farewell,
 		noStreak,
 		tierFor,
 		type Streak
 	} from '$lib/effects/streak';
+	import { award, emptyRecord, parseRecord, type StreakRecord } from '$lib/effects/badges';
+	import StreakBadges from '$lib/components/StreakBadges.svelte';
 	import { target as sharedTarget } from '$lib/practice/target.svelte';
 	import { page } from '$app/state';
 	import { shouldHandleSpace } from '$lib/shortcuts';
@@ -169,6 +172,37 @@
 	let fx = $state<FireworksApi | null>(null);
 	let streak = $state<Streak>(noStreak());
 	const tier = $derived(tierFor(streak.count));
+
+	/*
+	 * What the streaks leave behind.
+	 *
+	 * The combo itself lives and dies with the run. This outlives the tab: the
+	 * best you have ever done, the best on each tune, and one badge per rung of
+	 * the ladder kept from the first time you reached it.
+	 *
+	 * Local storage, alongside the rest of the player's preferences, and
+	 * deliberately not the database. The tables the long view would need are
+	 * still parked and a combo counter is not the thing that should quietly
+	 * start filling them.
+	 */
+	const STREAKS_KEY = 'backing:streaks-v1';
+	let streaks = $state<StreakRecord>(emptyRecord());
+	let streaksReady = $state(false);
+
+	onMount(() => {
+		try {
+			const raw = localStorage.getItem(STREAKS_KEY);
+			if (raw) streaks = parseRecord(JSON.parse(raw));
+		} catch {
+			// A record that will not parse costs you the shelf, never the player.
+		}
+		streaksReady = true;
+	});
+
+	$effect(() => {
+		if (!streaksReady) return;
+		localStorage.setItem(STREAKS_KEY, JSON.stringify(streaks));
+	});
 	let transportEl = $state<HTMLDivElement | null>(null);
 	let transportBeat: Animation | null = null;
 
@@ -481,19 +515,50 @@
 		fx?.spark(chip ?? slotEl(openWhere), pc, power);
 	}
 
-	/** One chord, judged and over. The streak moves whether or not anyone can see it. */
+	/**
+	 * One chord, judged and over.
+	 *
+	 * The streak and the record both move whether or not anyone can see them, so
+	 * that switching the fireworks on mid-sitting shows the truth rather than a
+	 * shelf that started counting when you flipped the switch.
+	 */
 	function celebrateChord(finished: ReturnType<typeof closeSlot>) {
 		if (!finished) return;
 
 		const before = streak;
 		streak = advanceStreak(streak, finished.attempt.landing);
 
+		const banked = award(streaks, before, streak, {
+			pc: finished.pc,
+			chart: slug,
+			at: new Date().toISOString()
+		});
+		streaks = banked.record;
+
 		if (finished.attempt.landing === 'landed') {
 			fx?.land(slotEl(finished.where), finished.pc, 0.55 + 0.45 * tier.intensity);
 		}
 
+		/*
+		 * Three things can be worth saying, and only the loudest of them gets to.
+		 * A badge earned for the first time outranks reaching the tier it sits
+		 * on, which outranks the streak having ended — and a badge is rare enough
+		 * to be worth the whole confetti cannon, six times ever.
+		 */
+		const [fresh] = banked.earned.slice(-1);
+		if (fresh) {
+			fx?.finale([finished.pc], `${fresh.name} · new badge`);
+			return;
+		}
+
 		const words = streakCallout(before, streak);
-		if (words) fx?.say(words, finished.pc);
+		if (words) {
+			fx?.say(words, finished.pc);
+			return;
+		}
+
+		const ended = farewell(before, streak);
+		if (ended) fx?.say(ended, finished.pc, 'end');
 	}
 
 	/**
@@ -1200,6 +1265,15 @@
 						{/if}
 					</div>
 				</section>
+			{/if}
+
+			<!--
+				The shelf, under the score and above the settings, and on screen
+				whether or not anything is playing — a ladder you can only see once
+				you are on it would be no use for deciding to get on it.
+			-->
+			{#if fireworks}
+				<StreakBadges record={streaks} {streak} chart={slug} chartName={seed.name} />
 			{/if}
 
 			<!--
