@@ -142,8 +142,24 @@ const DEGREE_ACCIDENTAL: Record<number, string> = {
 	2: '##'
 };
 
+const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
+
+function degreeAccidental(alter: number, unicode: boolean): string {
+	const accidental = DEGREE_ACCIDENTAL[alter] ?? '';
+	return unicode ? accidental.replace(/b/g, '♭').replace(/#/g, '♯') : accidental;
+}
+
 export function formatDegree(d: { degree: number; alter: number }, unicode = false): string {
-	const accidental = DEGREE_ACCIDENTAL[d.alter] ?? '';
-	const glyph = unicode ? accidental.replace(/b/g, '♭').replace(/#/g, '♯') : accidental;
-	return `${glyph}${d.degree}`;
+	return `${degreeAccidental(d.alter, unicode)}${d.degree}`;
+}
+
+/**
+ * The same degree as a Roman numeral: the ♭3 of C is `bIII`.
+ *
+ * Always uppercase. Case means chord quality everywhere else in this app — `ii`
+ * is a minor chord — and the callers that mean a chord lowercase it themselves;
+ * a numeral standing for a single note is claiming no quality at all.
+ */
+export function formatRomanDegree(d: { degree: number; alter: number }, unicode = false): string {
+	return `${degreeAccidental(d.alter, unicode)}${ROMAN[d.degree - 1] ?? d.degree}`;
 }

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { formatNote, pitchClass, type Note } from '$lib/music/note';
+	import { romanDegrees } from '$lib/music/scales';
 
 	/*
 	 * One scale, on one octave of a keyboard.
@@ -21,6 +22,13 @@
 	 * carrying pitch here as everywhere else in this app and cannot be asked to
 	 * carry a second meaning. Keys outside the scale are left as plain piano
 	 * keys — there is no third colour, only an absence.
+	 *
+	 * Each key in the scale also carries its degree as a Roman numeral, which is
+	 * the one thing on the drawing that does not move when the scale is
+	 * transposed: I is wherever the scale starts, and the run of numerals is the
+	 * mode's own shape, the same on every root. Uppercase throughout, because a
+	 * lowercase numeral means a minor chord everywhere else in this app and no
+	 * chord is being claimed here — see `formatRomanDegree`.
 	 */
 
 	let {
@@ -38,10 +46,23 @@
 
 	const BLACK = new Set([1, 3, 6, 8, 10]);
 	const WHITE_W = 40;
-	const WHITE_H = 88;
+	/*
+	 * Eight units taller than it needs to be for one label, because it now
+	 * carries two. The white key's usable strip is only what the black keys
+	 * leave below them, and squeezing a numeral and a note name into 36 units of
+	 * it put the numeral three units under the black keys' ends — close enough
+	 * to read as a collision rather than as a line of type.
+	 */
+	const WHITE_H = 96;
 	const BLACK_W = 25;
-	const BLACK_H = 52;
+	const BLACK_H = 57;
 	const WIDTH = WHITE_W * 7;
+
+	/* Both labels hang from the end of whichever key they are on, at the same
+	   two offsets, so the numerals form one band across the black keys and
+	   another across the white. */
+	const NAME_OFFSET = 10;
+	const ROMAN_OFFSET = 26;
 
 	/*
 	 * Pitch class to spelling, taken from the scale itself.
@@ -54,6 +75,13 @@
 	 */
 	const spelling = $derived(new Map(notes.map((note) => [pitchClass(note), note])));
 	const chordSet = $derived(new Set(chordTones.map((pc) => ((pc % 12) + 12) % 12)));
+
+	/* Degrees come from the scale rather than from the chord or the key: what a
+	   note is doing *in this scale* is the question the drawing is answering. */
+	const numerals = $derived.by(() => {
+		const written = romanDegrees(notes);
+		return new Map(notes.map((note, i) => [pitchClass(note), written[i]]));
+	});
 
 	type Key = { pc: number; black: boolean; x: number };
 
@@ -79,6 +107,8 @@
 		const note = spelling.get(pc);
 		return note ? formatNote(note, { unicode: true }) : '';
 	};
+
+	const romanOf = (pc: number) => numerals.get(pc) ?? '';
 </script>
 
 <svg
@@ -109,7 +139,14 @@
 			{#if inScale}
 				<text
 					x={key.x + WHITE_W / 2}
-					y={WHITE_H - 9}
+					y={WHITE_H - ROMAN_OFFSET}
+					class="key-roman on-white"
+					class:on-chord={isChord}
+					text-anchor="middle">{romanOf(key.pc)}</text
+				>
+				<text
+					x={key.x + WHITE_W / 2}
+					y={WHITE_H - NAME_OFFSET}
 					class="key-name on-white"
 					class:on-chord={isChord}
 					text-anchor="middle">{nameOf(key.pc)}</text
@@ -139,7 +176,14 @@
 			{#if inScale}
 				<text
 					x={key.x + BLACK_W / 2}
-					y={BLACK_H - 10}
+					y={BLACK_H - ROMAN_OFFSET}
+					class="key-roman on-black"
+					class:on-chord={isChord}
+					text-anchor="middle">{romanOf(key.pc)}</text
+				>
+				<text
+					x={key.x + BLACK_W / 2}
+					y={BLACK_H - NAME_OFFSET}
 					class="key-name on-black"
 					class:on-chord={isChord}
 					text-anchor="middle">{nameOf(key.pc)}</text
@@ -215,21 +259,49 @@
 	 * swatch itself, which brings the contrast-safe ink the palette computed for
 	 * it. The two sizes are the keys' widths, not their colours.
 	 */
-	.key-name {
+	.key-name,
+	.key-roman {
 		font-family: var(--font-mono);
 		fill: var(--color-ink);
 		pointer-events: none;
 	}
 
-	.on-white {
+	.key-name.on-white {
 		font-size: 12px;
 	}
 
-	.on-black {
+	.key-name.on-black {
 		font-size: 11px;
 	}
 
-	.key-name.on-chord {
+	/*
+	 * The numeral annotates the note name rather than competing with it, and the
+	 * whole of that hierarchy is size and position: two sizes smaller, and a
+	 * line above. It is deliberately *not* dimmed.
+	 *
+	 * Held back at three quarters opacity it measured 2.65:1 against the palest
+	 * key it can land on, where the note names manage 3.49:1 — and this is a
+	 * diagram read at arm's length from a music stand, at ten pixels. A second
+	 * label nobody can read from where they are sitting is not restraint.
+	 *
+	 * A black key is 25 units wide and that is what sets the smaller size:
+	 * `♭VII` is the longest a degree can be, four monospaced glyphs, and it has
+	 * to sit inside one with room to spare. It measures 20.2.
+	 */
+	.key-roman {
+		letter-spacing: 0.03em;
+	}
+
+	.key-roman.on-white {
+		font-size: 10px;
+	}
+
+	.key-roman.on-black {
+		font-size: 8.5px;
+	}
+
+	.key-name.on-chord,
+	.key-roman.on-chord {
 		fill: var(--tone-ink);
 	}
 </style>

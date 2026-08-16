@@ -1728,3 +1728,122 @@ that does not parse is dropped and the rest is kept, so a hand-edited or
 half-written entry costs one badge rather than the whole shelf. A stored `best`
 lower than a badge that was actually earned is corrected upwards — the badges
 are the harder evidence.
+
+---
+
+## Every key in a suggested scale says what it is doing there
+
+The diagrams under "Try over it" answered _which keys_ and stopped. Which of
+them the scale actually starts on, which one is the flat seventh the word
+_Mixolydian_ was promising, which is the ♯11 that makes a Lydian dominant worth
+the name — all of it had to be reconstructed from seven note names, on a
+picture deliberately drawn C to B and therefore never starting where the scale
+does.
+
+So every key in the scale now carries its degree as a Roman numeral, above the
+note name.
+
+### Degrees of the scale, not numerals of the key
+
+Roman numerals already mean something a few centimetres higher up the panel:
+`V7/vi`, the chord's function in the key. These mean something else — a single
+note's place in one suggested scale — and two frames sharing one notation is a
+real risk, so the second frame is pinned down by everything around it. The
+scale's name sits directly above its own diagram. Every numeral is measured
+from that scale's root and nothing else. And they are **uppercase, always**.
+
+The uppercase rule is the part worth stating. Case carries chord quality
+everywhere else here — `ii` is minor, `II` is not — and a lowercase numeral
+under a single key would be claiming a quality for a chord nobody has built.
+Case-by-quality was tempting, and would have said something genuinely useful
+about a mode: that the IV of Dorian is major is the fact that makes Dorian
+Dorian. It was dropped because it cannot be kept. Stacking thirds needs seven
+notes and a third to stack; the blues scale has six notes, the whole-tone
+scale six, the diminished scale eight, and the app suggests all three. A
+convention that quietly stops applying to a quarter of the diagrams is worse
+than no convention.
+
+`formatRomanDegree` therefore lives next to `formatDegree` in `spell.ts` and
+takes the same `{ degree, alter }` the whole app already uses. `analyse.ts` had
+been carrying its own private copy of the numeral table and its own accidental
+prefix; it now calls the shared one and lowercases the result when it means a
+minor chord, which is the one place case is earned. A chord's numeral and a
+note's degree should not be able to drift apart on the question of what a
+fourth is.
+
+### Measured from the scale's root, not from the chord
+
+The other tempting frame was the chord: label each key `1 ♭9 ♯9 3 ♯11 ♭13 ♭7`
+and tell an improviser what tension they are reaching for. That is a good
+label. It is also already on the screen — the degree row above the keyboard
+names every chord tone, in the same twelve colours as the diagram — and it
+would have made the numerals under a scale whose root is _not_ the chord's into
+a puzzle.
+
+Those are common. B♭ melodic minor is suggested over A7♯9; C harmonic minor
+over the G7 in a minor blues. Reading `VII` under the A, and `V` under the G,
+is the lesson rather than the confusion: it is where that chord sits in the
+scale you were just handed. Which note is home is a question the diagram
+already answers, in fill rather than in type — the chord tones are solid, the
+rest of the scale is the same colour held back.
+
+It also makes the numerals the one thing on the drawing that does not move.
+Twelve keys, C to B, means the scale itself slides around; `I` marks where it
+starts, and the run of numerals is the mode's shape, letter for letter
+identical on every root.
+
+### The degrees are relaxed exactly where the spellings are
+
+F♯ whole-half diminished contains an E♭. Strictly that is the ♭♭7 — a seventh,
+because it is some kind of E — and every player alive calls it the 6.
+
+This is the same collision the note spellings already hit, for the same reason:
+eight degrees, seven letters. So `scaleDegreeIn` takes the same way out as
+`readable` does one function above it, and through the same `spellChromatic`.
+Spelled first, always: the F♭ in C altered stays `♭IV` rather than becoming
+`III`, because it really is a diminished fourth and that is the whole character
+of the scale. Only when the strict answer needs a **double** accidental is the
+plain enharmonic degree used instead, leaning the way the note was already
+leaning.
+
+That also bounds the label. `♭VII` is now the longest a degree can be, four
+monospaced glyphs, and a test walks every scale in every key to prove it —
+which matters, because a black key on this diagram is 25 units wide and `♭VII`
+measures 20.2 of them.
+
+### Size, not dimming
+
+The first version held the numerals back at three quarters opacity, on the
+principle that an annotation should not shout over the note name.
+
+Measured against the palest key a numeral can land on, that put it at 2.65:1,
+where the note names sit at 3.49:1 — small type, on a diagram meant to be read
+from a music stand at arm's length, made deliberately harder to read than the
+type beside it. A label nobody can make out from where they are sitting is not
+restraint, it is a label that failed.
+
+So the numerals are full-strength ink and the hierarchy is entirely size and
+position: two sizes smaller, one line above, the note name still hanging at the
+end of the key. Both labels sit at exactly the same contrast as each other on
+every key, which is the app's existing bar rather than a new one.
+
+### Eight units taller, because the usable strip is not the key
+
+A white key is only readable below where the black keys end. That strip was 36
+units and one label; two labels squeezed into it left the numeral three units
+under the black keys' ends, which reads as a collision rather than as a line of
+type.
+
+The keys went from 88 units to 96, and the black keys from 52 to 57 with them.
+Both labels now hang from the end of whichever key they are on, at the same two
+offsets, so the numerals form one clean band across the black keys and another
+across the white: 6 units clear of the black keys' ends, 7 between numeral and
+note name, 10 below. The diagram grew about ten pixels on screen, which is the
+cheapest thing in this whole section.
+
+### Spoken as numbers, not as numerals
+
+The `aria-label` describes the same drawing as `C 1, D 2, E♭ ♭3, …`. Speech has
+no use for a Roman numeral — `♭VII` comes out of a screen reader as "flat vee
+eye eye" — and the degree is the content, not the notation it happens to be
+drawn in.
