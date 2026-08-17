@@ -13,10 +13,25 @@ import { scale, type Key } from './key';
  */
 
 export type ChordQuality =
-	'maj' | 'min' | 'dom' | 'min7b5' | 'dim7' | 'aug' | 'sus2' | 'sus4' | 'maj6' | 'min6';
+	'maj' | 'min' | 'minMaj' | 'dom' | 'min7b5' | 'dim7' | 'aug' | 'sus2' | 'sus4' | 'maj6' | 'min6';
 
 export type Extension = 7 | 9 | 11 | 13;
 export type Alteration = 'b5' | '#5' | 'b9' | '#9' | '#11' | 'b13';
+
+/**
+ * A tone added without the stack of thirds underneath it.
+ *
+ * `Cadd9` is not `C9`: the ninth arrives on its own, and the seventh that a
+ * ninth normally implies is exactly the note that must not be there. That is a
+ * different fact about the chord than an extension is, so it is a different
+ * field rather than an extension with a flag — every rule about extensions
+ * (they imply the seventh, the symbol names only the top one) is wrong here.
+ *
+ * The second and the ninth are kept apart because the chart keeps them apart.
+ * They are the same pitch class and a different sound, and `Am(add2)` written
+ * on a page should not come back as `Amadd9`.
+ */
+export type Added = 2 | 4 | 6 | 9 | 11 | 13;
 
 /** Root, quality and colour. Says nothing about which octave anything is in. */
 export type AbstractChord = {
@@ -24,6 +39,8 @@ export type AbstractChord = {
 	quality: ChordQuality;
 	extensions: Extension[];
 	alterations: Alteration[];
+	/** Tones added without implying a seventh: the `add9` in Cadd9. */
+	added?: Added[];
 	/** Slash chords: the note actually in the bass, when it is not the root. */
 	bass?: Note;
 };
@@ -39,6 +56,10 @@ export type Chord = AbstractChord & {
 const QUALITY_INTERVALS: Record<ChordQuality, string[]> = {
 	maj: ['P1', 'M3', 'P5'],
 	min: ['P1', 'm3', 'P5'],
+	// Like a dominant and for the same reason: with the seventh taken away this
+	// is just a minor triad, so the seventh is part of the quality rather than an
+	// extension that might not be asked for.
+	minMaj: ['P1', 'm3', 'P5', 'M7'],
 	dom: ['P1', 'M3', 'P5', 'm7'],
 	// Triad only: with no seventh this is a plain diminished chord, and the m7
 	// arrives via the 7 extension. A dominant, by contrast, is never a triad.
@@ -55,6 +76,7 @@ const QUALITY_INTERVALS: Record<ChordQuality, string[]> = {
 const SEVENTH_FOR_QUALITY: Partial<Record<ChordQuality, string>> = {
 	maj: 'M7',
 	min: 'm7',
+	minMaj: 'M7',
 	dom: 'm7',
 	aug: 'm7',
 	sus2: 'm7',
@@ -65,6 +87,16 @@ const SEVENTH_FOR_QUALITY: Partial<Record<ChordQuality, string>> = {
 
 /** Qualities whose sixth is a genuine chord tone, so adding a 9 does not imply a 7. */
 const SIXTH_QUALITIES = new Set<ChordQuality>(['maj6', 'min6']);
+
+/** The interval each added degree contributes. */
+const ADDED_INTERVAL: Record<Added, string> = {
+	2: 'M2',
+	4: 'P4',
+	6: 'M6',
+	9: 'M9',
+	11: 'P11',
+	13: 'M13'
+};
 
 export function chord(
 	root: Note | string,
@@ -117,7 +149,32 @@ export function chordIntervals(c: AbstractChord): Interval[] {
 		names.push(altered('b13') ? 'b13' : 'M13');
 	}
 
-	return names.map(ivl);
+	const added = c.added ?? [];
+	if (added.length === 0) return names.map(ivl);
+
+	/*
+	 * An added tone is the one thing here that does not belong on the top of the
+	 * stack. `add2` sits between the root and the third and is a different sound
+	 * from the `add9` an octave above it — and `closeVoicing` builds the chord by
+	 * walking this list in order, lifting each note above the last, so pushing the
+	 * second onto the end would turn every add2 into an add9 on the way to the
+	 * keyboard. Sorting by diatonic step puts each one where it is written.
+	 *
+	 * Only done when there is something added: every other path already builds
+	 * this list in ascending order, and a sort that can only be a no-op is a sort
+	 * that can only introduce a bug.
+	 */
+	const steps = new Set(names.map((n) => ivl(n).steps));
+	for (const degree of added) {
+		const name = ADDED_INTERVAL[degree];
+		const interval = ivl(name);
+		// A tone the chord already has is not added twice, whichever way it arrived.
+		if (steps.has(interval.steps)) continue;
+		steps.add(interval.steps);
+		names.push(name);
+	}
+
+	return names.map(ivl).sort((a, b) => a.steps - b.steps);
 }
 
 function replaceDegree(names: string[], degree: number, replacement: string) {
@@ -411,6 +468,7 @@ export function identify(notes: Note[]): AbstractChord {
 		['m3 d5', 'min7b5', []],
 		['M3 P5 M7', 'maj', [7]],
 		['m3 P5 m7', 'min', [7]],
+		['m3 P5 M7', 'minMaj', [7]],
 		['M3 P5 m7', 'dom', []],
 		['m3 d5 m7', 'min7b5', [7]],
 		['m3 d5 d7', 'dim7', []],
@@ -448,6 +506,9 @@ function simplifyToOctave(interval: Interval): Interval {
 const QUALITY_SUFFIX: Record<ChordQuality, { ascii: string; unicode: string }> = {
 	maj: { ascii: '', unicode: '' },
 	min: { ascii: 'm', unicode: 'm' },
+	// Never reached: `formatChord` spells this one out itself, because the seventh
+	// has to be written and this table has nowhere to put it.
+	minMaj: { ascii: 'mMaj', unicode: 'm∆' },
 	dom: { ascii: '', unicode: '' },
 	min7b5: { ascii: 'm7b5', unicode: 'ø' },
 	dim7: { ascii: 'dim7', unicode: '°' },
@@ -474,6 +535,11 @@ export function formatChord(c: AbstractChord, unicode = false): string {
 		symbol += unicode ? '∆' : 'maj';
 		if (highest && highest !== 7) symbol += String(highest);
 		else if (!unicode) symbol += '7';
+	} else if (c.quality === 'minMaj') {
+		// The seventh is not optional here, so it is always spelled: `Am∆` alone
+		// would be indistinguishable from a minor triad in a hurry.
+		symbol += unicode ? 'm∆' : 'mMaj';
+		symbol += String(highest && highest !== 7 ? highest : 7);
 	} else if (c.quality === 'dom') {
 		symbol += String(highest && highest !== 7 ? highest : 7);
 	} else if (c.quality === 'min7b5') {
@@ -495,6 +561,8 @@ export function formatChord(c: AbstractChord, unicode = false): string {
 	for (const alteration of c.alterations) {
 		symbol += alteration.replace('b', flat).replace('#', sharp);
 	}
+
+	for (const degree of c.added ?? []) symbol += `add${degree}`;
 
 	if (c.bass && pitchClass(c.bass) !== pitchClass(c.root)) {
 		symbol += `/${formatPitch(c.bass, unicode)}`;
@@ -534,6 +602,10 @@ export function parseChord(text: string): AbstractChord {
 		[/^(dim7|°7|o7)/, 'dim7', []],
 		[/^(dim|°|o)(?![a-z])/, 'min7b5', []],
 		[/^(aug|\+)/, 'aug', []],
+		// Before both `maj` and `min`, because it starts like one and ends like the
+		// other. `Cmmaj7`, `CmM7`, `Cm(maj7)`, `Cm∆7`, `C-maj7` are all the same
+		// chord; `Cmaj7` is not one of them and must still reach the token below.
+		[/^(m|min|-)\(?(maj|Maj|MAJ|M|∆)\)?/, 'minMaj', [7]],
 		[/^(maj|Maj|MAJ|M|∆)/, 'maj', [7]],
 		[/^(min|m|-)/, 'min', []]
 	];
@@ -551,6 +623,19 @@ export function parseChord(text: string): AbstractChord {
 		rest = body.slice(0, found.index) + body.slice(found.index + found[0].length);
 		break;
 	}
+
+	/*
+	 * Added tones come out first, because they are written as digits and every
+	 * rule below reads digits. Left in, the `9` of `Cadd9` is found by the degree
+	 * match and the chord becomes a C9 — a dominant, with a seventh, which is the
+	 * one note an added ninth exists to avoid.
+	 */
+	const added: Added[] = [];
+	rest = rest.replace(/\(?add(\d+)\)?/g, (_, digits: string) => {
+		const degree = Number(digits);
+		if (degree in ADDED_INTERVAL) added.push(degree as Added);
+		return '';
+	});
 
 	const alterations: Alteration[] = [];
 	for (const alteration of ['b5', '#5', 'b9', '#9', '#11', 'b13'] as Alteration[]) {
@@ -589,5 +674,12 @@ export function parseChord(text: string): AbstractChord {
 		);
 	}
 
-	return { root, quality, extensions, alterations, bass: rawBass ? parseNote(rawBass) : undefined };
+	return {
+		root,
+		quality,
+		extensions,
+		alterations,
+		added: added.length ? added : undefined,
+		bass: rawBass ? parseNote(rawBass) : undefined
+	};
 }

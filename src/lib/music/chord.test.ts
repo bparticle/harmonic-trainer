@@ -167,6 +167,77 @@ describe('chord symbols', () => {
 	});
 });
 
+describe('minor-major sevenths', () => {
+	it('reads the several ways people write one', () => {
+		for (const symbol of ['Ammaj7', 'AmM7', 'Am(maj7)', 'Am∆7', 'A-maj7', 'Aminmaj7']) {
+			expect(formatChord(parseChord(symbol)), symbol).toBe('AmMaj7');
+		}
+	});
+
+	it('keeps the major seventh, which is the only thing distinguishing it', () => {
+		expect(pitches(chordNotes(parseChord('AmMaj7')))).toEqual(['A', 'C', 'E', 'G#']);
+		expect(pitches(chordNotes(parseChord('Am7')))).toEqual(['A', 'C', 'E', 'G']);
+	});
+
+	// The whole reason this quality exists: `m` then `maj` used to fall through to
+	// the plain minor token, and the `maj` was swallowed without a word.
+	it('does not collapse into a minor seventh', () => {
+		expect(formatChord(parseChord('Ammaj7'))).not.toBe('Am7');
+	});
+
+	it('still lets a plain major seventh reach the major token', () => {
+		expect(formatChord(parseChord('Amaj7'))).toBe('Amaj7');
+		expect(formatChord(parseChord('AM7'))).toBe('Amaj7');
+	});
+
+	it('carries an extension above the seventh', () => {
+		expect(pitches(chordNotes(parseChord('Am(maj9)')))).toEqual(['A', 'C', 'E', 'G#', 'B']);
+		expect(formatChord(parseChord('Am(maj9)'))).toBe('AmMaj9');
+	});
+
+	it('is never a triad, so the seventh is always spelled', () => {
+		expect(chordNotes(parseChord('AmMaj7'))).toHaveLength(4);
+		expect(formatChord(parseChord('AmMaj7'), true)).toBe('Am∆7');
+	});
+});
+
+describe('added tones', () => {
+	it('adds the tone without the seventh a ninth would imply', () => {
+		expect(pitches(chordNotes(parseChord('Cadd9')))).toEqual(['C', 'E', 'G', 'D']);
+		expect(pitches(chordNotes(parseChord('C9')))).toEqual(['C', 'E', 'G', 'Bb', 'D']);
+	});
+
+	it('keeps a second below the third and a ninth above the chord', () => {
+		expect(pitches(chordNotes(parseChord('Am(add2)')))).toEqual(['A', 'B', 'C', 'E']);
+		expect(pitches(chordNotes(parseChord('Amadd9')))).toEqual(['A', 'C', 'E', 'B']);
+	});
+
+	it('survives close voicing in the register it was written in', () => {
+		expect(withOctaves(closeVoicing(parseChord('Am(add2)'), 3))).toEqual(['A3', 'B3', 'C4', 'E4']);
+		expect(withOctaves(closeVoicing(parseChord('Amadd9'), 3))).toEqual(['A3', 'C4', 'E4', 'B4']);
+	});
+
+	it('reads both the bare and the bracketed spelling', () => {
+		for (const symbol of ['Amadd9', 'Am(add9)']) {
+			expect(formatChord(parseChord(symbol)), symbol).toBe('Amadd9');
+		}
+	});
+
+	it('rides along with a quality and a suspension', () => {
+		expect(pitches(chordNotes(parseChord('Csus4add9')))).toEqual(['C', 'F', 'G', 'D']);
+		expect(formatChord(parseChord('Csus4add9'))).toBe('Csus4add9');
+	});
+
+	it('does not double a tone the chord already has', () => {
+		expect(pitches(chordNotes(parseChord('C9add9')))).toEqual(['C', 'E', 'G', 'Bb', 'D']);
+	});
+
+	it('leaves every other chord stacked exactly as before', () => {
+		expect(pitches(chordNotes(parseChord('G13')))).toEqual(['G', 'B', 'D', 'F', 'A', 'E']);
+		expect(pitches(chordNotes(parseChord('C7b9')))).toEqual(['C', 'E', 'G', 'Bb', 'Db']);
+	});
+});
+
 describe('naming the notes of a chord by degree', () => {
 	const degrees = (symbol: string) => degreeLabels(parseChord(symbol)).map((d) => d.degree);
 

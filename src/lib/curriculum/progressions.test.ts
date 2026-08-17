@@ -6,7 +6,8 @@ import {
 	progressionsAtLevel,
 	realiseProgression
 } from './progressions';
-import { formatChord } from '$lib/music/chord';
+import { formatChord, parseChord } from '$lib/music/chord';
+import { romanNumeral } from '$lib/music/analyse';
 import { key as makeKey, parseKey } from '$lib/music/key';
 import { STAGES } from './ladder';
 
@@ -151,6 +152,63 @@ describe('Roman numerals into chords', () => {
 	it('refuses nonsense', () => {
 		expect(() => chordFromNumeral('Q', makeKey('C'))).toThrow();
 		expect(() => chordFromNumeral('', makeKey('C'))).toThrow();
+	});
+
+	it('carries a minor-major seventh', () => {
+		expect(symbolOf('imMaj7', 'A')).toBe('AmMaj7');
+		expect(symbolOf('imMaj7', 'C')).toBe('CmMaj7');
+		expect(symbolOf('imMaj9', 'A')).toBe('AmMaj9');
+		expect(symbolOf('imMaj7/7', 'A')).toBe('AmMaj7/G#');
+	});
+
+	it('carries an added tone without turning it into an extension', () => {
+		expect(symbolOf('iadd2', 'A')).toBe('Amadd2');
+		expect(symbolOf('iadd9', 'A')).toBe('Amadd9');
+		expect(symbolOf('Iadd9', 'A')).toBe('Aadd9');
+		expect(symbolOf('iadd9', 'Eb')).toBe('Ebmadd9');
+	});
+});
+
+/**
+ * The property the songbook actually rests on.
+ *
+ * A chart is stored as numerals and resolved back when it is played, so a chord
+ * that cannot make that trip is a chord the app will play wrongly — quietly, in
+ * a tune someone is practising. Round-tripping is the whole contract.
+ */
+describe('chords survive being stored as numerals', () => {
+	const symbols = [
+		'AmMaj7',
+		'AmMaj9',
+		'Amadd2',
+		'Amadd9',
+		'Aadd9',
+		'Amadd2/G#',
+		'Csus4add9',
+		'Am7',
+		'Am9',
+		'Am',
+		'Amaj7',
+		'F#m7b5',
+		'Adim/Eb',
+		'C/G',
+		'G7b9',
+		'D/F#'
+	];
+
+	// Two keys, not twelve: the numeral must survive the trip *and* stay the same
+	// chord when it is read from a different tonic. Far keys are left out because
+	// they test enharmonic spelling of the bass, which is a separate question with
+	// its own tests.
+	it.each(symbols)('%s', (symbol) => {
+		for (const keyName of ['A', 'C']) {
+			const k = parseKey(keyName);
+			const written = parseChord(symbol);
+			const stored = romanNumeral(written, k);
+			expect(formatChord(chordFromNumeral(stored, k)), `${symbol} in ${keyName} (${stored})`).toBe(
+				formatChord(written)
+			);
+		}
 	});
 });
 

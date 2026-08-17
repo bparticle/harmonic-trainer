@@ -145,14 +145,25 @@ If you changed any code, finish with `npm run verify`.
 ## What the chord parser understands
 
 Roots `A`–`G` with `b`/`#`. Then: `m` `min` `-` for minor, `maj` `M` `∆`,
-`m7b5` `ø`, `dim` `°` `o`, `dim7` `°7` `o7`, `aug` `+`, `sus2` `sus4`, sixths
-`6` `m6`, extensions `7` `9` `11` `13`, alterations `b5` `#5` `b9` `#9` `#11`
-`b13`, and a slash bass, which now stores and plays back.
+minor-major `mmaj7` `mM7` `m(maj7)` `m∆7`, `m7b5` `ø`, `dim` `°` `o`, `dim7`
+`°7` `o7`, `aug` `+`, `sus2` `sus4`, sixths `6` `m6`, extensions `7` `9` `11`
+`13`, added tones `add2` `add4` `add9` `add11` `add13` — bracketed or not —
+alterations `b5` `#5` `b9` `#9` `#11` `b13`, and a slash bass, which now stores
+and plays back.
+
+`add9` is not `9`. The added tone arrives without the seventh underneath it,
+which is the whole point of writing it that way, and `add2` is kept distinct
+from `add9` because the chart keeps them distinct — the second sits under the
+third and sounds different from the ninth an octave up.
 
 `alt` is **not** understood — `G7alt` reads as a plain `G7`. The loss happens on
 the way in, where a round-trip check cannot see it, so it is caught by name
 instead: both the script and the editor say so outright. Write the alteration
 you actually want: `G7b9`, `G7#5`, `G7b13`.
+
+One more that the round-trip cannot see, because it is a real chord either way:
+**`maj` on its own means `maj7`**. `Emaj` is stored as `Emaj7`, with a D♯ that
+was never on the page. If you mean the plain triad, write `E`.
 
 ## Removing one
 
