@@ -56,18 +56,18 @@ const seed = importedToSeed(name, check.rows, {
 });
 
 // Slugs are the chart's URL, so a second tune must not silently overwrite a first.
-const existing = await db.select({ gridJson: schema.charts.gridJson }).from(schema.charts);
-const taken = existing
-	.map((row) => (row.gridJson as { slug?: string })?.slug)
-	.filter((slug): slug is string => Boolean(slug));
-seed.slug = uniqueSlug(seed.slug, [...CHARTS.map((c) => c.slug), ...taken]);
+const existing = await db.select({ slug: schema.charts.slug }).from(schema.charts);
+seed.slug = uniqueSlug(seed.slug, [...CHARTS.map((c) => c.slug), ...existing.map((r) => r.slug)]);
 
 await db.insert(schema.charts).values({
 	id: randomUUID(),
+	slug: seed.slug,
 	name: seed.name,
 	style: 'custom',
+	mode: seed.mode,
+	notes: seed.notes,
 	defaultBpm: seed.defaultBpm,
-	gridJson: { slug: seed.slug, grid: seed.grid, notes: seed.notes, mode: seed.mode }
+	gridJson: seed.grid
 });
 
 console.log(`\nadded "${seed.name}" — /backing?chart=${seed.slug}`);

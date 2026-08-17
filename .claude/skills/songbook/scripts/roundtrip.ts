@@ -1,6 +1,4 @@
-import { parseChartText, importedToSeed } from '$lib/curriculum/import';
-import { realiseChart } from '$lib/curriculum/charts';
-import { formatChord, parseChord } from '$lib/music/chord';
+import { gridToRows, parseIntoGrid, readGrid } from '$lib/curriculum/editor';
 
 /**
  * Does a chart survive being stored?
@@ -10,6 +8,12 @@ import { formatChord, parseChord } from '$lib/music/chord';
  * A chord that does not survive it is not a crash — it is a wrong chord, quietly,
  * in a tune you are about to practise. So the trip is made and checked before
  * anything is written anywhere.
+ *
+ * The checking itself lives in `$lib/curriculum/editor`, which is also what the
+ * chart editor on /backing shows you as you type and what the server runs
+ * before writing a row. This file is the command-line face of it and nothing
+ * more: a second implementation would be a second opinion about what a chord
+ * means, and the two would eventually disagree.
  */
 
 export type Check = {
@@ -24,13 +28,15 @@ export type Check = {
 };
 
 export function checkChart(text: string, keyName: string): Check {
-	const empty = { ok: false, bars: 0, rows: [], drift: [] };
-
-	// The importer strips repeat marks and then drops the bar they leave empty,
-	// so `| % |` silently shortens the form rather than repeating anything.
+	// The grid drops a bar holding only a repeat mark, so `| % |` silently
+	// shortens the form rather than repeating anything. Caught here rather than
+	// in the editor, where an empty bar is visible on screen and this is not.
 	if (/[%‖𝄎]/.test(text)) {
 		return {
-			...empty,
+			ok: false,
+			bars: 0,
+			rows: [],
+			drift: [],
 			problems: [
 				'Repeat marks found. Write the repeated chord out in full — a bar holding',
 				'only a repeat mark is dropped, and the form comes out short.'
@@ -38,40 +44,15 @@ export function checkChart(text: string, keyName: string): Check {
 		};
 	}
 
-	const parsed = parseChartText(text, keyName);
-	if (parsed.problems.length) return { ...empty, problems: parsed.problems };
+	const reading = readGrid(parseIntoGrid(text), keyName);
 
-	/* The source, tokenised exactly as the importer tokenises it, so the two
-	 * lists line up bar for bar. They can only line up because a chart with
-	 * problems has already been rejected above — a bar the importer skipped
-	 * would shift everything after it. */
-	const written: string[] = [];
-	for (const raw of text.split(/\r?\n/)) {
-		const line = raw.replace(/[:‖%]/g, ' ').trim();
-		if (!line) continue;
-		for (const cell of line.split('|')) {
-			const bar = cell.trim();
-			if (!bar) continue;
-			written.push(
-				bar
-					.split(/\s+/)
-					.filter(Boolean)
-					.map((symbol) => formatChord(parseChord(symbol)))
-					.join(' ')
-			);
-		}
-	}
-
-	const seed = importedToSeed('check', parsed.rows);
-	const stored = realiseChart(seed, keyName)
-		.rows.flat()
-		.map((bar) => bar.chords.map((c) => c.symbol).join(' '));
-
-	const drift = written
-		.map((symbol, i) => ({ bar: i + 1, written: symbol, stored: stored[i] ?? '—' }))
-		.filter((bar) => bar.written !== bar.stored);
-
-	return { ok: drift.length === 0, bars: parsed.bars, rows: parsed.rows, problems: [], drift };
+	return {
+		ok: reading.ok,
+		bars: reading.bars,
+		rows: reading.ok ? gridToRows(reading) : [],
+		problems: reading.problems,
+		drift: reading.drift.map((d) => ({ bar: d.bar, written: d.written, stored: d.playback }))
+	};
 }
 
 /** The report both scripts print. Returns true when the chart is safe to store. */

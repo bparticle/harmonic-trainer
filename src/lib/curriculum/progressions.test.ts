@@ -85,6 +85,38 @@ describe('Roman numerals into chords', () => {
 		expect(symbolOf('V7/V', 'C')).toBe('D7');
 	});
 
+	it('reads a slash bass as a degree of the key', () => {
+		// Arabic after the slash is a bass note, Roman is an applied dominant. The
+		// bass is counted from the key like everything else here, so the B under a
+		// G triad in C is the seventh degree and not the chord's own third.
+		expect(symbolOf('I/3', 'C')).toBe('C/E');
+		expect(symbolOf('V/7', 'C')).toBe('G/B');
+		expect(symbolOf('IV/1', 'C')).toBe('F/C');
+	});
+
+	it('keeps the bass on a chord that has a quality and extensions', () => {
+		expect(symbolOf('ii7/4', 'C')).toBe('Dm7/F');
+		expect(symbolOf('Imaj9/5', 'C')).toBe('Cmaj9/G');
+	});
+
+	it('reads an altered bass degree', () => {
+		expect(symbolOf('I/b3', 'C')).toBe('C/Eb');
+		expect(symbolOf('I/b7', 'C')).toBe('C/Bb');
+	});
+
+	it('transposes a slash chord like any other numeral', () => {
+		expect(symbolOf('I/3', 'Eb')).toBe('Eb/G');
+		expect(symbolOf('V/7', 'F')).toBe('C/E');
+		expect(symbolOf('I/b3', 'A')).toBe('A/C');
+	});
+
+	it('does not mistake an applied dominant for a bass note', () => {
+		// The two share a slash, and the whole disambiguation is Roman versus
+		// Arabic. Nothing already written may change meaning.
+		expect(symbolOf('V7/vi', 'C')).toBe('E7');
+		expect(symbolOf('V7/V', 'C')).toBe('D7');
+	});
+
 	it('transposes: the same numeral is a different chord in each key', () => {
 		expect(symbolOf('ii7', 'Eb')).toBe('Fm7');
 		expect(symbolOf('V7', 'Eb')).toBe('Bb7');

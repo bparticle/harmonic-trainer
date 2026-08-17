@@ -2071,3 +2071,121 @@ next one anybody opens. What `.claude/worktrees` says is that this repo's style
 rules cover this repo's own tree, and not whatever working copies happen to be
 nested inside it while somebody is working.
 
+---
+
+## The chart editor, and a slash that was already spoken for
+
+Typing a tune in meant a text box that wanted pipe characters, a key whose
+consequences were invisible, and a list of line numbers after saving. Four
+complaints, one shape: **you could not see what it was going to do until it had
+done it.** So the checking moved to the keystroke, and one thing that had been
+quietly wrong for as long as the importer existed had to be fixed first.
+
+### The slash was already taken
+
+`C/E` used to store as `C`. Not an error — a wrong chord, silently, in a tune
+about to be practised for an hour, and the songbook notes had to warn about it
+in prose because nothing in the app could.
+
+The cause was smaller than it looked. `AbstractChord` has carried a `bass` field
+since M1 and `parseChord` has always read it; the only place it fell off was
+`romanNumeral`, because a numeral had nowhere to put one. The slash was already
+spoken for: `V7/vi` is the dominant of vi.
+
+The two are told apart by which set of numbers follows the slash. **Arabic is a
+bass degree, Roman is an applied dominant.** `I/3` is C over E; `V7/vi` is still
+E7. Nothing already written changes meaning, which is what made this additive
+rather than a migration of every stored chart.
+
+### Measured from the key, not from the chord
+
+`G/B` in C could be `V/3` — the chord's own third — or `V/7`, the seventh degree
+of the key. It is `V/7`.
+
+Every other numeral in this app answers the question "where in the key", and the
+root of that same chord is already answered that way. Two different origins in
+one symbol would mean reading `V/7` required knowing which half meant what. It
+also reuses the accidental-handling that resolving a root already needed, which
+is why `I/b3` spells correctly in every key without a second copy of that code —
+the two now share `degreeNote`.
+
+### A bass note the bass player ignores has not been stored
+
+Storing the bass and stopping there would have been the same bug with a longer
+reach: the chart says `C/E`, the walking bass starts the bar on C, and the
+disagreement is now between the screen and the speakers rather than between the
+sheet and the database.
+
+`walkingBass` takes the named bass on the downbeat, and aims at the next chord's
+named bass when it walks. The inner beats still step through the chord — a slash
+chord is an instruction about the bottom of the bar, not a bar of one note.
+
+### The checking moved to the keystroke
+
+A bar is a cell. Under it sits the numeral it will be stored as, and that is the
+whole answer to the written-key trap: the key is not a label on the form, it is
+the thing every numeral is measured from, so changing it moves the numerals
+where you can watch them. If they stop making sense, the key is wrong — which
+was previously discoverable only by saving the tune and playing it.
+
+Under the grid sits what comes back out again. That is what `check-chart.ts` has
+always printed, and it needed to be somewhere a person could see without
+knowing there was a script.
+
+### One implementation, three callers
+
+`editor.ts` is pure and holds all of it. The editor calls it to show you the
+bars as you type. The server calls the same functions before writing, and
+derives the numerals itself rather than trusting the ones the browser worked
+out — a browser is not the authority on what a chord means. The songbook script
+calls it too, and lost its own copy of the round trip in the process.
+
+Deriving one answer from one source in three places is the only reason the
+screen, the database and the command line cannot end up describing different
+tunes. The script's previous copy was already drifting: it tokenised the source
+itself to line the bars up, which worked only because a chart with problems had
+been rejected before it got there.
+
+That refactor closed a documented gap for free. `alt` is lost on the way _in_ —
+`G7alt` parses as a plain `G7` — so a round-trip check provably cannot see it,
+and the skill file said as much. Catching it by name in the shared module means
+the script catches it now too.
+
+### Drift refuses the save
+
+The old form offered to "save the understood bars". The editor does not: a chart
+whose bars come back as different chords is not a chart of that tune, and the
+non-punishing tone this app takes with _playing_ has never applied to data
+integrity. What changed is that refusing is now fair — the editor has already
+told you which bar, what it became, and that there is a way to write it that
+survives.
+
+Nothing goes red, still. The report sits in muted ink like everything else here.
+A chord typed wrong while writing a tune down is not a mistake in playing; it is
+a sentence still being written.
+
+### The pipe syntax is an input, not the interface
+
+Pasting `| Dm7 | G7 |` fills the grid. It is how a tune arrives from an email or
+a transcription, it is what the songbook skill produces, and it is faster than
+clicking for anyone who can touch-type. Removing it to make a point about pipe
+characters would have cost the fastest route in and fixed nothing — the
+complaint was never the syntax, it was being made to type it blind.
+
+### `slug`, `mode` and `notes` stopped hiding in a JSON column
+
+The slug is how a chart is addressed in a URL and how the built-ins are told
+apart from yours, and it lived inside `grid_json` — so the page read every row
+on every load and filtered them in application code against a value the database
+could not see. They are columns now, with the slug unique.
+
+The generated migration would have added `slug` as `NOT NULL` with no default,
+which cannot work on a table with rows in it, and would have left the values it
+needed inside the document it was replacing. It is hand-written: nullable, then
+filled from the JSON, then tightened. A row with no slug of its own takes one
+from its id rather than colliding with another untitled chart.
+
+No `user_id`. It belongs on this table and is left to M9, which creates the
+`users` table and the accessor every owned query goes through. Adding the column
+first would mean inventing half of that seam early, and guessing at the half
+that is actually a decision.
