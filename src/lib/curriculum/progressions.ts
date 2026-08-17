@@ -208,17 +208,75 @@ const NATURAL_LETTER: Record<number, Letter | undefined> = {
 };
 
 /**
+ * A degree of the key, with any accidentals in front of it, as a spelled note.
+ *
+ * Alter the note, do not re-spell it.
+ *
+ * `♯I` means the tonic raised, so in F it is F♯ — and going via the pitch class
+ * and asking the key to spell it gave G♭, because F major is a flat key. Same
+ * thing turned `♭V` in C into F♯ sitting next to a D♭m7. Moving the alteration
+ * keeps the letter, which is the entire point of the numeral.
+ *
+ * Two exceptions, both about readability rather than theory. An accidental
+ * still standing on a natural pitch is a spelling nobody writes — ♭II in E♭ is
+ * E7, never F♭7 — and those take the plain letter. Past a single accidental it
+ * stops being useful at all, because B𝄫 helps no one, so the far keys fall back
+ * to whatever the key would call the note.
+ */
+function degreeNote(degree: number, accidental: string, k: Key): Note {
+	const note: Note = scale(k)[degree - 1];
+	if (!accidental) return note;
+
+	const steps = accidental.startsWith('b') ? -accidental.length : accidental.length;
+	const altered = { ...note, alter: note.alter + steps };
+	const pc = ((pitchClass(altered) % 12) + 12) % 12;
+
+	if (altered.alter !== 0 && NATURAL_LETTER[pc]) {
+		return { ...altered, letter: NATURAL_LETTER[pc]!, alter: 0 };
+	}
+	return Math.abs(altered.alter) <= 1 ? altered : spell(pc, k);
+}
+
+/**
+ * What follows a slash: a bass note, or the target of an applied dominant.
+ *
+ * The slash was already spoken for — `V7/vi` is the dominant of vi — so a bass
+ * note could not simply be written after one. It is told apart by which set of
+ * numbers it uses: Arabic means a degree of the key and therefore a note in the
+ * bass, Roman means a chord and therefore an applied dominant. `I/3` is C over
+ * E; `V7/vi` is still E7. Nothing already written changes meaning.
+ *
+ * Measured from the key rather than from the chord, like every other numeral
+ * here: the B under a G triad in C is `V/7`, not `V/3`. That is the reading
+ * that survives transposition, because it is the same question the root is
+ * already answered by.
+ */
+const BASS_DEGREE_PATTERN = /^([b#]{0,2})([1-7])$/;
+
+/**
  * Turn a Roman numeral into a real chord in a key.
  *
  * Handles the diatonic cases, chromatic roots (♭II, ♭VII), quality suffixes
- * (7, maj7, ø7, °) and applied dominants (V7/vi). Case carries the quality, as
- * it does on every chart: uppercase major, lowercase minor.
+ * (7, maj7, ø7, °), applied dominants (V7/vi) and slash basses (I/3). Case
+ * carries the quality, as it does on every chart: uppercase major, lowercase
+ * minor.
  */
 export function chordFromNumeral(numeral: string, k: Key): AbstractChord {
-	// Applied dominants: the dominant of whatever the target numeral resolves to.
 	const slash = numeral.indexOf('/');
 	if (slash > 0) {
-		const target = chordFromNumeral(numeral.slice(slash + 1), k);
+		const after = numeral.slice(slash + 1);
+		const bass = BASS_DEGREE_PATTERN.exec(after);
+
+		if (bass) {
+			const [, accidental, degree] = bass;
+			return {
+				...chordFromNumeral(numeral.slice(0, slash), k),
+				bass: degreeNote(Number(degree), accidental, k)
+			};
+		}
+
+		// Applied dominants: the dominant of whatever the target numeral resolves to.
+		const target = chordFromNumeral(after, k);
 		return {
 			root: transpose(target.root, ivl('P5')),
 			quality: 'dom',
@@ -235,36 +293,7 @@ export function chordFromNumeral(numeral: string, k: Key): AbstractChord {
 	if (!degree) throw new Error(`Not a Roman numeral: ${numeral}`);
 
 	const isMinor = roman === roman.toLowerCase();
-	const notes = scale(k);
-	let root: Note = notes[degree - 1];
-
-	if (accidental) {
-		/*
-		 * Alter the note, do not re-spell it.
-		 *
-		 * `♯I` means the tonic raised, so in F it is F♯ — and going via the pitch
-		 * class and asking the key to spell it gave G♭, because F major is a flat
-		 * key. Same thing turned `♭V` in C into F♯ sitting next to a D♭m7. Moving
-		 * the alteration keeps the letter, which is the entire point of the
-		 * numeral.
-		 *
-		 * Two exceptions, both about readability rather than theory. An accidental
-		 * still standing on a natural pitch is a spelling nobody writes — ♭II in
-		 * E♭ is E7, never F♭7 — and those take the plain letter. Past a single
-		 * accidental it stops being useful at all, because B𝄫 helps no one, so
-		 * the far keys fall back to whatever the key would call the note.
-		 */
-		const altered = { ...root, alter: root.alter + (accidental === 'b' ? -1 : 1) };
-		const pc = ((pitchClass(altered) % 12) + 12) % 12;
-
-		if (altered.alter !== 0 && NATURAL_LETTER[pc]) {
-			root = { ...altered, letter: NATURAL_LETTER[pc]!, alter: 0 };
-		} else if (Math.abs(altered.alter) <= 1) {
-			root = altered;
-		} else {
-			root = spell(pc, k);
-		}
-	}
+	const root = degreeNote(degree, accidental, k);
 
 	/*
 	 * A bare lowercase numeral takes its quality from the key: vii in a major key

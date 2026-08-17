@@ -293,15 +293,38 @@ export const transferEvents = pgTable(
 	]
 );
 
-/** Chord charts as data — a grid of chord symbols, never notation. */
-export const charts = pgTable('charts', {
-	id: uuid('id').primaryKey().defaultRandom(),
-	name: text('name').notNull(),
-	gridJson: jsonb('grid_json').notNull(),
-	style: text('style').$type<ChartStyle>().notNull(),
-	defaultBpm: integer('default_bpm').notNull(),
-	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
-});
+/**
+ * Chord charts as data — a grid of chord symbols, never notation.
+ *
+ * `slug`, `mode` and `notes` were buried in `grid_json` and are columns now.
+ * The slug is how a chart is addressed in a URL and how the built-in ones are
+ * told apart from yours, which meant every page load read every row and
+ * filtered them in application code to find a value the database could not see.
+ *
+ * `grid_json` keeps the grid and nothing else: rows of bars, each bar a string
+ * of Roman numerals. It stays JSON because it is a nested array nothing queries
+ * into — the one shape here that genuinely is a document.
+ *
+ * No `user_id` yet. It belongs here and is deliberately left to M9, which
+ * creates the `users` table and the accessor every owned query goes through;
+ * adding the column first would mean inventing half of that seam early.
+ */
+export const charts = pgTable(
+	'charts',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		slug: text('slug').notNull().unique(),
+		name: text('name').notNull(),
+		gridJson: jsonb('grid_json').$type<string[][]>().notNull(),
+		style: text('style').$type<ChartStyle>().notNull(),
+		mode: text('mode').$type<'major' | 'minor'>().notNull().default('major'),
+		/** What the tune is *for* practising, in the voice the built-ins use. */
+		notes: text('notes').notNull().default(''),
+		defaultBpm: integer('default_bpm').notNull(),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(t) => [index('charts_slug_idx').on(t.slug)]
+);
 
 // ---------------------------------------------------------------------------
 // Inferred types

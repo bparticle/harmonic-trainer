@@ -86,8 +86,13 @@ If a bar drifts, you have two honest options: teach `chordFromNumeral` in
 way the numerals can hold. Never store a drifting chart — the app will play the
 chord on the right-hand side of the arrow, not the one on the sheet.
 
-Known gap: **slash chords lose their bass note** (`C/E` stores as `C`), because
-a Roman numeral has nowhere to put one. Drop the slash, or add the notation.
+The check itself lives in `src/lib/curriculum/editor.ts`. The script, the editor
+on `/backing` and the server all run that one implementation, so what this
+prints is exactly what the app would show you and exactly what gets written.
+
+**Slash chords keep their bass note.** `C/E` stores as `I/3` and comes back as
+`C/E`, and the walking bass starts the bar on the E. After a slash, Arabic is a
+bass degree of the key and Roman is still an applied dominant (`V7/vi`).
 
 ## 4. Put it in
 
@@ -98,13 +103,19 @@ npx vite-node .claude/skills/songbook/scripts/add-chart.ts <file> <key> "<name>"
 ```
 
 Needs `npm run db:up` and `DATABASE_URL`. It runs the same check first and
-writes nothing if the chart drifts. This is exactly what the _Add a chart_ form
-on `/backing` does — the form is there and works, so prefer it when the user is
-sitting at the app; use the script when transcribing on their behalf or when the
-tune is long enough that hunting a typo in a text box would be miserable.
+writes nothing if the chart drifts.
 
-Imported charts get `notes: 'Yours.'` because the form has no notes field. To
-say something more useful, update `grid_json->>'notes'` directly.
+This is what the chart editor on `/backing` does, from the command line. The
+editor is a grid: a bar is a cell, chords are parsed as you type, and the
+numeral each bar will be stored as sits under it — so prefer it when the user is
+sitting at the app. Reach for the script when transcribing on their behalf, or
+when the tune is long enough that typing it in bar by bar would be tedious.
+Pasting the pipe syntax into the editor's first cell fills the whole grid, which
+is often the fastest route: transcribe to a file, check it here, paste it in.
+
+Both write `notes` as a real column now. The script leaves it as `Yours.`; the
+editor has a field for it, and it is worth filling in — every entry in
+`charts.ts` says what the tune is _for_ practising rather than what it is.
 
 **Into `charts.ts`** (public domain only): add a `ChartSeed` to `CHARTS`. Paste
 the grid straight from the check script's output — those rows are the numerals
@@ -136,13 +147,14 @@ If you changed any code, finish with `npm run verify`.
 Roots `A`–`G` with `b`/`#`. Then: `m` `min` `-` for minor, `maj` `M` `∆`,
 `m7b5` `ø`, `dim` `°` `o`, `dim7` `°7` `o7`, `aug` `+`, `sus2` `sus4`, sixths
 `6` `m6`, extensions `7` `9` `11` `13`, alterations `b5` `#5` `b9` `#9` `#11`
-`b13`, and a slash bass it can parse but cannot store.
+`b13`, and a slash bass, which now stores and plays back.
 
-`alt` is **not** understood — `G7alt` reads as a plain `G7` without complaint,
-and the round-trip check cannot see it because the loss happens on the way in.
-Write the alteration you actually want: `G7b9`, `G7#5`, `G7b13`.
+`alt` is **not** understood — `G7alt` reads as a plain `G7`. The loss happens on
+the way in, where a round-trip check cannot see it, so it is caught by name
+instead: both the script and the editor say so outright. Write the alteration
+you actually want: `G7b9`, `G7#5`, `G7b13`.
 
 ## Removing one
 
 The chart page has a delete button for anything under Yours. Otherwise:
-`delete from charts where grid_json->>'slug' = '<slug>'`.
+`delete from charts where slug = '<slug>'`.

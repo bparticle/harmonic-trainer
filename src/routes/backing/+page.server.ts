@@ -5,7 +5,8 @@ import type { Actions, PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
 import { charts } from '$lib/server/db/schema';
 import { CHARTS, type ChartSeed } from '$lib/curriculum/charts';
-import { importedToSeed, parseChartText, slugify, uniqueSlug } from '$lib/curriculum/import';
+import { slugify, uniqueSlug } from '$lib/curriculum/import';
+import { gridToRows, readGrid, type Grid } from '$lib/curriculum/editor';
 
 /**
  * Charts you typed in yourself.
@@ -20,33 +21,24 @@ import { importedToSeed, parseChartText, slugify, uniqueSlug } from '$lib/curric
 
 const BUILT_IN = new Set(CHARTS.map((c) => c.slug));
 
-type StoredGrid = {
-	slug?: string;
-	grid?: string[][];
-	notes?: string;
-	mode?: 'major' | 'minor';
-};
-
 export const load: PageServerLoad = async () => {
 	const rows = await db.select().from(charts);
 
 	const mine: Array<ChartSeed & { id: string }> = [];
 	for (const row of rows) {
-		const stored = (row.gridJson ?? {}) as StoredGrid;
-		const slug = stored.slug ?? slugify(row.name);
-		if (BUILT_IN.has(slug)) continue;
-		if (!stored.grid?.length) continue;
+		if (BUILT_IN.has(row.slug)) continue;
+		if (!row.gridJson?.length) continue;
 
 		mine.push({
 			id: row.id,
-			slug,
+			slug: row.slug,
 			name: row.name,
 			style: row.style,
 			category: 'mine',
-			mode: stored.mode ?? 'major',
+			mode: row.mode,
 			defaultBpm: row.defaultBpm,
-			grid: stored.grid,
-			notes: stored.notes ?? 'Yours.'
+			grid: row.gridJson,
+			notes: row.notes || 'Yours.'
 		});
 	}
 
@@ -54,51 +46,75 @@ export const load: PageServerLoad = async () => {
 	return { mine };
 };
 
+/** The editor posts the chords as typed. Anything else is not a grid. */
+function parseGridField(raw: string): Grid | null {
+	let value: unknown;
+	try {
+		value = JSON.parse(raw);
+	} catch {
+		return null;
+	}
+
+	if (!Array.isArray(value)) return null;
+	const grid: Grid = [];
+	for (const row of value) {
+		if (!Array.isArray(row)) return null;
+		grid.push(row.map((text) => ({ text: typeof text === 'string' ? text : '' })));
+	}
+	return grid.length ? grid : null;
+}
+
 export const actions: Actions = {
-	/** Save a chart written out as chord symbols. */
+	/**
+	 * Save a chart written out as chord symbols.
+	 *
+	 * The numerals are derived here rather than taken from the form, using the
+	 * same `readGrid` the editor showed you. A browser is not the authority on
+	 * what a chord means, and running the one implementation on both sides is
+	 * what stops the screen and the database describing different tunes.
+	 */
 	create: async ({ request }) => {
 		const form = await request.formData();
 		const name = String(form.get('name') ?? '').trim();
 		const keyName = String(form.get('key') ?? 'C');
-		const text = String(form.get('chart') ?? '');
-		const bpm = Number(form.get('bpm') ?? 140);
 		const mode = form.get('mode') === 'minor' ? 'minor' : 'major';
-		const allowPartial = form.get('allowPartial') === 'yes';
+		const notes = String(form.get('notes') ?? '').trim();
+		const bpm = Number(form.get('bpm') ?? 140);
 		const safeBpm = Number.isFinite(bpm) ? Math.max(40, Math.min(300, bpm)) : 140;
-		const entered = { name, text, key: keyName, mode, bpm: safeBpm };
+		const entered = { name, key: keyName, mode, bpm: safeBpm, notes };
 
-		if (!name)
-			return fail(400, { problems: ['Give it a name.'], canSavePartial: false, ...entered });
+		const grid = parseGridField(String(form.get('grid') ?? ''));
+		if (!grid) return fail(400, { problems: ['Nothing to save.'], ...entered });
+		if (!name) return fail(400, { problems: ['Give it a name.'], ...entered });
 
-		const parsed = parseChartText(text, keyName);
-		if (parsed.rows.length === 0) {
-			return fail(400, { problems: parsed.problems, canSavePartial: false, ...entered });
+		const reading = readGrid(grid, keyName);
+		if (!reading.ok) {
+			// The editor blocks its own save button on exactly this, so reaching
+			// here means the form was posted some other way.
+			const problems = reading.problems.length
+				? reading.problems
+				: reading.drift.map((d) => `Bar ${d.bar}: ${d.written} would come back as ${d.playback}.`);
+			return fail(400, {
+				problems: problems.length ? problems : ['Nothing to save.'],
+				...entered
+			});
 		}
-		if (parsed.problems.length > 0 && !allowPartial) {
-			return fail(400, { problems: parsed.problems, canSavePartial: true, ...entered });
-		}
 
-		const seed = importedToSeed(name, parsed.rows, {
-			defaultBpm: safeBpm,
-			mode
-		});
+		const taken = await db.select({ slug: charts.slug }).from(charts);
+		const slug = uniqueSlug(slugify(name), [...BUILT_IN, ...taken.map((row) => row.slug)]);
 
-		const rows = await db.select({ gridJson: charts.gridJson }).from(charts);
-		const storedSlugs = rows
-			.map((row) => ((row.gridJson ?? {}) as StoredGrid).slug)
-			.filter((slug): slug is string => Boolean(slug));
-		seed.slug = uniqueSlug(seed.slug, [...BUILT_IN, ...storedSlugs]);
 		await db.insert(charts).values({
 			id: randomUUID(),
-			name: seed.name,
+			slug,
+			name,
 			style: 'custom',
-			defaultBpm: seed.defaultBpm,
-			gridJson: { slug: seed.slug, grid: seed.grid, notes: seed.notes, mode: seed.mode }
+			mode,
+			notes,
+			defaultBpm: safeBpm,
+			gridJson: gridToRows(reading)
 		});
 
-		// Anything not understood is still worth saying, even on success — a bar
-		// silently missing from a tune you just typed in is a nasty surprise.
-		redirect(303, `/backing?chart=${encodeURIComponent(seed.slug)}`);
+		redirect(303, `/backing?chart=${encodeURIComponent(slug)}`);
 	},
 
 	remove: async ({ request }) => {

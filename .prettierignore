@@ -4,3 +4,8 @@ node_modules
 package-lock.json
 drizzle/
 static/
+
+# Agent worktrees are whole checkouts of this repo nested inside it. Their files
+# are not ours to format, and the harness writes .claude/ into them with CRLF,
+# so every worktree that exists breaks the format check at the root.
+.claude/worktrees

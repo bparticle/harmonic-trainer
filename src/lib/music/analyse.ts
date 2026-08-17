@@ -8,7 +8,7 @@ import {
 import { transpose, ivl } from './interval';
 import { formatKey, parallelKey, scale, scalePitchClasses, type Key } from './key';
 import { pitchClass, type Note } from './note';
-import { formatRomanDegree, scaleDegree } from './spell';
+import { formatDegree, formatRomanDegree, scaleDegree } from './spell';
 
 /**
  * Roman numeral analysis.
@@ -101,8 +101,18 @@ function numeralFor(root: Note, k: Key, quality: string): string {
 	return MINOR_ISH.has(quality) ? numeral.toLowerCase() : numeral;
 }
 
+/**
+ * A chord as a numeral in a key, bass note included.
+ *
+ * The bass is written as an Arabic degree — `I/3` is C over E in C — because
+ * the slash already means an applied dominant when a Roman numeral follows it.
+ * Same guard as `formatChord`: a bass that is only the root written out again
+ * is not a slash chord and says nothing worth storing.
+ */
 export function romanNumeral(c: AbstractChord, k: Key): string {
-	return numeralFor(c.root, k, c.quality) + romanSuffix(c);
+	const base = numeralFor(c.root, k, c.quality) + romanSuffix(c);
+	if (!c.bass || pitchClass(c.bass) === pitchClass(c.root)) return base;
+	return `${base}/${formatDegree(scaleDegree(c.bass, k))}`;
 }
 
 function roleFor(degree: number, alter: number, category: ChordCategory): HarmonicRole {
