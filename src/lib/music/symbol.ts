@@ -75,6 +75,11 @@ export function chordSymbolParts(c: AbstractChord): SymbolPart[] {
 			parts.push({ kind: 'text', value: 'm' });
 			if (highest) upper.push({ kind: 'text', value: String(highest) });
 			break;
+		case 'minMaj':
+			parts.push({ kind: 'text', value: 'm' });
+			parts.push({ kind: 'glyph', value: 'triangle' });
+			upper.push({ kind: 'text', value: String(highest && highest !== 7 ? highest : 7) });
+			break;
 		case 'min7b5':
 			if (c.extensions.includes(7)) {
 				parts.push({ kind: 'glyph', value: 'halfDim' });
@@ -120,6 +125,10 @@ export function chordSymbolParts(c: AbstractChord): SymbolPart[] {
 		if (combined.length) parts.push({ kind: 'super', parts: combined });
 	}
 
+	// Set on the baseline, not raised: `add9` is a word, and the digit belongs to
+	// the word rather than to the stack of extensions above it.
+	for (const degree of c.added ?? []) parts.push({ kind: 'text', value: `add${degree}` });
+
 	if (c.bass) {
 		parts.push({ kind: 'slash' });
 		parts.push({ kind: 'text', value: c.bass.letter });
@@ -157,6 +166,7 @@ export function chordSymbolLabel(c: AbstractChord): string {
 	const spoken: Record<string, string> = {
 		maj: 'major',
 		min: 'minor',
+		minMaj: 'minor major',
 		dom: 'dominant',
 		min7b5: 'half diminished',
 		dim7: 'diminished',
@@ -176,8 +186,9 @@ export function chordSymbolLabel(c: AbstractChord): string {
 	const highest = [...c.extensions].sort((a, b) => b - a)[0];
 	// A dominant always has a seventh even when the symbol does not spell it out,
 	// so "G dominant" would be a stranger thing to hear than "G dominant 7".
-	const spokenExtension = c.quality === 'dom' ? (highest ?? 7) : highest;
+	const spokenExtension = c.quality === 'dom' || c.quality === 'minMaj' ? (highest ?? 7) : highest;
 	const extension = spokenExtension ? ` ${spokenExtension}` : '';
+	const spokenAdded = (c.added ?? []).map((degree) => ` add ${degree}`).join('');
 	const alterations = c.alterations
 		.map((a) => ` ${a.startsWith('b') ? 'flat' : 'sharp'} ${a.slice(1)}`)
 		.join('');
@@ -185,5 +196,5 @@ export function chordSymbolLabel(c: AbstractChord): string {
 		? ` over ${formatPitch(c.bass).replace('b', ' flat').replace('#', ' sharp')}`
 		: '';
 
-	return `${root} ${spoken[c.quality]}${extension}${alterations}${bass}`;
+	return `${root} ${spoken[c.quality]}${extension}${alterations}${spokenAdded}${bass}`;
 }

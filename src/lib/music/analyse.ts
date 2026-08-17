@@ -56,7 +56,7 @@ export type Analysis = {
 /** Qualities stable enough to establish a new tonic, rather than merely point onward. */
 const TONIC_ISH = new Set(['maj', 'min', 'maj6', 'min6']);
 
-const MINOR_ISH = new Set(['min', 'min7b5', 'dim7', 'min6']);
+const MINOR_ISH = new Set(['min', 'minMaj', 'min7b5', 'dim7', 'min6']);
 
 /**
  * The part of a numeral after the degree.
@@ -67,7 +67,8 @@ const MINOR_ISH = new Set(['min', 'min7b5', 'dim7', 'min6']);
  * dominant back.
  */
 function romanSuffix(c: AbstractChord): string {
-	return qualitySuffix(c) + c.alterations.join('');
+	const added = (c.added ?? []).map((degree) => `add${degree}`).join('');
+	return qualitySuffix(c) + c.alterations.join('') + added;
 }
 
 function qualitySuffix(c: AbstractChord): string {
@@ -79,6 +80,10 @@ function qualitySuffix(c: AbstractChord): string {
 			return String(highest && highest !== 7 ? highest : 7);
 		case 'min':
 			return c.extensions.length ? String(highest) : '';
+		// Spelled out rather than left to the numeral's case, which only carries
+		// major against minor and has nowhere to put the major seventh.
+		case 'minMaj':
+			return `mMaj${highest && highest !== 7 ? highest : 7}`;
 		case 'min7b5':
 			return c.extensions.includes(7) ? 'm7b5' : 'dim';
 		case 'dim7':

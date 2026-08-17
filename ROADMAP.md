@@ -20,7 +20,7 @@ of the plan is deleted rather than left standing as a description of the past.
 
 ## Where this came from
 
-Four requirements, stated by the owner:
+Five requirements, stated by the owner:
 
 1. Aim for a multi-user setup — prepare for it now, build it later.
 2. Chord badges become **per song**, so every tune keeps its own best streak.
@@ -28,10 +28,20 @@ Four requirements, stated by the owner:
    played.
 4. A real chord editor for adding tunes. The current one is a text box that
    wants pipe characters and tells you what was wrong only after you save.
+5. Offer the hosted instance to other people, for a small monthly fee.
 
-Everything below is derived from those four. Where a requirement forced a choice
+Everything below is derived from those five. Where a requirement forced a choice
 that was not in it, the choice is argued in `DECISIONS.md` rather than smuggled
 in here.
+
+The fifth arrived after the other four and rewrites the first. "Prepare for it
+now, build it later" was written when the second player was hypothetical and
+unhurried; a paid hosted instance is that player arriving ready to pay, and
+_later_ now has a date on it. M9 does not change — the seam is still the right
+first move, and building it is still cheaper than not. What changes is that
+three questions M9 deliberately left open are now answered by the requirement
+rather than by whoever gets there first, and that two milestones exist after
+M10 which did not exist before.
 
 ---
 
@@ -103,6 +113,15 @@ useless without the `users` row it points at and the accessor every query goes
 through, and inventing half of this seam early would have been the worse of the
 two mistakes. So it is a column and a backfill in this milestone: one row's
 worth of data, pointed at the one user that now exists.
+
+One correction to that, forced by M12 and cheap to make now rather than later:
+**the column is nullable, and the seeded charts keep it null.** `db:seed` writes
+the built-in forms, cycles and standards into this table from `charts.ts`, so a
+`NOT NULL` backfill would hand the shared repertoire to whoever happened to be
+the first row in `users`. Null means built-in and readable by everyone, a value
+means yours; the list on the play-along page is the union of the two, which is
+what it already shows. Every other new table in M9 and M12 stays `NOT NULL`,
+because nothing else here has a shared copy.
 
 `cards`, `srs_state`, `reviews`, `sessions`, `session_blocks`, `takes` and the
 rest do **not** — not because they will never need it, but because each needs a
@@ -325,6 +344,347 @@ Every number on the page can be traced to rows in `play_runs`, `chord_attempts`,
 
 ---
 
+## M12 — Accounts
+
+**Real per-player credentials, and every owned row actually owned.** This is the
+milestone `SECURITY.md` already says is mandatory: multi-user cannot ship on a
+shared password.
+
+### This, not billing, is the hosting problem
+
+Two subscribers today would not be two users. They would be two people typing
+the same `APP_PASSWORD`, reading the same ladder position, grading each other's
+flashcards, and editing each other's twelve pitch colours through
+`/api/settings` — which patches a singleton row. That is four data-isolation
+bugs on the day the second person signs in, and no amount of billing code in
+front of it changes what is behind it.
+
+There is a fifth, quieter one. The play-along record still lives in
+`localStorage`, so a paid account would today store nothing at all on the
+server: sign in from the laptop and your badges are on the desktop. **That is
+why M9 is a prerequisite for charging money and not merely a nice thing to have
+first.** An account whose contents live in one browser is not an account.
+
+M9 fixes none of the four on purpose, and is right not to. It builds the seam
+and writes the play-along record through it; the tables the rest of the app
+writes — `cards`, `srs_state`, `reviews`, `sessions`, `session_blocks` — were
+deferred because each posed a question that could not be answered honestly
+without a second player. There is now a second player, and the questions get
+answered here.
+
+### The tables that were waiting
+
+| Table                                                      | Gets `user_id` | Why                                                             |
+| ---------------------------------------------------------- | -------------- | --------------------------------------------------------------- |
+| `cards`                                                    | yes, not null  | Generated as a ladder is climbed. Two players climb differently |
+| `sessions`                                                 | yes, not null  | A practice session belongs to whoever sat down                  |
+| `srs_state`                                                | no             | Its primary key _is_ `card_id`; the card already knows          |
+| `reviews`, `session_blocks`                                | no             | Cannot exist without their parent, and the parent knows         |
+| `skills`                                                   | no             | Seeded curriculum. A definition, not data                       |
+| `charts`                                                   | nullable       | Null is built-in and shared; a value is yours                   |
+| `takes`, `repertoire`, `analysis_facts`, `transfer_events` | no             | Still parked, still nothing writes to them                      |
+
+The rule is M9's, applied further: a row that cannot exist without its parent
+does not repeat the parent's owner, because the same fact stored twice can
+disagree. The cost is a join on the profile queries, and it is worth it.
+
+That settles the first half of open decision 2. **The skill graph is shared
+because it is a definition; the cards generated from it are personal because
+they are data.** One seeded copy of the curriculum, twelve cards per player per
+rung, and re-seeding still matches on `code` without orphaning anybody's review
+history.
+
+The second half settles itself the moment strangers are involved: **charts you
+typed in are private.** A hosted service where somebody else's tune appears in
+your list is a bug, not a feature, and sharing is something nobody has asked
+for.
+
+### The room stops existing
+
+This reverses M9, and the reversal is the interesting part. M9 argued that the
+twelve colours and the wheel calibration are not preferences but _measurements
+of the room_ — they match coloured stickers on real keys and a wheel somebody
+built by hand, so two players at the same piano would want them identical.
+
+Hosting removes the piano. A subscriber in another country shares no stickers,
+no hand-built wheel, no MIDI cable and no laptop with anyone. **Every value in
+the singleton is now the player's**, including both of the ones M9 flagged as
+genuinely unresolved: latency belongs to a cable that belongs to exactly one
+subscriber, and how wide a rolled chord may be belongs to one pair of hands.
+Open decision 1 does not get decided so much as dissolved.
+
+So `user_prefs` holds all of it — colour map, wheel config, MIDI device,
+latency offset, cluster window, session length, reveal delay, ladder key and
+rung — and the singleton is not deleted but re-employed: it becomes **the
+defaults a new account is born with**. The check constraint pinning it to
+`id = 1` still never has to be dropped, which was the cheapest possible outcome
+and stays available for a reason nobody predicted.
+
+`/api/settings` stops patching the singleton and starts patching the caller's
+row. Nothing in the settings screens changes shape.
+
+### Credentials
+
+Email and a password, hashed with `scrypt` from `node:crypto` — memory-hard,
+already in the platform, no native module to break a deploy. The parameters go
+in a constant with a comment saying when they were last raised.
+
+Magic links are the real alternative and would delete a subsystem: no hash, no
+reset flow, no credential stuffing. They are listed under _Decisions still open_
+rather than chosen here, because they make e-mail delivery the only way into an
+app somebody has paid for, and a password degrades better on the morning the
+mail provider is having a bad day. The recommendation is passwords; the point
+worth knowing before deciding is that **e-mail becomes a hard dependency
+either way**, since a paid account with no password reset is hostile.
+
+Either way this is the first external service this project has ever needed.
+That is a genuine loss of a property the README currently advertises, and it is
+recorded rather than glossed.
+
+### The cookie learns to be revoked
+
+M9's payload is `userId.issuedAt.signature`. M12 puts an epoch in front of the
+timestamp — an integer on `users`, bumped by "sign out everywhere" and by a
+password change — so a ninety-day cookie stops being permanent.
+
+Verification stops being self-sufficient: the epoch has to be read. That is one
+user lookup per request, and it is the same lookup M13's entitlement check needs
+anyway, so the cost is one query rather than two. `event.locals` ends up
+carrying the user, not a boolean.
+
+### The rest of what SECURITY.md says does not exist
+
+- **Rate limiting** on sign-in and on reset requests. A small table, because
+  serverless instances share no memory and Postgres is already there.
+- **Password reset**: single-use token, short expiry, its own table.
+- **Deleting an account has to actually work.** Every owned row cascades from
+  `users`, designed in from the first migration rather than discovered later,
+  and a test counts rows before and after. Exporting everything you own is the
+  same requirement wearing a different hat, and the profile is where it goes.
+
+### Done when
+
+- Two accounts practise the same rung on the same evening and neither can see
+  the other's cards, charts, runs, badges or colours.
+- Signing out everywhere kills the cookie on the other machine.
+- Deleting an account leaves no row behind, proven by a test.
+- `npm run verify` passes.
+
+---
+
+## M13 — The subscription
+
+**Money in, entitlement out.** One table, one accessor, and as little billing
+code in this repo as can be managed.
+
+### A seam that does not care which provider sits behind it
+
+`provider` is a column and `entitled(userId)` is a single function. That is
+deliberate: which company processes payment is a commercial decision, not an
+architectural one, and the two should not have to move together. The
+reasoning behind whichever provider is chosen — cost, settlement, the tax
+mechanics of selling across borders — is tracked outside this repository,
+because it changes on a timeline this file should not.
+
+What the seam actually has to satisfy is narrower than "pick the cheapest
+option": the provider needs to host its own subscribe, change and cancel
+pages, so none of that UI has to be built and maintained here, and it needs
+webhook retry behaviour this design does not quietly depend on being
+generous — see _Webhooks are not allowed to be the only source of truth_,
+below.
+
+### Schema
+
+```
+subscriptions
+  id                    uuid pk
+  user_id               uuid not null -> users on delete cascade
+  provider              text not null      -- e.g. a provider's identifier
+  customer_ref          text not null      -- their customer id
+  subscription_ref      text not null unique
+  status                text not null      -- their vocabulary, untranslated
+  current_period_end    timestamptz not null
+  cancel_at_period_end  boolean not null default false
+  checked_at            timestamptz not null  -- when this last agreed with them
+  created_at            timestamptz not null
+  updated_at            timestamptz not null
+```
+
+`status` keeps the provider's own word rather than a local enum. Translating
+somebody else's state machine into your own means owning the translation forever
+and being wrong about it during exactly the hours when the two disagree. It is
+also what makes `provider` more than decoration: a second vocabulary can arrive
+without the first one being rewritten.
+
+```
+billing_events
+  id           text pk           -- their event id: the idempotency key
+  type         text not null
+  received_at  timestamptz not null
+  payload      jsonb not null
+```
+
+Webhooks arrive more than once by design. Making their event id the primary key
+turns a replay into `on conflict do nothing`, which is the same trick the run
+flush already uses for the same reason.
+
+### Webhooks are not allowed to be the only source of truth
+
+This is the one place the provider choice reaches into the design, and it is
+why the seam above cannot be indifferent to every property of a provider:
+retry windows on a failed webhook vary a great deal, and some allow as little
+as half an hour of tolerance for the endpoint being unreachable — less than
+one bad deploy.
+
+So `checked_at` exists and the rule is: **a subscription row older than a day
+is not trusted, it is re-read from the provider.** Webhooks become an
+optimisation that keeps the row fresh, rather than the only mechanism that
+can ever make it true, and a missed event costs a lazy re-read instead of a
+subscriber silently losing access. This would be worth doing on any provider.
+On one with a narrow retry window it is not optional.
+
+### The entitlement
+
+One function — `entitled(userId)` — read once in `hooks.server.ts`, beside the
+user lookup the cookie already needs. Everything else asks it and nothing else
+computes it. That is `currentUserId()`'s discipline applied to the second thing
+worth having exactly one answer to, and it is where the staleness check above
+lives, so nothing else has to remember it.
+
+Active, trialing and past-due all pass. Past-due passes deliberately: a
+failed renewal should not lock somebody out of their own practice history
+while it gets sorted out.
+
+### What lapsing does, and does not do
+
+**Read-only. Never locked out, never deleted.** Signing in keeps working. The
+profile, the record, and every chart you typed in stay readable and
+exportable. Starting a session and saving a run stop.
+
+An app that has never once told anyone off does not open its commercial career
+by holding a year of practice history hostage over a single missed renewal.
+
+### The free tier is the source code
+
+It is AGPL, self-hostable and documented, so the hosted instance can be paid-only
+without taking anything from anyone: the free version is the one you run
+yourself, and the fee buys somebody else running it. That is an honest offer and
+it is the only one that does not require inventing a crippled tier.
+
+A trial exists so the inside can be seen before paying. Fourteen days, no
+free-of-commitment option — a trial with no commitment needs an abuse story,
+and nobody wants to write one for a product priced this low.
+
+### The licence asks for one link
+
+Section 13 of the AGPL points both
+ways: a hosted service running a **modified** version must prominently offer its
+users that version's source. The hosted instance intends to run the same code as
+the repository, which satisfies it — but "intends to" is not a mechanism, and
+the obligation is on whoever is running it on the day.
+
+So the app shell gains a source link, in the settings menu beside the profile.
+One anchor, permanently correct, and the thing that keeps the promise honest if
+a hotfix ever ships from a branch. It does not exist today because there is no
+hosted service and no second user; it ships with this milestone.
+
+### Two plans, and the prices are not in this file
+
+There is a monthly plan and a yearly one. The yearly is the one to default to,
+and the reason is structural rather than promotional: a fixed cost applies
+per billing cycle regardless of amount, and at a few euros a month that fixed
+cost is a large share of the take. Billing once a year pays it once instead
+of twelve times and cannot churn mid-year.
+
+That is everything the code needs to know. **The actual figures, the market they
+were chosen against and the arithmetic behind them are commercial and live
+outside this repository**, because a public roadmap is a strange place to
+negotiate with yourself about what to charge. What belongs here is that there
+are exactly two plans, that they differ only in billing period, and that neither
+unlocks a feature the other does not.
+
+### The part that is not code, and blocks launch anyway
+
+None of this is a milestone, all of it is required, and it is written down here
+because it is the half most likely to be discovered late:
+
+- **The non-code prerequisites of accepting payment at all** — the kind of
+  entity that can do it, and what tax follows from doing it across borders.
+  Commercial and legal detail, tracked outside this repository the same way
+  the pricing figures are; this line exists so the next reader knows it was
+  considered rather than missed.
+- **Terms and a privacy policy**, because you become the controller of other
+  people's data the moment the second account exists. Export and deletion are
+  built in M12 precisely so this is a page of text rather than a panic.
+- **Backups with a restore that has actually been run once.** Somebody else's
+  practice history is now in there.
+
+### Done when
+
+- A subscriber signs up, pays, practises, changes plan, cancels and comes back,
+  with no billing interface in this repository.
+- A webhook replayed by hand changes nothing the second time.
+- A lapsed account can still read and export everything it ever recorded.
+
+---
+
+## M14 — The way in
+
+**A public demo that needs no account, no password and no database.** The
+cheapest milestone here and the only one that produces evidence rather than
+capability.
+
+### The problem it fixes
+
+The landing page is public, detailed and good. It describes a rhythm section
+that listens to you, shows a chart following the music, and then offers a
+password box. **The only way to actually see the product is to install
+Postgres.** Everything else on this list is an argument about how to charge for
+something nobody has been able to try.
+
+### What it is
+
+Route `/demo`, public in `isPublicRequest()` the way `/` already is. It runs the
+real play-along page — not a mock-up, not a video — over the built-in charts,
+and writes nothing anywhere.
+
+- **Charts come from code.** `charts.ts` already holds the forms, cycles and
+  standards, and `curriculum/editor.ts` already resolves them. The demo reads
+  them directly rather than through the database, so it works on an instance
+  with no Postgres at all and cannot be broken by a migration.
+- **Colours come from `DEFAULT_COLOR_MAP`.** The palette is normally injected
+  from `settings` during SSR; the demo uses the defaults in `$lib/settings` and
+  skips the read.
+- **Nothing persists.** No runs, no badges, no streak record, no localStorage
+  worth migrating later. A visitor who closes the tab has left no trace, which
+  is also the honest version of the privacy claim on the page they arrived from.
+- **MIDI works if they have it**, over HTTPS, exactly as it does signed in. The
+  on-screen keyboard is the fallback and feeds the same pipeline, so a visitor
+  with no hardware still sees chords judged.
+
+### What it must show, and what it must not
+
+It must show the **scoring**, because that is the entire differentiator. A demo
+of the transport and the chart without the judging is a worse iReal Pro, and
+anybody who knows the category will read it that way in four seconds.
+
+It must not offer to save anything, must not show an empty profile, and must not
+put a sign-up call anywhere until M13 exists to receive one. Until then the only
+honest exit is the source and "run it yourself" — which is a real offer, and the
+one this project has always made.
+
+One chart is enough, and it should be playing-ready on arrival: a blues in C,
+transport armed, the first bar already taken apart underneath. The visitor's
+first action should be pressing play, not choosing.
+
+### Done when
+
+Somebody with no account, no database and no MIDI keyboard can hear a blues, tap
+a bar to loop it, change the key, and see what the chord is doing — within ten
+seconds of clicking one link on the landing page.
+
+---
+
 ## What this changes about the parked milestones
 
 ### M6 — partly unparked
@@ -362,13 +722,49 @@ have: once M9 exists there is a record worth taking with you, not just charts.
 
 ## Order
 
-**M9 → M10**, with M11 already done.
+**M14 → M9 → M10 → M12 → M13**, with M11 already done.
 
-- M9 is the foundation; M10 cannot start without it.
-- M10 goes last on purpose. A profile shipped the same week as the log that
-  feeds it is an empty page with headings on it.
-- M11 went first because it was independent of both and the only one of the
-  three that fixed something which hurt every time a tune was typed in.
+- M14 goes first, which is a change. It depends on nothing — no persistence, no
+  account, no database — so it is not waiting for M9, and it is the only item
+  here that answers a question rather than adding a capability. Everything after
+  it is built better if somebody has used the thing first, and the order that
+  puts a payment page in front of software nobody has been able to try is the
+  order that spends three months learning nothing.
+- M9 is the foundation and nothing else here starts without it. It is also, and
+  this was not its original justification, the thing that makes a paid account
+  hold anything: without it the record lives in one browser.
+- M10 stays where it is. A profile shipped the same week as the log that feeds
+  it is an empty page with headings on it — and if the point is to persuade
+  somebody the account is worth keeping, the page that says what they have
+  actually done is a large part of the argument. It is nonetheless the one thing
+  in this list that could move later if that becomes urgent, because written
+  to M9's rule it needs no rewriting when M12 lands.- M12 before M13, and not negotiably. Billing in front of a shared password sells
+  access to a room everybody is already standing in.
+- M11 went first because it was independent of everything and fixed something
+  that hurt every time a tune was typed in.
+
+The non-code work in M13 runs
+alongside from the start of M12, because it is the half with other people's
+timelines in it.
+
+### The release where the app stops being what it says it is
+
+M9 already lists the four places that will stop being true and must change in
+the same release as accounts: `SECURITY.md`'s threat model and its
+"no multi-tenancy", `.env.example`, the README's opening claim, and the landing
+copy in `LandingPage.svelte`. All four still stand, and the fifth requirement
+sharpens what they have to become, since the landing page currently sells the
+opposite of a hosted account — _one musician per instance_, _no user accounts_,
+_your practice data belongs on your machine_.
+
+The honest replacement keeps both halves true and does not apologise for either:
+**run it yourself, or let somebody else run it for you.** The software stays free
+and self-hostable; the fee buys hosting, backups and not having to keep a
+Postgres alive. `APP_PASSWORD` remains exactly what it is — the right answer for
+a personal instance — and stops being the only answer.
+
+Not one word of it is edited before M12 ships, per the rule at the top of this
+file.
 
 ---
 
@@ -376,14 +772,21 @@ have: once M9 exists there is a record worth taking with you, not just charts.
 
 Flagged here rather than settled by whoever happens to be typing:
 
-1. **`chordClusterWindowMs` and `midiLatencyOffsetMs`** — the instrument's, or
-   the player's. (M9 records the question; only accounts force an answer.)
-2. **Sharing when accounts land** — are charts you typed in visible to another
-   player, and is the seeded skill graph shared or copied. (Deliberately not
-   decided in M9.)
+1. **How people sign in** — password with a reset flow, or a magic link with no
+   password at all. M12 recommends passwords and explains why; the deciding
+   consideration is that e-mail becomes load-bearing either way.
 1. **Retention of `chord_attempts`** — the recommendation is to keep everything
    forever, at a few thousand rows an hour, because it cannot be reconstructed.
 
-**Settled:** slash chords carry their bass note. Arabic after the slash is a
-degree of the key, Roman stays an applied dominant, and the walking bass plays
-what the chart names. Reasoning in `DECISIONS.md`.
+**Settled since the last revision, by the hosting requirement rather than by
+argument:**
+
+- `chordClusterWindowMs` and `midiLatencyOffsetMs` are the player's. So is
+  everything else in the singleton, because hosting deletes the shared room.
+- The seeded skill graph is shared, being a definition; the cards generated from
+  it are per-player, being data.
+- Charts you typed in are private to you.
+
+**Settled earlier:** slash chords carry their bass note. Arabic after the slash
+is a degree of the key, Roman stays an applied dominant, and the walking bass
+plays what the chart names. Reasoning in `DECISIONS.md`.

@@ -30,14 +30,24 @@
 	 * is meant to outlive every page, and the only thing that ends it is closing
 	 * the tab.
 	 */
+	/*
+	 * The demo is signed out and still needs a keyboard.
+	 *
+	 * Being judged on what you play is the one thing here no other tool does, so
+	 * a demo that cannot listen is a demo of the wrong product. It reads the
+	 * default preferences like any other unauthenticated request, and it never
+	 * writes any back — see the device effect below.
+	 */
+	const listening = $derived(data.authed || page.url.pathname.startsWith('/demo'));
+
 	$effect(() => {
-		if (!data.authed) return;
+		if (!listening) return;
 		untrack(() => void restoreMidi());
 	});
 
 	// Keep a running session's clustering in step with the saved preferences.
 	$effect(() => {
-		if (!data.authed) return;
+		if (!listening) return;
 		midi.windowMs = data.settings.prefs.chordClusterWindowMs;
 		midi.latencyOffsetMs = data.settings.prefs.midiLatencyOffsetMs;
 	});

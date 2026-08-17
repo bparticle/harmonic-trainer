@@ -16,4 +16,19 @@ describe('public routes', () => {
 		expect(isPublicRequest('/login/help', 'GET')).toBe(true);
 		expect(isPublicRequest('/backing', 'GET')).toBe(false);
 	});
+
+	it('serves the demo to visitors', () => {
+		expect(isPublicRequest('/demo', 'GET')).toBe(true);
+		expect(isPublicRequest('/demo', 'HEAD')).toBe(true);
+	});
+
+	it('refuses to let the demo be posted to', () => {
+		// It has no actions, and the real play-along page's do need a session.
+		expect(isPublicRequest('/demo', 'POST')).toBe(false);
+	});
+
+	it('does not let a public prefix open a private path', () => {
+		expect(isPublicRequest('/demonstration', 'GET')).toBe(false);
+		expect(isPublicRequest('/settings/colours', 'GET')).toBe(false);
+	});
 });

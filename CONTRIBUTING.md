@@ -112,6 +112,17 @@ than rewritten in the past tense — the reasoning moves to `DECISIONS.md` and t
 status to the README table. If you are looking for something to work on, that
 file is the honest list.
 
+## Licensing your contribution
+
+The project is **AGPL-3.0-or-later**, and contributions are accepted under the
+same terms — opening a pull request means you are offering your work under that
+licence. There is no CLA and no copyright assignment; you keep your copyright.
+
+The reasoning is in `DECISIONS.md`; the short version is that a hosted instance is
+planned, and the AGPL is the licence that keeps self-hosting and forking free
+while asking a competitor who modifies it into a service to publish what they
+changed.
+
 ## Reporting bugs
 
 Musical bugs are the interesting ones. If a chord is named wrong, a progression
