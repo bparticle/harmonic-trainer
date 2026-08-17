@@ -495,13 +495,19 @@ euros a month the difference is small in absolute terms and is not what decides
 this, but it points the same way as everything else. Settlement lands next day in
 the account the money is wanted in, with no second provider in the path.
 
-The VAT argument for Stripe survives on paper and does not bite yet. Stripe Tax
-computes the customer's country rate and files it; Revolut gives you a VAT field
-on a plan. But **under €10,000 a year of cross-border EU sales the correct rate
-is Belgian VAT on everything**, which is one number that never varies, and a
-machine for computing one constant is not worth choosing a provider over. It
-becomes real above the threshold, which at this price point is a subscriber count
-nobody has yet — a good problem to have, and a migration to do then.
+The VAT argument for Stripe survives on paper, and whether it bites is not a
+property of this project. Stripe Tax computes the customer's country rate and
+files it; Revolut gives you a VAT field on a plan. Under €10,000 a year of
+cross-border EU B2C sales the correct rate is Belgian VAT on everything — one
+number that never varies, and a machine for computing one constant is not worth
+choosing a provider over.
+
+**The threshold is measured per taxable person, not per project.** It is the
+whole business's cross-border EU B2C digital sales added together, so another
+product that already crosses it takes this simplification off the table before
+the first subscriber signs up. Domestic sales, B2B supplies under reverse charge
+and non-EU customers are all outside the count, which is why the answer cannot
+be read off a revenue figure. See _Decisions still open_.
 
 So: **Revolut, and build behind the seam.** `provider` is a column and
 `entitled()` is one function, which is deliberate — this is a reversible bet, and
@@ -803,20 +809,26 @@ file.
 
 ## Decisions still open
 
-Three, all flagged where they arise, none of which should be settled by whoever
+Four, all flagged where they arise, none of which should be settled by whoever
 happens to be typing:
 
 1. **How people sign in** — password with a reset flow, or a magic link with no
    password at all. M12 recommends passwords and explains why; the deciding
    consideration is that e-mail becomes load-bearing either way.
-2. **What would move this off Revolut.** The choice is made and it is reversible
-   on purpose, so the two triggers are written down rather than left to be felt:
-   crossing €10,000 of cross-border EU sales, which turns VAT from a constant
-   into machinery worth buying; and finding that renewals cannot be tested
-   without a test clock, which is a developer-experience problem that only shows
-   up once the integration is real. Either one is a reason to re-read this
-   section, not to rewrite the app. See M13.
-3. **Retention of `chord_attempts`** — the recommendation is to keep everything
+2. **Whether the VAT simplification is available at all.** The €10,000 threshold
+   belongs to the business, not to this product, and counts every cross-border
+   EU B2C digital sale it makes. If another project already crosses it, the rate
+   is the customer's country's from the first subscriber here and the returns
+   are quarterly — which is an argument for a tax engine or a merchant of record
+   rather than for computing rates by hand. This is a question about somebody's
+   accounts rather than about this repository, and it is recorded here because
+   the answer changes what gets built.
+3. **What would move this off Revolut.** The choice is made and it is reversible
+   on purpose, so the triggers are written down rather than left to be felt: the
+   answer to the question above, and finding that renewals cannot be tested
+   without a test clock, which only shows up once the integration is real.
+   Either is a reason to re-read this section, not to rewrite the app. See M13.
+4. **Retention of `chord_attempts`** — the recommendation is to keep everything
    forever, at a few thousand rows an hour, because it cannot be reconstructed.
 
 **Settled since the last revision, by the hosting requirement rather than by
