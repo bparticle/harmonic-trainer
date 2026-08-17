@@ -95,6 +95,10 @@ const TEMPLATE_SPECS: TemplateSpec[] = [
 	{ quality: 'dom', alterations: ['b13'], prior: 0.6 },
 	{ quality: 'dom', alterations: ['#5'], prior: 0.5 },
 	{ quality: 'dom', alterations: ['b5'], prior: 0.45 },
+	// The tonic of harmonic minor, and a line cliché everywhere else — but it only
+	// ever appears in passing, so it should not outrank the plain m7 it is heard
+	// against.
+	{ quality: 'minMaj', extensions: [7], prior: 0.4 },
 	// Comparatively rare, and that is the whole point of the number.
 	{ quality: 'min7b5', extensions: [7], prior: 0.45 },
 	{ quality: 'min7b5', prior: 0.3 },
