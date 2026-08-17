@@ -71,10 +71,12 @@
 					them under your hands with a generated rhythm section.
 				</p>
 				<div class="hero-actions entrance entrance-4">
-					<a class="primary-action" href={REPOSITORY} target="_blank" rel="noreferrer">
-						<span>Explore the source</span><span aria-hidden="true">↗</span>
+					<a class="primary-action" href="/demo">
+						<span>Try it — no account</span><span aria-hidden="true">→</span>
 					</a>
-					<a class="text-action" href="#tour">See it in motion <span aria-hidden="true">↓</span></a>
+					<a class="text-action" href={REPOSITORY} target="_blank" rel="noreferrer"
+						>Explore the source <span aria-hidden="true">↗</span></a
+					>
 				</div>
 				<p class="hero-note entrance entrance-5">AGPL licensed · no telemetry · self-hosted</p>
 			</div>

@@ -3,11 +3,23 @@ import { SESSION_COOKIE, verifyToken } from '$lib/server/auth';
 
 const PUBLIC_PATHS = ['/login'];
 
+/**
+ * Readable by anyone: the project page at the root, and the demo.
+ *
+ * The demo is the whole play-along page with no account behind it, so it must
+ * be reachable without a session — but it writes nothing and has no actions, so
+ * it has no business accepting anything but a read.
+ */
+const PUBLIC_READ_PATHS = ['/demo'];
+
 export function isPublicRequest(pathname: string, method: string): boolean {
-	const isPublicPath = PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
-	// The root is the public project page for visitors. Keep mutations behind the
-	// session gate: only read requests may pass through without authentication.
-	return isPublicPath || (pathname === '/' && (method === 'GET' || method === 'HEAD'));
+	if (PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))) return true;
+
+	// Keep mutations behind the session gate wherever the page itself is open.
+	if (method !== 'GET' && method !== 'HEAD') return false;
+
+	if (pathname === '/') return true;
+	return PUBLIC_READ_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
 export const handle: Handle = async ({ event, resolve }) => {
