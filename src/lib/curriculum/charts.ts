@@ -22,7 +22,7 @@ import { chordFromNumeral } from './progressions';
  *              here. Where anything still in copyright belongs.
  *
  * What is deliberately absent is a fake book. No melodies anywhere, and no
- * changes to tunes still in copyright — that is what the chart importer is for.
+ * changes to tunes still in copyright — that is what the chart editor is for.
  *
  * Grids are stored as Roman numerals rather than chord symbols, so one chart
  * plays in all twelve keys without being rewritten. Bars are grouped into rows

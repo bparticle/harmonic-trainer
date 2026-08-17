@@ -55,12 +55,25 @@ writing a chord symbol into a data file, something has gone wrong.
 Pitch class and MIDI number are derived. G♯ and A♭ are different notes that
 happen to sound the same, and the difference has to survive transposition.
 
-**No gamification.** No confetti, coins, badges, streaks or guilt. The
-scoreboard is whether you can name what you played.
+**Celebration is a switch; the score is not behind it.** This rule used to read
+"no gamification" and the app has since grown fireworks, a combo counter and a
+shelf of badges — so here is what it actually means now. The honest number and
+the noise made about it are separate by construction: `Tally` is what happened,
+`Streak` is how loud to be about it, and nothing in the celebration feeds the
+percentage on screen. Turning the fun off changes what the app celebrates and
+never what it reports. Anything decorative is opt-out and obeys
+`prefers-reduced-motion`.
+
+**Nothing punishes.** No guilt, no daily streak, no calendar of dots, nothing
+that turns a day away from the piano into a loss. Nothing goes red. A chord you
+played nothing over is dropped rather than failed, because resting is something
+musicians do on purpose. A chord streak measures playing; a daily streak would
+measure attendance, and this app has never told anyone off.
 
 **Nothing in copyright.** Only generic forms and public-domain material ships
 in the repo, and every bundled standard records its publication year. Anything
-still in copyright belongs in your own database via the chart importer.
+still in copyright belongs in your own database, via the chart editor on
+**Play along**.
 
 ## Code style
 
@@ -91,6 +104,13 @@ npm run test:watch     # while working
 including the ones that turned out to be wrong. It is worth skimming before
 proposing an architectural change — the question may already be answered there.
 If your change overturns something in it, add an entry saying so.
+
+`ROADMAP.md` is what is planned and not yet built, in enough detail to be picked
+up cold. Two rules govern it: nothing in it is hinted at anywhere in the app
+until it exists, and when a milestone lands its section is **deleted** rather
+than rewritten in the past tense — the reasoning moves to `DECISIONS.md` and the
+status to the README table. If you are looking for something to work on, that
+file is the honest list.
 
 ## Reporting bugs
 

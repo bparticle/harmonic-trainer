@@ -47,6 +47,7 @@
 	} from '$lib/effects/streak';
 	import { award, emptyRecord, parseRecord, type StreakRecord } from '$lib/effects/badges';
 	import StreakBadges from '$lib/components/StreakBadges.svelte';
+	import ChartEditor from '$lib/components/ChartEditor.svelte';
 	import { target as sharedTarget } from '$lib/practice/target.svelte';
 	import { page } from '$app/state';
 	import { shouldHandleSpace } from '$lib/shortcuts';
@@ -96,8 +97,6 @@
 	let importing = $state(Boolean(form));
 	let confirmingDelete = $state(false);
 
-	const PLACEHOLDER = `| Dm7 | G7 | Cmaj7 | Cmaj7 |
-| Am7 D7 | Dm7 G7 | Cmaj7 | Cmaj7 |`;
 	let keyName = $state('C');
 	let bpm = $state(initialSeed.defaultBpm);
 	let feel = $state<Feel>('swing');
@@ -1004,83 +1003,24 @@
 		<section>
 			{#if importing}
 				<!-- Typing is fine here: this is setting up, not practising. -->
-				<form
-					method="POST"
-					action="?/create"
-					class="border-ground-line bg-ground-raised mb-5 flex flex-col gap-3 rounded-xl border p-4"
-				>
-					<h2 class="panel-title mb-0">Add a chart</h2>
-					<p class="text-ink-dim text-xs leading-relaxed">
-						Write the chords out as they are on the page, with a <code>|</code> between bars and a line
-						per row. Say which key it is written in and it gets stored as numerals — so typing it once
-						gives you all twelve keys.
-					</p>
+				<ChartEditor
+					keys={KEYS}
+					{keyLabel}
+					initialKey={keyName}
+					initial={form}
+					onCancel={() => (importing = false)}
+				/>
 
-					<div class="grid grid-cols-2 gap-3 sm:grid-cols-[1fr_7rem_8rem]">
-						<label class="col-span-2 flex flex-col gap-1 sm:col-span-3">
-							<span class="field-label">Chart name</span>
-							<input name="name" value={form?.name ?? ''} required class="field w-full" />
-						</label>
-						<label class="flex flex-col gap-1">
-							<span class="field-label">Written key</span>
-							<select name="key" class="field w-full">
-								{#each KEYS as k (k)}
-									<option value={k} selected={k === (form?.key ?? keyName)}>{keyLabel(k)}</option>
-								{/each}
-							</select>
-						</label>
-						<label class="flex flex-col gap-1">
-							<span class="field-label">Mode</span>
-							<select name="mode" class="field w-full">
-								<option value="major" selected={form?.mode !== 'minor'}>major</option>
-								<option value="minor" selected={form?.mode === 'minor'}>minor</option>
-							</select>
-						</label>
-						<label class="col-span-2 flex flex-col gap-1 sm:col-span-1">
-							<span class="field-label">Tempo</span>
-							<input
-								name="bpm"
-								type="number"
-								min="40"
-								max="300"
-								value={form?.bpm ?? 140}
-								class="field w-full"
-							/>
-						</label>
+				{#if form?.problems?.length}
+					<div role="alert" class="border-ground-line mb-5 rounded-lg border p-3">
+						<p class="mb-1 text-sm font-semibold">The save was refused:</p>
+						<ul class="flex flex-col gap-0.5">
+							{#each form.problems as problem (problem)}
+								<li class="text-ink-muted font-mono text-xs">{problem}</li>
+							{/each}
+						</ul>
 					</div>
-
-					<label class="flex flex-col gap-1">
-						<span class="field-label">Chords, one row per line</span>
-						<textarea
-							name="chart"
-							rows="6"
-							class="field font-mono text-sm"
-							placeholder={PLACEHOLDER}>{form?.text ?? ''}</textarea
-						>
-					</label>
-
-					{#if form?.problems?.length}
-						<div role="alert" class="border-ground-line rounded-lg border p-3">
-							<p class="mb-1 text-sm font-semibold">Check these before saving:</p>
-							<ul class="flex flex-col gap-0.5">
-								{#each form.problems as problem (problem)}
-									<li class="font-mono text-xs" style:color="var(--pc-0)">{problem}</li>
-								{/each}
-							</ul>
-						</div>
-					{/if}
-
-					<div class="flex flex-wrap items-center gap-2">
-						{#if form?.canSavePartial}
-							<button type="submit" name="allowPartial" value="yes" class="chip is-on"
-								>Save the understood bars</button
-							>
-						{:else}
-							<button type="submit" class="chip is-on">Save chart</button>
-						{/if}
-						<button type="button" class="chip" onclick={() => (importing = false)}>Cancel</button>
-					</div>
-				</form>
+				{/if}
 			{/if}
 
 			<div class="tonal-centre">
@@ -1726,35 +1666,8 @@
 		color: var(--color-ink-dim);
 	}
 
-	.field-label {
-		font-family: var(--font-mono);
-		font-size: 0.68rem;
-		color: var(--color-ink-dim);
-	}
-
-	.field {
-		padding: 0.45rem 0.6rem;
-		border-radius: 8px;
-		border: 1px solid var(--color-ground-line);
-		background: var(--color-ground);
-		color: var(--color-ink);
-		font-family: var(--font-mono);
-		font-size: 0.8rem;
-	}
-
-	.field:focus {
-		border-color: var(--color-ink-dim);
-	}
-
-	.field:focus-visible {
-		outline: 2px solid var(--color-ink);
-		outline-offset: 2px;
-	}
-
-	code {
-		font-family: var(--font-mono);
-		color: var(--color-ink-muted);
-	}
+	/* The form fields and their labels left with the chart importer: the editor
+	   is a component now and carries its own. */
 
 	/* The key chips carry their own pitch colour, as they do everywhere else. */
 	.key-chip.is-on {
