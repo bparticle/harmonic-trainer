@@ -775,7 +775,7 @@ Flagged here rather than settled by whoever happens to be typing:
 1. **How people sign in** — password with a reset flow, or a magic link with no
    password at all. M12 recommends passwords and explains why; the deciding
    consideration is that e-mail becomes load-bearing either way.
-1. **Retention of `chord_attempts`** — the recommendation is to keep everything
+2. **Retention of `chord_attempts`** — the recommendation is to keep everything
    forever, at a few thousand rows an hour, because it cannot be reconstructed.
 
 **Settled since the last revision, by the hosting requirement rather than by
