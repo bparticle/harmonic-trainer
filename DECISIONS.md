@@ -2246,3 +2246,285 @@ seventh, which is precisely the note being avoided.
 That one is not a loss the parser can be blamed for — both readings are real
 chords and the symbol is genuinely ambiguous — so it is documented in the
 songbook notes next to `alt` rather than guessed at.
+
+## The licence moves to the AGPL
+
+Changed in August 2026, from MIT to AGPL-3.0-or-later, twelve days after the
+first commit and before anything was charged for. It is recorded here at length
+because a licence change is the one decision in a project that other people are
+entitled to have explained to them.
+
+### What the MIT licence permitted
+
+Anyone could take this code, host it as a paid service, keep every improvement
+closed, and compete with the hosted instance using the work it was built from,
+owing nothing and saying nothing. That is not a dark reading of the MIT licence;
+it is the MIT licence working exactly as designed and as intended by the people
+who wrote it.
+
+It stops being an acceptable trade the moment a hosted instance is the plan.
+Plausible published the same reasoning after it happened to them rather than
+before, which is the only detail worth copying differently.
+
+### What the AGPL does not do
+
+Worth stating plainly, because the AGPL has a reputation assembled mostly by
+people who wanted permissive terms and did not get them. Nothing below changes:
+
+- **Self-hosting is free and unrestricted.** Run it on a laptop, a NAS, a VPS or
+  a company server. Nothing is owed. This is the free tier and it stays the real
+  thing rather than a crippled one.
+- **Forking is free**, including hostile forking. If this project is run badly,
+  somebody else may run it better with the same code, and that possibility is a
+  feature — it is the accountability that comes with taking contributions.
+- **Reading, learning from and contributing to it are unaffected**, and there is
+  no CLA and no copyright assignment. Contributors keep their copyright.
+- **Charging money is allowed.** The AGPL is not a non-commercial licence and
+  never was.
+
+The single new obligation lands on one kind of user: modify it, run the modified
+version as a network service, and you must offer your users its source. Everyone
+else is where they were.
+
+### Why at twelve days old
+
+Two facts made this nearly free now and expensive at any later date, and both
+are properties of the calendar rather than of the argument.
+
+There was **one human author and nobody to ask.** A relicence needs the
+agreement of everyone holding copyright in the code, so every outside
+contribution raises the cost of a change like this. Doing it before the first
+pull request means it costs one commit; doing it afterwards means an
+archaeology project and a round of e-mails to people who may not answer.
+
+And relicensing is **not retroactive.** Everything published under MIT stays
+MIT and can be forked from the last MIT commit for as long as anyone cares to.
+Today that fork is a twelve-day-old app with no accounts, no billing and no
+record of anything. In a year it would have been most of a product. The window
+where this is cheap is open exactly once, at the beginning, and closes a little
+further every week.
+
+### The cost, and it is real
+
+The AGPL deters companies from adopting the code, because many have blanket
+policies against it. For a harmony trainer aimed at individual musicians that
+costs nothing anyone will miss, but it is a real narrowing and pretending
+otherwise would be dishonest.
+
+Some contributors dislike copyleft on principle and will not send patches to an
+AGPL project. At this size that is a handful of people at most, and the
+alternative was a licence that permits the one outcome the project cannot
+survive.
+
+### One codebase, no proprietary fork
+
+The hosted instance will run the same code as the repository, billing included.
+No open core, no stripped community edition, no features held back for paying
+customers. Secrets live in environment variables, which is where they already
+live.
+
+This is partly principle and mostly arithmetic: a solo maintainer running a
+public core and a private fork is a solo maintainer doing everything twice, and
+the second copy is the one that rots.
+
+## Somebody else's account
+
+The fifth requirement is that the hosted instance be offered to other people for
+about five euros a month. It arrives after the four that produced M9 to M11, and
+it does something none of those did: it puts a date on _later_.
+
+`ROADMAP.md` has the plan — M12 for accounts, M13 for the subscription. What
+follows is why the shape is what it is, including the place where it reverses a
+decision recorded above and the place where doing nothing turned out to have
+been right.
+
+### The seam was built for exactly this, and holds
+
+"Prepare for multi-user now, build it later" was written when the second player
+was hypothetical. The temptation at the time was to build the whole of it — user
+columns on twelve tables, an empty `password_hash`, a login form nobody would
+use. What was built instead was a `users` table with one row and one accessor
+that every owned query goes through.
+
+That decision is now being tested by the thing it was made for, and it passes.
+Nothing in M12 is a migration of work done wrongly; it is rows arriving in a
+table that already exists, through a function that already resolves them.
+`currentUserId()` stops being a constant and starts reading a cookie, which was
+the entire claim. The columns deliberately not added are added now, in the
+milestone that can finally say what they should mean.
+
+The lesson worth keeping is narrower than "build seams". It is that a seam is
+worth building when it is one function and one table, and not worth building
+when it is twelve columns encoding twelve guesses.
+
+### The room stops existing
+
+Here is the reversal. The M9 analysis argued that the twelve pitch colours and
+the wheel calibration are not preferences but measurements: they match coloured
+stickers on real keys and a wheel somebody built by hand, so two players at the
+same piano want them identical. The singleton keeps what belongs to the room.
+
+That argument was correct and is now void, because it quietly assumed the two
+players are in the same room. A subscriber in another country shares no
+stickers, no hand-built wheel, no cable and no laptop with anybody. Hosting does
+not answer the question of who owns a setting; it deletes the entity the answer
+appealed to.
+
+So everything moves to the player, including the two values recorded as
+genuinely unresolved — latency is a property of one subscriber's cable, and how
+wide a rolled chord may be is a property of one subscriber's hands. They were
+flagged as needing a second player to decide them. A second player decided them
+by existing, which is not how anybody expected that to be settled.
+
+The singleton is not dropped. It changes job: it becomes the defaults a new
+account is born with. The check constraint pinning it to `id = 1` was called the
+cheapest possible outcome for the table that looked hardest to move, and it is
+cheaper than that — the table did not need to move at all, only to be re-read.
+
+### A definition is shared, data is not
+
+The other question left open was whether the seeded skill graph is shared or
+copied per player, and whether charts you typed in are visible to anyone else.
+Both fall out of one distinction rather than needing a policy.
+
+`skills` is the curriculum. It is seeded, never authored at runtime, identical
+for everyone, and re-seeding matches on `code` so editing it never orphans
+review history. That is a definition, and definitions are shared. `cards` are
+generated from it as a ladder is climbed, at a rate that is personal, carrying
+FSRS state that is the most personal thing in the database. That is data, and
+data is owned.
+
+The same cut settles a smaller thing M9 had got slightly wrong. `charts` was to
+take a `NOT NULL` owner backfilled to the one existing player — but `db:seed`
+writes the built-in forms, cycles and standards into that table, so the backfill
+would have handed the shared repertoire to whoever happened to be first. The
+column is nullable: null is built-in, a value is yours.
+
+Charts you typed in are private for a blunter reason: a hosted service where a
+stranger's tune turns up in your list is a bug. Sharing is a feature nobody
+asked for, and this file has a long record of what happens to those.
+
+### The record has to exist before the account can be sold
+
+The most useful thing this exercise turned up is not in the plan for either new
+milestone. It is that M9 was already load-bearing for the fee and nobody had
+said so.
+
+Streaks and badges still live in `localStorage`. Sell an account today and a
+subscriber signs in on the laptop to find their badges are on the desktop — not
+lost, but not theirs either, because they belong to a browser rather than to a
+person. An account whose contents live in one browser is not an account, and the
+money would be buying a login and a nicer URL.
+
+So M9 stays first, and gains a second justification it did not have when it was
+written for a single player who could not tell the difference.
+
+### Revolut, and the argument that did not survive contact
+
+The first version of this section chose Stripe on three grounds. Two of them
+were wrong about the facts and the third was right about the wrong scale, which
+is worth writing down as it happened rather than presenting the conclusion as
+though it had been obvious.
+
+The first ground was that the Revolut account in hand was a personal one and
+merchant accounts are a Business feature with their own onboarding, so "I
+already have Revolut" would not shorten the path. It is a Business account with
+acquiring already enabled. The path was already short.
+
+The second was that Stripe hosts both pages this needs, so subscribing, changing
+a card and cancelling would be somebody else's interface and somebody else's PCI
+scope. Revolut has both: a hosted payment page that takes the first payment and
+saves the method, and a customer portal where a subscriber changes a card or
+ends a cycle. That was the strongest argument and it was an argument from not
+having looked.
+
+The third was VAT, and it is true — Stripe Tax computes the customer's country
+rate and files it, Revolut gives you a VAT field on a plan. What it is not is
+relevant yet. Under €10,000 a year of cross-border EU sales the right rate is
+Belgian VAT on everything: one number, in a config file, that never varies.
+Buying a machine to compute a constant is not a reason to choose a payment
+provider, and the threshold is about 167 subscribers held for a full year — the
+day it binds is a good day.
+
+What is left favours Revolut on every axis that can be measured. It is cheaper,
+and by more than the headline rates say, because Stripe adds 0.7% to recurring
+volume and Revolut does not. Settlement lands next day in the account the money
+is wanted in, with no second company in the path. And the integration starts
+from an account that already exists.
+
+Stripe keeps one real advantage and it is not about money: the better workshop.
+An official Node SDK, a CLI that forwards webhooks to `localhost`, and test
+clocks that fast-forward a subscription a year to prove renewal and dunning
+work. That last has no Revolut equivalent, so renewal behaviour gets verified
+against a sandbox in real elapsed time. It is a tax on the build, paid once.
+
+The honest summary is that this was close, that it moved because two of the
+three reasons turned out to be false, and that being close is exactly why
+`provider` is a column and `entitled()` is a single function. The triggers that
+would move it again are written into `ROADMAP.md` instead of being left to be
+noticed.
+
+### Webhooks stop being the source of truth
+
+One design consequence follows from the provider and deserves its own note,
+because it looks like an implementation detail and is not.
+
+Revolut retries a failed webhook three times at ten-minute intervals and then
+gives up. That is half an hour of tolerance for the endpoint being unreachable,
+which is less than one bad deploy. Stripe retries for days, which is why an
+integration written against Stripe can get away with treating the webhook as the
+only mechanism that ever makes the local row true.
+
+So the subscription row carries `checked_at` and is re-read from the provider
+when it goes stale. Webhooks become an optimisation that keeps it fresh rather
+than the sole path to correctness, and a missed event costs a lazy read instead
+of a paying subscriber quietly losing access on a Sunday.
+
+This would be the right shape on any provider. The narrower retry window is what
+turns it from good practice into a requirement, and it is the only place in
+either milestone where the choice of provider reaches into the design.
+
+### Lapsing is read-only, and that is a tone decision
+
+The scoring rules in this app drop silence rather than marking it wrong. The
+profile refuses a daily streak because it would be the first thing here to tell
+anyone off. A lapsed subscription is the same question wearing a suit.
+
+So a lapsed account keeps signing in, keeps reading its own history, and keeps
+being able to export all of it. What stops is starting a session and saving a
+run. Nothing is deleted for non-payment and nothing is held hostage — an app
+that has never once scolded anybody does not open its commercial career by
+locking a year of practice behind a failed card.
+
+The free tier question answers itself for the same reason. The software is
+copyleft, self-hostable and documented, so the free version already exists and is
+the real thing rather than a crippled one. The fee buys somebody else keeping a Postgres
+alive. Nothing has to be taken away from anyone to make it worth paying, which
+is a comfortable position arrived at by accident, a long way back, by making the
+thing open in the first place.
+
+### What this costs the project, honestly
+
+Two properties currently advertised stop being true, and they are worth naming
+rather than letting the copy quietly change.
+
+The first is that there are no external services. Accounts need e-mail — for a
+reset, or for a magic link, but for one of the two — and that is the first
+outside dependency this project has ever had. It sits on the path into an app
+somebody has paid for, which is why passwords are recommended over magic links:
+a password degrades better on the morning the mail provider is having a bad day.
+
+The second is bigger and is the actual price of admission. "Your practice data
+belongs on your machine" stops being a promise about everybody and becomes a
+promise about self-hosters. Other people's practice history lands in a database
+someone else is responsible for, which is what a controller of personal data is,
+and it brings backups that have been restored at least once, an export, a
+deletion that actually deletes, terms, and a privacy policy. The export and the
+deletion are built in M12 rather than left to the legal page, because a right to
+erasure implemented as a promise in prose is a schema bug with good manners.
+
+The landing page currently sells the opposite of all of this — _one musician per
+instance_, _no user accounts_ — and none of it is edited until M12 ships, per
+the rule that the app must not hint at what it cannot do. The replacement keeps
+both halves true and apologises for neither: run it yourself, or let somebody
+else run it for you.

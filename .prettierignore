@@ -9,3 +9,7 @@ static/
 # are not ours to format, and the harness writes .claude/ into them with CRLF,
 # so every worktree that exists breaks the format check at the root.
 .claude/worktrees
+
+# Gitignored commercial notes. Prose nobody ships; `npm run verify` should not
+# have an opinion about it.
+private

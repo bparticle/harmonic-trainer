@@ -76,7 +76,7 @@
 					</a>
 					<a class="text-action" href="#tour">See it in motion <span aria-hidden="true">↓</span></a>
 				</div>
-				<p class="hero-note entrance entrance-5">MIT licensed · no telemetry · self-hosted</p>
+				<p class="hero-note entrance entrance-5">AGPL licensed · no telemetry · self-hosted</p>
 			</div>
 
 			<div class="hero-instrument entrance entrance-3" aria-label="Animated harmonic wheel">
@@ -347,7 +347,7 @@
 						class="text-action light"
 						href={`${REPOSITORY}/blob/main/LICENSE`}
 						target="_blank"
-						rel="noreferrer">Read the MIT license</a
+						rel="noreferrer">Read the AGPL license</a
 					>
 				</div>
 			</div>
@@ -433,7 +433,7 @@
 			</svg>
 			<span>Harmonic Trainer</span>
 		</a>
-		<p>Open source under the MIT license.</p>
+		<p>Open source under the AGPL-3.0 license.</p>
 		<div>
 			<a href={REPOSITORY} target="_blank" rel="noreferrer">Source</a><a
 				href={`${REPOSITORY}/issues`}

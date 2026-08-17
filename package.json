@@ -2,7 +2,7 @@
 	"name": "harmonic-trainer",
 	"version": "0.1.0",
 	"description": "A harmonic wheel for practising chord progressions. No staff notation, anywhere.",
-	"license": "MIT",
+	"license": "AGPL-3.0-or-later",
 	"private": true,
 	"type": "module",
 	"keywords": [
