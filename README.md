@@ -25,8 +25,10 @@ scale-degree numbers, Roman numerals, intervals and colour. If you read chord
 charts fluently and staves not at all, nothing here will ask you to.
 
 Free software, MIT licensed. Run it on your laptop, deploy it wherever you
-like, change whatever you want. It is designed to be one person's instance —
-there are no accounts, no telemetry, and no server anyone else controls.
+like, change whatever you want. It is your own instance — no telemetry, and no
+server anyone else controls. Today that means one shared password and one
+player; per-player accounts are planned rather than built, and `ROADMAP.md`
+says what is being done now to make them cheap later.
 
 ## What it does
 
@@ -171,6 +173,9 @@ src/
       ladder.ts      Twelve keys, seven rungs each; suggests, never gates
       charts.ts      Forms, cycles and public-domain standards, as numerals
       import.ts      Chord symbols you type in, stored as numerals
+      editor.ts      Writing a chart down: what each bar stores, and what
+                     comes back out. Shared by the editor, the server and
+                     the songbook script, so all three agree
     srs/
       scheduler.ts   FSRS via ts-fsrs; direction and cold-key weighting
     midi/          Web MIDI and chord clustering
@@ -181,6 +186,7 @@ src/
       Glyph.svelte       Musical accidentals as vectors
       ChordSymbol.svelte Composed chord symbols with spoken labels
       Keyboard.svelte    On-screen keyboard; the no-MIDI fallback
+      ChartEditor.svelte A grid of bars, checked as you type
     server/
       auth.ts        Password check and signed session cookie
       db/
@@ -231,15 +237,32 @@ local Postgres for development and tests.
 
 ## Milestones
 
-| M      | Deliverable                               | Status |
-| ------ | ----------------------------------------- | ------ |
-| **M0** | Repo, DB, migrations, test runner, tokens | done   |
-| **M1** | Music core + golden fixtures              | done   |
-| **M2** | Harmonic wheel component                  | done   |
-| **M3** | MIDI layer                                | done   |
-| **M4** | SRS + seeded skill graph                  | done   |
-| **M5** | Session engine                            | done   |
-| **M7** | Backing tracks and play-along             | done   |
+| M       | Deliverable                               | Status |
+| ------- | ----------------------------------------- | ------ |
+| **M0**  | Repo, DB, migrations, test runner, tokens | done   |
+| **M1**  | Music core + golden fixtures              | done   |
+| **M2**  | Harmonic wheel component                  | done   |
+| **M3**  | MIDI layer                                | done   |
+| **M4**  | SRS + seeded skill graph                  | done   |
+| **M5**  | Session engine                            | done   |
+| **M7**  | Backing tracks and play-along             | done   |
+| **M11** | The chart editor                          | done   |
+
+Work after M7 shipped unnumbered, all of it on the play-along page: chord-by-chord
+scoring against the sounding chord, the chart following the music, streaks and
+badges, the suggested scales drawn on a keyboard, and every key in them named
+with its degree. `DECISIONS.md` has the reasoning for each.
+
+### Planned
+
+| M       | Deliverable                                                    | Status  |
+| ------- | -------------------------------------------------------------- | ------- |
+| **M9**  | The record — persistence, the multi-user seam, per-song badges | planned |
+| **M10** | The profile — one page for what has actually happened          | planned |
+
+`ROADMAP.md` holds the plan: schema, scope, order and the decisions still open.
+This table carries status and nothing else, so the two cannot drift into
+different accounts of the same work.
 
 `DECISIONS.md` records every non-obvious choice and why it was made, including
 the ones that turned out to be wrong. It is the most useful thing to read
@@ -247,17 +270,20 @@ before proposing an architectural change.
 
 ### Not built, on purpose
 
-Two milestones from the original brief are deliberately unbuilt. Nothing in the
-app hints at either, because a menu item leading nowhere is worse than an
-absence.
+Still deliberately unbuilt, and nothing in the app hints at any of it, because a
+menu item leading nowhere is worse than an absence.
 
-| M      | Deliverable                                  | Why it is parked                                            |
-| ------ | -------------------------------------------- | ----------------------------------------------------------- |
-| **M6** | Vault, blind-spot report, transfer detection | Needs months of recorded playing before it can say anything |
-| **M8** | Songwriting mode and data export             | Wanted later, not now                                       |
+| Deliverable          | Why it is parked                                                       |
+| -------------------- | ---------------------------------------------------------------------- |
+| The vault            | Nothing yet produces recorded MIDI to browse                           |
+| Transfer detection   | Its consumer, the mastery gate, was deleted in the depth-first rebuild |
+| **M8** — songwriting | Wanted later; smaller than it was, once M11 has built the grid         |
 
-The plan for both is in `DECISIONS.md` under _M6 is parked_, along with what was
-kept for whoever builds it.
+The blind-spot report was parked with the other two and is now unblocked: M9
+writes down every chord judged on the play-along page, which is the capture
+habit the vault was supposed to supply. See `ROADMAP.md`, _What this changes
+about the parked milestones_, and `DECISIONS.md` under _M6 is parked_ for what
+was kept for whoever builds the rest.
 
 ---
 

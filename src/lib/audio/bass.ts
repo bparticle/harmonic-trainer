@@ -58,6 +58,19 @@ function nearest(pc: number, reference: number, low: number, high: number): numb
 	return best >= 0 ? best : Math.max(low, Math.min(high, reference));
 }
 
+/**
+ * The note this chord wants under it.
+ *
+ * A slash chord names its own bass, and it is the bass player who is being
+ * told: `C/E` is a C triad with an E underneath, and if the line walks from C
+ * anyway then the chart says one thing and the instrument plays another. The
+ * inner beats still walk through the chord — the bass note is a downbeat
+ * instruction, not a whole bar of one note.
+ */
+function bassNote(chord: AbstractChord): Note {
+	return chord.bass ?? chord.root;
+}
+
 function noteOf(chord: AbstractChord, degree: number): Note | null {
 	const interval = degreeInterval(chord, degree);
 	return interval ? transpose(chord.root, interval) : null;
@@ -152,9 +165,9 @@ export function walkingBass(bars: BarChord[], options: BassOptions = {}): BassNo
 		const { chord, beats } = bars[i];
 		// Looping: after the last chord comes the first one again.
 		const next = bars[(i + 1) % bars.length].chord;
-		const targetPc = pitchClass(next.root);
+		const targetPc = pitchClass(bassNote(next));
 
-		const rootMidi = nearest(pitchClass(chord.root), previous, low, high);
+		const rootMidi = nearest(pitchClass(bassNote(chord)), previous, low, high);
 		out.push({ midi: rootMidi, beat, role: 'root' });
 		previous = rootMidi;
 

@@ -82,9 +82,12 @@ async function main() {
 			.insert(schema.charts)
 			.values({
 				id: randomUUID(),
+				slug: chart.slug,
 				name: chart.name,
-				gridJson: { slug: chart.slug, grid: chart.grid, notes: chart.notes },
+				gridJson: chart.grid,
 				style: chart.style,
+				mode: chart.mode,
+				notes: chart.notes,
 				defaultBpm: chart.defaultBpm
 			})
 			.onConflictDoNothing();

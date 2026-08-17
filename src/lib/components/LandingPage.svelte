@@ -264,7 +264,7 @@
 					<ul class="plain-list">
 						<li>Progressive twelve-key practice ladder</li>
 						<li>Hands-free sustain-pedal and keyboard controls</li>
-						<li>No streaks, points or guilt</li>
+						<li>No daily streaks, no guilt for a day off</li>
 					</ul>
 				</div>
 

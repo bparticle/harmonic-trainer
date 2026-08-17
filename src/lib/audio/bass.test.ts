@@ -28,6 +28,24 @@ describe('shape of the line', () => {
 		}
 	});
 
+	it('starts a slash chord on the bass note it names, not on its root', () => {
+		// The chart saying C/E while the bass plays a C is the same lie the
+		// importer used to tell by dropping the bass note altogether.
+		const slashes = bars(['C/E', 'F', 'G/B', 'C']);
+		const line = walkingBass(slashes);
+		const downbeats = [0, 4, 8, 12].map((beat) => pcOf(line.find((n) => n.beat === beat)!.midi));
+		expect(downbeats).toEqual([pitchClass(parseChord('E').root), 5, 11, 0]);
+	});
+
+	it('walks towards the next chord’s bass note, not its root', () => {
+		const slashes = bars(['F', 'C/E']);
+		const line = walkingBass(slashes);
+		const lead = pcOf(line.find((n) => n.beat === 3)!.midi);
+		// E is the note being arrived at, so the approach is a step from it.
+		const distance = Math.min((lead - 4 + 12) % 12, (4 - lead + 12) % 12);
+		expect([1, 5, 7].includes(distance) || distance === 0).toBe(true);
+	});
+
 	it('leads into the next chord on the last beat of each bar', () => {
 		const line = walkingBass(iiVI);
 		for (let i = 0; i < iiVI.length; i++) {

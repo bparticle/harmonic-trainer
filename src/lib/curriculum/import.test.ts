@@ -99,6 +99,27 @@ describe('an imported chart behaves like a built-in one', () => {
 		expect(seed.category).toBe('mine');
 		expect(seed.published).toBeUndefined();
 	});
+
+	it('keeps the bass note of a slash chord', () => {
+		// This used to be the worst thing the importer did: C/E stored as C, no
+		// error anywhere, and a bass line walking from the wrong note for as long
+		// as you practised the tune.
+		const { rows } = parseChartText('| C/E | F | G/B | C |', 'C');
+		expect(flat(rows)).toEqual(['I/3', 'IV', 'V/7', 'I']);
+
+		const symbols = realiseChart(importedToSeed('Slashes', rows), 'C')
+			.rows.flat()
+			.flatMap((bar) => bar.chords.map((c) => c.symbol));
+		expect(symbols).toEqual(['C/E', 'F', 'G/B', 'C']);
+	});
+
+	it('transposes a slash chord with its bass', () => {
+		const { rows } = parseChartText('| C/E | G/B |', 'C');
+		const symbols = realiseChart(importedToSeed('Slashes', rows), 'Eb')
+			.rows.flat()
+			.flatMap((bar) => bar.chords.map((c) => c.symbol));
+		expect(symbols).toEqual(['Eb/G', 'Bb/D']);
+	});
 });
 
 describe('slugs', () => {

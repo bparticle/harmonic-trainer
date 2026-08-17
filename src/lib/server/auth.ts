@@ -4,11 +4,15 @@ import { env } from '$env/dynamic/private';
 /*
  * A single shared password and a signed cookie. That is the whole auth system.
  *
- * User accounts are an explicit anti-goal, but moving the database off
- * a private NAS onto a public URL means *something* has to stand between the
- * internet and the practice vault. This is the smallest thing that does the
- * job: no users table, no sessions table, no registration, no email. One
- * secret, one cookie, and nothing to maintain.
+ * Moving the database off a private NAS onto a public URL means *something* has
+ * to stand between the internet and the practice vault, and this is the
+ * smallest thing that does the job: no registration, no email, one secret, one
+ * cookie, nothing to maintain.
+ *
+ * Accounts were an explicit anti-goal when this was written, and are now the
+ * direction — see ROADMAP.md, M9. Nothing here changes until then. The plan is
+ * to name the user in the signed payload and resolve it through one accessor,
+ * not to grow this file into a login system.
  */
 
 export const SESSION_COOKIE = 'ht_session';
