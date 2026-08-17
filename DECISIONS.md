@@ -1847,3 +1847,227 @@ The `aria-label` describes the same drawing as `C 1, D 2, E♭ ♭3, …`. Speec
 no use for a Roman numeral — `♭VII` comes out of a screen reader as "flat vee
 eye eye" — and the degree is the content, not the notation it happens to be
 drawn in.
+
+---
+
+## A record worth keeping, and someone to keep it for
+
+Four requirements, and none of them is small: aim at multi-user, make the chord
+badges belong to the tune that won them, track everything and put it on a
+profile, and replace the chart importer with an editor that can be used without
+guessing. The plan is in `ROADMAP.md`; what follows is why it has the shape it
+has, including the two places where this reverses something written above.
+
+### The reason that expired
+
+Three separate places in this file decline to write something down, and all
+three give the same two-part reason: the tables the long view would need are
+still parked, and none of this was asked for.
+
+The second half is now spent — it has been asked for — and it was always the
+weaker half. The first half survives intact and turns out to say something
+different from what it looked like it said. `takes`, `analysis_facts` and
+`transfer_events` are shaped for analysis of recorded MIDI. **A streak record
+does not fit any of them**, so "do not quietly start filling the parked tables"
+was never an argument against persisting; it was an argument against persisting
+into the wrong tables, and it still is. What is being built is new tables that
+mean what they hold.
+
+The part of that reasoning that was genuinely wrong is smaller and worth naming:
+a combo counter is not what should start filling the long view, but the
+per-chord judgements underneath it are exactly that, and they were being thrown
+away every time the page closed.
+
+### Accounts stop being an anti-goal
+
+`auth.ts` says user accounts are an explicit anti-goal. That was true when the
+only problem auth solved was standing between the internet and one person's
+practice vault, and it is no longer the direction. It is recorded here rather
+than quietly edited away, because it was a reasonable decision that has been
+overtaken rather than a mistake.
+
+What has not changed is the appetite for building accounts now. There is one
+player, and registration, password hashing and email would all be machinery
+serving nobody. So the decision is narrower than it sounds: **build the seam,
+not the feature.**
+
+### One seam, not a column on every table
+
+The tempting version of "prepare for multi-user" is to put `user_id` on all
+twelve tables now and backfill it with the one value there is. That is not
+preparation, it is building it badly — twelve columns that are provably constant,
+each encoding a guess about a question nobody has asked yet.
+
+The seam is two things instead. A `users` table with exactly one row, and
+`currentUserId()`, which every query touching owned data goes through from the
+first day. Today it resolves to the seeded row; later it reads a claim off the
+cookie. If that discipline holds, a second player is a change in one function
+plus a login form. If it does not, no amount of columns would have saved it.
+
+Tables get `user_id` when this work writes to them and not before. New ones
+carry it from their first migration, and `charts` gets it because the editor is
+rewriting how charts are entered anyway. `cards`, `srs_state`, `reviews` and
+`sessions` wait — not because they will never need it, but because each poses a
+real question (is the seeded skill graph shared, or copied per player?) that
+cannot be answered honestly without a second player to answer it for.
+
+The `users` table holds an id, a name and a timestamp. No empty `password_hash`
+column waiting for accounts to arrive: nothing exists until it is reached, and a
+column nothing writes is the same smell as a table nothing reads — which is the
+thing that got the record button deleted.
+
+### Some settings belong to the instrument, not to the player
+
+The singleton `settings` row is where multi-user actually bites, and pulling it
+apart turned up a distinction worth keeping. The twelve pitch colours exist to
+match coloured stickers on real keys. The wheel calibration exists to match a
+physical wheel that somebody built by hand. **Neither of those is a preference;
+they are measurements of the room**, and two players sitting at the same piano
+would want them identical.
+
+So the singleton stays, holding what belongs to the instrument, and what belongs
+to the player — session length, reveal delay, where they are on the ladder —
+moves to a row of its own. The check constraint that pins the settings row to
+`id = 1` never has to be dropped, which is the cheapest possible outcome for the
+table that looked hardest to move.
+
+Two values sit on the line and are recorded as unresolved rather than settled by
+whoever happened to be typing: MIDI latency is a property of the cable, and how
+wide a rolled chord may be before it stops being one chord is a property of the
+hands. They will be decided when there is a second player to disagree.
+
+### A badge belongs to the tune it was won on
+
+Badges were global — six tiers, first earned wins, and once `nice` had been
+taken it could never be earned again on anything. That made the shelf a record
+of one afternoon rather than of the repertoire, and it made every tune after the
+first one unrewarded.
+
+Per-tune fixes it, and sharpens what a badge claims. Fifty in a row **on this
+tune** is a much harder and much more specific statement than fifty in a row on
+whatever happened to be playing; it is three clean passes of that form, which is
+the thing anybody would actually want to be able to say.
+
+The migration costs nothing, because a badge has recorded `chart` since the day
+badges shipped. Every stored badge already knows which tune won it and moves to
+that tune's shelf with its date and its colour intact. Nothing is invented,
+which is the same standard the colour rule holds itself to.
+
+### The shelf is a ladder on a tune and a record on the profile
+
+"All six on show, earned or not" was argued from a real distinction: a cabinet
+shows what you have won, a ladder shows what is next, and this is a ladder.
+Per-tune badges do not weaken that on the tune — six empty sockets under a chart
+still say that twenty is next and fifty exists.
+
+On the profile it inverts. Thirty tunes with six sockets each is a hundred and
+eighty mostly-empty slots, and a page composed largely of things you have not
+done is not a ladder, it is a scolding with a grid layout. The profile shows
+what was won. The same rule, applied honestly to a different question, produces
+opposite answers in the two places — which is a good sign it is a rule rather
+than a habit.
+
+### The clock runs when the music does
+
+"Hours played" is the number on a profile most likely to become a lie, because
+every easy way to compute it is generous. Page-open time counts reading email
+with a tab in the background. Session start to session end counts the evening
+the browser was left open.
+
+Counted: the transport running and not paused, plus practice blocks that
+actually finished. Not counted: the page merely being open, a paused transport,
+a session abandoned mid-block, time spent on Explore. Likewise "tunes
+practised" counts a chart something was played over, not a chart opened.
+
+This is the tone rule the score already follows, applied to a different number.
+Silence is dropped rather than marked wrong; "you have not played yet" is not
+the same statement as "you scored zero"; and an hour claimed is an hour where
+something was actually sounding.
+
+### No daily streak, and that is a design decision
+
+Specified, and it also falls out of everything above. The chord streak counts
+chords landed back to back — it measures playing. A daily streak counts days
+attended, punishes a week away from the piano, and would be the first thing in
+this app to tell anyone off. There is no calendar of dots, no days-in-a-row
+counter, and nothing on the profile that turns a day off into a loss.
+
+It is worth being explicit that this is a decision and not an omission, because
+a profile page is exactly where somebody will later assume one was forgotten.
+
+### A grid, not a paragraph
+
+Every complaint about the chart importer is the same complaint: you cannot see
+what it is going to do until it has done it. Bars are pipe characters, which is
+a key nobody's hands are near. The written key silently governs every numeral
+stored, so choosing it wrong produces a chart that is wrong in all twelve keys
+identically — the one error the app cannot catch for you. `G7alt` parses as a
+plain `G7` without a word. And the problems arrive as line numbers, after
+saving, against a text box that now has to be re-read.
+
+The fix is not a better error message, it is moving the whole check forward: a
+grid of bars, chords parsed as you type and echoed back formatted, and the
+numeral each bar will be stored as printed underneath it while you work. That
+last part already exists — `check-chart.ts` prints exactly this — so the change
+is largely about where it runs. Logic that has to live in a script the user
+never sees is a user interface problem wearing a tooling costume.
+
+Pasting `| Dm7 | G7 |` still works, because that path is how long transcriptions
+and agent-assisted ones get in. It becomes an input to the grid rather than the
+only way through it.
+
+### The editor is not songwriting mode
+
+Asked directly, and worth answering in writing because the guess was reasonable.
+M8 was for inventing a progression that does not exist yet; the editor is for
+entering one that is already on the paper in front of you. Different jobs, and
+only one of them is blocking anybody today.
+
+They do share a grid, which is the useful part of the answer: M11 should build
+that grid as a component rather than as a page, and what is left of M8
+afterwards is a blank one, a way to hear it, and export. That is a much smaller
+milestone than the one currently parked, and it is smaller because of work being
+done for another reason.
+
+### What this unparks
+
+The reason recorded for parking M6 was that the vault and the blind-spot report
+could work sooner but not without the capture habit transfer detection was
+supposed to justify. That has quietly stopped being true. Play along judges
+every chord occurrence against the chord that is sounding, and writing those
+judgements down is the capture habit — arriving from the other end, without a
+single recorded take or a `recognise()` pass.
+
+So the blind-spot report is unblocked and becomes a `GROUP BY`. The vault stays
+parked, because nothing here produces recorded MIDI. Transfer detection stays
+parked unchanged, for the reason it was parked in the first place: its consumer,
+the mastery gate, is still deleted, and it would feed a report and nothing else.
+
+## Verify checks this repo, not the copies of it
+
+`npm run verify` started failing on files nobody had written. Prettier walks
+from the repo root, and the agent worktrees live at `.claude/worktrees/` —
+inside it. Each one is a complete checkout, so the format check was reading
+three copies of the tree and reporting style issues against files that are not
+this repo's working copy of anything.
+
+The obvious guess was that the copies had gone stale, and two of them had: both
+sat at older commits than `main`, both were fully merged, and they are gone now.
+But staleness was not the fault. The worktree actually in use failed too, on the
+five tracked files under `.claude/`, and it was sitting at exactly the commit
+`main` was on. Same bytes in git, different bytes on disk — the copies had CRLF
+where the originals had LF.
+
+That is precisely what `.gitattributes` is here to prevent, and it is not
+broken. `git check-attr` reports `eol: lf` inside a worktree and git honours it
+on checkout. Those files simply do not arrive by checkout: the harness writes
+`.claude/` into a new worktree itself, and on Windows they land with CRLF. A
+line-ending rule in this repo cannot govern a file git did not put there.
+
+So the ignore entry is the fix, and removing the dead worktrees was only the
+tidying. Deleting them would have shortened the error and left the failure
+standing, because the worktree in use breaks the check too, and so would the
+next one anybody opens. What `.claude/worktrees` says is that this repo's style
+rules cover this repo's own tree, and not whatever working copies happen to be
+nested inside it while somebody is working.
+
