@@ -255,10 +255,13 @@ with its degree. `DECISIONS.md` has the reasoning for each.
 
 ### Planned
 
-| M       | Deliverable                                                    | Status  |
-| ------- | -------------------------------------------------------------- | ------- |
-| **M9**  | The record — persistence, the multi-user seam, per-song badges | planned |
-| **M10** | The profile — one page for what has actually happened          | planned |
+| M       | Deliverable                                                     | Status  |
+| ------- | --------------------------------------------------------------- | ------- |
+| **M9**  | The record — persistence, the multi-user seam, per-song badges  | planned |
+| **M10** | The profile — one page for what has actually happened           | planned |
+| **M12** | Accounts — real credentials, and every owned row actually owned | planned |
+| **M13** | The subscription — a hosted instance somebody else can pay for  | planned |
+| **M14** | The way in — a public demo needing no account and no database   | planned |
 
 `ROADMAP.md` holds the plan: schema, scope, order and the decisions still open.
 This table carries status and nothing else, so the two cannot drift into
@@ -383,7 +386,17 @@ npm run verify   # format check, types, tests — the same three CI runs
 
 ## Licence
 
-MIT. See `LICENSE`.
+**AGPL-3.0-or-later.** See `LICENSE`. Copyright © 2026 the Harmonic Trainer
+contributors.
+
+Run it, read it, change it, fork it, host it for yourself. The licence asks one
+thing in return, and only of one kind of user: if you run a **modified** version
+as a service other people use over a network, publish your changes. Running it
+unmodified costs you nothing, self-hosting costs you nothing, and forking is
+explicitly fine.
+
+`DECISIONS.md` records the reasoning behind it, and what it does and does
+not restrict.
 
 Bundled musical material is generic (blues, rhythm changes, modal vamps, ii–V
 cycles) or public domain, and every bundled standard records its publication

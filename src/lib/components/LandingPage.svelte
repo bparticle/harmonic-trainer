@@ -433,7 +433,7 @@
 			</svg>
 			<span>Harmonic Trainer</span>
 		</a>
-		<p>Open source under the AGPL license.</p>
+		<p>Open source under the AGPL-3.0 license.</p>
 		<div>
 			<a href={REPOSITORY} target="_blank" rel="noreferrer">Source</a><a
 				href={`${REPOSITORY}/issues`}
