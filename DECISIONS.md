@@ -2189,3 +2189,60 @@ No `user_id`. It belongs on this table and is left to M9, which creates the
 `users` table and the accessor every owned query goes through. Adding the column
 first would mean inventing half of that seam early, and guessing at the half
 that is actually a decision.
+
+## Two chords the model could not hold
+
+Transcribing Resurrections turned up a failure the round-trip check is
+structurally unable to catch. `Am(add2)` came back as `Am` and `Ammaj7` as
+`Am7`, and the checker reported both as clean — because it compares the _parsed_
+chord against playback, and the loss had already happened by the time it looked.
+This is the same shape as the `alt` problem, which is why `alt` was called out by
+name rather than detected: a chord that parses into a different real chord is
+invisible to a check that starts from the parse.
+
+The `alt` answer was a warning. That works when the chord is genuinely
+unwriteable, and it was the wrong answer twice over here, because both of these
+are ordinary chords that a chart is entitled to contain.
+
+### A minor-major seventh is a quality, not a minor chord with a suffix
+
+`m` then `maj` fell through to the minor token and the `maj` was consumed as
+nothing. There was nowhere for it to land: the quality list had no minor-major,
+and `SEVENTH_FOR_QUALITY` maps `min` to a minor seventh, so even a `7` extension
+could only ever produce the G natural.
+
+It is now a quality of its own, with its seventh in the base intervals rather
+than in the extensions — the same treatment `dom` gets, for the same reason.
+Take the seventh away and there is no chord left, only a minor triad, so the
+seventh is not something the symbol might decline to ask for.
+
+The numeral spells it out: `imMaj7`, not a case distinction. Roman numerals carry
+major against minor in the case of the letters and have exactly one bit to spend
+there, which the minor third has already taken.
+
+### An added tone is not an extension
+
+`Cadd9` and `C9` differ by the one note that makes `add9` worth writing. Every
+rule about extensions is wrong for it — that they imply the seventh, that the
+symbol names only the top one — so it is a separate field rather than an
+extension with a flag beside it.
+
+`add2` and `add9` are kept apart. They are the same pitch class, and the second
+sits under the third while the ninth sits above the chord; a page that writes
+`Am(add2)` should not get `Amadd9` back. That distinction only survives if the
+interval list stays in pitch order, because `closeVoicing` walks it lifting each
+note above the last — so a second pushed onto the end arrives at the keyboard as
+a ninth. The list is sorted, but only when something has been added: everything
+else already builds it ascending, and a sort that can only be a no-op is a sort
+that can only introduce a bug.
+
+Parsing strips `add` before anything else reads digits. Left in, the `9` of
+`Cadd9` is found by the degree match and the chord becomes a dominant — with a
+seventh, which is precisely the note being avoided.
+
+### What is still silent
+
+`maj` alone still means `maj7`, so `Emaj` stores a D♯ that was never written.
+That one is not a loss the parser can be blamed for — both readings are real
+chords and the symbol is genuinely ambiguous — so it is documented in the
+songbook notes next to `alt` rather than guessed at.
