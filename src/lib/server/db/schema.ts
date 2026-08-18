@@ -11,9 +11,11 @@ import {
 	smallint,
 	text,
 	timestamp,
+	unique,
 	uuid
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
+import type { Landing } from '$lib/practice/match';
 
 /*
  * Conventions
@@ -90,6 +92,24 @@ export type ChartStyle = 'blues' | 'minor_blues' | 'rhythm_changes' | 'modal_vam
 // ---------------------------------------------------------------------------
 // Tables
 // ---------------------------------------------------------------------------
+
+/**
+ * Exactly one row: the local player, seeded by the migration at a fixed id.
+ *
+ * An id, a name and a timestamp, and nothing else. No `email`, no empty
+ * `password_hash` waiting for accounts to arrive — nothing exists until it is
+ * reached, and a column nothing writes is the same smell as a table nothing
+ * reads. Credentials are M12, and they cannot be faked by leaving space for
+ * them.
+ *
+ * Everything owned cascades from here, designed in from this first migration
+ * rather than discovered on the day somebody asks to be deleted.
+ */
+export const users = pgTable('users', {
+	id: uuid('id').primaryKey(),
+	name: text('name').notNull(),
+	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+});
 
 /**
  * Single row, id pinned to 1. Holds the editable design tokens (the twelve
@@ -305,14 +325,18 @@ export const transferEvents = pgTable(
  * of Roman numerals. It stays JSON because it is a nested array nothing queries
  * into — the one shape here that genuinely is a document.
  *
- * No `user_id` yet. It belongs here and is deliberately left to M9, which
- * creates the `users` table and the accessor every owned query goes through;
- * adding the column first would mean inventing half of that seam early.
+ * `user_id` is the one nullable owner in the schema, and the null means
+ * something: **null is built-in and shared, a value is yours.** `db:seed` writes
+ * the forms, cycles and standards into this table from `charts.ts`, so a NOT
+ * NULL backfill would have handed the shared repertoire to whoever happened to
+ * be the first row in `users`. The list on the play-along page is the union of
+ * the two, which is what it already showed.
  */
 export const charts = pgTable(
 	'charts',
 	{
 		id: uuid('id').primaryKey().defaultRandom(),
+		userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
 		slug: text('slug').notNull().unique(),
 		name: text('name').notNull(),
 		gridJson: jsonb('grid_json').$type<string[][]>().notNull(),
@@ -324,6 +348,129 @@ export const charts = pgTable(
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
 	(t) => [index('charts_slug_idx').on(t.slug)]
+);
+
+/**
+ * One row per run of the transport: play pressed to stop pressed.
+ *
+ * The `Tally` is flattened into columns rather than kept as `jsonb` because the
+ * profile sums it on every load and it is a closed vocabulary — seven numbers,
+ * unchanged since the day scoring shipped. `analysis_facts` is narrow and long
+ * for the opposite reason: its dimensions keep being added to.
+ *
+ * `chart_slug` rather than a foreign key, because the built-in charts live in
+ * code and have no row to point at. `chart_id` is set only for a chart of your
+ * own, and survives that chart being deleted — the run still happened, and the
+ * slug still says what it was played over.
+ *
+ * `best_streak` is why the streak record no longer stores a best at all: a
+ * streak cannot outlive the transport, so the best ever is `MAX(best_streak)`
+ * here and the best on a tune is the same grouped by slug. Nothing left to
+ * reconcile, because there is only one place the answer comes from.
+ */
+export const playRuns = pgTable(
+	'play_runs',
+	{
+		id: uuid('id').primaryKey(),
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		chartSlug: text('chart_slug').notNull(),
+		chartId: uuid('chart_id').references(() => charts.id, { onDelete: 'set null' }),
+		keyCenter: text('key_center').notNull(),
+		bpm: integer('bpm').notNull(),
+		feel: text('feel').notNull(),
+		startedAt: timestamp('started_at', { withTimezone: true }).notNull(),
+		endedAt: timestamp('ended_at', { withTimezone: true }),
+		/** Transport running and not paused, count-in included. Never page-open time. */
+		playingMs: integer('playing_ms').notNull(),
+		voiced: integer('voiced').notNull(),
+		landed: integer('landed').notNull(),
+		partial: integer('partial').notNull(),
+		missed: integer('missed').notNull(),
+		notesChord: integer('notes_chord').notNull(),
+		notesColour: integer('notes_colour').notNull(),
+		notesOutside: integer('notes_outside').notNull(),
+		bestStreak: integer('best_streak').notNull()
+	},
+	(t) => [
+		index('play_runs_user_started_idx').on(t.userId, t.startedAt),
+		index('play_runs_user_chart_idx').on(t.userId, t.chartSlug)
+	]
+);
+
+/**
+ * One row per judged chord. A few thousand for an hour of playing, kept.
+ *
+ * This is the grain the blind-spot report needs and it cannot be reconstructed
+ * after the fact, which is the whole argument for writing it down rather than
+ * only the totals it rolls up into.
+ *
+ * No `user_id`. It cannot exist without its run and the run has one; the same
+ * fact stored twice is a fact able to disagree with itself. The cost is a join
+ * on every profile query and it is worth it.
+ */
+export const chordAttempts = pgTable(
+	'chord_attempts',
+	{
+		id: uuid('id').primaryKey(),
+		runId: uuid('run_id')
+			.notNull()
+			.references(() => playRuns.id, { onDelete: 'cascade' }),
+		/** Bar of the form, not of the loop. */
+		bar: integer('bar').notNull(),
+		/** As it sounded, in the key it was played in. */
+		chord: text('chord').notNull(),
+		/** As the chart stores it. */
+		numeral: text('numeral').notNull(),
+		/** The key it was heard in, from `studyProgression` — not the tune's home key. */
+		localKey: text('local_key').notNull(),
+		landing: text('landing').$type<Landing>().notNull(),
+		found: smallint('found').notNull(),
+		needed: smallint('needed').notNull(),
+		notesChord: smallint('notes_chord').notNull(),
+		notesColour: smallint('notes_colour').notNull(),
+		notesOutside: smallint('notes_outside').notNull(),
+		/** Offset into the run, on the run's own clock. */
+		atMs: integer('at_ms').notNull()
+	},
+	(t) => [index('chord_attempts_run_idx').on(t.runId)]
+);
+
+/**
+ * The shelf. A badge is a milestone; a run is telemetry.
+ *
+ * Different lifetimes, so a table of its own rather than a `GROUP BY` over the
+ * log — if the log is ever pruned the shelf has to survive it.
+ *
+ * The unique constraint is the first-earned-wins rule moved out of TypeScript
+ * and into the schema, so `insert … on conflict do nothing` is now the whole of
+ * it. Keyed per chart, which is what makes a badge worth more than it was:
+ * fifty in a row *on this tune* is three clean passes of that form, where fifty
+ * in a row on whatever happened to be playing was an afternoon.
+ */
+export const badges = pgTable(
+	'badges',
+	{
+		id: uuid('id').primaryKey(),
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		chartSlug: text('chart_slug').notNull(),
+		/** The tier's stable id, never its name: a rename must not orphan a badge. */
+		tier: text('tier').notNull(),
+		wonAt: timestamp('won_at', { withTimezone: true }).notNull(),
+		/** The streak that clinched it, which may be higher than the tier's threshold. */
+		count: integer('count').notNull(),
+		/** Pitch class of the clinching chord. The badge's colour. */
+		pc: smallint('pc').notNull(),
+		keyCenter: text('key_center').notNull(),
+		runId: uuid('run_id').references(() => playRuns.id, { onDelete: 'set null' })
+	},
+	(t) => [
+		unique('badges_user_chart_tier').on(t.userId, t.chartSlug, t.tier),
+		index('badges_user_idx').on(t.userId)
+	]
 );
 
 // ---------------------------------------------------------------------------
@@ -342,6 +489,10 @@ export type RepertoireEntry = typeof repertoire.$inferSelect;
 export type AnalysisFact = typeof analysisFacts.$inferSelect;
 export type TransferEvent = typeof transferEvents.$inferSelect;
 export type Chart = typeof charts.$inferSelect;
+export type User = typeof users.$inferSelect;
+export type PlayRun = typeof playRuns.$inferSelect;
+export type ChordAttempt = typeof chordAttempts.$inferSelect;
+export type BadgeRow = typeof badges.$inferSelect;
 
 export type CardDirection = (typeof cardDirection.enumValues)[number];
 export type SrsStateKind = (typeof srsStateKind.enumValues)[number];

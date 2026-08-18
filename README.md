@@ -41,6 +41,10 @@ says what is being done now to make them cheap later.
   drums, optional comping, any key, any tempo, loop any bars. Blues, rhythm
   changes, cycles and public-domain standards, plus anything you type in.
 - **Explore** — the wheel, chord neighbours, voice leading.
+- **Profile** — what has actually happened: hours played, chords judged, badges
+  won, and the twelve keys as swatches so the ones you never play are visible at
+  a glance. Every number traces to a row; none is an estimate, and there is no
+  daily streak.
 
 No MIDI keyboard? Everything works with the on-screen one.
 
@@ -161,6 +165,8 @@ src/
       analyse.ts     Roman numerals, secondary dominants, subs, modulation
       voiceleading.ts  Distance between chords; neighbours one or two notes away
       symbol.ts        Chord symbols split into typographic parts
+      study.ts         What key each chord of a progression is heard in
+      scales.ts        Scale suggestions, and every degree named
       __fixtures__/  263 hand-authored golden fixtures
     wheel/         The harmonic wheel
       geometry.ts    Ring/position to pitch class; shapes derived from intervals
@@ -168,42 +174,75 @@ src/
       overlays.ts    Key, chord neighbours, brightness axis, modulation
       Wheel.svelte   Parametric SVG; knows no music, only cells
     curriculum/    The syllabus, as data
-      skills.ts      The L0-L11 graph plus the application track
-      cards.ts       Card generation from (skill, key, item, direction)
+      cards.ts       Card generation from (skill, key, item, direction), and the
+                     L0-L11 skill graph they are generated against
       ladder.ts      Twelve keys, seven rungs each; suggests, never gates
+      progressions.ts  Named progressions to work on instead of a rung
       charts.ts      Forms, cycles and public-domain standards, as numerals
       import.ts      Chord symbols you type in, stored as numerals
       editor.ts      Writing a chart down: what each bar stores, and what
                      comes back out. Shared by the editor, the server and
                      the songbook script, so all three agree
+    practice/      Being judged on what you play
+      match.ts       Did you land the chord, and where did your notes sit
+      target.svelte.ts  Lends the sounding chord to the header
+      run.ts         A run of the transport on its way to the record, and the
+                     outbox that holds it when the network is away
+    effects/       The fun, on a switch, kept apart from the score
+      streak.ts      Chords landed in a row, and the ladder of tiers
+      badges.ts      What the streaks leave behind, one shelf per tune
+      sparkle.ts     Burst geometry
+    audio/         Generated, never sampled
+      backing.ts     The transport: bars, loops, count-in, live tempo
+      bass.ts        Walking bass from the chart
+      groove.ts      Swing and straight feels
+    session/       The practice sitting
+      plan.ts        Which blocks, in which order, for how long
+      drill.ts       One block's worth of cards
     srs/
       scheduler.ts   FSRS via ts-fsrs; direction and cold-key weighting
     midi/          Web MIDI and chord clustering
       cluster.ts     Note-ons gathered into chord events; pedal handling
-      smf.ts         Standard MIDI File encode and decode — parked, see M6
+      smf.ts         Standard MIDI File encode and decode - parked, see M6
       session.svelte.ts  Devices, hot-plug, live state, recording
+      shared.svelte.ts   One connection, shared by every page
     components/
       Glyph.svelte       Musical accidentals as vectors
       ChordSymbol.svelte Composed chord symbols with spoken labels
       Keyboard.svelte    On-screen keyboard; the no-MIDI fallback
       ChartEditor.svelte A grid of bars, checked as you type
+      PlayAlong.svelte   The play-along page, shared by /backing and /demo
+      StreakBadges.svelte  This tune's six sockets
+      Fireworks.svelte   Sparks, bursts and callouts
     server/
       auth.ts        Password check and signed session cookie
       db/
-        schema.ts    All 12 tables
+        schema.ts    All 16 tables
         index.ts     Drizzle client
+        user.ts      currentUserId() - the whole multi-user seam
         settings.ts  The singleton settings row
+        session-store.ts  Sessions, blocks, reviews, and card creation
+        play-log.ts  The play-along record: runs, chords judged, badges
     settings.ts    Shared setting types and defaults
   routes/
     layout.css     Design tokens as Tailwind theme
     +layout.*      Injects the database-owned palette during SSR
+    +page.*        Today: pick what to practise
+    play/          Name what you play, live
+    backing/       Play along, for the player who owns the instance
+    demo/          The same page, public, writing nothing
     explore/       The wheel with every overlay
+    profile/       What has actually happened
+    session/       A practice sitting, block by block
     settings/
       wheel/       Calibration against your physical wheel
       colours/     OKLCH palette editor with live contrast
     api/settings/  Patches the singleton settings row
+    api/session/   The session's write endpoint
+    api/runs/      Where a run of the transport is written down
     login/         The password gate
-  hooks.server.ts  Redirects unauthenticated requests to /login
+  hooks.server.ts  Redirects unauthenticated requests to /login, and puts
+                   what the cookie claims on event.locals
 ```
 
 ### Two things worth knowing before editing
@@ -246,7 +285,10 @@ local Postgres for development and tests.
 | **M4**  | SRS + seeded skill graph                  | done   |
 | **M5**  | Session engine                            | done   |
 | **M7**  | Backing tracks and play-along             | done   |
+| **M9**  | The record, and the multi-user seam       | done   |
+| **M10** | The profile                               | done   |
 | **M11** | The chart editor                          | done   |
+| **M14** | The way in — the public demo              | done   |
 
 Work after M7 shipped unnumbered, all of it on the play-along page: chord-by-chord
 scoring against the sounding chord, the chart following the music, streaks and
@@ -257,11 +299,8 @@ with its degree. `DECISIONS.md` has the reasoning for each.
 
 | M       | Deliverable                                                     | Status  |
 | ------- | --------------------------------------------------------------- | ------- |
-| **M9**  | The record — persistence, the multi-user seam, per-song badges  | planned |
-| **M10** | The profile — one page for what has actually happened           | planned |
 | **M12** | Accounts — real credentials, and every owned row actually owned | planned |
 | **M13** | The subscription — a hosted instance somebody else can pay for  | planned |
-| **M14** | The way in — a public demo needing no account and no database   | planned |
 
 `ROADMAP.md` holds the plan: schema, scope, order and the decisions still open.
 This table carries status and nothing else, so the two cannot drift into
@@ -280,13 +319,15 @@ menu item leading nowhere is worse than an absence.
 | -------------------- | ---------------------------------------------------------------------- |
 | The vault            | Nothing yet produces recorded MIDI to browse                           |
 | Transfer detection   | Its consumer, the mastery gate, was deleted in the depth-first rebuild |
-| **M8** — songwriting | Wanted later; smaller than it was, once M11 has built the grid         |
+| **M8** — songwriting | Wanted later; smaller than it was, now M11 has built the grid          |
 
-The blind-spot report was parked with the other two and is now unblocked: M9
-writes down every chord judged on the play-along page, which is the capture
-habit the vault was supposed to supply. See `ROADMAP.md`, _What this changes
-about the parked milestones_, and `DECISIONS.md` under _M6 is parked_ for what
-was kept for whoever builds the rest.
+The blind-spot report was parked with the other two and is now unblocked, with
+the rows it needs already being written: M9 records every chord judged on the
+play-along page, which is the capture habit the vault was supposed to supply,
+and the profile's _where the time went_ panel is its first draft. See
+`ROADMAP.md`, _What this changes about the parked milestones_, and
+`DECISIONS.md` under _M6 is parked_ for what was kept for whoever builds the
+rest.
 
 ---
 
@@ -354,6 +395,37 @@ still in copyright, and it never enters the repo.
 
 The same rhythm section, with fewer knobs and the forms only, is the "Apply it"
 block of a session.
+
+---
+
+## The record
+
+Every run of the transport is written down: the chart, the key, the tempo, how
+long the transport actually ran, and one row per chord judged — what it was,
+what it was heard as, and how it went. Badges are kept per tune, so six sockets
+sit under each chart and "fifty in a row" means fifty in a row **on this one**.
+
+Two consequences worth knowing. There is no stored "best": a streak cannot
+outlive the transport, so the best ever is simply the highest any run reached,
+which means the number and the badges cannot drift apart. And a run played with
+the network away is queued in the browser and sent on the next load, because a
+run played on a train should not cost a badge.
+
+**Profile** — in the settings menu, not the main nav — is where that is read
+back. It opens with the twelve keys round the circle of fifths, each swatch
+filling with the chords judged in it, so the pale ones are the corners of the
+keyboard you have not been in. Colour there means what it means everywhere else:
+a key has a tonic and wears that tonic's swatch, while a chord quality has no
+pitch and is drawn in weight instead.
+
+Hours played counts the transport running and not paused, plus practice
+blocks that finished; it never counts a page left open or a session abandoned
+halfway. "Tunes practised" counts a chart something was played over, not a chart
+opened. Where a figure would have to be estimated it is not shown.
+
+There is no daily streak, no calendar of dots and no days-in-a-row counter. A
+chord streak measures playing; a daily streak would measure attendance, and this
+app has never told anyone off.
 
 ---
 

@@ -2528,3 +2528,244 @@ instance_, _no user accounts_ — and none of it is edited until M12 ships, per
 the rule that the app must not hint at what it cannot do. The replacement keeps
 both halves true and apologises for neither: run it yourself, or let somebody
 else run it for you.
+
+## M9 and M10 — the record, and the page that reads it
+
+The plan is deleted from `ROADMAP.md`, per that file's own rule. What follows is
+what building it actually taught, which is mostly the places where the plan was
+right and one or two where it was not.
+
+### The local player has a fixed id
+
+Not in the plan, and it removes a whole class of problem. The seam needs a
+`users` row for the foreign keys to point at, and the obvious way to make one is
+`gen_random_uuid()` in the migration. The obvious way is wrong here: cookies last
+ninety days, `verifyToken` names a user in the payload, and a database rebuilt
+from scratch would hand out a new id — so every cookie in circulation would name
+a row that no longer exists, and the first insert after that would fail on a
+foreign key rather than on anything a person could read.
+
+So the local player is `00000000-0000-4000-8000-000000000001`, written once in
+the migration and once in `user.ts`. It is the same trick as pinning `settings`
+to `id = 1`, for the same reason: there is exactly one of these, the value is
+recognisable on sight in every foreign key, and `currentUserId()` needs no query
+at all to resolve a claim. A constant duplicated in two files with a comment on
+each beats a lookup on every request that can only ever return one answer.
+
+### `verifyToken` returns a claim, not an id
+
+The plan said it would return "the id or null instead of a boolean". It cannot,
+quite, and the reason is the one requirement that mattered most: **nobody gets
+signed out by this change.** A cookie minted before M9 carries a timestamp and
+no user, and it is a perfectly good session — so there are three outcomes, not
+two: refused, valid and named, valid and naming nobody.
+
+It returns `{ userId: string | null }` or null. The payload is signed whole
+rather than in halves, so the user and the timestamp cannot be swapped
+independently; there is a test for exactly that, because it is the kind of thing
+that is obviously fine until it is obviously not.
+
+`event.locals` carries the raw claim and `currentUserId` is the only thing
+allowed to resolve it. That is not ceremony — it is the difference between one
+place to change when accounts land and a search across every query.
+
+### The migration has to know which charts were built in
+
+`charts.user_id` is nullable, and the null means something: shared repertoire,
+seeded from code. A value means yours. The plan settled that. What it did not
+say is how the migration tells one from the other in a table that already holds
+both, and the answer turns out to be unpleasant in a way worth recording: it
+hardcodes the eighteen built-in slugs.
+
+The alternatives were worse. Leaving every existing chart null would have made
+the tunes somebody typed in read as built-in for ever — invisible to the owner
+query today, and handed to a stranger on the day accounts land. Discriminating
+on `style = 'custom'` does not work, because half the built-in standards are
+`custom` too. A migration is a statement about what was true at one moment and
+it only runs once; a list of slugs correct at that moment is exactly the sort of
+thing it is allowed to contain. It ran, and it claimed three charts and left
+five shared, which is the right answer.
+
+### A run ends when the transport restarts, not only when it stops
+
+The plan said one row per run of the transport, and the page said a run is one
+press of play to one press of stop. Those agree until you change the chart or
+the loop while the music is going, which calls `track.start()` again — the form
+returns to the top and the tally on screen is cleared, because what was counted
+is not part of what follows.
+
+One row records one chart in one key at one tempo. A row spanning a chart change
+could not honestly say what it was played over, so those moments end a run and
+begin another. That is not bookkeeping pedantry, it is the row's own claim being
+kept true. It also means a sitting spent drilling two bars produces several rows
+rather than one, which is a better description of the sitting than one row would
+have been.
+
+A run is written only if the transport actually ran for a second. Below that
+nothing was played and nothing was heard, and a row saying otherwise is a
+double-tap of the play button pretending to be practice.
+
+### `best` is gone, and the reconciliation went with it
+
+`parseRecord` used to reconcile a stored `best` against the badges, because the
+two could disagree and the badges were the harder evidence. That code is
+deleted, not fixed. A streak cannot outlive the transport, so `MAX(best_streak)`
+over the runs is the only answer and there is no second copy to argue with it.
+The done-when asked for the two to agree without reconciliation code; they agree
+because there is nothing left to reconcile.
+
+The shelf does show the run under way against both bests, which is not a stored
+value but a `Math.max` against the streak in progress — otherwise landing a new
+personal best means watching the shelf quote the old one for the rest of the
+sitting.
+
+### The outbox merges, and settles by id
+
+Local storage stopped being the record and became a write-through cache. The
+interesting part is not the caching, it is what happens when a post fails.
+
+Everything waiting merges into one flush rather than queuing as separate posts,
+because a sitting spent offline should arrive as one request and the far end
+treats replays as no-ops anyway. And what is cleared afterwards is exactly what
+was accepted, matched by id, rather than the whole key — because a run that
+finished while the previous post was in flight would otherwise be thrown away,
+and that is precisely the sitting where somebody is playing hard enough for it
+to matter. There is a test named after that case.
+
+The badges that lived only in a browser reach the record the same way: on the
+first load after this shipped, anything the cache knows and the database does
+not is queued as a badge with no run. The unique constraint means doing it on
+every load costs nothing after the first, so there is no migration flag anybody
+has to remember to remove.
+
+### The profile counts chords, not minutes, and says so
+
+The plan asked for "hours by key and by chord quality, straight out of
+`chord_attempts`". It cannot be done honestly. A run knows how long it lasted; a
+chord does not. Splitting a run's minutes across its chords by count is an
+estimate, and the done-when for this page is that none of its numbers is one.
+
+So the panel reports chords judged and how they went, and a sentence on the page
+explains why it is not minutes. That is a smaller claim than the plan made and a
+true one, which is the trade this project keeps making. Everything else survived
+intact: the clock counts the transport running and not paused plus practice
+blocks that finished, and "tunes practised" counts a chart something was played
+over rather than one opened.
+
+`practiceTotals` filters on no user at all, and that is deliberate rather than
+forgotten. `sessions`, `session_blocks` and `reviews` were left without an owner
+because each poses a question that cannot be answered without a second player.
+There is one player, so it is one player's total, and the query lives in one
+place so that the day it stops being true there is one thing to change.
+
+### Two guards that are not needed today
+
+A chart id arriving with a run is checked against the charts that caller owns,
+and the delete action scopes to the owner rather than trusting an id off a form.
+Neither can currently be violated — there is one user — and both are here
+anyway. "It happens to be true" and "the database will not let it be otherwise"
+are different guarantees, and the second is the one M12 will be glad of.
+
+### What a badge now knows
+
+It records the key it was won in, which the old one did not. A badge carried in
+from local storage gets an empty key rather than a guessed one, and the shelf
+simply omits it. Inventing a plausible key for an old badge would have been the
+one thing the colour rule has always refused to do: nothing on a badge is made
+up, which is why its colour is the pitch class of the chord that clinched it
+rather than a tier.
+
+## The profile earns its colour, and the instance goes public
+
+Two changes on the way to a deployed instance: the profile stopped being a wall
+of grey numbers, and "there is one player" stopped being a thing that merely
+happened to be true.
+
+### Colour on the profile is derived, never decorative
+
+The first version of the page was deliberately monochrome, on the grounds that
+hue means pitch everywhere in this app and cannot be handed a second meaning. It
+was right about the rule and wrong about the conclusion, and the mistake is
+worth writing down because it is an easy one to repeat.
+
+**A key has a tonic. A tonic is a pitch.** Colouring the by-key bars by their
+tonic's swatch is not a second meaning for hue, it is the first one, applied
+where it happens to be useful — and it makes the panel say something the numbers
+did not: a row of greens really is a lot of time on F. The old comment claimed a
+bar chart of keys would make hue mean "row". That was simply a misreading of the
+app's own rule.
+
+The rule then does the rest of the work, and it does it by refusing things. A
+chord quality has no pitch, so those bars are drawn in weight — the same
+language the note spread already uses on the play-along page. Landing a chord is
+not a pitch, so the landed/part/missed meter is weight too. Nothing on the page
+is coloured because the page looked bland; every colour on it is a pitch, and
+the greyness of the rest is the rule holding rather than an oversight.
+
+### Twelve swatches say more than the panel under them
+
+The addition worth having is a strip of the twelve keys in circle-of-fifths
+order, each filling with the chords judged in it. Modes fold into their tonic,
+because B♭ major and G minor are the same seven notes under the hands and the
+question being answered is which corners of the keyboard you have been in.
+
+It needs no prose. Five pale outlines in a row is the blind-spot report arriving
+about a milestone early, and it arrives without telling anybody off — an unplayed
+key is drawn as an empty socket, exactly like an unearned badge, rather than as
+a gap with a number attached to it.
+
+The swatches stand upright and fill from the bottom rather than lying on their
+sides. Twelve horizontal bars sorted by length is a ranking, and a ranking is
+the wrong idea here: no key is supposed to win.
+
+The panel hides itself until something has been played along, which is the
+ladder-versus-cabinet rule applied once more. Six empty sockets under a tune are
+a ladder — they say twenty is next and fifty exists. Twelve empty keys shown to
+somebody who has only ever done practice sessions are a wall of things they have
+not done, which is the one thing this page must never become.
+
+### The log stores keys the way the schema says to
+
+`chord_attempts.local_key` was being written by `formatStudyKey`, which produces
+`B♭ major` — a display string with a real flat sign in it. The schema's own
+conventions say a key centre is `C`, `Eb`, `F#`, and that spelling has to
+survive a round trip through the database. `B♭ major` does not: `parseKey`
+cannot read it back, so nothing could tell which pitch class a row was about,
+which is exactly what the colouring above needs.
+
+It writes `formatKey` now — `Bb`, `F# dorian` — and the profile parses it and
+prints it with the accidental. The bug was invisible for as long as the column
+was only ever shown as text, which is the usual way a violated convention gets
+noticed: not when it is broken, but the first time something tries to use it.
+
+### One player, enforced rather than observed
+
+`currentUserId` used to hand back whatever the cookie claimed, falling back to
+the local player. That was safe by circumstance — the server mints every token
+and always names the same user — and circumstance is a poor thing to rest on
+once the instance is deployed and the file is one edit from meaning something
+else.
+
+It now collapses every claim to the local player. Nothing creates a user row, no
+route registers anybody, the migration seeds exactly one, and so a cookie naming
+somebody else is not a user; it is a string. Honouring it would have meant the
+number of accounts this app supports was decided by what happened to be in a
+browser. There are tests, and they are written so that they fail when M12 lands
+— which is the reminder that `SECURITY.md`, the README's opening claim and the
+landing copy all have to change in the same release.
+
+**No sign-up exists anywhere in the app, and that is the decision rather than
+the absence of one.** Hosted accounts are not open, the legal and financial
+questions behind them are not settled, and a page that says "coming soon" is
+still a page hinting at something that does not exist. The demo's only exit
+stays "run it yourself", which is a real offer and has been since the licence
+moved.
+
+### A flush is bounded as a whole
+
+The endpoint capped runs per post and chords per run, which multiply: a hundred
+runs of twenty thousand chords is two million rows in one transaction. The cap
+that matters is the one spent across the whole post, oldest run first, and runs
+past the budget are still written — losing the chords off the end of a long
+sitting is a smaller loss than losing that the sitting happened, and the run's
+own totals do not depend on its attempt rows.

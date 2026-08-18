@@ -6,6 +6,7 @@ import {
 	issueToken,
 	safeRedirectPath
 } from '$lib/server/auth';
+import { currentUserId } from '$lib/server/db/user';
 
 export const load: ServerLoad = ({ locals, url }) => {
 	if (locals.authed) redirect(303, safeRedirectPath(url.searchParams.get('next'), url.origin));
@@ -21,7 +22,9 @@ export const actions: Actions = {
 			return fail(401, { error: 'Not that one.' });
 		}
 
-		cookies.set(SESSION_COOKIE, issueToken(), {
+		// One password mints one player's token. Which player that is stops being
+		// a foregone conclusion in M12; the payload has somewhere to say so now.
+		cookies.set(SESSION_COOKIE, issueToken(currentUserId()), {
 			...cookieOptions,
 			// Allow http://localhost during development, where there is no TLS.
 			secure: url.protocol === 'https:'

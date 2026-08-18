@@ -246,6 +246,15 @@
 				>
 			</div>
 
+			<!-- Here rather than in the main nav: a fourth destination was already
+			     enough to make the header slide sideways on a narrow screen, and the
+			     profile is somewhere you go between sittings, not during one. -->
+			<a
+				href="/profile"
+				class="border-ground-line hover:border-ink-dim text-ink-muted hover:text-ink mt-3 block rounded border px-3 py-2 text-center font-mono text-xs transition-colors"
+				onclick={() => (open = false)}>Profile</a
+			>
+
 			{#if problem}
 				<p class="mt-2 font-mono text-xs" style="color: var(--pc-0)">{problem}</p>
 			{/if}

@@ -23,8 +23,12 @@ export function isPublicRequest(pathname: string, method: string): boolean {
 }
 
 export const handle: Handle = async ({ event, resolve }) => {
-	const authed = verifyToken(event.cookies.get(SESSION_COOKIE));
+	const claim = verifyToken(event.cookies.get(SESSION_COOKIE));
+	const authed = claim !== null;
 	event.locals.authed = authed;
+	// What the cookie says, unresolved. `currentUserId` turns it into a user;
+	// nothing else is allowed to, which is what keeps the seam a single seam.
+	event.locals.userId = claim?.userId ?? null;
 
 	if (!authed && !isPublicRequest(event.url.pathname, event.request.method)) {
 		// Preserve where they were headed so the redirect after login is not jarring.

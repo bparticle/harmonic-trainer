@@ -429,6 +429,51 @@ export async function rungProgress(position: Position) {
 	};
 }
 
+/**
+ * What the practice half of the app has to show for itself.
+ *
+ * Blocks that **finished** and the reviews graded in them. A block abandoned
+ * halfway is not counted, for the same reason the play-along clock stops when
+ * the transport does: the number has to mean something a person would recognise
+ * as time at the piano.
+ *
+ * No user filter, and that is not an oversight. `sessions`, `session_blocks`
+ * and `reviews` deliberately do not carry `user_id` yet — each poses a question
+ * that cannot be answered honestly without a second player, and M12 answers
+ * them. There is one player, so this is one player's total. The day that stops
+ * being true, this query has to change, which is why it is in one place.
+ */
+export async function practiceTotals() {
+	const [blocks] = await db
+		.select({
+			finished: sql<number>`count(*)::int`,
+			ms: sql<number>`coalesce(sum(extract(epoch from (${sessionBlocks.endedAt} - ${sessionBlocks.startedAt})) * 1000), 0)::bigint`
+		})
+		.from(sessionBlocks)
+		.where(sql`${sessionBlocks.endedAt} is not null`);
+
+	const [graded] = await db
+		.select({
+			total: sql<number>`count(*)::int`,
+			correct: sql<number>`count(*) filter (where ${reviews.correct})::int`,
+			last: sql<Date | null>`max(${reviews.ts})`
+		})
+		.from(reviews);
+
+	const [sat] = await db.select({ total: sql<number>`count(*)::int` }).from(sessions);
+
+	return {
+		sessions: sat?.total ?? 0,
+		blocksFinished: blocks?.finished ?? 0,
+		// Clamped: a clock adjusted backwards mid-block would otherwise take hours
+		// off a total that is supposed to only ever go up.
+		playingMs: Math.max(0, Number(blocks?.ms ?? 0)),
+		reviews: graded?.total ?? 0,
+		reviewsCorrect: graded?.correct ?? 0,
+		lastReviewed: graded?.last ?? null
+	};
+}
+
 export async function loadCards(cardIds: string[]) {
 	if (cardIds.length === 0) return [];
 	const rows = await db
