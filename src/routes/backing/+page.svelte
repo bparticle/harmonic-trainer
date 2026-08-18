@@ -12,4 +12,10 @@
 	let { data, form } = $props();
 </script>
 
-<PlayAlong mine={data.mine} {form} colorMap={data.settings.colorMap} />
+<PlayAlong
+	mine={data.mine}
+	{form}
+	colorMap={data.settings.colorMap}
+	record={data.record}
+	bests={data.bests}
+/>

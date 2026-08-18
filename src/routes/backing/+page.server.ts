@@ -1,9 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
 import { charts } from '$lib/server/db/schema';
+import { currentUserId } from '$lib/server/db/user';
+import { loadBests, loadRecord } from '$lib/server/db/play-log';
 import { CHARTS, type ChartSeed } from '$lib/curriculum/charts';
 import { slugify, uniqueSlug } from '$lib/curriculum/import';
 import { gridToRows, readGrid, type Grid } from '$lib/curriculum/editor';
@@ -21,11 +23,15 @@ import { gridToRows, readGrid, type Grid } from '$lib/curriculum/editor';
 
 const BUILT_IN = new Set(CHARTS.map((c) => c.slug));
 
-export const load: PageServerLoad = async () => {
-	const rows = await db.select().from(charts);
+export const load: PageServerLoad = async ({ locals }) => {
+	const userId = currentUserId(locals.userId);
+	const rows = await db.select().from(charts).where(eq(charts.userId, userId));
 
 	const mine: Array<ChartSeed & { id: string }> = [];
 	for (const row of rows) {
+		// A slug shared with a built-in would be shown twice. The seeded rows are
+		// null-owned and already excluded by the query; this catches a chart you
+		// typed in before the built-in of the same name existed.
 		if (BUILT_IN.has(row.slug)) continue;
 		if (!row.gridJson?.length) continue;
 
@@ -43,7 +49,11 @@ export const load: PageServerLoad = async () => {
 	}
 
 	mine.sort((a, b) => a.name.localeCompare(b.name));
-	return { mine };
+
+	// The shelf and the two bests, from the record rather than from the browser.
+	// A run played here shows up on the other machine, which is the whole point
+	// of M9 and was the one thing localStorage could never do.
+	return { mine, record: await loadRecord(userId), bests: await loadBests(userId) };
 };
 
 /** The editor posts the chords as typed. Anything else is not a grid. */
@@ -73,7 +83,7 @@ export const actions: Actions = {
 	 * what a chord means, and running the one implementation on both sides is
 	 * what stops the screen and the database describing different tunes.
 	 */
-	create: async ({ request }) => {
+	create: async ({ request, locals }) => {
 		const form = await request.formData();
 		const name = String(form.get('name') ?? '').trim();
 		const keyName = String(form.get('key') ?? 'C');
@@ -105,6 +115,7 @@ export const actions: Actions = {
 
 		await db.insert(charts).values({
 			id: randomUUID(),
+			userId: currentUserId(locals.userId),
 			slug,
 			name,
 			style: 'custom',
@@ -117,10 +128,16 @@ export const actions: Actions = {
 		redirect(303, `/backing?chart=${encodeURIComponent(slug)}`);
 	},
 
-	remove: async ({ request }) => {
+	remove: async ({ request, locals }) => {
 		const form = await request.formData();
 		const id = String(form.get('id') ?? '');
-		if (id) await db.delete(charts).where(eq(charts.id, id));
+		// Scoped to the owner, not just to the id. A delete that trusts an id from
+		// a form is the shape of bug M12 would otherwise have to go looking for.
+		if (id) {
+			await db
+				.delete(charts)
+				.where(and(eq(charts.id, id), eq(charts.userId, currentUserId(locals.userId))));
+		}
 		redirect(303, '/backing');
 	}
 };

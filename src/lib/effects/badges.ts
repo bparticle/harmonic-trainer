@@ -4,9 +4,8 @@ import { BADGE_TIERS, crossed, type Streak, type Tier } from './streak';
  * What the streaks leave behind.
  *
  * A combo that vanishes when the transport stops is worth exactly as much as
- * the run it happened in. This is the part that outlives the sitting: the best
- * you have ever done, the best on each tune, and one badge per tier, kept from
- * the first time you earned it.
+ * the run it happened in. This is the part that outlives the sitting: one badge
+ * per tier per tune, kept from the first time you earned it there.
  *
  * Each badge remembers the **chord it was won on**, as a pitch class, and that
  * is what colours it on the shelf. It is the one honest source of colour
@@ -15,11 +14,17 @@ import { BADGE_TIERS, crossed, type Streak, type Tier } from './streak';
  * wears the colour of the chord that clinched it. Fifty in a row landed on an
  * F7 leaves a green medal.
  *
- * Everything here is pure. Where the record is *kept* is the caller's problem —
- * see the play-along page, which puts it in local storage alongside the rest of
- * the player's preferences. Nothing touches the database: the tables the long
- * view would need are still parked, and a combo counter is not the thing that
- * should quietly start filling them.
+ * **No best is stored here any more.** A streak cannot outlive the transport —
+ * it is counted from the moment the transport starts — so the best ever is
+ * `MAX(best_streak)` over `play_runs` and the best on a tune is the same
+ * grouped by slug. Keeping a second copy alongside the badges meant the two
+ * could disagree, and `parseRecord` carried a reconciliation that existed for
+ * no other reason. One place the answer comes from, and nothing to reconcile.
+ *
+ * Everything here is pure. Where the record is *kept* is the caller's problem:
+ * the database owns it, and the play-along page keeps a copy in local storage
+ * so the shelf paints before the network answers and a run played on a train
+ * still counts.
  */
 
 export type Badge = {
@@ -31,38 +36,42 @@ export type Badge = {
 	at: string;
 	/** Pitch class of the chord it was won on. The badge's colour. */
 	pc: number;
-	/** Slug of the chart being played. */
+	/** Slug of the chart it was won on. */
 	chart: string;
+	/** The key it was won in. */
+	key: string;
 };
 
-export type StreakRecord = {
-	/** The best run of chords ever landed back to back. */
-	best: number;
-	/** The same, per chart, because a blues and a bebop head are not the same ask. */
-	bestByChart: Record<string, number>;
-	/** Earned badges, keyed by tier id. First one wins; later ones do not overwrite. */
-	badges: Record<string, Badge>;
-};
+/**
+ * Earned badges, by chart and then by tier.
+ *
+ * Keyed per chart since M9, which is what makes a badge worth having more than
+ * once: under the old global rule, earning `nice` on the first tune meant never
+ * earning it again on anything, so the shelf recorded one afternoon rather than
+ * a repertoire.
+ */
+export type StreakRecord = { badges: Record<string, Record<string, Badge>> };
 
-export const emptyRecord = (): StreakRecord => ({ best: 0, bestByChart: {}, badges: {} });
+export const emptyRecord = (): StreakRecord => ({ badges: {} });
 
 export type Won = {
 	pc: number;
 	chart: string;
 	at: string;
+	key: string;
 };
 
 /**
  * Fold one advanced streak into the record.
  *
  * Called after every judged chord, including the ones that break a streak —
- * `crossed` returns nothing and the maxima do not move, so a break costs a
- * comparison and changes nothing.
+ * `crossed` returns nothing and the record is handed straight back, so a break
+ * costs a comparison and changes nothing.
  *
- * A badge is kept from the **first** time it was earned rather than the best.
- * `best` already answers "how far have you got"; a badge answers "when did you
- * first get there", and overwriting it every time you pass through would turn
- * six dated milestones into six copies of the same afternoon.
+ * A badge is kept from the **first** time it was earned on that tune rather
+ * than the best. The best answers "how far have you got"; a badge answers "when
+ * did you first get there", and overwriting it every time you passed through
+ * would turn six dated milestones into six copies of the same afternoon.
  */
 export function award(
 	record: StreakRecord,
@@ -70,39 +79,49 @@ export function award(
 	after: Streak,
 	won: Won
 ): { record: StreakRecord; earned: Tier[] } {
-	const earned = crossed(before, after).filter((tier) => !record.badges[tier.id]);
-	const previousOnChart = record.bestByChart[won.chart] ?? 0;
+	const onChart = record.badges[won.chart] ?? {};
+	const earned = crossed(before, after).filter((tier) => !onChart[tier.id]);
+	if (earned.length === 0) return { record, earned: [] };
 
-	if (earned.length === 0 && after.count <= record.best && after.count <= previousOnChart) {
-		return { record, earned: [] };
-	}
-
-	const badges = { ...record.badges };
+	const updated = { ...onChart };
 	for (const tier of earned) {
-		badges[tier.id] = {
+		updated[tier.id] = {
 			tier: tier.id,
 			count: after.count,
 			at: won.at,
 			pc: won.pc,
-			chart: won.chart
+			chart: won.chart,
+			key: won.key
 		};
 	}
 
-	return {
-		record: {
-			best: Math.max(record.best, after.count),
-			bestByChart: { ...record.bestByChart, [won.chart]: Math.max(previousOnChart, after.count) },
-			badges
-		},
-		earned
-	};
+	return { record: { badges: { ...record.badges, [won.chart]: updated } }, earned };
 }
 
-export const bestOn = (record: StreakRecord, chart: string): number =>
-	record.bestByChart[chart] ?? 0;
+/** This tune's shelf. */
+export const badgesOn = (record: StreakRecord, chart: string): Record<string, Badge> =>
+	record.badges[chart] ?? {};
 
-export const earnedCount = (record: StreakRecord): number =>
-	BADGE_TIERS.filter((tier) => record.badges[tier.id]).length;
+/** Every badge won, across every tune, newest last. */
+export const allBadges = (record: StreakRecord): Badge[] =>
+	Object.values(record.badges)
+		.flatMap((byTier) => Object.values(byTier))
+		.sort((a, b) => a.at.localeCompare(b.at));
+
+/** How many of this tune's six are on the shelf. */
+export const earnedCount = (record: StreakRecord, chart: string): number =>
+	BADGE_TIERS.filter((tier) => badgesOn(record, chart)[tier.id]).length;
+
+/**
+ * Badges in the first record that the second has never heard of.
+ *
+ * This is how a shelf that lived only in a browser reaches the record: on the
+ * first load after M9 the cache holds badges the database does not, and they
+ * are posted rather than quietly dropped. It stays useful afterwards for
+ * anything earned while the network was away.
+ */
+export const missingFrom = (mine: StreakRecord, theirs: StreakRecord): Badge[] =>
+	allBadges(mine).filter((badge) => !badgesOn(theirs, badge.chart)[badge.tier]);
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
 	typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -110,53 +129,63 @@ const isObject = (value: unknown): value is Record<string, unknown> =>
 const asCount = (value: unknown): number =>
 	typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
 
+/** A badge, or nothing. Unknown tiers are dropped, which is what makes the ladder safe to change. */
+function parseBadge(tier: string, chart: string, value: unknown): Badge | null {
+	if (!KNOWN_TIERS.has(tier) || !isObject(value)) return null;
+
+	const count = asCount(value.count);
+	if (count === 0) return null;
+
+	const raw = typeof value.pc === 'number' ? ((value.pc % 12) + 12) % 12 : 0;
+	return {
+		tier,
+		count,
+		at: typeof value.at === 'string' ? value.at : '',
+		pc: Number.isFinite(raw) ? raw : 0,
+		chart,
+		key: typeof value.key === 'string' ? value.key : ''
+	};
+}
+
+const KNOWN_TIERS = new Set(BADGE_TIERS.map((tier) => tier.id));
+
 /**
  * Read a record back from wherever it was stored.
  *
  * Deliberately unforgiving about shape and forgiving about failure: anything
  * that does not parse is dropped and the rest is kept, so a hand-edited or
  * half-written entry costs you one badge rather than the whole shelf. Local
- * storage is the user's own file — it can and eventually will contain
- * something this code did not write.
+ * storage is the user's own file — it can and eventually will contain something
+ * this code did not write.
  *
- * Badges under an unknown tier id are dropped too, which is what makes the
- * ladder safe to change: an id that no longer exists is not a badge anyone can
- * be shown.
+ * It also reads the flat, tier-keyed record that shipped before M9, and the
+ * migration is lossless because `Badge.chart` has been recorded since the day
+ * badges shipped: every stored badge already knows which tune won it and moves
+ * to that tune's shelf with its date and its colour intact. One that names no
+ * chart is dropped, which is the rule this function already applied to anything
+ * that did not parse. Nothing is invented — a badge whose key was never
+ * recorded gets an empty one rather than a guess.
  */
 export function parseRecord(raw: unknown): StreakRecord {
-	if (!isObject(raw)) return emptyRecord();
+	if (!isObject(raw) || !isObject(raw.badges)) return emptyRecord();
 
-	const bestByChart: Record<string, number> = {};
-	if (isObject(raw.bestByChart)) {
-		for (const [chart, value] of Object.entries(raw.bestByChart)) {
-			const count = asCount(value);
-			if (count > 0) bestByChart[chart] = count;
+	const badges: Record<string, Record<string, Badge>> = {};
+	const keep = (badge: Badge | null) => {
+		if (!badge || !badge.chart) return;
+		badges[badge.chart] ??= {};
+		badges[badge.chart][badge.tier] = badge;
+	};
+
+	for (const [key, value] of Object.entries(raw.badges)) {
+		// The pre-M9 shape keyed badges by tier, so `key` is a tier id and the
+		// chart is inside. The current one keys by chart, and the value is a map.
+		if (isObject(value) && typeof value.count === 'number') {
+			keep(parseBadge(key, typeof value.chart === 'string' ? value.chart : '', value));
+			continue;
 		}
+		if (!isObject(value)) continue;
+		for (const [tier, entry] of Object.entries(value)) keep(parseBadge(tier, key, entry));
 	}
 
-	const known = new Set(BADGE_TIERS.map((tier) => tier.id));
-	const badges: Record<string, Badge> = {};
-	if (isObject(raw.badges)) {
-		for (const [id, value] of Object.entries(raw.badges)) {
-			if (!known.has(id) || !isObject(value)) continue;
-			const count = asCount(value.count);
-			const pc = typeof value.pc === 'number' ? ((value.pc % 12) + 12) % 12 : 0;
-			if (count === 0) continue;
-			badges[id] = {
-				tier: id,
-				count,
-				at: typeof value.at === 'string' ? value.at : '',
-				pc: Number.isFinite(pc) ? pc : 0,
-				chart: typeof value.chart === 'string' ? value.chart : ''
-			};
-		}
-	}
-
-	// A stored `best` lower than a badge that was actually earned is not a fact
-	// worth preserving; the badges are the harder evidence.
-	const claimed = asCount(raw.best);
-	const earnedHigh = Math.max(0, ...Object.values(badges).map((badge) => badge.count));
-	const chartHigh = Math.max(0, ...Object.values(bestByChart));
-
-	return { best: Math.max(claimed, earnedHigh, chartHigh), bestByChart, badges };
+	return { badges };
 }
