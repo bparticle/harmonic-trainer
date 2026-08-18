@@ -34,313 +34,18 @@ Everything below is derived from those five. Where a requirement forced a choice
 that was not in it, the choice is argued in `DECISIONS.md` rather than smuggled
 in here.
 
-The fifth arrived after the other four and rewrites the first. "Prepare for it
+Four of the five have been built: the editor as M11, the record and the seam as
+M9, the profile as M10, and the demo as M14. Their reasoning is in
+`DECISIONS.md` and their status is in the README, per the rules at the top of
+this file. What is left here is the fifth requirement and what it costs.
+
+That fifth one arrived after the others and rewrote the first. "Prepare for it
 now, build it later" was written when the second player was hypothetical and
 unhurried; a paid hosted instance is that player arriving with a bank card, and
-_later_ now has a date on it. M9 does not change — the seam is still the right
-first move, and building it is still cheaper than not. What changes is that
-three questions M9 deliberately left open are now answered by the requirement
-rather than by whoever gets there first, and that two milestones exist after
-M10 which did not exist before.
-
----
-
-## M9 — The record
-
-**Persistence for everything the play-along page already knows, a user to own
-it, and per-song badges.** Nothing else on this list works until this does.
-
-Today the streak record — `best`, `bestByChart`, six badges — lives in
-localStorage under `backing:streaks-v1`, and the per-chord judgements that
-produced it are discarded when the page closes. The reason given at the time was
-half "the parked tables should not start quietly filling up" (still true, and
-they are not the right shape anyway) and half "nobody asked for it" (spent).
-
-### The user seam
-
-Accounts are not being built here. What is being built is the seam they will
-arrive through, so that arriving is a change in one function rather than a
-migration of every table.
-
-- A `users` table with **exactly one row**, seeded by the migration: the local
-  player. Client-generated UUID, per the schema's own convention.
-- Columns are `id`, `name`, `created_at` and nothing else. No `email`, no
-  `password_hash` sitting empty against the day accounts land — nothing exists
-  until it is reached, and an unused column is the same smell as an unread
-  table.
-- `currentUserId()` in `src/lib/server/db/user.ts`, the single accessor. Today
-  it resolves to the seeded row. Later it reads the cookie's claim. **Every
-  query that touches owned data goes through it from day one**, which is the
-  entire point of doing this now.
-- The session token gains the user in front of the timestamp:
-  `userId.issuedAt.signature`, signed exactly as now. A payload with no dot in
-  it is an old cookie and resolves to the local player, so nobody is signed out
-  by the change. `verifyToken` returns the id or null instead of a boolean, and
-  `event.locals` gains `userId` beside `authed`.
-
-### What the seam is not allowed to pretend
-
-`SECURITY.md` states the threat model plainly: one shared password, no roles, no
-reset, no rate limiting, adequate for a personal instance and not for anything
-else. That sentence is also the hard boundary on this milestone.
-
-**Multi-user cannot ship on a shared password.** Two players behind one secret
-are not two users; they are one login with two names on it, and every row's
-`user_id` would be decoration. So the order is fixed: the seam now, real
-per-player credentials before a second row is ever inserted into `users`.
-
-Building the seam changes none of that today, which is why it is safe to build.
-The signed payload naming a user is not a security claim — `AUTH_SECRET` still
-gates minting a token at all — it is a place for the answer to live once there
-is more than one.
-
-When accounts do land, these say something that will have stopped being true and
-must change in the same release: `SECURITY.md` (threat model and "no
-multi-tenancy"), `.env.example`, the README's opening claim, and the public
-landing copy in `LandingPage.svelte`. None of them is edited now, because the
-app must not hint at what it cannot do.
-
-Worth a second look at the same time, though not a blocker: `db/index.ts` picks
-its driver and a pool of exactly one partly on the grounds that this is a
-single-user app.
-
-Which tables get `user_id` now: **the ones this work writes to.** New tables
-carry it `NOT NULL` from the first migration.
-
-`charts` gets it here too. The original plan was to add it during M11, which was
-in that table anyway — and M11 deliberately did not, because the column is
-useless without the `users` row it points at and the accessor every query goes
-through, and inventing half of this seam early would have been the worse of the
-two mistakes. So it is a column and a backfill in this milestone: one row's
-worth of data, pointed at the one user that now exists.
-
-One correction to that, forced by M12 and cheap to make now rather than later:
-**the column is nullable, and the seeded charts keep it null.** `db:seed` writes
-the built-in forms, cycles and standards into this table from `charts.ts`, so a
-`NOT NULL` backfill would hand the shared repertoire to whoever happened to be
-the first row in `users`. Null means built-in and readable by everyone, a value
-means yours; the list on the play-along page is the union of the two, which is
-what it already shows. Every other new table in M9 and M12 stays `NOT NULL`,
-because nothing else here has a shared copy.
-
-`cards`, `srs_state`, `reviews`, `sessions`, `session_blocks`, `takes` and the
-rest do **not** — not because they will never need it, but because each needs a
-decision that cannot honestly be made without users existing (is the seeded
-skill graph shared? is a chart you typed in visible to the other player?), and
-guessing now buys nothing.
-
-### Settings, and who owns them
-
-`settings` is the interesting one. It is a singleton pinned to `id = 1` by a
-check constraint, and it looks like the hardest thing here to move — until you
-ask what is actually in it. Half of it is not a preference at all.
-
-| Belongs to the instrument (stays singleton)  | Belongs to the player (moves per-user) |
-| -------------------------------------------- | -------------------------------------- |
-| `color_map_json` — matches physical stickers | `sessionLengthMinutes`                 |
-| `wheel_config_json` — matches a real wheel   | `revealDelayMs`                        |
-| `midi_device`                                | `ladderKey`, `ladderRung`              |
-| `midiLatencyOffsetMs`                        | `chordClusterWindowMs`                 |
-
-The twelve colours exist to match coloured stickers on real keys; the wheel
-calibration exists to match a physical wheel somebody built by hand. Two players
-at the same piano would want both identical. So the singleton keeps what belongs
-to the room, player prefs become a `user_prefs` row keyed by `user_id`, and the
-check constraint never has to be dropped.
-
-**None of this is built in M9.** It is analysis, recorded where the seam is
-designed, because splitting a table for one player buys nothing and would be
-the same mistake as putting `user_id` on all twelve tables today. The split
-happens when accounts do.
-
-The two on the bottom row are judgement calls, flagged rather than settled:
-latency is a property of the cable and the machine, while how wide a rolled
-chord may be before it stops being one chord is a property of the hands.
-
-### The log
-
-Two new tables. One row per run of the transport, and one row per judged chord.
-
-```
-play_runs
-  id             uuid pk          -- client-generated, so a run can be written offline
-  user_id        uuid not null -> users
-  chart_slug     text not null    -- slug not FK: the built-in charts live in code
-  chart_id       uuid -> charts   -- set only for a chart of your own
-  key_center     text not null
-  bpm            int not null
-  feel           text not null
-  started_at     timestamptz not null
-  ended_at       timestamptz
-  playing_ms     int not null     -- transport actually running; see "the clock"
-  voiced         int not null     -- the Tally, flattened
-  landed         int not null
-  partial        int not null
-  missed         int not null
-  notes_chord    int not null
-  notes_colour   int not null
-  notes_outside  int not null
-  best_streak    int not null
-```
-
-```
-chord_attempts
-  id             uuid pk
-  run_id         uuid not null -> play_runs on delete cascade
-  bar            int not null     -- bar of the form, not of the loop
-  chord          text not null    -- as it sounded, in the key it was played in
-  numeral        text not null    -- as the chart stores it
-  local_key      text not null    -- the key it was heard in, from studyProgression
-  landing        text not null    -- 'landed' | 'partial' | 'missed'
-  found          smallint not null
-  needed         smallint not null
-  notes_chord    smallint not null
-  notes_colour   smallint not null
-  notes_outside  smallint not null
-  at_ms          int not null     -- offset into the run
-```
-
-The `Tally` is flattened into columns rather than kept as `jsonb` because the
-profile sums it on every load and it is a closed vocabulary — seven numbers,
-unchanged since the day scoring shipped. `analysis_facts` is narrow and long for
-the opposite reason: its dimensions keep being added to.
-
-`chord_attempts` carries no `user_id`. It cannot exist without its run, and the
-run has one. The cost is a join on every profile query; the alternative is the
-same fact stored twice and able to disagree.
-
-Volume is a few thousand rows for an hour of playing. Keep them; this is the
-grain the blind-spot report needs, and it cannot be reconstructed after the
-fact.
-
-### Badges
-
-```
-badges
-  id             uuid pk
-  user_id        uuid not null -> users
-  chart_slug     text not null
-  tier           text not null    -- the stable tier id, never the name
-  won_at         timestamptz not null
-  count          int not null     -- the streak that clinched it
-  pc             smallint not null -- pitch class of the clinching chord: its colour
-  key_center     text not null    -- new: the key it was won in
-  run_id         uuid -> play_runs on delete set null
-  unique (user_id, chart_slug, tier)
-```
-
-A badge is a milestone; a run is telemetry. Different lifetimes, so a separate
-table rather than a `GROUP BY` over the log — if the log is ever pruned, the
-shelf must survive it.
-
-The unique constraint is the first-earned-wins rule, moved out of TypeScript and
-into the schema: `insert … on conflict do nothing` is now the whole of it.
-
-`best` and `bestByChart` stop being stored at all. **A streak cannot outlive the
-transport** — it is counted from the moment the transport starts — so the best
-run ever is `MAX(best_streak)` over `play_runs`, and the best on a tune is the
-same grouped by `chart_slug`. That deletes the reconciliation in `parseRecord`
-that exists only because a stored `best` and an earned badge can disagree.
-
-### Per-song badges
-
-`StreakRecord.badges` changes key from `tier` to `(chart, tier)`. The shelf on
-the play-along page shows **this tune's** six sockets; the profile shows what
-has actually been won across all of them.
-
-The migration out of localStorage is lossless, because `Badge.chart` has been
-recorded since badges shipped: every stored badge already knows which tune won
-it and moves to that tune's shelf with its date and colour intact. An entry with
-no chart on it is dropped, which is the rule `parseRecord` already applies to
-anything that does not parse.
-
-Consequences worth stating, because they are the point rather than side effects:
-
-- Six rungs per tune, and "fifty in a row" now means fifty in a row **on this
-  tune** — a materially harder and more meaningful claim than the global one it
-  replaces.
-- A new tune starts with an empty shelf. Under the old rule, earning `nice` once
-  meant never earning it again on anything.
-- "All six on show, earned or not" still holds **on the tune**, where it is a
-  ladder and the empty sockets are the point. It does not hold on the profile,
-  where thirty tunes' worth of empty sockets would be a wall of things you have
-  not done. There it shows what was won.
-
-### Storage, offline, and sync
-
-localStorage stays, as a write-through cache rather than as the record. The
-schema's own conventions assume the practice session runs offline and flushes
-later, and a run played on a train should not cost a badge.
-
-- Run id is generated client-side, so the flush is idempotent on replay:
-  `on conflict do nothing`.
-- Written at the end of a run, not per chord. A `POST /api/runs` carrying the
-  run, its attempts and any badges earned, in one transaction.
-- Pending runs flush on next load. The cache key gains the user id when accounts
-  land.
-
-### Done when
-
-- A run played, the browser closed, and the badge is still there on another
-  machine.
-- `MAX(best_streak)` and the badge shelf agree without any reconciliation code.
-- Every new query filters on `currentUserId()`.
-- `npm run verify` passes, and the existing localStorage record migrates with
-  its dates intact.
-
----
-
-## M10 — The profile
-
-**One page that says what has actually happened.** Reads M9's tables; adds no
-new capture of its own.
-
-Route `/profile`. It goes in the settings menu at the top right, **not** in the
-main nav — a fourth destination was already enough to make the header slide
-sideways on a narrow screen, and that is recorded.
-
-### What it shows
-
-- **Headline.** Hours played, chords judged, tunes practised, badges earned,
-  best streak ever and what won it.
-- **Per tune.** Times played, last played, best streak, the badges won on it,
-  and how the accuracy has moved. Sorted by time spent, because that is the
-  honest answer to "what have I been practising".
-- **Where the time went.** Hours by key and by chord quality, straight out of
-  `chord_attempts`. This is the seed of the blind-spot report and costs one
-  `GROUP BY`.
-- **Recent runs.** The last twenty, each linking back to the tune.
-- **Practice sessions.** Blocks completed and reviews graded, from the tables
-  that already record them. The profile reads both halves of the app or it is
-  not a profile.
-
-### The clock
-
-"Hours played" has to mean something defensible, or it is a vanity number:
-
-- **Counted:** transport running and not paused, including the count-in, plus
-  practice blocks that actually finished.
-- **Not counted:** the page being open, the transport paused, a session
-  abandoned mid-block, or time spent on Explore.
-
-Two sources, one number, and the profile can show the split. The rule matches
-the one the score already follows — silence is dropped, and "you have not played
-yet" is not the same statement as "you scored zero".
-
-"Tunes practised" counts a chart with at least one **voiced** chord, not a chart
-opened.
-
-### No daily streak
-
-No calendar of dots, no days-in-a-row counter, nothing that turns a day off into
-a loss. This was specified, and it also follows from what is already here: the
-chord streak measures playing, a daily streak measures attendance, and this app
-has never once told anyone off.
-
-### Done when
-
-Every number on the page can be traced to rows in `play_runs`, `chord_attempts`,
-`badges`, `sessions` or `reviews`, and none of them is an estimate.
+_later_ now has a date on it. The seam M9 built does not change — it was the
+right first move either way — but three questions it deliberately left open are
+now answered by the requirement rather than by whoever gets there first, and two
+milestones exist which did not exist before.
 
 ---
 
@@ -359,14 +64,14 @@ flashcards, and editing each other's twelve pitch colours through
 bugs on the day the second person signs in, and no amount of billing code in
 front of it changes what is behind it.
 
-There is a fifth, quieter one. The play-along record still lives in
-`localStorage`, so a paid account would today store nothing at all on the
-server: sign in from the laptop and your badges are on the desktop. **That is
-why M9 is a prerequisite for charging money and not merely a nice thing to have
-first.** An account whose contents live in one browser is not an account.
+There was a fifth, quieter one, and M9 has since fixed it: the play-along record
+lived in `localStorage`, so a paid account would have stored nothing at all on
+the server — sign in from the laptop and your badges were on the desktop. An
+account whose contents live in one browser is not an account, which is why the
+record had to come first and did.
 
-M9 fixes none of the four on purpose, and is right not to. It builds the seam
-and writes the play-along record through it; the tables the rest of the app
+M9 fixed none of the other four on purpose, and was right not to. It built the
+seam and writes the play-along record through it; the tables the rest of the app
 writes — `cards`, `srs_state`, `reviews`, `sessions`, `session_blocks` — were
 deferred because each posed a question that could not be answered honestly
 without a second player. There is now a second player, and the questions get
@@ -381,12 +86,12 @@ answered here.
 | `srs_state`                                                | no             | Its primary key _is_ `card_id`; the card already knows          |
 | `reviews`, `session_blocks`                                | no             | Cannot exist without their parent, and the parent knows         |
 | `skills`                                                   | no             | Seeded curriculum. A definition, not data                       |
-| `charts`                                                   | nullable       | Null is built-in and shared; a value is yours                   |
+| `charts`                                                   | done in M9     | Null is built-in and shared; a value is yours                   |
 | `takes`, `repertoire`, `analysis_facts`, `transfer_events` | no             | Still parked, still nothing writes to them                      |
 
-The rule is M9's, applied further: a row that cannot exist without its parent
-does not repeat the parent's owner, because the same fact stored twice can
-disagree. The cost is a join on the profile queries, and it is worth it.
+The rule is the one M9 set, applied further: a row that cannot exist without its
+parent does not repeat the parent's owner, because the same fact stored twice
+can disagree. The cost is a join on the profile queries, and it is worth it.
 
 That settles the first half of open decision 2. **The skill graph is shared
 because it is a definition; the cards generated from it are personal because
@@ -404,7 +109,9 @@ for.
 This reverses M9, and the reversal is the interesting part. M9 argued that the
 twelve colours and the wheel calibration are not preferences but _measurements
 of the room_ — they match coloured stickers on real keys and a wheel somebody
-built by hand, so two players at the same piano would want them identical.
+built by hand, so two players at the same piano would want them identical. That
+is why it left the singleton alone, and the argument was right for the room it
+was made in.
 
 Hosting removes the piano. A subscriber in another country shares no stickers,
 no hand-built wheel, no MIDI cable and no laptop with anyone. **Every value in
@@ -443,9 +150,9 @@ recorded rather than glossed.
 
 ### The cookie learns to be revoked
 
-M9's payload is `userId.issuedAt.signature`. M12 puts an epoch in front of the
-timestamp — an integer on `users`, bumped by "sign out everywhere" and by a
-password change — so a ninety-day cookie stops being permanent.
+The payload M9 built is `userId.issuedAt.signature`. M12 puts an epoch in front
+of the timestamp — an integer on `users`, bumped by "sign out everywhere" and by
+a password change — so a ninety-day cookie stops being permanent.
 
 Verification stops being self-sufficient: the epoch has to be read. That is one
 user lookup per request, and it is the same lookup M13's entitlement check needs
@@ -736,9 +443,12 @@ single recorded take.
 
 So it splits:
 
-- **The blind-spot report** is unblocked. It becomes a `GROUP BY` over
-  `chord_attempts` and belongs after M10, whose "where the time went" panel is
-  its first draft.
+- **The blind-spot report** is unblocked, and the rows it needs are being
+  written. It is a `GROUP BY` over `chord_attempts`, and the profile's "where
+  the time went" panel is its first draft: same two groupings, reported as
+  counts and accuracy rather than as a finding. What is left is the part that
+  says something — noticing that a quality is landing well everywhere except in
+  three keys, and saying so without turning it into a telling-off.
 - **The vault** (record takes, browse, name, promote to repertoire) stays
   parked. Nothing above produces recorded MIDI, and `midi/smf.ts` still waits.
 - **Transfer detection** stays parked, unchanged: its consumer, the mastery
@@ -753,34 +463,30 @@ that grid as a component rather than a page.
 
 That component — `ChartEditor.svelte` over `curriculum/editor.ts` — is now most
 of M8. What is left is a blank one, a way to keep what you are writing without
-naming it a tune yet, and export. And export gains a second meaning it did not
-have: once M9 exists there is a record worth taking with you, not just charts.
+naming it a tune yet, and export. And export has gained a second meaning it did
+not have: there is now a record worth taking with you, not just charts.
 
 ---
 
 ## Order
 
-**M14 → M9 → M10 → M12 → M13**, with M11 already done.
+**M12 → M13.** M14, M9 and M10 have landed, in that order, with M11 before them.
 
-- M14 goes first, which is a change. It depends on nothing — no persistence, no
-  account, no database — so it is not waiting for M9, and it is the only item
-  here that answers a question rather than adding a capability. Everything after
-  it is built better if somebody has used the thing first, and the order that
-  puts a payment page in front of software nobody has been able to try is the
-  order that spends three months learning nothing.
-- M9 is the foundation and nothing else here starts without it. It is also, and
-  this was not its original justification, the thing that makes a paid account
-  hold anything: without it the record lives in one browser.
-- M10 stays where it is. A profile shipped the same week as the log that feeds
-  it is an empty page with headings on it — and if the point is to persuade
-  somebody the account is worth five euros, the page that says what they have
-  actually done is a large part of the argument. It is nonetheless the one thing
-  in this list that could move later if the fee is in a hurry, because written
-  to M9's rule it needs no rewriting when M12 lands.
+- M14 went first, which was a change. It depended on nothing — no persistence,
+  no account, no database — so it was not waiting for M9, and it was the only
+  item here that answered a question rather than adding a capability. The order
+  that puts a payment page in front of software nobody has been able to try is
+  the order that spends three months learning nothing.
+- M9 was the foundation and nothing else here could start without it. It is
+  also, and this was not its original justification, the thing that makes a paid
+  account hold anything: without it the record lives in one browser.
+- M10 followed it rather than shipping alongside, because a profile released the
+  same week as the log that feeds it is an empty page with headings on it.
+  Written to M9's rule, it needs no rewriting when M12 lands.
 - M12 before M13, and not negotiably. Billing in front of a shared password sells
   access to a room everybody is already standing in.
-- M11 went first because it was independent of everything and fixed something
-  that hurt every time a tune was typed in.
+- M11 went first of all because it was independent of everything and fixed
+  something that hurt every time a tune was typed in.
 
 The non-code work in M13 — a registered business, VAT, terms, backups — runs
 alongside from the start of M12, because it is the half with other people's
@@ -788,13 +494,14 @@ timelines in it.
 
 ### The release where the app stops being what it says it is
 
-M9 already lists the four places that will stop being true and must change in
-the same release as accounts: `SECURITY.md`'s threat model and its
-"no multi-tenancy", `.env.example`, the README's opening claim, and the landing
-copy in `LandingPage.svelte`. All four still stand, and the fifth requirement
-sharpens what they have to become, since the landing page currently sells the
-opposite of a hosted account — _one musician per instance_, _no user accounts_,
-_your practice data belongs on your machine_.
+Four places stop being true and must change in the same release as accounts, and
+M9 deliberately edited none of them, because the app must not hint at what it
+cannot do: `SECURITY.md`'s threat model and its "no multi-tenancy",
+`.env.example`, the README's opening claim, and the landing copy in
+`LandingPage.svelte`. All four still stand, and the fifth requirement sharpens
+what they have to become, since the landing page currently sells the opposite of
+a hosted account — _one musician per instance_, _no user accounts_, _your
+practice data belongs on your machine_.
 
 The honest replacement keeps both halves true and does not apologise for either:
 **run it yourself, or let somebody else run it for you.** The software stays free
@@ -830,6 +537,9 @@ happens to be typing:
    Either is a reason to re-read this section, not to rewrite the app. See M13.
 4. **Retention of `chord_attempts`** — the recommendation is to keep everything
    forever, at a few thousand rows an hour, because it cannot be reconstructed.
+   The table exists now and is filling, so this is a live question rather than a
+   hypothetical one; nothing prunes it and nothing should until somebody decides
+   it should.
 
 **Settled since the last revision, by the hosting requirement rather than by
 argument:**

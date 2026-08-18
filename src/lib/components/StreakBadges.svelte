@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { bestOn, type StreakRecord } from '$lib/effects/badges';
+	import type { Badge } from '$lib/effects/badges';
 	import { BADGE_TIERS, nextTier, type Streak } from '$lib/effects/streak';
 
 	/*
@@ -20,28 +20,35 @@
 	 *
 	 * The badge you are climbing towards fills its outline as you go, which is
 	 * the only moving part.
+	 *
+	 * Since M9 the six sockets are **this tune's**. Six empty ones under a chart
+	 * you have not played yet is the point: the shelf is a ladder here, and it
+	 * says that twenty is next and that fifty exists. The profile inverts that
+	 * and shows only what was won, because thirty tunes' worth of empty sockets
+	 * would be a scolding with a grid layout.
 	 */
 
 	let {
-		record,
+		shelf,
 		streak,
-		chart,
-		chartName
+		chartName,
+		best,
+		bestHere
 	}: {
-		record: StreakRecord;
+		/** This tune's badges, by tier. */
+		shelf: Record<string, Badge>;
 		/** The run under way, for the progress ring. */
 		streak: Streak;
-		/** Slug of the chart being played. */
-		chart: string;
 		chartName: string;
+		/** The best ever and the best on this tune, out of the runs that set them. */
+		best: number;
+		bestHere: number;
 	} = $props();
 
 	/* A pointy-top hexagon, drawn once and worn by all six. */
 	const W = 52;
 	const H = 58;
 	const HEX = `M ${W / 2} 2 L ${W - 2} ${H / 4 + 1} L ${W - 2} ${(H * 3) / 4 - 1} L ${W / 2} ${H - 2} L 2 ${(H * 3) / 4 - 1} L 2 ${H / 4 + 1} Z`;
-
-	const onThisChart = $derived(bestOn(record, chart));
 
 	/*
 	 * Two different "next"s, which is a distinction worth keeping.
@@ -54,7 +61,7 @@
 	 * their first.
 	 */
 	const climbing = $derived(streak.count > 0 ? nextTier(streak.count) : null);
-	const chasing = $derived(BADGE_TIERS.find((tier) => !record.badges[tier.id]) ?? null);
+	const chasing = $derived(BADGE_TIERS.find((tier) => !shelf[tier.id]) ?? null);
 
 	/** How far the run under way has got towards the rung above it, 0–100 for the arc. */
 	const progress = $derived.by(() => {
@@ -73,10 +80,11 @@
 	}
 
 	function describe(id: string, name: string, from: number): string {
-		const badge = record.badges[id];
-		if (!badge) return `${name} — not yet earned. Land ${from} chords in a row.`;
+		const badge = shelf[id];
+		if (!badge) return `${name} — not yet earned. Land ${from} chords in a row on this tune.`;
 		const day = when(badge.at);
-		return `${name} — ${badge.count} in a row${day ? ` on ${day}` : ''}.`;
+		const key = badge.key ? ` in ${badge.key.replace('b', '♭')}` : '';
+		return `${name} — ${badge.count} in a row${key}${day ? ` on ${day}` : ''}.`;
 	}
 </script>
 
@@ -86,18 +94,18 @@
 		<dl class="shelf-bests">
 			<div>
 				<dt>best ever</dt>
-				<dd>{record.best || '—'}{record.best ? '×' : ''}</dd>
+				<dd>{best || '—'}{best ? '×' : ''}</dd>
 			</div>
 			<div>
 				<dt>on {chartName}</dt>
-				<dd>{onThisChart || '—'}{onThisChart ? '×' : ''}</dd>
+				<dd>{bestHere || '—'}{bestHere ? '×' : ''}</dd>
 			</div>
 		</dl>
 	</header>
 
 	<ul class="badges">
 		{#each BADGE_TIERS as tier (tier.id)}
-			{@const badge = record.badges[tier.id]}
+			{@const badge = shelf[tier.id]}
 			{@const isNext = chasing?.id === tier.id}
 			{@const isClimbing = climbing?.id === tier.id}
 			<li
@@ -131,12 +139,12 @@
 	<p class="shelf-hint">
 		{#if climbing}
 			{climbing.from - streak.count} more in a row for <strong>{climbing.name}</strong>.
-		{:else if record.best === 0}
-			Land chords back to back to start a streak. Three in a row is the first badge.
+		{:else if bestHere === 0}
+			Land chords back to back to start a streak. Three in a row is the first badge on this tune.
 		{:else if chasing}
 			<strong>{chasing.name}</strong> is next: {chasing.from} in a row.
 		{:else}
-			Every badge earned. There is nothing above legendary.
+			Every badge earned on {chartName}. There is nothing above legendary.
 		{/if}
 	</p>
 </section>
