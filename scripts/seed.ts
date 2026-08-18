@@ -39,7 +39,8 @@ const db = drizzle(pool, { schema });
 async function main() {
 	if (reset) {
 		console.log('clearing generated rows…');
-		// Order matters: reviews and srs_state hang off cards, blocks off sessions.
+		// Order matters: reviews and srs_state hang off cards, blocks off sessions,
+		// and chord_attempts off play_runs.
 		await db.execute(sql`delete from ${schema.reviews}`);
 		await db.execute(sql`delete from ${schema.transferEvents}`);
 		await db.execute(sql`delete from ${schema.analysisFacts}`);
@@ -47,7 +48,13 @@ async function main() {
 		await db.execute(sql`delete from ${schema.sessions}`);
 		await db.execute(sql`delete from ${schema.cards}`);
 		await db.execute(sql`delete from ${schema.skills}`);
+		await db.execute(sql`delete from ${schema.badges}`);
+		await db.execute(sql`delete from ${schema.chordAttempts}`);
+		await db.execute(sql`delete from ${schema.playRuns}`);
 		await db.execute(sql`delete from ${schema.charts}`);
+		// `users` survives a reset. It holds one row, the migration put it there,
+		// and every cookie in circulation names it — clearing it would sign the
+		// player out to prove a point about generated data it is not an example of.
 	}
 
 	const skills = skillSeeds();
@@ -76,6 +83,8 @@ async function main() {
 			});
 	}
 
+	// No `userId`: null is what makes these the shared repertoire rather than
+	// somebody's. See the column's comment in schema.ts.
 	console.log(`seeding ${CHARTS.length} charts…`);
 	for (const chart of CHARTS) {
 		await db

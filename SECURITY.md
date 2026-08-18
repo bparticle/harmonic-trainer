@@ -30,9 +30,10 @@ service without adding real authentication first.
 
 **Web MIDI needs a secure context.** Deploy over HTTPS or MIDI silently fails.
 
-**The database holds practice data.** Chord charts, review history and settings
-— nothing sensitive by design, but it is still yours. Back it up like anything
-else.
+**The database holds practice data.** Chord charts, review history, settings,
+and since M9 a log of every run of the play-along transport and every chord it
+judged — nothing sensitive by design, but it is still yours, and there is more of
+it than there used to be. Back it up like anything else.
 
 If you find something that lets one deployment's data reach another, or that
 bypasses the password gate, that is a real vulnerability and we would like to

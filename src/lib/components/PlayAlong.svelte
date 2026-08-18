@@ -16,7 +16,7 @@
 	} from '$lib/curriculum/charts';
 	import { chordPitchClasses, closeVoicing, degreeLabels, fitToRange } from '$lib/music/chord';
 	import { scaleDegreeIn, scaleNotes } from '$lib/music/scales';
-	import { key as makeKey, parseKey } from '$lib/music/key';
+	import { formatKey, key as makeKey, parseKey } from '$lib/music/key';
 	import {
 		formatRoman,
 		formatStudyKey,
@@ -45,7 +45,28 @@
 		tierFor,
 		type Streak
 	} from '$lib/effects/streak';
-	import { award, emptyRecord, parseRecord, type StreakRecord } from '$lib/effects/badges';
+	import {
+		award,
+		badgesOn,
+		emptyRecord,
+		missingFrom,
+		parseRecord,
+		type StreakRecord
+	} from '$lib/effects/badges';
+	import {
+		isEmpty,
+		noBests,
+		parseBests,
+		queue,
+		readOutbox,
+		settle,
+		tallyColumns,
+		type AttemptPayload,
+		type BadgePayload,
+		type Bests,
+		type RunPayload
+	} from '$lib/practice/run';
+	import { chordSymbolLabel } from '$lib/music/symbol';
 	import StreakBadges from '$lib/components/StreakBadges.svelte';
 	import ChartEditor from '$lib/components/ChartEditor.svelte';
 	import { target as sharedTarget } from '$lib/practice/target.svelte';
@@ -87,7 +108,10 @@
 		mine = [] as Array<ChartSeed & { id: string }>,
 		form = null,
 		colorMap,
-		demo = false
+		demo = false,
+		/** The shelf and the two bests, as the record has them. Empty for the demo. */
+		record: fromServer = emptyRecord() as StreakRecord,
+		bests: bestsFromServer = noBests() as Bests
 	} = $props();
 
 	const KEYS = ['C', 'G', 'D', 'A', 'E', 'B', 'Gb', 'Db', 'Ab', 'Eb', 'Bb', 'F'];
@@ -192,36 +216,196 @@
 	/*
 	 * What the streaks leave behind.
 	 *
-	 * The combo itself lives and dies with the run. This outlives the tab: the
-	 * best you have ever done, the best on each tune, and one badge per rung of
-	 * the ladder kept from the first time you reached it.
+	 * The combo itself lives and dies with the run. This outlives the tab, and
+	 * since M9 it outlives the *machine*: one badge per rung per tune, kept from
+	 * the first time you reached it there, in the database.
 	 *
-	 * Local storage, alongside the rest of the player's preferences, and
-	 * deliberately not the database. The tables the long view would need are
-	 * still parked and a combo counter is not the thing that should quietly
-	 * start filling them.
+	 * Local storage is still here and has changed job. It was the record and is
+	 * now a write-through cache in front of it — which is what lets a run played
+	 * with the network away still count, and what carried the shelf in on the
+	 * first load after this shipped.
+	 *
+	 * No best is held here at all. A streak cannot outlive the transport, so the
+	 * best ever is the highest any run reached and the best on a tune is the same
+	 * grouped by slug — both computed where the runs are, so there is no second
+	 * copy able to disagree with the badges.
 	 */
-	const STREAKS_KEY = 'backing:streaks-v1';
-	let streaks = $state<StreakRecord>(emptyRecord());
-	let streaksReady = $state(false);
+	const RECORD_KEY = 'backing:record-v2';
+	/** What the record was called when it was the record. Read once, on the way past. */
+	const LEGACY_RECORD_KEY = 'backing:streaks-v1';
+
+	// svelte-ignore state_referenced_locally
+	let record = $state<StreakRecord>(fromServer);
+	// svelte-ignore state_referenced_locally
+	let bests = $state<Bests>(bestsFromServer);
+	let recordReady = $state(false);
+
+	const shelf = $derived(badgesOn(record, slug));
+	/*
+	 * The run under way counts towards both bests before it has been written
+	 * down. Waiting for the flush would mean landing a new personal best and
+	 * watching the shelf go on quoting the old one for the rest of the sitting.
+	 */
+	const bestEver = $derived(Math.max(bests.best, streak.best));
+	const bestHere = $derived(Math.max(bests.byChart[slug] ?? 0, streak.best));
 
 	onMount(() => {
 		// The demo keeps its streak for as long as the tab is open and writes
-		// nothing down. Leaving `streaksReady` false is what stops the effect below.
+		// nothing down. Leaving `recordReady` false is what stops the effect below.
 		if (demo) return;
+
 		try {
-			const raw = localStorage.getItem(STREAKS_KEY);
-			if (raw) streaks = parseRecord(JSON.parse(raw));
+			const raw = localStorage.getItem(RECORD_KEY) ?? localStorage.getItem(LEGACY_RECORD_KEY);
+			const cached = raw ? parseRecord(JSON.parse(raw)) : emptyRecord();
+
+			// Badges the browser knows about and the record does not: everything
+			// earned before M9, and anything earned since while offline. `parseRecord`
+			// reads the old tier-keyed shape and files each badge under the tune that
+			// won it, which is lossless because a badge has named its chart since the
+			// day badges shipped.
+			const unseen = missingFrom(cached, record);
+			if (unseen.length > 0) {
+				queue(localStorage, {
+					runs: [],
+					badges: unseen.map((badge) => ({
+						chartSlug: badge.chart,
+						tier: badge.tier,
+						wonAt: badge.at || new Date().toISOString(),
+						count: badge.count,
+						pc: badge.pc,
+						keyCenter: badge.key,
+						runId: null
+					}))
+				});
+			}
 		} catch {
-			// A record that will not parse costs you the shelf, never the player.
+			// A cache that will not parse costs you nothing: the record is elsewhere.
 		}
-		streaksReady = true;
+
+		recordReady = true;
+		void flush();
 	});
 
 	$effect(() => {
-		if (!streaksReady) return;
-		localStorage.setItem(STREAKS_KEY, JSON.stringify(streaks));
+		if (!recordReady) return;
+		localStorage.setItem(RECORD_KEY, JSON.stringify(record));
 	});
+
+	/**
+	 * Send whatever is waiting, and take the answer as the truth.
+	 *
+	 * Failure is not handled because there is nothing to handle: the outbox keeps
+	 * what was not accepted and the next load tries again. Every id in it was
+	 * generated here, so sending the same thing twice is a no-op at the other end
+	 * — which is the entire reason the ids are generated here.
+	 */
+	async function flush() {
+		if (demo) return;
+		const pending = readOutbox(localStorage);
+		if (isEmpty(pending)) return;
+
+		try {
+			const response = await fetch('/api/runs', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(pending)
+			});
+			if (!response.ok) return;
+
+			const answer = await response.json();
+			settle(localStorage, pending);
+			record = parseRecord(answer.record);
+			bests = parseBests(answer.bests);
+		} catch {
+			// No network. It waits, which is what an outbox is for.
+		}
+	}
+
+	/*
+	 * The run being played, on its way to the record.
+	 *
+	 * A run is one press of play to one press of stop, which is the same unit the
+	 * score on screen has always used — and it has to be, because a streak is
+	 * counted from the moment the transport starts and `best_streak` is what the
+	 * shelf's two numbers are derived from.
+	 *
+	 * Changing the chart or the loop mid-run restarts the transport, so it also
+	 * ends one run and begins another. That is not bookkeeping pedantry: one row
+	 * records one chart in one key, and a row that spanned a chart change could
+	 * not honestly say what was played over.
+	 */
+	let runId: string | null = null;
+	let runStartedAt = '';
+	/** Transport actually running, accumulated across pauses. */
+	let runPlayedMs = 0;
+	let runningSince: number | null = null;
+	let runAttempts: AttemptPayload[] = [];
+	let runBadges: BadgePayload[] = [];
+
+	/** How far into the run we are, on the only clock that counts. */
+	const elapsedMs = () =>
+		Math.round(runPlayedMs + (runningSince === null ? 0 : performance.now() - runningSince));
+
+	const startClock = () => (runningSince ??= performance.now());
+
+	function stopClock() {
+		if (runningSince === null) return;
+		runPlayedMs += performance.now() - runningSince;
+		runningSince = null;
+	}
+
+	/** Begin one. Whatever came before must already have been banked. */
+	function startRun() {
+		runId = crypto.randomUUID();
+		runStartedAt = new Date().toISOString();
+		runPlayedMs = 0;
+		runningSince = null;
+		runAttempts = [];
+		runBadges = [];
+	}
+
+	/**
+	 * Write the run down, if there was one.
+	 *
+	 * Closes the chord under the hands first, so the last thing played belongs to
+	 * the run it was played in. Idempotent through `runId`, which is cleared here
+	 * — stopping, then changing the chart, banks once.
+	 *
+	 * A second of transport is the whole bar to clear: below that nothing was
+	 * played and nothing was heard, and a row saying so would be a double-tap of
+	 * the play button pretending to be practice. Anything that judged a chord is
+	 * far past it.
+	 *
+	 * Queued before it is posted, always, so closing the tab on the way out costs
+	 * nothing — the next load sends it.
+	 */
+	function bankRun() {
+		closeSlot();
+		stopClock();
+		const id = runId;
+		runId = null;
+		if (demo || !id || runPlayedMs < 1000) return;
+
+		const run: RunPayload = {
+			id,
+			chartSlug: slug,
+			chartId: mineId,
+			keyCenter: keyName,
+			bpm,
+			feel,
+			startedAt: runStartedAt,
+			endedAt: new Date().toISOString(),
+			playingMs: Math.round(runPlayedMs),
+			...tallyColumns(tally),
+			bestStreak: streak.best,
+			attempts: runAttempts
+		};
+
+		queue(localStorage, { runs: [run], badges: runBadges });
+		runAttempts = [];
+		runBadges = [];
+		void flush();
+	}
 	let transportEl = $state<HTMLDivElement | null>(null);
 	let transportBeat: Animation | null = null;
 
@@ -403,6 +587,16 @@
 	let openWhere = $state<string | null>(null);
 	/** Its root's colour, held so a celebration fired after it closes is still its own. */
 	let openPc = 0;
+	/*
+	 * What the chord *was*, held for the same reason its colour is: by the time
+	 * the slot closes and the attempt can be judged, the music has moved on and
+	 * the numbers alone would not say what they were about.
+	 */
+	let openBar = 0;
+	let openChord = '';
+	let openNumeral = '';
+	let openLocalKey = '';
+	let openAtMs = 0;
 	/** Pitch classes played over it so far. */
 	let heard = $state<number[]>([]);
 	let tally = $state<Tally>(emptyTally());
@@ -476,6 +670,19 @@
 			openWhere = `${number}:${index}`;
 			openPc = pitchClass(bar.chords[index].chord.root);
 			openTarget = targetFor(bar.chords[index].chord, study.key);
+			openBar = number;
+			// The chord as it sounded and the numeral as the chart stores it: the
+			// first is what was played over, the second is what makes two runs in
+			// different keys comparable.
+			openChord = chordSymbolLabel(bar.chords[index].chord);
+			openNumeral = study.roman;
+			// `formatKey`, not `formatStudyKey`: the record stores 'Bb' and 'F# dorian',
+			// never 'B♭ major'. The schema's convention is that a key survives a round
+			// trip through the database, and a display string with a ♭ in it does not —
+			// `parseKey` cannot read it back, so the profile could not tell which pitch
+			// class it was looking at.
+			openLocalKey = formatKey(study.key);
+			openAtMs = elapsedMs();
 		}
 
 		if (!openTarget) return;
@@ -504,6 +711,26 @@
 			const attempt = judge(heard, openTarget);
 			tally = addAttempt(tally, attempt);
 			finished = { attempt, where: openWhere, pc: openPc };
+
+			// One row per judged chord. This is the grain the blind-spot report
+			// needs and the one thing that cannot be reconstructed afterwards from
+			// the totals it rolls up into.
+			if (runId) {
+				runAttempts.push({
+					id: crypto.randomUUID(),
+					bar: openBar,
+					chord: openChord,
+					numeral: openNumeral,
+					localKey: openLocalKey,
+					landing: attempt.landing,
+					found: attempt.found,
+					needed: attempt.needed,
+					notesChord: attempt.notes.chord,
+					notesColour: attempt.notes.colour,
+					notesOutside: attempt.notes.outside,
+					atMs: openAtMs
+				});
+			}
 		}
 
 		openSlot = null;
@@ -513,8 +740,16 @@
 		return finished;
 	}
 
+	/**
+	 * Clear the run off the screen.
+	 *
+	 * Banks it first, always. Emptying the tally and the streak and only then
+	 * writing the row would file a sitting as a row of zeroes, so the two are
+	 * welded together here rather than left as an order for each caller to
+	 * remember — which is exactly the kind of thing a caller eventually does not.
+	 */
 	function resetRun() {
-		closeSlot();
+		bankRun();
 		tally = emptyTally();
 		lastRun = null;
 		streak = noStreak();
@@ -562,12 +797,28 @@
 		const before = streak;
 		streak = advanceStreak(streak, finished.attempt.landing);
 
-		const banked = award(streaks, before, streak, {
+		const at = new Date().toISOString();
+		const banked = award(record, before, streak, {
 			pc: finished.pc,
 			chart: slug,
-			at: new Date().toISOString()
+			at,
+			key: keyName
 		});
-		streaks = banked.record;
+		record = banked.record;
+
+		// Carried with the run rather than posted as it happens: a badge and the
+		// run that won it should land together or not at all.
+		for (const tier of banked.earned) {
+			runBadges.push({
+				chartSlug: slug,
+				tier: tier.id,
+				wonAt: at,
+				count: streak.count,
+				pc: finished.pc,
+				keyCenter: keyName,
+				runId
+			});
+		}
 
 		if (finished.attempt.landing === 'landed') {
 			fx?.land(slotEl(finished.where), finished.pc, 0.55 + 0.45 * tier.intensity);
@@ -788,8 +1039,10 @@
 		} else {
 			followPlayback = true;
 			// A run is one press of play to one press of stop, so this is where the
-			// previous one is cleared away.
+			// previous one is banked and cleared away.
 			resetRun();
+			startRun();
+			startClock();
 			counting = countIn;
 			await track.start(config());
 			playing = track.playing;
@@ -802,6 +1055,9 @@
 		// paused and hunting for a shape would be credited to it as though they
 		// had been played in time.
 		closeSlot();
+		// The clock stops with the music. A paused transport is not playing, which
+		// is the difference between an hour claimed and an hour spent.
+		stopClock();
 		track.pause();
 		// Pin the chord panel to the one just landed on — the same thing tapping
 		// a bar does when nothing is playing.
@@ -818,6 +1074,7 @@
 	async function resumePlay() {
 		followPlayback = true;
 		const resumed = await track.resume(config());
+		startClock();
 		paused = false;
 		playing = track.playing;
 		// If the key, chart, feel or loop changed while paused there was no
@@ -832,6 +1089,9 @@
 		// screen rather than being cleared along with the transport.
 		closeSlot();
 		lastRun = tally.voiced > 0 ? tally : null;
+		// Banked rather than reset, because the total stays on screen: `resetRun`
+		// would write the same row and then wipe the thing you just played.
+		bankRun();
 		track.stop();
 		playing = false;
 		paused = false;
@@ -843,8 +1103,12 @@
 	async function restartIfPlaying() {
 		if (!playing) return;
 		// The form goes back to the top and the chords may not even be the same
-		// ones, so what was counted up to here is not part of what follows.
+		// ones, so what was counted up to here is not part of what follows. It is
+		// a run in its own right, though, which is why `resetRun` banks it rather
+		// than throwing it away.
 		resetRun();
+		startRun();
+		startClock();
 		counting = countIn;
 		await track.start(config());
 	}
@@ -902,6 +1166,9 @@
 	// Changing the chart brings its own tempo with it, since 160 for rhythm
 	// changes and 160 for a modal vamp are not the same request.
 	function chooseChart(next: string) {
+		// Whatever was played over the old tune is a run over the old tune. Banked
+		// before the slug moves, or it would be filed under the wrong one.
+		bankRun();
 		slug = next;
 		bpm = repertoire.find((c) => c.slug === next)?.defaultBpm ?? bpm;
 		pinnedChord = 0;
@@ -927,7 +1194,12 @@
 		return () => session.onPedal(null);
 	});
 
-	onDestroy(() => track.dispose());
+	onDestroy(() => {
+		// Navigating away mid-run should not cost the run. The queue is written
+		// synchronously, so it survives the page going even if the post does not.
+		bankRun();
+		track.dispose();
+	});
 </script>
 
 <!-- Wheel and touch, not the scroll event: only those two can tell a person
@@ -1252,7 +1524,7 @@
 				you are on it would be no use for deciding to get on it.
 			-->
 			{#if fireworks}
-				<StreakBadges record={streaks} {streak} chart={slug} chartName={seed.name} />
+				<StreakBadges {shelf} {streak} chartName={seed.name} best={bestEver} {bestHere} />
 			{/if}
 
 			<!--

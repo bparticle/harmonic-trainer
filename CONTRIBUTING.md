@@ -64,6 +64,15 @@ percentage on screen. Turning the fun off changes what the app celebrates and
 never what it reports. Anything decorative is opt-out and obeys
 `prefers-reduced-motion`.
 
+**Hue means pitch, and nothing else.** The twelve pitch-class colours are the
+app's one colour language, so a colour has to be derived from a pitch or it does
+not get to be a colour. A key wears its tonic's swatch; a badge wears the chord
+that clinched it. Anything with no pitch in it — a chord quality, whether a
+chord landed, how many reviews were graded — is drawn in **weight**: ink, dim
+ink, a dashed fill. This is the rule that keeps the palette meaning something,
+and the test of it is uncomfortable on purpose: if a screen looks grey and the
+only available fix would be a colour that stands for nothing, it stays grey.
+
 **Nothing punishes.** No guilt, no daily streak, no calendar of dots, nothing
 that turns a day away from the piano into a loss. Nothing goes red. A chord you
 played nothing over is dropped rather than failed, because resting is something
