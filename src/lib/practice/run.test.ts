@@ -31,7 +31,7 @@ const run = (id: string): RunPayload => ({
 	chartId: null,
 	keyCenter: 'C',
 	bpm: 140,
-	feel: 'swing',
+	groove: 'swing',
 	startedAt: '2026-08-17T10:00:00.000Z',
 	endedAt: '2026-08-17T10:04:00.000Z',
 	playingMs: 240_000,

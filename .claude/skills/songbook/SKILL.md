@@ -40,13 +40,36 @@ they were written down.
 
 ## 2. Read the sheet into a text file
 
-Write the grid to a scratch file. One line per row of the sheet, `|` between
-bars, spaces between chords sharing a bar:
+Two formats are understood. Use the second whenever the tune has words.
+
+**The grid.** One line per row of the sheet, `|` between bars, spaces between
+chords sharing a bar:
 
 ```
 | Fm7 | Bbm7 | Eb7 | Abmaj7 |
 | Dbmaj7 | G7 | Cmaj7 | Cmaj7 |
 ```
+
+**The chord sheet** — chords written above the words, which is how a song
+actually arrives. Each chord becomes a bar and each line becomes a row, so a row
+of the chart is a line of the song:
+
+```
+C              Am            F            G
+Here is a line of words with a chord over each part of it
+```
+
+Each chord becomes a bar, so that is four bars. A chord's column is a claim
+about which word it lands on, and cuts snap to the nearest word boundary so a chord sitting a character inside a word still splits
+where a person would have split it. `[Verse]`-style labels are dropped. A chord
+line with nothing under it is simply a row of bars, so the two formats do not
+have to be kept apart.
+
+Watch the splits in the check output rather than trusting them. Hand-typed
+sheets are eyeballed, and where the spacing is loose the words land where the
+sheet said and not where the tune goes — that is not an error and nothing
+downstream will ever complain about it. Fix it in the file, or afterwards in the
+editor, where every fragment is its own box.
 
 Two chords in a bar split it evenly; four is the most a bar can hold. Rows are
 only how a chart is read — four bars to a line is conventional and worth
@@ -99,11 +122,16 @@ bass degree of the key and Roman is still an applied dominant (`V7/vi`).
 **Into the database** (the usual case):
 
 ```bash
-npx vite-node .claude/skills/songbook/scripts/add-chart.ts <file> <key> "<name>" --bpm 140
+npx vite-node .claude/skills/songbook/scripts/add-chart.ts <file> <key> "<name>" --bpm 140 --groove reggae --notes "…"
 ```
 
 Needs `npm run db:up` and `DATABASE_URL`. It runs the same check first and
 writes nothing if the chart drifts.
+
+`--groove` is the rhythm section the tune opens with — `swing` (the default),
+`straight`, `shuffle`, `rock`, `pop`, `ballad`, `bossa`, `reggae`, `funk`. The
+key you pass is stored as the tune's home key, so a song opens in the key it was
+written in; a chord sheet brings its words along without being asked.
 
 This is what the chart editor on `/backing` does, from the command line. The
 editor is a grid: a bar is a cell, chords are parsed as you type, and the
@@ -155,6 +183,12 @@ and plays back.
 which is the whole point of writing it that way, and `add2` is kept distinct
 from `add9` because the chart keeps them distinct — the second sits under the
 third and sounds different from the ninth an octave up.
+
+A **bare lowercase numeral takes its quality from the key**, so `vii` in a major
+key is the diminished chord and not a minor one. That is the right reading of a
+numeral nobody added anything to, and it means a plain minor triad on that degree
+is written `viim` — which is what the analyser now produces, so it round-trips.
+Nothing to do about it; worth knowing when you read the stored numerals back.
 
 `alt` is **not** understood — `G7alt` reads as a plain `G7`. The loss happens on
 the way in, where a round-trip check cannot see it, so it is caught by name

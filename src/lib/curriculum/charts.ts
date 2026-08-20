@@ -1,4 +1,5 @@
 import type { BarChord } from '$lib/audio/bass';
+import type { Groove } from '$lib/audio/groove';
 import { formatChord, type AbstractChord } from '$lib/music/chord';
 import { key as makeKey, type Key } from '$lib/music/key';
 import type { ChartStyle } from '$lib/server/db/schema';
@@ -18,6 +19,11 @@ import { chordFromNumeral } from './progressions';
  *   standards  Real repertoire, and only where the copyright has expired: US
  *              publication in 1930 or earlier. The year is recorded on each one
  *              so the claim can be checked rather than taken on trust.
+ *   traditional Folk songs with no author and no first publication to record.
+ *              The category is the claim here, in place of the year: these are
+ *              nobody's composition in the same way a blues is nobody's, and
+ *              putting them under `standards` with a year invented to fill the
+ *              field would be the opposite of what that field is for.
  *   mine       Charts you typed in yourself, kept in the database rather than
  *              here. Where anything still in copyright belongs.
  *
@@ -29,12 +35,13 @@ import { chordFromNumeral } from './progressions';
  * of four purely because that is how a chart is read.
  */
 
-export type ChartCategory = 'form' | 'cycle' | 'standard' | 'mine';
+export type ChartCategory = 'form' | 'cycle' | 'standard' | 'traditional' | 'mine';
 
 export const CHART_CATEGORIES: Record<ChartCategory, string> = {
 	form: 'Forms',
 	cycle: 'Cycles',
 	standard: 'Standards',
+	traditional: 'Traditional',
 	mine: 'Yours'
 };
 
@@ -48,8 +55,28 @@ export type ChartSeed = {
 	 * announced as "C" or "C minor". */
 	mode: 'major' | 'minor';
 	defaultBpm: number;
+	/** The rhythm section it opens with. Choosing a chart sets this and the
+	 * tempo together, because a tune played at the wrong tempo in the wrong
+	 * groove is not that tune slightly off — it is a different tune. */
+	defaultGroove: Groove;
+	/** The key it opens in, for a chart that has one. A form does not: a blues
+	 * is a blues in all twelve, so this is undefined for everything built in and
+	 * the key already on screen is left alone. */
+	defaultKey?: string;
 	/** Rows of bars; each bar holds one or two Roman numerals. */
 	grid: string[][];
+	/**
+	 * The words, in the same shape as `grid`: one fragment per bar, '' where a
+	 * bar has none. Omitted entirely for an instrumental, and every part of the
+	 * app that draws lyrics checks for that rather than drawing an empty row —
+	 * a chart without words has to look exactly as it did before words existed.
+	 *
+	 * A bar holding two chords shares one fragment. That is a real limit and an
+	 * honest one: the words are aligned to bars because that is what a chord
+	 * sheet aligns them to, and splitting a fragment across half a bar would be
+	 * inventing timing nobody wrote down.
+	 */
+	lyrics?: string[][];
 	notes: string;
 	/** Year of first publication, for the standards. Their licence to be here. */
 	published?: number;
@@ -63,6 +90,7 @@ export const CHARTS: ChartSeed[] = [
 		category: 'form',
 		mode: 'major',
 		defaultBpm: 120,
+		defaultGroove: 'shuffle',
 		grid: [
 			['I7', 'IV7', 'I7', 'I7'],
 			['IV7', 'IV7', 'I7', 'I7'],
@@ -78,6 +106,7 @@ export const CHARTS: ChartSeed[] = [
 		category: 'form',
 		mode: 'major',
 		defaultBpm: 140,
+		defaultGroove: 'swing',
 		grid: [
 			['I7', 'IV7', 'I7', 'v7 I7'],
 			['IV7', '#iv°7', 'I7', 'VI7'],
@@ -93,6 +122,7 @@ export const CHARTS: ChartSeed[] = [
 		category: 'form',
 		mode: 'minor',
 		defaultBpm: 120,
+		defaultGroove: 'swing',
 		grid: [
 			['i7', 'i7', 'i7', 'i7'],
 			['iv7', 'iv7', 'i7', 'i7'],
@@ -108,6 +138,7 @@ export const CHARTS: ChartSeed[] = [
 		category: 'form',
 		mode: 'major',
 		defaultBpm: 160,
+		defaultGroove: 'swing',
 		grid: [
 			['I6 vi7', 'ii7 V7', 'I6 vi7', 'ii7 V7'],
 			['I7', 'IV7', 'I6 vi7', 'ii7 V7'],
@@ -128,6 +159,7 @@ export const CHARTS: ChartSeed[] = [
 		category: 'form',
 		mode: 'minor',
 		defaultBpm: 132,
+		defaultGroove: 'swing',
 		grid: [
 			['i7', 'i7', 'i7', 'i7'],
 			['i7', 'i7', 'i7', 'i7'],
@@ -136,6 +168,45 @@ export const CHARTS: ChartSeed[] = [
 		],
 		notes:
 			'Dorian, sixteen bars, with a shift up a semitone for two. Nowhere to hide behind harmonic motion, so the voicings and the melody have to carry it.'
+	},
+	{
+		slug: 'four-chord-loop',
+		name: 'Four-chord loop',
+		style: 'custom',
+		category: 'form',
+		mode: 'major',
+		defaultBpm: 96,
+		defaultGroove: 'pop',
+		grid: [['I', 'V', 'vi', 'IV']],
+		notes:
+			'I–V–vi–IV, four bars, round and round. The most played progression in popular music and a fair test of whether your triads are actually under the hands — there are no sevenths to hide the shape.'
+	},
+	{
+		slug: 'doo-wop',
+		name: 'Doo-wop changes',
+		style: 'custom',
+		category: 'form',
+		mode: 'major',
+		defaultBpm: 116,
+		defaultGroove: 'pop',
+		grid: [['I', 'vi', 'IV', 'V']],
+		notes:
+			'I–vi–IV–V. The fifties turnaround, and the same four chords as the loop above in a different order — worth playing back to back to hear how much the order is doing.'
+	},
+	{
+		slug: 'mixolydian-vamp',
+		name: 'Rock vamp',
+		style: 'modal_vamp',
+		category: 'form',
+		mode: 'major',
+		defaultBpm: 128,
+		defaultGroove: 'rock',
+		grid: [
+			['I', 'bVII', 'IV', 'I'],
+			['I', 'bVII', 'IV', 'I']
+		],
+		notes:
+			'I–♭VII–IV, which is mixolydian rather than major: the flat seven is the whole sound. Eight bars so the loop is long enough to play a phrase over.'
 	},
 
 	// -- Cycles: named devices, not compositions ------------------------------
@@ -146,6 +217,7 @@ export const CHARTS: ChartSeed[] = [
 		category: 'cycle',
 		mode: 'major',
 		defaultBpm: 180,
+		defaultGroove: 'swing',
 		grid: [
 			['Imaj7', 'vii7 III7', 'vi7 II7', 'v7 I7'],
 			['IV7', 'iv7 bVII7', 'iii7 VI7', 'biii7 bVI7'],
@@ -161,6 +233,7 @@ export const CHARTS: ChartSeed[] = [
 		category: 'cycle',
 		mode: 'major',
 		defaultBpm: 160,
+		defaultGroove: 'swing',
 		grid: [
 			['Imaj7 bIII7', 'bVImaj7 VII7', 'IIImaj7 V7', 'Imaj7'],
 			['bVImaj7 VII7', 'IIImaj7 V7', 'Imaj7 bIII7', 'bVImaj7']
@@ -175,6 +248,7 @@ export const CHARTS: ChartSeed[] = [
 		category: 'cycle',
 		mode: 'major',
 		defaultBpm: 120,
+		defaultGroove: 'swing',
 		grid: [
 			['ii7 V7', 'v7 I7', 'i7 IV7', 'iv7 bVII7'],
 			['bvii7 bIII7', 'biii7 bVI7', 'bvi7 bII7', 'bii7 bV7'],
@@ -192,6 +266,7 @@ export const CHARTS: ChartSeed[] = [
 		category: 'standard',
 		mode: 'major',
 		defaultBpm: 200,
+		defaultGroove: 'swing',
 		published: 1917,
 		grid: [
 			['I', 'I', 'IV7', 'IV7'],
@@ -213,6 +288,7 @@ export const CHARTS: ChartSeed[] = [
 		category: 'standard',
 		mode: 'major',
 		defaultBpm: 190,
+		defaultGroove: 'swing',
 		published: 1925,
 		grid: [
 			['VI7', 'VI7', 'VI7', 'VI7'],
@@ -234,6 +310,7 @@ export const CHARTS: ChartSeed[] = [
 		category: 'standard',
 		mode: 'major',
 		defaultBpm: 130,
+		defaultGroove: 'swing',
 		published: 1914,
 		grid: [
 			['I7', 'I7', 'I7', 'I7'],
@@ -257,6 +334,7 @@ export const CHARTS: ChartSeed[] = [
 		category: 'standard',
 		mode: 'minor',
 		defaultBpm: 96,
+		defaultGroove: 'ballad',
 		published: 1929,
 		grid: [
 			['i', 'i V7', 'i', 'iv'],
@@ -272,6 +350,7 @@ export const CHARTS: ChartSeed[] = [
 		category: 'standard',
 		mode: 'major',
 		defaultBpm: 170,
+		defaultGroove: 'swing',
 		published: 1918,
 		grid: [
 			['I', 'I', 'VI7', 'VI7'],
@@ -289,6 +368,7 @@ export const CHARTS: ChartSeed[] = [
 		category: 'standard',
 		mode: 'major',
 		defaultBpm: 160,
+		defaultGroove: 'swing',
 		published: 1924,
 		grid: [
 			['I', 'VI7', 'II7', 'V7'],
@@ -304,6 +384,7 @@ export const CHARTS: ChartSeed[] = [
 		category: 'standard',
 		mode: 'major',
 		defaultBpm: 170,
+		defaultGroove: 'swing',
 		published: 1918,
 		grid: [
 			['I', 'I', 'vi', 'vi'],
@@ -322,6 +403,7 @@ export const CHARTS: ChartSeed[] = [
 		category: 'standard',
 		mode: 'major',
 		defaultBpm: 110,
+		defaultGroove: 'swing',
 		published: 1928,
 		grid: [
 			['I', 'I', 'IV', 'iv'],
@@ -337,6 +419,7 @@ export const CHARTS: ChartSeed[] = [
 		category: 'standard',
 		mode: 'major',
 		defaultBpm: 200,
+		defaultGroove: 'swing',
 		published: 1920,
 		grid: [
 			['V7', 'V7', 'I', 'I'],
@@ -354,6 +437,7 @@ export const CHARTS: ChartSeed[] = [
 		category: 'standard',
 		mode: 'major',
 		defaultBpm: 150,
+		defaultGroove: 'swing',
 		published: 1902,
 		grid: [
 			['I', 'I', 'I', 'I7'],
@@ -363,6 +447,58 @@ export const CHARTS: ChartSeed[] = [
 		],
 		notes:
 			'Sixteen bars of ragtime, and about as plain as a chart gets. Worth having because the I–VI–II–V at the end is the turnaround you will play for the rest of your life.'
+	},
+
+	// -- Traditional: folk songs, no author to credit and none to clear --------
+	{
+		slug: 'mango-walk',
+		name: 'Mango Walk',
+		style: 'custom',
+		category: 'traditional',
+		mode: 'major',
+		defaultBpm: 112,
+		defaultGroove: 'reggae',
+		defaultKey: 'F',
+		grid: [
+			['V7', 'I', 'V7', 'I'],
+			['V7', 'I', 'V7', 'I']
+		],
+		lyrics: [
+			[
+				'My mother did a-tell me that you go',
+				'mango walk',
+				'You go mango walk,',
+				'you go mango walk'
+			],
+			['My mother did a-tell me that you go', 'mango walk', 'And steal all the number', '’leven']
+		],
+		notes:
+			'Two chords: the dominant leaning home, and home. Nothing to read means the whole of the attention can go on time and on singing while you play, which is harder than it sounds and is the point of having it here.'
+	},
+	{
+		slug: 'linstead-market',
+		name: 'Linstead Market',
+		style: 'custom',
+		category: 'traditional',
+		mode: 'major',
+		defaultBpm: 104,
+		defaultGroove: 'reggae',
+		defaultKey: 'C',
+		grid: [
+			['I', 'IV', 'V', 'I'],
+			['I', 'IV', 'V', 'I'],
+			['I', 'IV', 'V', 'I'],
+			['I', 'IV', 'V', 'I']
+		],
+		// Verse twice, then the chorus twice, which is the whole song.
+		lyrics: [
+			['Mi carry mi ackee go a', 'Linstead Market', 'Not a quattie worth', 'sell'],
+			['Mi carry mi ackee go a', 'Linstead Market', 'Not a quattie worth', 'sell'],
+			['Oh lord what a night,', 'not a bite', 'What a Saturday', 'night'],
+			['Lawd what a night,', 'not a bite', 'What a Saturday', 'night']
+		],
+		notes:
+			'I–IV–V–I, four times, verse and chorus over the same four bars. The plainest changes in the book, so what is left to get right is the groove and landing the change exactly on the bar line.'
 	}
 ];
 
@@ -378,6 +514,8 @@ export function chartBySlug(slug: string): ChartSeed | undefined {
 export type ChartBar = {
 	/** Bar number from one, so it can be said out loud. */
 	number: number;
+	/** The words sung over this bar, if the chart has any. */
+	lyric?: string;
 	/** The chords in this bar, with their numerals kept for the analysis view. */
 	chords: {
 		numeral: string;
@@ -393,9 +531,13 @@ export type RealisedChart = {
 	style: ChartStyle;
 	keyCenter: string;
 	defaultBpm: number;
+	defaultGroove: Groove;
 	notes: string;
 	/** Rows of bars, as printed. */
 	rows: ChartBar[][];
+	/** Whether there is anything to sing. Asked once here rather than by every
+	 * component that would otherwise have to go looking through the bars. */
+	hasLyrics: boolean;
 	/** The same bars flattened, which is what the players consume. */
 	bars: BarChord[];
 	beatsPerBar: number;
@@ -419,8 +561,8 @@ export function realiseChart(seed: ChartSeed, keyName: string, beatsPerBar = 4):
 	const bars: BarChord[] = [];
 	let number = 0;
 
-	const rows = seed.grid.map((row) =>
-		row.map((cell) => {
+	const rows = seed.grid.map((row, r) =>
+		row.map((cell, c) => {
 			number++;
 			const numerals = cell.trim().split(/\s+/);
 			const share = beatsPerBar / numerals.length;
@@ -436,7 +578,10 @@ export function realiseChart(seed: ChartSeed, keyName: string, beatsPerBar = 4):
 				};
 			});
 
-			return { number, chords };
+			// Empty string and absent mean the same thing to everything downstream:
+			// this bar has no words. Only one of them is allowed past here.
+			const lyric = seed.lyrics?.[r]?.[c]?.trim();
+			return { number, chords, lyric: lyric || undefined };
 		})
 	);
 
@@ -446,8 +591,10 @@ export function realiseChart(seed: ChartSeed, keyName: string, beatsPerBar = 4):
 		style: seed.style,
 		keyCenter: keyName,
 		defaultBpm: seed.defaultBpm,
+		defaultGroove: seed.defaultGroove,
 		notes: seed.notes,
 		rows,
+		hasLyrics: rows.some((row) => row.some((bar) => bar.lyric !== undefined)),
 		bars,
 		beatsPerBar
 	};

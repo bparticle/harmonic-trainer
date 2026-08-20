@@ -2,6 +2,7 @@ import { parseChord, type AbstractChord } from '$lib/music/chord';
 import { romanNumeral } from '$lib/music/analyse';
 import { key as makeKey } from '$lib/music/key';
 import type { ChartSeed } from './charts';
+import type { Groove } from '$lib/audio/groove';
 
 /**
  * Bringing your own charts in.
@@ -102,7 +103,12 @@ function tryParse(symbol: string): AbstractChord | null {
 export function importedToSeed(
 	name: string,
 	rows: string[][],
-	options: { defaultBpm?: number; mode?: 'major' | 'minor' } = {}
+	options: {
+		defaultBpm?: number;
+		mode?: 'major' | 'minor';
+		defaultGroove?: Groove;
+		defaultKey?: string;
+	} = {}
 ): ChartSeed {
 	return {
 		slug: slugify(name),
@@ -111,6 +117,10 @@ export function importedToSeed(
 		category: 'mine',
 		mode: options.mode ?? 'major',
 		defaultBpm: options.defaultBpm ?? 140,
+		// Swing is what a chart played as before it could say otherwise, so it is
+		// what one that still does not say gets.
+		defaultGroove: options.defaultGroove ?? 'swing',
+		defaultKey: options.defaultKey,
 		grid: rows,
 		notes: 'Yours.'
 	};
