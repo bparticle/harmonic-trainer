@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { key as makeKey } from '$lib/music/key';
-import { realiseChart } from './charts';
+import { CHARTS, realiseChart, type ChartSeed } from './charts';
 import {
 	draftSeed,
 	draftVoicings,
@@ -153,5 +153,70 @@ describe('pasting a chart in', () => {
 		expect(looksLikeChart('| C | F |')).toBe(true);
 		expect(looksLikeChart('C\nF')).toBe(true);
 		expect(looksLikeChart('Cmaj7')).toBe(false);
+	});
+});
+
+/**
+ * Opening a stored chart in the editor and saving it again.
+ *
+ * This is the whole of the edit action's correctness. The numerals go out as
+ * chord symbols, a person changes the tempo or the groove and nothing else, and
+ * what comes back has to play exactly the same tune. Editing the tempo of a
+ * chart must never quietly rewrite its chords.
+ *
+ * The test is on the chords rather than on the numeral strings, because those
+ * are not quite the same claim. `charts.ts` writes a diminished chord by hand as
+ * `#iv°7` and `romanNumeral` produces `#ivdim7`; both resolve to F♯dim7, so the
+ * grid text is normalised on the way through and the music is not. Asserting on
+ * the strings would be asserting on spelling and would fail for a difference
+ * nobody can hear.
+ */
+describe('a chart out to the editor and back', () => {
+	/** Exactly what the play-along page hands the editor. */
+	const asTyped = (seed: ChartSeed, keyName: string): string =>
+		realiseChart(seed, keyName)
+			.rows.map((row) => row.map((bar) => bar.chords.map((c) => c.symbol).join(' ')).join(' | '))
+			.join('\n');
+
+	/** The grid as it would be stored again. */
+	const saved = (seed: ChartSeed, keyName: string): string[][] =>
+		gridToRows(readGrid(parseIntoGrid(asTyped(seed, keyName)), keyName));
+
+	/** What a grid actually sounds like in a key, bar by bar. */
+	const sounds = (grid: string[][], keyName: string): string[] =>
+		realiseChart({ ...CHARTS[0], grid }, keyName)
+			.rows.flat()
+			.map((bar) => bar.chords.map((c) => c.symbol).join(' '));
+
+	it('plays back exactly the chords it went in with, in all twelve keys', () => {
+		const keys = ['C', 'G', 'D', 'A', 'E', 'B', 'Gb', 'Db', 'Ab', 'Eb', 'Bb', 'F'];
+		for (const seed of CHARTS) {
+			for (const written of keys) {
+				expect(sounds(saved(seed, written), written), `${seed.slug} in ${written}`).toEqual(
+					sounds(seed.grid, written)
+				);
+			}
+		}
+	});
+
+	it('is a fixed point, so editing the same chart twice changes nothing', () => {
+		// A chart of your own was stored by `readGrid` in the first place, so it
+		// already holds generated numerals. Opening and saving it is a no-op on
+		// the grid, which is the guarantee the edit button actually rests on.
+		for (const seed of CHARTS) {
+			const written = seed.defaultKey ?? 'C';
+			const once = saved(seed, written);
+			const twice = saved({ ...seed, grid: once }, written);
+			expect(twice, seed.slug).toEqual(once);
+		}
+	});
+
+	it('reports no drift, so the editor would not warn about an untouched chart', () => {
+		for (const seed of CHARTS) {
+			const written = seed.defaultKey ?? 'C';
+			const reading = readGrid(parseIntoGrid(asTyped(seed, written)), written);
+			expect(reading.problems, seed.slug).toEqual([]);
+			expect(reading.drift, seed.slug).toEqual([]);
+		}
 	});
 });

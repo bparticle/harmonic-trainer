@@ -115,9 +115,36 @@ function numeralFor(root: Note, k: Key, quality: string): string {
  * is not a slash chord and says nothing worth storing.
  */
 export function romanNumeral(c: AbstractChord, k: Key): string {
-	const base = numeralFor(c.root, k, c.quality) + romanSuffix(c);
+	const suffix = romanSuffix(c);
+	const base =
+		numeralFor(c.root, k, c.quality) + suffix + (needsSpelledMinor(c, k, suffix) ? 'm' : '');
 	if (!c.bass || pitchClass(c.bass) === pitchClass(c.root)) return base;
 	return `${base}/${formatDegree(scaleDegree(c.bass, k))}`;
+}
+
+/**
+ * When lowercase is not enough to say "minor".
+ *
+ * A bare lowercase numeral is read back as *the key's* chord on that degree —
+ * so `vii` in a major key is the diminished triad, not a minor one, and that is
+ * the right reading of a numeral nobody added anything to. It leaves one chord
+ * with nowhere to live: a plain minor triad on a degree whose diatonic chord is
+ * diminished. G♯m in A major went out as `vii` and came back as G♯dim, which is
+ * a different chord in a tune somebody is about to practise.
+ *
+ * `viim` is already read correctly, because a suffix naming a quality wins over
+ * the key's. So the fix is to write it, and only where it is needed: everywhere
+ * else the bare numeral is what a chart says and what a musician expects to
+ * read. Spelling the quality only ever adds information, which is why the fix
+ * belongs on this side rather than in the reader.
+ */
+function needsSpelledMinor(c: AbstractChord, k: Key, suffix: string): boolean {
+	if (suffix !== '' || c.quality !== 'min') return false;
+	// A chromatic root carries an accidental, and an accidental already stops the
+	// numeral being read as the key's own chord.
+	const index = scale(k).findIndex((note) => pitchClass(note) === pitchClass(c.root));
+	if (index < 0) return false;
+	return diatonicSeventh(k, index + 1).quality === 'min7b5';
 }
 
 function roleFor(degree: number, alter: number, category: ChordCategory): HarmonicRole {

@@ -163,3 +163,34 @@ describe('modulation and pivot chords', () => {
 		expect(formatKey(result[3].key)).toBe('G');
 	});
 });
+
+describe('a minor triad where the key has a diminished one', () => {
+	/*
+	 * The one chord a bare lowercase numeral cannot carry.
+	 *
+	 * A chart stores numerals, and a bare `vii` is read back as the key's own
+	 * chord on that degree — diminished in any major key. So a plain minor triad
+	 * there has to say so, or G#m in A major goes out as `vii` and comes back as
+	 * G#dim: not a crash, just a different chord in a tune about to be practised
+	 * for an hour.
+	 */
+	it('spells the minor so it survives being stored', () => {
+		expect(romanNumeral(parseChord('G#m'), parseKey('A'))).toBe('viim');
+		expect(romanNumeral(parseChord('Bm'), parseKey('C'))).toBe('viim');
+	});
+
+	it('leaves the diminished chord alone: that is what bare vii already means', () => {
+		expect(romanNumeral(parseChord('Bdim'), parseKey('C'))).toBe('viidim');
+	});
+
+	it('says nothing extra where a suffix already carries the quality', () => {
+		expect(romanNumeral(parseChord('Bm7'), parseKey('C'))).toBe('vii7');
+		expect(romanNumeral(parseChord('Bm7b5'), parseKey('C'))).toBe('viim7b5');
+	});
+
+	it('leaves every other minor triad bare, which is how a chart reads', () => {
+		expect(romanNumeral(parseChord('Dm'), parseKey('C'))).toBe('ii');
+		expect(romanNumeral(parseChord('Em'), parseKey('C'))).toBe('iii');
+		expect(romanNumeral(parseChord('Am'), parseKey('C'))).toBe('vi');
+	});
+});

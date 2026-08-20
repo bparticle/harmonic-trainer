@@ -178,11 +178,14 @@ src/
                      L0-L11 skill graph they are generated against
       ladder.ts      Twelve keys, seven rungs each; suggests, never gates
       progressions.ts  Named progressions to work on instead of a rung
-      charts.ts      Forms, cycles and public-domain standards, as numerals
+      charts.ts      Forms, cycles, public-domain standards and traditionals,
+                     as numerals, with the words where a tune is sung
       import.ts      Chord symbols you type in, stored as numerals
       editor.ts      Writing a chart down: what each bar stores, and what
                      comes back out. Shared by the editor, the server and
                      the songbook script, so all three agree
+      lyrics.ts      Chords written above the words; splits a sung line
+                     onto the bars it is sung over
     practice/      Being judged on what you play
       match.ts       Did you land the chord, and where did your notes sit
       target.svelte.ts  Lends the sounding chord to the header
@@ -194,8 +197,8 @@ src/
       sparkle.ts     Burst geometry
     audio/         Generated, never sampled
       backing.ts     The transport: bars, loops, count-in, live tempo
-      bass.ts        Walking bass from the chart
-      groove.ts      Swing and straight feels
+      bass.ts        Bass lines from the chart: walking, boogie, roots, driving
+      groove.ts      The nine grooves — kit, bass style, comping and feel
     session/       The practice sitting
       plan.ts        Which blocks, in which order, for how long
       drill.ts       One block's worth of cards

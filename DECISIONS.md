@@ -2710,3 +2710,296 @@ that matters is the one spent across the whole post, oldest run first, and runs
 past the budget are still written — losing the chords off the end of a long
 sitting is a smaller loss than losing that the sitting happened, and the run's
 own totals do not depend on its attempt rows.
+
+## Grooves
+
+### A feel was two things wearing one name
+
+`Feel` was `'swing' | 'straight'`, and it did exactly one honest job: it moved
+the offbeat eighth from halfway through the beat to two thirds of the way. Then
+it did a second job it had never been given, which was to stand for the whole
+rhythm section. There was one drum pattern — a ride cymbal playing
+spang-a-lang — one bass player, who walked, and one way of comping, which was
+sparse and pushed. Picking "straight" got you that same jazz trio with the
+eighths evened out.
+
+So a pop tune played over this app arrived with a walking bass and a ride
+cymbal, and there was no control anywhere that could do anything about it. The
+two chips were not restrictive because there were only two of them. They were
+restrictive because they were the wrong noun: a subdivision was being asked to
+name an arrangement.
+
+The feel is still a feel and still means the one thing. What the player picks is
+a **groove** — a kit, a bass style, a way of comping, and the feel those are
+played with. There are eight: swing, straight, shuffle, rock, pop, ballad, bossa
+and funk. The first two keep their names, because those names were never wrong
+about the music, only about their scope, and because a preference or a logged
+run written before this existed still means what it said.
+
+### The bass had to move before anything else would
+
+Changing the drums alone would have got nowhere. A backbeat over a walking bass
+is a jazz trio with a rock drummer sitting in, which is a worse noise than
+either. So `bass.ts` gained four lines to sit beside the walking one: roots held
+for the whole chord, root and fifth in two, the root–fifth–sixth–fifth boogie
+that is most of what a blues bass player does, and roots on every beat with an
+eighth-note pickup into the change.
+
+`walkingBass` was not touched. It is the only line here with somewhere to get
+to — the one that has to know what chord is coming — and it had tests that were
+worth keeping green as evidence that nothing about the jazz grooves moved.
+
+What did move is how long a bass note is held. Every note used to last 0.86 of a
+beat, which was right when there was a note on every beat and nothing else. A
+ballad's root has four beats to itself, and 0.86 of one would have been a bass
+player playing staccato with three beats of silence after each note. The
+duration now comes from the gap to the next note, which yields exactly 0.86 for
+a walking line and holds everything else for as long as it is supposed to ring.
+
+### The voicings are the same in all eight
+
+The comping styles differ in rhythm and nothing else: when the chord is struck
+and how long it is held. It is tempting to give rock its triads back with the
+root in them, but the bass has the root in every groove here, and the reason the
+comp is rootless is the bass, not the genre. A groove is a rhythm. Making it a
+voicing rule as well would have been two changes hiding in one word again, which
+is the mistake this whole section exists to undo.
+
+### A chart says what it is
+
+A tune needs more than a chord grid to arrive as itself. The blues opened at 120
+in swing, which is a blues nobody plays; a pop tune typed in by hand opened as
+jazz in C whatever key it was written in. So `charts` gained `default_groove` and
+`default_key` beside the `default_bpm` it already had, and choosing a chart now
+brings all three.
+
+The key is the interesting one, because it is the only one that is sometimes
+absent and the absence means something. A form has no key: a twelve-bar blues is
+a twelve-bar blues in all twelve, and dragging the key back to C on the way past
+would undo the one setting a practising musician most often makes deliberately.
+So `default_key` is null for every built-in, and null is the claim rather than a
+missing value. A song does have a key, and it is the key you wrote the chart down
+in — which the editor already asked for, to decide the numerals. Storing what it
+had rather than asking again is one fewer field and one fewer chance to
+contradict yourself.
+
+Three new forms come with it, because eight grooves and nothing to play them
+over is a control panel rather than a feature: the four-chord loop, the doo-wop
+turnaround, and the ♭VII rock vamp. All three are generic devices in the sense
+the file already means it — nobody's composition, and the raw material of a few
+thousand of them.
+
+### A column called `feel` holding `'rock'`
+
+`play_runs.feel` was renamed to `play_runs.groove`, by rename rather than by
+drop and re-add, so every run already logged survives with its swing or straight
+meaning exactly what it always did. The endpoint reads `groove` and falls back to
+`feel`, and the player reads both out of `localStorage` the same way — a browser
+can be holding an unflushed run or a set-up sitting written by the old page, and
+losing an evening's playing to a renamed field would be a poor trade for a
+tidier column name.
+
+### The one drop, which is mostly a silence
+
+Reggae is the ninth groove, and it is the one where the defining gesture is
+something that does not happen. Beat one has no kick and no snare on it — the
+kick and the snare land together on three instead, and the hole where the
+downbeat should be is what the name is about. Put a kick on one and it is a slow
+rock tune immediately.
+
+The hi-hat plays eighths with the offbeat _louder_ than the beat, which is the
+other half of the lean. That is one number, and it is the difference between
+this and the ballad kit.
+
+The comp earns its own style rather than borrowing one. The skank — a short
+chord on every offbeat and nothing anywhere else — is the most recognisable
+single thing in any groove here, and it is also the reason this is the one
+groove whose note tells you to turn comping on. Comping is muted by default,
+correctly, because the usual reason to run a backing track is to comp for
+yourself. A reggae backing with the comping off is a bass and a drummer and no
+reggae.
+
+The bass rests on three, where the drums are, so the two interlock instead of
+doubling. It does not rest on beat one, though plenty of real reggae lines do:
+a backing track has a job a record does not, which is that the chord has just
+changed and you have to be able to hear what it changed to. That is a deliberate
+departure from the idiom and it is the only one here.
+
+### An edit action, and a slug that does not follow the name
+
+Charts could be created and deleted and nothing else, which was survivable while
+the only thing a chart carried was a tempo and was suddenly not once it carried
+a groove and a key as well. Getting the groove wrong and having to delete the
+tune and type it in again is not a workflow.
+
+So `update` exists, and `create` and `update` now read their submission through
+one function. That is not tidiness for its own sake: the validation is the part
+that decides what a chord means, and two copies of it would eventually disagree
+about a chart depending on which button was pressed.
+
+**The slug is frozen at creation and stays frozen through a rename.**
+`play_runs.chart_slug` and `badges.chart_slug` are strings rather than foreign
+keys — deliberately, so that a run over a built-in has something to point at —
+which means a slug that followed the name would orphan every run logged and
+every badge won on a tune the moment somebody fixed a typo in its title. The
+name is what you read; the slug is what the record is filed under; those are
+allowed to differ, and here they have to.
+
+The update is scoped to the owner and not just to the id, exactly as `remove`
+already was. An update that trusts an id from a form is the same bug as a delete
+that does.
+
+### A chart has to come back out as something readable
+
+A chart goes into the database as Roman numerals and the editor works in chord
+symbols, so opening one for editing means realising it back — through
+`realiseChart`, the same function the player uses to put a chart into a key, in
+the key it was written in.
+
+The round trip is the whole of this feature's correctness, so it is tested
+rather than assumed: every chart, in all twelve keys, out to symbols and back to
+numerals, has to play the identical chord in every bar. Two hundred and fifty
+assertions for a button, which is the right number for a button that silently
+rewrites your chords if it is wrong.
+
+The test asserts on the chords and not on the numeral strings, because those are
+not the same claim. `charts.ts` writes a diminished chord by hand as `#iv°7` and
+`romanNumeral` produces `#ivdim7`. Both resolve to F♯dim7. Asserting the strings
+match would be asserting about spelling and would fail over a difference nobody
+can hear — and the second test covers what that leaves open, which is that the
+round trip is a _fixed point_: whatever normalising happens, happens once.
+
+### A refused save used to lose the grid
+
+The editor's own comment said a refused save comes back with what was typed so
+nothing is lost. The chords were not among the things it came back with — the
+failure payload carried the name, key, mode, tempo and notes, and `initial.text`
+was never set by anything. Type in thirty-two bars, get one bar wrong, and the
+save is refused and the thirty-two bars are gone.
+
+It carries the grid now, rebuilt in the shape `parseIntoGrid` reads. It carries
+the chords **as typed** rather than as read back, because telling somebody that
+bar three would come back as a different chord and then replacing bar three with
+that different chord is the editor arguing with itself.
+
+## Words
+
+### Two traditionals, and a category that says why they are here
+
+`charts.ts` lets in public domain standards on one condition: US publication in
+1930 or earlier, with the year recorded on the entry so the claim can be checked
+rather than taken on trust. Mango Walk and Linstead Market are Jamaican folk
+songs. They have no author to credit and no first publication to record, so the
+field that exists to make the claim checkable had nothing true to put in it — and
+inventing a year to fill it in would have been the exact opposite of what that
+field is for.
+
+So they go under a category of their own. `traditional` **is** the claim, in
+place of the year: these are nobody's composition in the same way a twelve-bar
+blues is nobody's, and saying so plainly is more honest than a number that looks
+like evidence and is not.
+
+Both open in `reggae`, which is an anachronism and a deliberate one — they are
+mento tunes and predate the groove by decades. It is what they were asked for
+and it is what they sound good over.
+
+### The words go under the bar, and the bar is already lit
+
+A chart sheet aligns words to chords. That alignment is the only timing anybody
+actually wrote down, so it is the only timing this stores: a fragment per bar,
+lighting up when the bar does.
+
+Spreading those words evenly across the bar's four beats was the obvious next
+thing and would have been worse. Nobody sings evenly. A cursor stepping word by
+word would look more precise while drifting away from where the singer is
+actually going, and a practice tool that invents the one quantity its user is
+listening for is not being helpful, it is being confident. Bar-level is what the
+data supports, so bar-level is what is drawn.
+
+It costs almost nothing to render, which is the sign it was put in the right
+place: `is-now` is already on the bar for the chord highlight, and the lyric line
+simply reads it. There is no second highlight, no second clock, and nothing new
+to keep in sync with the transport.
+
+**A chart with no words draws nothing at all.** Not an empty row, not a
+collapsed one — the markup is not emitted. The requirement was that an
+instrumental look exactly as it did before lyrics existed, and the only way to be
+sure of that is for there to be nothing there. Within a chart that _does_ have
+words, a wordless bar still gets its line, invisible, so the row keeps a straight
+baseline instead of the bars jumping about at different heights.
+
+### The format a song actually arrives in
+
+Nobody hands you a grid and a separate list of lyrics. They hand you chords
+spaced out above the words, which is what a songbook, a forum post and an email
+from the person you are playing with all use — so that is what the editor takes.
+
+A chord's column in the line above is a claim about which word it lands on.
+Turning that claim into "these words belong to this bar" is the whole of
+`lyrics.ts`, and the one piece of judgement in it is that a hand-typed column is
+approximate: it is eyeballed, often against a different font from the one you are
+reading in, so a chord very often sits a character or two inside the word it
+belongs to. Cuts snap to the nearest word boundary, which is what turns
+`did a-tel|l me` into a split a person would have made.
+
+Two things this refuses to do. It will not read a line as chords unless _every_
+token on it parses as one, because "A man walks in" is not a bar of A. And it
+will not claim a lyric line twice.
+
+Faithful is not the same as right. Where a sheet's spacing is loose the split
+lands where the sheet said, not where the tune goes — the words for both
+traditionals here were placed by ear rather than by the column arithmetic. The
+editor shows every fragment in an editable box for exactly that reason: the
+parser gets you most of the way and then you fix the two bars it got wrong.
+
+### One filter for the chords and the words
+
+`gridToRows` drops empty bars, and empty rows after that. The words have to be
+dropped in precisely the same places or every lyric after the first blank bar is
+sung over the wrong chord — a bug that would be silent, would only show up in the
+middle of a tune, and would look like a transcription mistake rather than a
+missing filter.
+
+So the lyric rides on the bar through `readGrid` rather than travelling beside
+it, and `lyricsToRows` and `gridToRows` share the function that decides which
+bars survive. They cannot disagree, rather than merely being written today in a
+way that agrees.
+
+### `vii` could not say "minor"
+
+Adding a reggae tune with a G♯m in A major turned up a round-trip bug that had
+been sitting there since charts were first stored as numerals. `romanNumeral`
+wrote it as `vii`; `chordFromNumeral` read `vii` back as the key's own chord on
+the seventh degree, which is diminished. G♯m went in and G♯dim came out.
+
+Both halves were behaving as designed. A bare lowercase numeral _should_ take
+its quality from the key — that is what makes `ii` and `vi` readable without a
+suffix, and it is what every chart does. The gap is the one chord the convention
+has nowhere to put: a plain minor triad on a degree whose diatonic chord is
+diminished.
+
+The fix is on the writing side. `viim` already read back correctly, because a
+suffix naming a quality wins over the key's — so the analyser now spells the
+minor, and only in the case that needs it. Reading is unchanged, which matters:
+changing the reader would have quietly re-pointed every `vii` in every chart
+already stored, while writing more explicitly can only ever add information to
+charts written from here on.
+
+The drift check caught it before anything was written, which is the entire
+reason that check runs before every save and refuses the chart rather than
+warning about it. It is the third time now it has stopped a wrong chord rather
+than a crash.
+
+### The songbook script had been writing charts nobody could see
+
+`add-chart.ts` predates the migration that made `charts.user_id` mean something,
+and it never set one. Null used to mean nothing in particular; since that
+migration it means **built-in and shared**, and the play-along page fetches your
+charts by owner. So every chart added with the script went into the table, was
+never shown under Yours, and would have been handed to a stranger on the day
+accounts land.
+
+It writes the local player now. The same edit gave it the two things it had also
+fallen behind on — a groove and a home key — and taught the check script to
+print the words under the bars they are sung over, because a split in the wrong
+place is not an error and nothing downstream will ever complain about one.
