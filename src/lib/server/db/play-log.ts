@@ -114,7 +114,8 @@ export async function saveFlush(userId: string, flush: Flush): Promise<void> {
 					notesChord: run.notesChord,
 					notesColour: run.notesColour,
 					notesOutside: run.notesOutside,
-					bestStreak: run.bestStreak
+					bestStreak: run.bestStreak,
+					bestStreakBpm: run.bestStreakBpm
 				})
 				.onConflictDoNothing({ target: playRuns.id })
 				.returning({ id: playRuns.id });

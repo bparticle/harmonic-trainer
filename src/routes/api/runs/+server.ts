@@ -219,6 +219,14 @@ function parseRun(value: unknown): RunPayload[] {
 		: [];
 
 	const endedAt = when(value.endedAt);
+
+	// The one number on a run that is allowed to be absent: a run that never
+	// landed two in a row clinched nothing, so there is no tempo to name and a
+	// null says exactly that. Anything unreadable is treated the same way rather
+	// than dropping the run — losing a sitting over an optional field would be the
+	// wrong trade.
+	const bestStreakBpm = value.bestStreakBpm === null ? null : count(value.bestStreakBpm, 400);
+
 	return [
 		{
 			id,
@@ -235,6 +243,7 @@ function parseRun(value: unknown): RunPayload[] {
 			// that wrote it thought.
 			endedAt: endedAt && endedAt >= startedAt ? endedAt.toISOString() : null,
 			...(numbers as Record<keyof typeof numbers, number>),
+			bestStreakBpm,
 			attempts
 		}
 	];

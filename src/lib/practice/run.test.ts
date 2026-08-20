@@ -46,6 +46,7 @@ const run = (id: string): RunPayload => ({
 	notesColour: 12,
 	notesOutside: 2,
 	bestStreak: 12,
+	bestStreakBpm: 140,
 	attempts: []
 });
 

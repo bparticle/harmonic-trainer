@@ -64,6 +64,16 @@ export type RunPayload = {
 	notesColour: number;
 	notesOutside: number;
 	bestStreak: number;
+	/**
+	 * The tempo showing when that best streak was last raised, or null.
+	 *
+	 * Null is honest and common: a run where nothing was ever landed twice in a
+	 * row never raised a best, and there is no tempo to name. Sent as its own
+	 * field rather than derived from `bpm`, because the whole reason it exists is
+	 * that the two can differ — the transport's tempo moves while it runs, and
+	 * `bpm` is where the slider ended up.
+	 */
+	bestStreakBpm: number | null;
 	attempts: AttemptPayload[];
 };
 

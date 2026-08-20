@@ -2,6 +2,7 @@
 	import { pitchClass } from '$lib/music/note';
 	import { parseKey } from '$lib/music/key';
 	import LandingPage from '$lib/components/LandingPage.svelte';
+	import { TASK_COUNT, type WorkoutSize } from '$lib/session/workout';
 
 	/*
 	 * Today: what would you like to practise?
@@ -20,8 +21,17 @@
 
 	let { data } = $props();
 
+	/*
+	 * Three sizes, not three lengths.
+	 *
+	 * The 10/20/35 picker measured something no block ever obeyed — nothing ended
+	 * because a timer ran out, so the minutes were a promise the session could not
+	 * keep. A workout is three, four or five tasks and every one of them is
+	 * countable, which is why the preview beside this can be true.
+	 */
 	// svelte-ignore state_referenced_locally
-	let length = $state<10 | 20 | 35>(data.settings.prefs.sessionLengthMinutes);
+	let size = $state<WorkoutSize>(data.size);
+	const preview = $derived(data.previews[size] ?? []);
 
 	type Choice =
 		{ kind: 'rung'; key: string; rung: string } | { kind: 'progression'; id: string; key: string };
@@ -262,14 +272,38 @@
 			</details>
 		{/if}
 
+		<!-- Today's tasks, which is what a workout actually is ------------------- -->
+		{#if !resuming && preview.length}
+			<section class="flex flex-col gap-2">
+				<h2 class="panel-title">Today · {preview.length} tasks</h2>
+				<ol class="flex flex-col gap-1">
+					{#each preview as item, i (i)}
+						<li class="task">
+							<span class="task-index">{i + 1}</span>
+							<span class="min-w-0 flex-1">
+								<span class="task-title">{item.title}</span>
+								<span class="task-line">{item.line}</span>
+							</span>
+						</li>
+					{/each}
+				</ol>
+				<p class="text-ink-dim text-[0.78rem] leading-relaxed">
+					Composed for today and different tomorrow. Choosing something below pins what it is made
+					of; it does not change how much of it there is.
+				</p>
+			</section>
+		{/if}
+
 		<!-- Do it --------------------------------------------------------------- -->
 		<section
 			class="border-ground-line bg-ground/95 sticky bottom-0 flex flex-col items-center gap-3 border-t pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] backdrop-blur"
 		>
-			<p class="panel-title">{resuming ? 'Session in progress' : 'Suggested today'}</p>
+			<p class="panel-title">{resuming ? 'Workout in progress' : 'Suggested today'}</p>
 			<p class="text-ink-muted max-w-lg text-center text-sm leading-relaxed">
 				{#if data.active}
-					Your saved session in {glyph(data.active.plan.keyCenter)} is ready where you left it.
+					Your workout in {glyph(data.active.workout.keyCenter)} is waiting at task
+					{Math.min(data.active.resumeAt + 1, data.active.workout.tasks.length)} of {data.active
+						.workout.tasks.length}.
 				{:else}
 					{choice.kind === 'rung'
 						? (chosenRung?.instruction ?? '')
@@ -278,7 +312,7 @@
 			</p>
 
 			<form method="POST" action="?/start" class="flex w-full flex-col items-center gap-3">
-				<input type="hidden" name="length" value={length} />
+				<input type="hidden" name="size" value={size} />
 				<input
 					type="hidden"
 					name="progression"
@@ -295,18 +329,18 @@
 				<button type="submit" class="start">
 					<span class="start-verb">{resuming ? 'Carry on' : 'Practise'}</span>
 					<span class="start-what"
-						>{resuming ? glyph(data.active?.plan.keyCenter ?? '') : summary}</span
+						>{resuming ? glyph(data.active?.workout.keyCenter ?? '') : summary}</span
 					>
 				</button>
 
 				{#if !resuming}
-					<div class="flex gap-1" aria-label="Session length">
-						{#each [10, 20, 35] as const as m (m)}
+					<div class="flex gap-1" aria-label="Workout size">
+						{#each ['short', 'standard', 'long'] as const as option (option)}
 							<button
 								type="button"
 								class="minutes"
-								class:is-selected={length === m}
-								onclick={() => (length = m)}>{m}m</button
+								class:is-selected={size === option}
+								onclick={() => (size = option)}>{option} · {TASK_COUNT[option]}</button
 							>
 						{/each}
 					</div>
@@ -354,6 +388,42 @@
 		font-size: 0.7rem;
 		letter-spacing: 0.09em;
 		text-transform: uppercase;
+		color: var(--color-ink-dim);
+	}
+
+	/*
+	 * A task in the preview.
+	 *
+	 * Drawn in weight and not in colour: a task is not a pitch, so it does not get
+	 * one. The keys below carry their tonics' swatches and these deliberately do
+	 * not, which is what keeps the colours on this page meaning one thing.
+	 */
+	.task {
+		display: flex;
+		align-items: baseline;
+		gap: 0.7rem;
+		padding: 0.4rem 0.15rem;
+	}
+
+	.task-index {
+		font-family: var(--font-mono);
+		font-size: 0.68rem;
+		color: var(--color-ink-dim);
+		font-variant-numeric: tabular-nums;
+	}
+
+	.task-title {
+		display: block;
+		font-family: var(--font-display);
+		font-size: 0.85rem;
+		font-weight: 600;
+		color: var(--color-ink);
+	}
+
+	.task-line {
+		display: block;
+		font-size: 0.72rem;
+		line-height: 1.35;
 		color: var(--color-ink-dim);
 	}
 
