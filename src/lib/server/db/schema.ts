@@ -50,15 +50,23 @@ const bytea = customType<{ data: Uint8Array; driverData: Buffer }>({
 // ---------------------------------------------------------------------------
 
 /**
- * The four directions from section 8. Each is scheduled independently because
- * hearing, naming, playing and reading-off-the-wheel are genuinely different
- * skills — you can hear a chord you cannot name.
+ * The directions from section 8, each named `stimulus_response`. Each is
+ * scheduled independently because hearing, naming, playing and
+ * reading-off-the-wheel are genuinely different skills — you can hear a chord
+ * you cannot name.
+ *
+ * `degree_play` is the fifth and arrived last: the stimulus is a Roman numeral
+ * and a key rather than a symbol, because seeing "A♭" and producing A♭ is
+ * spelling while seeing "IV of E♭" and producing A♭ is harmony. It is appended
+ * rather than filed next to `play_name` on purpose — `ALTER TYPE ... ADD VALUE`
+ * only appends, so the order here has to be the order the type actually holds.
  */
 export const cardDirection = pgEnum('card_direction', [
 	'hear_name',
 	'hear_play',
 	'see_play',
-	'play_name'
+	'play_name',
+	'degree_play'
 ]);
 
 /** FSRS memory states. */

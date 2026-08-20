@@ -2,7 +2,7 @@ import type { CardDirection } from '$lib/server/db/schema';
 import {
 	RUNGS,
 	STAGES,
-	directionsForRung,
+	directionsForItem,
 	itemsForRung,
 	ladderIdentity,
 	type LadderItem,
@@ -35,6 +35,8 @@ export type CardPayload = {
 	answerPitchClasses: number[];
 	answerVoicing?: number[];
 	degree?: string;
+	/** The key the degree is counted from, when the card's own key is not it. */
+	degreeOf?: string;
 	detail?: string;
 	/** Progressions only: the chords in order. */
 	steps?: Array<{ numeral: string; symbol: string; pitchClasses: number[]; voicing: number[] }>;
@@ -64,6 +66,7 @@ function toPayload(item: LadderItem): CardPayload {
 		answerPitchClasses: item.answerPitchClasses,
 		answerVoicing: item.answerVoicing,
 		degree: item.degree,
+		degreeOf: item.degreeOf,
 		detail: item.detail
 	};
 }
@@ -72,7 +75,7 @@ function toPayload(item: LadderItem): CardPayload {
 export function cardsForRung(rungId: RungId, stage: Stage): GeneratedCard[] {
 	const out: GeneratedCard[] = [];
 	for (const item of itemsForRung(rungId, stage)) {
-		for (const direction of directionsForRung(rungId)) {
+		for (const direction of directionsForItem(rungId, item)) {
 			out.push({
 				skillCode: rungSkillCode(rungId),
 				keyCenter: stage.key,

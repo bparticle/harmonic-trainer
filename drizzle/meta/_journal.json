@@ -36,6 +36,13 @@
       "when": 1787229274453,
       "tag": "0004_lyrics",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1787237661174,
+      "tag": "0005_degrees",
+      "breakpoints": true
     }
   ]
 }
