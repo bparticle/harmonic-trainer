@@ -1,18 +1,11 @@
 import { GROOVES, type Groove } from '$lib/audio/groove';
 import { CHARTS, type ChartCategory } from '$lib/curriculum/charts';
-import {
-	itemsForRung,
-	nextPosition,
-	positionOf,
-	rungById,
-	stageByKey,
-	type RungId
-} from '$lib/curriculum/ladder';
+import { nextPosition, positionOf, rungById, type RungId } from '$lib/curriculum/ladder';
 import { PROGRESSIONS } from '$lib/curriculum/progressions';
 import { progressionSkillCode, rungSkillCode } from '$lib/curriculum/cards';
 import type { ChordQuality } from '$lib/music/chord';
 import type { CardDirection, ChartStyle } from '$lib/server/db/schema';
-import { selectDue, type Schedulable } from '$lib/srs/scheduler';
+import { isRetiredIntroduction, selectDue, type Schedulable } from '$lib/srs/scheduler';
 
 /**
  * Composing a workout.
@@ -32,13 +25,17 @@ import { selectDue, type Schedulable } from '$lib/srs/scheduler';
  *
  * The four task kinds are the ones the play-along page cannot ask, plus the page
  * itself. The ear and the function are questions no chart poses; the mission
- * *is* the chart, under a constraint, with a goal. All four are modelled here
- * even though only composition exists yet — the queue builder, the `degree_play`
- * direction and the goal evaluator arrive in later phases, and widening a type
- * later is worse than designing it for what is coming.
+ * *is* the chart, under a constraint, with a goal. The goal evaluator arrives in
+ * a later phase; everything the drill room asks is here.
  *
- * Two things the plan left open, decided here and open to being overruled by the
- * record later:
+ * Both drill tasks are queues of card ids over one bank, and they partition it
+ * by direction — the ear takes `hear_play` and `hear_name`, the function takes
+ * `degree_play` — which is what "one pool per workout, nothing asked twice"
+ * amounts to in practice. The fallthrough in `composeWorkout` hands each built
+ * task out once, so a workout of four tasks is four tasks.
+ *
+ * Three things the plan left open, decided here and open to being overruled by
+ * the record later:
  *
  *   - **A short pool cycles rather than ending early.** "The task ends at the
  *     count, never at pile-empty" is the whole point of the fallback tiers, but
@@ -53,6 +50,20 @@ import { selectDue, type Schedulable } from '$lib/srs/scheduler';
  *     playable is the stronger constraint. `directionsForRung` already refuses
  *     to ask a scale to be *named*; being asked to play one back is a fair
  *     question.
+ *   - **The function task asks cards, not the ladder directly.** This module
+ *     first built its degree prompts by walking `itemsForRung` over everywhere
+ *     reached, which was quick and answered nothing to anyone. A prompt
+ *     synthesised on the spot is never due, never graded and never recorded — so
+ *     `DIRECTION_WEIGHT['degree_play']`, which the plan asks for in the same
+ *     breath, would have weighed nothing, because no degree question would ever
+ *     have passed through `selectDue`. Making a card direction and then routing
+ *     around the scheduler is two decisions that contradict each other. So the
+ *     degrees are generated as cards in `cards.ts` like every other question,
+ *     and the function task is a queue of card ids exactly as the ear task is.
+ *     What survives from the first version is the round-robin: the queue is
+ *     spread across keys, because a function is the one thing in the app that
+ *     means the same in all twelve of them and eight `IV`s in one key is a
+ *     spelling drill wearing a numeral.
  */
 
 const DAY_MS = 86_400_000;
@@ -112,17 +123,6 @@ export function describeGoal(goal: Goal): string {
 	}
 }
 
-/** A degree prompt: "the IV chord — E♭", answered by playing it and naming it. */
-export type DegreePrompt = {
-	key: string;
-	rungId: RungId;
-	/** The Roman numeral as the ladder stores it: `IV`, `ii`, `vii°`. */
-	degree: string;
-	/** What answers it, for marking and for saying afterwards. */
-	answer: string;
-	answerPitchClasses: number[];
-};
-
 /**
  * A mission: the real play-along page under a constraint.
  *
@@ -175,7 +175,7 @@ type TaskBase = {
 };
 
 export type EarTask = TaskBase & { kind: 'ear'; cardIds: string[] };
-export type FunctionTask = TaskBase & { kind: 'function'; prompts: DegreePrompt[] };
+export type FunctionTask = TaskBase & { kind: 'function'; cardIds: string[] };
 export type MissionTask = TaskBase & { kind: 'mission'; mission: Mission };
 export type NewThingTask = TaskBase & { kind: 'new_thing'; novelty: Novelty };
 
@@ -318,6 +318,8 @@ const MISSION_CHORUSES = 2;
 
 const EAR_DIRECTIONS: CardDirection[] = ['hear_play', 'hear_name'];
 
+const FUNCTION_DIRECTIONS: CardDirection[] = ['degree_play'];
+
 /**
  * Which form a cold quality is most at home in.
  *
@@ -415,11 +417,11 @@ export function chooseKeyCenter(reachedKeys: string[], coldSpots: ColdSpot[], da
 }
 
 // ---------------------------------------------------------------------------
-// The ear queue
+// The queues that never run dry
 // ---------------------------------------------------------------------------
 
 /**
- * The queue that never runs dry.
+ * One direction's worth of the bank, in the order it is worth asking.
  *
  * Due first, near-due next, fresh material last — the order the plan names, and
  * the reason "Nothing due for this block today" stops being possible. The third
@@ -429,125 +431,157 @@ export function chooseKeyCenter(reachedKeys: string[], coldSpots: ColdSpot[], da
  * It goes to the back instead, where it fills whatever the reviews left over.
  *
  * Every card in the bank exists because something reached it — `cards.ts` makes
- * nothing until it is — so the bank *is* the reached material, and there is no
- * second filter to apply.
+ * nothing until it is — so the bank *is* the reached material and needs no
+ * filtering down to it. The only thing taken out is the one direction that has
+ * somewhere better to be asked.
  */
-export function earQueue(
+function tieredPool(
 	cards: Schedulable[],
-	options: { now: Date; day: number; coldKeys?: string[]; pinnedSkill?: string | null }
-): string[] {
-	const pool = cards.filter((c) => EAR_DIRECTIONS.includes(c.direction));
+	options: { now: Date; day: number; directions: CardDirection[]; coldKeys?: string[] }
+): Schedulable[] {
+	const pool = cards.filter((c) => options.directions.includes(c.direction));
 	if (pool.length === 0) return [];
 
 	const reviewed = pool.filter((c) => c.state.reps > 0);
-	const due = selectDue(reviewed, { now: options.now, coldKeys: options.coldKeys });
+
+	// Graduated introductions are dropped here and nowhere else in the app: a
+	// symbol you can already play is a question the chart asks all day with a
+	// band behind it. `plan.ts` does not ask for this, so the six-block session
+	// keeps its warm-up until the page that replaces it exists.
+	const due = selectDue(reviewed, {
+		now: options.now,
+		coldKeys: options.coldKeys,
+		retireIntroductions: true
+	});
 	const dueIds = new Set(due.map((c) => c.cardId));
 
 	const nearDue = reviewed
-		.filter((c) => !dueIds.has(c.cardId))
+		.filter((c) => !dueIds.has(c.cardId) && !isRetiredIntroduction(c))
 		.sort((a, b) => a.state.dueAt.getTime() - b.state.dueAt.getTime());
 
+	// No retirement filter on the fresh tier: `reps === 0` is a card still in
+	// `new`, and being new is the whole of what earns an introduction.
 	const fresh = pool.filter((c) => c.state.reps === 0);
 
 	// Each tier keeps its own ordering and starts somewhere else each day.
-	const tiered = [
+	return [
 		...rotate(due, options.day),
 		...rotate(nearDue, options.day),
 		...rotate(fresh, options.day)
 	];
+}
 
-	// A pinned choice does not narrow the queue — narrowing is the cage this
-	// milestone is undoing — it leads it, and the rest of the queue is whatever
-	// else the tiers offer. Rotated on its own account, because a pinned skill
-	// large enough to fill the queue would otherwise freeze it: the tiers rotate
-	// past cards that are not pinned, which leaves the pinned ones in the same
-	// order every day.
-	const pinnedAll = options.pinnedSkill
-		? rotate(
-				tiered.filter((c) => c.skillCode === options.pinnedSkill),
-				options.day
-			)
-		: [];
-	const pinned = pinnedAll.slice(0, pinnedShare(EAR_QUESTIONS));
+/**
+ * Lead with a pinned skill without narrowing to it.
+ *
+ * A pinned choice does not narrow the queue — narrowing is the cage this
+ * milestone is undoing — it leads it, and the rest of the queue is whatever else
+ * the tiers offer. Half the questions at most, and the pinned cards past that
+ * half are not thrown away, only sent to the back.
+ */
+function leadWithPinned(
+	ordered: Schedulable[],
+	pinnedAll: Schedulable[],
+	count: number
+): Schedulable[] {
+	if (pinnedAll.length === 0) return ordered;
 	const pinnedIds = new Set(pinnedAll.map((c) => c.cardId));
-	const rest = tiered.filter((c) => !pinnedIds.has(c.cardId));
+	const rest = ordered.filter((c) => !pinnedIds.has(c.cardId));
+	return unique([...pinnedAll.slice(0, count), ...rest, ...ordered], (c) => c.cardId);
+}
 
-	const ordered = unique([...pinned, ...rest, ...tiered], (c) => c.cardId);
-	const count = Math.min(EAR_QUESTIONS, ordered.length * MAX_PASSES);
+/** Repeat a short pool rather than ending early, up to `MAX_PASSES` times. */
+function toQueue(ordered: Schedulable[], count: number): string[] {
 	return fill(
 		ordered.map((c) => c.cardId),
-		count
+		Math.min(count, ordered.length * MAX_PASSES)
 	);
 }
 
-// ---------------------------------------------------------------------------
-// The function prompts
-// ---------------------------------------------------------------------------
+const withSkill = (cards: Schedulable[], skill: string | null | undefined) =>
+	skill ? cards.filter((c) => c.skillCode === skill) : [];
+
+/** Ten aural questions, and never fewer because the deck is well run. */
+export function earQueue(
+	cards: Schedulable[],
+	options: { now: Date; day: number; coldKeys?: string[]; pinnedSkill?: string | null }
+): string[] {
+	const tiered = tieredPool(cards, { ...options, directions: EAR_DIRECTIONS });
+	if (tiered.length === 0) return [];
+
+	// The pinned cards are rotated on their own account, because a pinned skill
+	// large enough to fill the queue would otherwise freeze it: the tiers rotate
+	// past cards that are not pinned, which leaves the pinned ones in the same
+	// order every day.
+	const pinned = rotate(withSkill(tiered, options.pinnedSkill), options.day);
+	return toQueue(leadWithPinned(tiered, pinned, pinnedShare(EAR_QUESTIONS)), EAR_QUESTIONS);
+}
 
 /**
- * Degrees drawn from everywhere the ladder has been.
+ * One key at a time, in turn.
  *
- * The material already exists — every triad and seventh the ladder builds
- * carries its degree — so only the question is new. A rung with no degrees to
- * ask contributes none: a scale is seven notes and not a numbered chord, and an
- * unanswerable question still counts against you.
+ * A key holds twenty-two numbered chords by the time its sevenths are up, so
+ * taking the first eight of a flat list means eight chords of one key — which is
+ * the complaint this milestone opens with, rebuilt inside the task meant to
+ * answer it. Round-robin instead: eight questions touch eight keys, and today's
+ * key still goes first. The lanes are not rotated again; they were filled from a
+ * list the day had already turned.
  */
-export function degreePrompts(
-	reached: Array<{ key: string; rungId: RungId }>,
-	options: { day: number; keyCenter?: string; pinned?: { key: string; rungId: RungId } | null }
-): DegreePrompt[] {
-	const byKey = new Map<string, DegreePrompt[]>();
-	for (const { key, rungId } of reached) {
-		const stage = stageByKey(key);
-		if (!stage) continue;
-		for (const item of itemsForRung(rungId, stage)) {
-			if (!item.degree) continue;
-			const prompt: DegreePrompt = {
-				key,
-				rungId,
-				degree: item.degree,
-				answer: item.label,
-				answerPitchClasses: item.answerPitchClasses
-			};
-			const lane = byKey.get(key);
-			if (lane) lane.push(prompt);
-			else byKey.set(key, [prompt]);
-		}
+function spreadByKey(cards: Schedulable[], day: number, lead?: string): Schedulable[] {
+	const byKey = new Map<string, Schedulable[]>();
+	for (const card of cards) {
+		const lane = byKey.get(card.keyCenter);
+		if (lane) lane.push(card);
+		else byKey.set(card.keyCenter, [card]);
 	}
-	if (byKey.size === 0) return [];
 
-	/*
-	 * One key at a time, in turn.
-	 *
-	 * A key holds twenty-two numbered chords by the time its sevenths are up, so
-	 * taking the first eight of a flat list means eight chords of one key — which
-	 * is the complaint this milestone opens with, rebuilt inside the task meant
-	 * to answer it. Round-robin instead: eight questions touch eight keys, and
-	 * today's key still goes first.
-	 */
 	const keyOrder = unique(
-		[
-			...(options.keyCenter && byKey.has(options.keyCenter) ? [options.keyCenter] : []),
-			...rotate([...byKey.keys()], options.day)
-		],
+		[...(lead && byKey.has(lead) ? [lead] : []), ...rotate([...byKey.keys()], day)],
 		(key) => key
 	);
-	const lanes = keyOrder.map((key) => rotate(byKey.get(key)!, options.day));
+	const lanes = keyOrder.map((key) => byKey.get(key)!);
 
-	const spread: DegreePrompt[] = [];
+	const spread: Schedulable[] = [];
 	const deepest = Math.max(...lanes.map((lane) => lane.length));
 	for (let depth = 0; depth < deepest; depth++) {
 		for (const lane of lanes) if (lane[depth]) spread.push(lane[depth]);
 	}
+	return spread;
+}
 
-	const pinned = options.pinned
-		? spread
-				.filter((p) => p.key === options.pinned!.key && p.rungId === options.pinned!.rungId)
-				.slice(0, pinnedShare(FUNCTION_QUESTIONS))
-		: [];
+/**
+ * Eight degrees, spread over as many keys as the ladder has reached.
+ *
+ * The same tiers as the ear queue over the other half of the bank, and then the
+ * round-robin — the one thing the function task does that the ear task does not,
+ * because a numeral is the app's one piece of knowledge that transposes for
+ * free and asking it eight times in one key throws that away.
+ *
+ * The spread comes before the pinning rather than after, so a pinned rung is
+ * entered through today's key: choosing "the sevenths in F" and being asked
+ * about the sevenths in B first would be an odd way of honouring it.
+ */
+export function functionQueue(
+	cards: Schedulable[],
+	options: {
+		now: Date;
+		day: number;
+		coldKeys?: string[];
+		pinnedSkill?: string | null;
+		keyCenter?: string;
+	}
+): string[] {
+	const tiered = tieredPool(cards, { ...options, directions: FUNCTION_DIRECTIONS });
+	if (tiered.length === 0) return [];
 
-	const ordered = unique([...pinned, ...spread], (p) => `${p.key}|${p.rungId}|${p.degree}`);
-	return fill(ordered, Math.min(FUNCTION_QUESTIONS, ordered.length * MAX_PASSES));
+	// No second rotation for the pinned cards here: the round-robin has already
+	// reordered them, so they do not sit still the way the ear queue's would.
+	const spread = spreadByKey(tiered, options.day, options.keyCenter);
+	const pinned = withSkill(spread, options.pinnedSkill);
+	return toQueue(
+		leadWithPinned(spread, pinned, pinnedShare(FUNCTION_QUESTIONS)),
+		FUNCTION_QUESTIONS
+	);
 }
 
 // ---------------------------------------------------------------------------
@@ -686,15 +720,14 @@ function earTask(cardIds: string[]): EarTask | null {
 	};
 }
 
-function functionTask(prompts: DegreePrompt[]): FunctionTask | null {
-	if (prompts.length === 0) return null;
+function functionTask(cardIds: string[]): FunctionTask | null {
+	if (cardIds.length === 0) return null;
 	return {
 		kind: 'function',
 		title: 'The function',
-		instruction:
-			'Numbers, not symbols. Play the chord the degree asks for, then name what you played.',
-		goal: { kind: 'questions', count: prompts.length },
-		prompts
+		instruction: `${cardIds.length} of them, and the key moves under you. Numbers, not symbols: play the chord the degree asks for, then name what you played.`,
+		goal: { kind: 'questions', count: cardIds.length },
+		cardIds
 	};
 }
 
@@ -814,8 +847,6 @@ export function composeWorkout(input: WorkoutInput): Workout {
 			? rungSkillCode(choice.rungId)
 			: progressionSkillCode(choice.progressionId)
 		: null;
-	const pinnedRung = choice?.kind === 'rung' ? { key: choice.key, rungId: choice.rungId } : null;
-
 	const novelty = chooseNovelty({
 		reached: input.reached,
 		keyCenter,
@@ -829,8 +860,12 @@ export function composeWorkout(input: WorkoutInput): Workout {
 	const charts = input.charts ?? CHARTS;
 	const chartBySlug = new Map(charts.map((c) => [c.slug, c]));
 
+	// Two queues, one bank, partitioned by direction — so nothing is asked twice
+	// without either queue having to know the other exists.
 	const ear = earTask(earQueue(input.cards, { now, day, coldKeys, pinnedSkill }));
-	const fn = functionTask(degreePrompts(input.reached, { day, keyCenter, pinned: pinnedRung }));
+	const fn = functionTask(
+		functionQueue(input.cards, { now, day, coldKeys, pinnedSkill, keyCenter })
+	);
 
 	let missionsBuilt = 0;
 	const nextMission = (): MissionTask | null => {

@@ -9,9 +9,9 @@ import {
 	chooseNovelty,
 	composeWorkout,
 	dayNumber,
-	degreePrompts,
 	describeGoal,
 	earQueue,
+	functionQueue,
 	noveltyId,
 	type Novelty,
 	type Task,
@@ -48,7 +48,13 @@ const card = (
 
 /** A bank spread over every reached key and every direction. */
 function bank(options: { dueInDays?: number; reps?: number } = {}): Schedulable[] {
-	const directions: CardDirection[] = ['hear_name', 'hear_play', 'see_play', 'play_name'];
+	const directions: CardDirection[] = [
+		'hear_name',
+		'hear_play',
+		'see_play',
+		'play_name',
+		'degree_play'
+	];
 	const out: Schedulable[] = [];
 	for (const { key, rungId } of REACHED) {
 		for (const direction of directions) {
@@ -75,6 +81,8 @@ const input = (overrides: Partial<WorkoutInput> = {}): WorkoutInput => ({
 const taskKinds = (workout: Workout) => workout.tasks.map((t) => t.kind);
 const earCards = (workout: Workout) =>
 	workout.tasks.flatMap((t) => (t.kind === 'ear' ? t.cardIds : []));
+const functionCards = (workout: Workout) =>
+	workout.tasks.flatMap((t) => (t.kind === 'function' ? t.cardIds : []));
 const missions = (workout: Workout) =>
 	workout.tasks.flatMap((t) => (t.kind === 'mission' ? [t.mission] : []));
 
@@ -228,28 +236,67 @@ describe('the ear queue never runs dry', () => {
 	});
 });
 
-describe('the function task', () => {
-	it('asks degrees drawn from everywhere the ladder has been', () => {
-		const prompts = degreePrompts(REACHED, { day: 0 });
-		expect(prompts).toHaveLength(8);
-		expect(new Set(prompts.map((p) => p.key)).size).toBeGreaterThan(1);
+describe('the function queue', () => {
+	it('asks eight, and asks them of degree cards only', () => {
+		const cards = bank();
+		const byId = new Map(cards.map((c) => [c.cardId, c]));
+		const queue = functionQueue(cards, { now: NOW, day: 0 });
+
+		expect(queue).toHaveLength(8);
+		for (const id of queue) expect(byId.get(id)!.direction, id).toBe('degree_play');
 	});
 
-	it('never asks a scale for its degree, because a scale has none', () => {
-		const scaleOnly = degreePrompts([{ key: 'C', rungId: 'scale' }], { day: 0 });
-		expect(scaleOnly).toEqual([]);
+	it('is scheduled like everything else rather than invented on the spot', () => {
+		// The point of making the degrees real cards: review work owed comes before
+		// material only just met, exactly as it does in the ear.
+		const fresh = card('fresh', 'degree_play', 'C', { reps: 0, dueInDays: -5 });
+		const owed = card('owed', 'degree_play', 'C', { reps: 4, dueInDays: -1 });
+		const queue = functionQueue([fresh, owed], { now: NOW, day: 0 });
+		expect(queue.indexOf('owed')).toBeLessThan(queue.indexOf('fresh'));
 	});
 
-	it('carries the answer with the question, so it can be marked', () => {
-		for (const prompt of degreePrompts(REACHED, { day: 2 })) {
-			expect(prompt.degree.length, prompt.answer).toBeGreaterThan(0);
-			expect(prompt.answerPitchClasses.length, prompt.answer).toBeGreaterThan(2);
+	it('never runs dry when the deck is well run', () => {
+		for (const options of [{ dueInDays: 9 }, { dueInDays: 30, reps: 0 }]) {
+			expect(
+				functionQueue(bank(options), { now: NOW, day: 0 }),
+				JSON.stringify(options)
+			).toHaveLength(8);
 		}
 	});
 
+	it('spreads the numerals over the keys rather than drilling one', () => {
+		const cards = bank();
+		const byId = new Map(cards.map((c) => [c.cardId, c]));
+		const keys = new Set(
+			functionQueue(cards, { now: NOW, day: 0 }).map((id) => byId.get(id)!.keyCenter)
+		);
+		expect(keys.size).toBe(REACHED_KEYS.length);
+	});
+
 	it('leads with today’s key', () => {
-		const prompts = degreePrompts(REACHED, { day: 5, keyCenter: 'Bb' });
-		expect(prompts[0].key).toBe('Bb');
+		const cards = bank();
+		const byId = new Map(cards.map((c) => [c.cardId, c]));
+		const queue = functionQueue(cards, { now: NOW, day: 5, keyCenter: 'Bb' });
+		expect(byId.get(queue[0])!.keyCenter).toBe('Bb');
+	});
+
+	it('goes round a short pool rather than stopping early, but only so far', () => {
+		const one = [card('only-one', 'degree_play', 'C')];
+		expect(functionQueue(one, { now: NOW, day: 0 })).toEqual(['only-one', 'only-one', 'only-one']);
+	});
+
+	it('has nothing to say when nothing reached carries a numeral', () => {
+		// A brand-new account owns the C major scale and nothing else, and a scale
+		// is not a numbered chord — so `cards.ts` never made the card to ask.
+		const scaleOnly = cardsForRung('scale', STAGES[0]);
+		expect(scaleOnly.map((c) => c.direction)).not.toContain('degree_play');
+		expect(functionQueue([card('seen', 'see_play', 'C')], { now: NOW, day: 0 })).toEqual([]);
+	});
+
+	it('never asks the same card as the ear task, one bank between the two', () => {
+		const workout = composeWorkout(input({ size: 'long' }));
+		const overlap = earCards(workout).filter((id) => functionCards(workout).includes(id));
+		expect(overlap).toEqual([]);
 	});
 });
 
@@ -263,11 +310,9 @@ describe('the picker is honoured', () => {
 		const byId = new Map(bank().map((c) => [c.cardId, c]));
 		expect(byId.get(earCards(workout)[0])!.skillCode).toBe('rung:all-sevenths');
 
-		const fn = workout.tasks.find((t) => t.kind === 'function');
-		expect(fn?.kind === 'function' && fn.prompts[0]).toMatchObject({
-			key: 'F',
-			rungId: 'all-sevenths' satisfies RungId
-		});
+		const first = byId.get(functionCards(workout)[0])!;
+		expect(first.skillCode).toBe(`rung:${'all-sevenths' satisfies RungId}`);
+		expect(first.keyCenter).toBe('F');
 	});
 
 	it('pins a progression in the key it was asked for', () => {
