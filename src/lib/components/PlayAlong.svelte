@@ -5,7 +5,7 @@
 	import Keyboard from '$lib/components/Keyboard.svelte';
 	import ScaleKeys from '$lib/components/ScaleKeys.svelte';
 	import { BackingTrack, type Part } from '$lib/audio/backing';
-	import type { Feel } from '$lib/audio/groove';
+	import { GROOVES, grooveSpec, isGroove, type Groove } from '$lib/audio/groove';
 	import {
 		CHARTS,
 		CHART_CATEGORIES,
@@ -133,13 +133,24 @@
 
 	// svelte-ignore state_referenced_locally
 	let slug = $state(initialSeed.slug);
+	/*
+	 * The editor is one component doing two jobs: writing a chart down and
+	 * changing one you already have. `editing` says which, and a refused save
+	 * carries the id back so a rejected edit reopens as an edit rather than
+	 * silently turning into a second copy of the tune.
+	 */
 	// svelte-ignore state_referenced_locally
-	let importing = $state(Boolean(form));
+	let editing = $state<(ChartSeed & { id: string }) | null>(
+		form?.id ? (mine.find((c) => c.id === form.id) ?? null) : null
+	);
+	// svelte-ignore state_referenced_locally
+	let importing = $state(Boolean(form) && !form?.id);
 	let confirmingDelete = $state(false);
 
-	let keyName = $state('C');
+	// A chart with a home key opens in it; a form has none and opens in C.
+	let keyName = $state(initialSeed.defaultKey ?? 'C');
 	let bpm = $state(initialSeed.defaultBpm);
-	let feel = $state<Feel>('swing');
+	let groove = $state<Groove>(initialSeed.defaultGroove);
 	let countIn = $state(true);
 
 	let loopFrom = $state<number | null>(null);
@@ -392,7 +403,7 @@
 			chartId: mineId,
 			keyCenter: keyName,
 			bpm,
-			feel,
+			groove,
 			startedAt: runStartedAt,
 			endedAt: new Date().toISOString(),
 			playingMs: Math.round(runPlayedMs),
@@ -454,6 +465,41 @@
 
 	const seed = $derived(repertoire.find((c) => c.slug === slug) ?? CHARTS[0]);
 	const mineId = $derived(mine.find((c) => c.slug === slug)?.id ?? null);
+	const mineSeed = $derived(mine.find((c) => c.slug === slug) ?? null);
+
+	/**
+	 * A stored chart, back in the editor as chord symbols.
+	 *
+	 * It goes in as numerals and has to come out as something a person can read
+	 * and retype, which is `realiseChart` — the same function the player uses to
+	 * put a chart into a key. Realised in the key it was written in, so the
+	 * numerals underneath each bar come straight back out as the ones already
+	 * stored: opening a chart and saving it again without touching anything must
+	 * not move a single chord.
+	 */
+	function chartAsTyped(seed: ChartSeed): string {
+		return realiseChart(seed, seed.defaultKey ?? 'C')
+			.rows.map((row) => row.map((bar) => bar.chords.map((c) => c.symbol).join(' ')).join(' | '))
+			.join('\n');
+	}
+
+	const editorInitial = $derived(
+		form ??
+			(editing
+				? {
+						name: editing.name,
+						text: chartAsTyped(editing),
+						key: editing.defaultKey ?? 'C',
+						mode: editing.mode,
+						bpm: editing.defaultBpm,
+						groove: editing.defaultGroove,
+						lyrics: editing.lyrics,
+						// `load` shows 'Yours.' where a chart has no notes. It is a placeholder
+						// on the way out and must not become real text on the way back in.
+						notes: editing.notes === 'Yours.' ? '' : editing.notes
+					}
+				: null)
+	);
 	const chart = $derived(realiseChart(seed, keyName));
 	const bars = $derived(chart.rows.flat());
 	const homeKey = $derived(makeKey(keyName, seed.mode === 'minor' ? 'aeolian' : 'ionian'));
@@ -947,12 +993,23 @@
 				const saved = JSON.parse(raw) as Record<string, unknown>;
 				const savedSeed = repertoire.find((chart) => chart.slug === saved.slug);
 				if (!requestedSlug && savedSeed) slug = savedSeed.slug;
-				if (typeof saved.keyName === 'string' && KEYS.includes(saved.keyName))
+				// The saved key belongs to the sitting; a song's home key belongs to the
+				// song, and on the way in the song wins. A form has no home key — a
+				// blues is a blues in all twelve — so nothing overrides there.
+				if (
+					!initialSeed.defaultKey &&
+					typeof saved.keyName === 'string' &&
+					KEYS.includes(saved.keyName)
+				) {
 					keyName = saved.keyName;
+				}
 				if (!requestedSlug && typeof saved.bpm === 'number' && Number.isFinite(saved.bpm)) {
 					bpm = Math.max(MIN_BPM, Math.min(MAX_BPM, Number(saved.bpm)));
 				}
-				if (saved.feel === 'swing' || saved.feel === 'straight') feel = saved.feel;
+				// `feel` is the old two-value key. Reading it keeps a sitting set up
+				// before grooves existed opening on the groove it used to be.
+				const savedGroove = isGroove(saved.groove) ? saved.groove : saved.feel;
+				if (!requestedSlug && isGroove(savedGroove)) groove = savedGroove;
 				if (typeof saved.countIn === 'boolean') countIn = saved.countIn;
 				if (typeof saved.fireworks === 'boolean') fireworks = saved.fireworks;
 				for (const [part] of PARTS) {
@@ -980,7 +1037,7 @@
 		if (!playerReady) return;
 		localStorage.setItem(
 			PLAYER_KEY,
-			JSON.stringify({ slug, keyName, bpm, feel, countIn, fireworks, muted, level })
+			JSON.stringify({ slug, keyName, bpm, groove, countIn, fireworks, muted, level })
 		);
 	});
 
@@ -1016,7 +1073,7 @@
 		return {
 			bars: chart.bars,
 			bpm,
-			feel,
+			groove,
 			key: homeKey,
 			loopFrom: loopFrom ?? undefined,
 			loopTo: loopTo ?? undefined,
@@ -1163,18 +1220,31 @@
 	const inLoop = (number: number) =>
 		!looping || (number >= (loopFrom ?? 1) && number <= (loopTo ?? barCount));
 
-	// Changing the chart brings its own tempo with it, since 160 for rhythm
-	// changes and 160 for a modal vamp are not the same request.
+	/*
+	 * Changing the chart brings its own setup with it.
+	 *
+	 * 160 for rhythm changes and 160 for a modal vamp are not the same request,
+	 * and neither are swing and rock — a pop tune arriving over a walking bass is
+	 * three controls away from being the tune you asked for, every single time.
+	 *
+	 * The key only moves for a chart that has one. A form does not: a blues is a
+	 * blues in all twelve, and dragging the key back to C on the way past would
+	 * undo the one thing the player most often sets deliberately.
+	 */
 	function chooseChart(next: string) {
 		// Whatever was played over the old tune is a run over the old tune. Banked
 		// before the slug moves, or it would be filed under the wrong one.
 		bankRun();
 		slug = next;
-		bpm = repertoire.find((c) => c.slug === next)?.defaultBpm ?? bpm;
+		const chosen = repertoire.find((c) => c.slug === next);
+		bpm = chosen?.defaultBpm ?? bpm;
+		groove = chosen?.defaultGroove ?? groove;
+		if (chosen?.defaultKey && KEYS.includes(chosen.defaultKey)) keyName = chosen.defaultKey;
 		pinnedChord = 0;
 		followPlayback = true;
 		pinnedBar = 1;
 		confirmingDelete = false;
+		editing = null;
 		loopFrom = null;
 		loopTo = null;
 		// A score against a tune you have moved on from is just a stale number.
@@ -1296,14 +1366,18 @@
 		{/if}
 
 		<section>
-			{#if importing}
+			{#if importing || editing}
 				<!-- Typing is fine here: this is setting up, not practising. -->
 				<ChartEditor
 					keys={KEYS}
 					{keyLabel}
 					initialKey={keyName}
-					initial={form}
-					onCancel={() => (importing = false)}
+					initial={editorInitial}
+					editing={editing ? { id: editing.id, name: editing.name } : null}
+					onCancel={() => {
+						importing = false;
+						editing = null;
+					}}
 				/>
 
 				{#if form?.problems?.length}
@@ -1384,6 +1458,19 @@
 										</button>
 									{/each}
 								</div>
+								{#if chart.hasLyrics}
+									<!--
+										The words, under the chord they are sung over.
+										Rendered for every bar once any bar has words — including the
+										ones with none — so the row keeps a straight baseline instead
+										of the bars jumping about at different heights. A chart with
+										no lyrics at all draws nothing here and looks exactly as it
+										did before lyrics existed.
+									-->
+									<p class="bar-lyric" class:is-silent={!bar.lyric}>
+										{#if bar.lyric}{bar.lyric}{:else}&nbsp;{/if}
+									</p>
+								{/if}
 							</div>
 						{/each}
 					</div>
@@ -1399,7 +1486,17 @@
 						Select a chord to study it. Use a bar header to set the loop range.
 					{/if}
 				</span>
-				{#if mineId}
+				{#if mineSeed}
+					{#if !confirmingDelete && !editing}
+						<button
+							type="button"
+							class="ml-auto rounded-md px-2 py-1 underline"
+							onclick={() => {
+								editing = mineSeed;
+								confirmingDelete = false;
+							}}>edit this chart</button
+						>
+					{/if}
 					{#if confirmingDelete}
 						<form method="POST" action="?/remove" class="ml-auto flex flex-wrap items-center gap-2">
 							<span>Delete {seed.name}?</span>
@@ -1414,7 +1511,7 @@
 					{:else}
 						<button
 							type="button"
-							class="ml-auto rounded-md px-2 py-1 underline"
+							class="rounded-md px-2 py-1 underline"
 							onclick={() => (confirmingDelete = true)}>delete this chart</button
 						>
 					{/if}
@@ -1585,20 +1682,24 @@
 					</div>
 
 					<div class="w-60">
-						<h2 class="panel-title">Feel</h2>
-						<div class="flex gap-1.5">
-							{#each ['swing', 'straight'] as const as option (option)}
+						<h2 class="panel-title">Groove</h2>
+						<!-- Three across rather than four: nine of them make a square, and
+						     the longer names fit without being cramped. -->
+						<div class="grid grid-cols-3 gap-1.5">
+							{#each GROOVES as option (option.id)}
 								<button
 									type="button"
-									class="chip flex-1 justify-center"
-									class:is-on={feel === option}
+									class="chip justify-center"
+									class:is-on={groove === option.id}
+									title={option.notes}
 									onclick={() => {
-										feel = option;
+										groove = option.id;
 										void restartIfPlaying();
-									}}>{option}</button
+									}}>{option.name}</button
 								>
 							{/each}
 						</div>
+						<p class="groove-note">{grooveSpec(groove).notes}</p>
 					</div>
 
 					<div class="w-60">
@@ -1878,6 +1979,52 @@
 		text-transform: uppercase;
 		color: var(--color-ink-dim);
 		margin-bottom: 0.5rem;
+	}
+
+	/*
+	 * The words.
+	 *
+	 * Dim until the bar is playing and then lit, which needs no state of its own
+	 * — `is-now` is already on the bar for the chord highlight, and the lyric
+	 * simply reads it. The whole phrase lights at once rather than word by word,
+	 * because bars are what the sheet aligned the words to and anything finer
+	 * would be a guess dressed up as timing.
+	 */
+	.bar-lyric {
+		margin: 0.5rem 0 0;
+		padding-top: 0.45rem;
+		border-top: 1px solid var(--color-ground-line);
+		font-size: 0.82rem;
+		line-height: 1.35;
+		color: var(--color-ink-muted);
+		text-wrap: balance;
+		transition: color 120ms ease;
+	}
+
+	.bar-lyric.is-silent {
+		/* Holds the line's height without claiming there are words here. */
+		opacity: 0;
+	}
+
+	.bar.is-now .bar-lyric {
+		color: var(--color-ink);
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.bar-lyric {
+			transition: none;
+		}
+	}
+
+	/* One line saying what the selected groove is, for whoever has not met the
+	   word. It sits where the key panel's fourth row of chips would be, so the
+	   two panels stay the same height. */
+	.groove-note {
+		margin-top: 0.5rem;
+		font-family: var(--font-mono);
+		font-size: 0.65rem;
+		line-height: 1.45;
+		color: var(--color-ink-dim);
 	}
 
 	.chip {

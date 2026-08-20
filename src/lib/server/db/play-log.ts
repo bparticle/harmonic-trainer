@@ -98,7 +98,7 @@ export async function saveFlush(userId: string, flush: Flush): Promise<void> {
 					chartId: run.chartId,
 					keyCenter: run.keyCenter,
 					bpm: run.bpm,
-					feel: run.feel,
+					groove: run.groove,
 					startedAt: new Date(run.startedAt),
 					endedAt: run.endedAt ? new Date(run.endedAt) : null,
 					playingMs: run.playingMs,

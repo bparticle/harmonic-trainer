@@ -97,7 +97,12 @@ async function main() {
 				style: chart.style,
 				mode: chart.mode,
 				notes: chart.notes,
-				defaultBpm: chart.defaultBpm
+				defaultBpm: chart.defaultBpm,
+				defaultGroove: chart.defaultGroove,
+				// Null for every built-in: a form is a form in all twelve keys.
+				defaultKey: chart.defaultKey ?? null,
+				// Null for an instrumental, which is all but the traditionals.
+				lyricsJson: chart.lyrics ?? null
 			})
 			.onConflictDoNothing();
 	}

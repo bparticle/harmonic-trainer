@@ -16,6 +16,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import type { Landing } from '$lib/practice/match';
+import type { Groove } from '$lib/audio/groove';
 
 /*
  * Conventions
@@ -31,7 +32,7 @@ import type { Landing } from '$lib/practice/match';
  * round trip through the database — see src/lib/music/spell.ts.
  *
  * Vocabularies the app will keep extending (block types, fact types, chart
- * styles) are `text` narrowed by a TypeScript union rather than a pgEnum,
+ * styles, grooves) are `text` narrowed by a TypeScript union rather than a pgEnum,
  * because ALTER TYPE is a migration tax for no real benefit here. The three
  * vocabularies fixed by an algorithm — SRS card direction, FSRS state, FSRS
  * rating — are real enums.
@@ -345,6 +346,33 @@ export const charts = pgTable(
 		/** What the tune is *for* practising, in the voice the built-ins use. */
 		notes: text('notes').notNull().default(''),
 		defaultBpm: integer('default_bpm').notNull(),
+		/**
+		 * How the tune opens: the rhythm section it wants, and the key it is in.
+		 *
+		 * A form has no key — a twelve-bar blues is a twelve-bar blues in all
+		 * twelve — so `default_key` is null for every built-in, and that null is a
+		 * claim rather than a missing value. A song does have one, and it is the key
+		 * you wrote the chart down in, which is why the editor stores what it
+		 * already asked for instead of asking twice.
+		 *
+		 * `default_groove` is `text` narrowed by a union for the reason given at the
+		 * top of this file: grooves are a vocabulary that will keep being added to,
+		 * and adding one should not be a migration.
+		 */
+		defaultGroove: text('default_groove').$type<Groove>().notNull().default('swing'),
+		defaultKey: text('default_key'),
+		/**
+		 * The words, in the same shape as `grid_json`: rows of bars, one fragment
+		 * per bar. Null for an instrumental, and the null is load-bearing — every
+		 * screen that would draw lyrics checks it and draws nothing, so a chart
+		 * without words looks exactly as it did before words existed.
+		 *
+		 * JSON for the same reason the grid is: it is a nested array nothing
+		 * queries into, and it is the one other genuinely document-shaped thing
+		 * here. Kept beside the grid rather than in it so that an instrumental
+		 * costs a null and not a parallel array of empty strings.
+		 */
+		lyricsJson: jsonb('lyrics_json').$type<string[][]>(),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
 	(t) => [index('charts_slug_idx').on(t.slug)]
@@ -379,7 +407,9 @@ export const playRuns = pgTable(
 		chartId: uuid('chart_id').references(() => charts.id, { onDelete: 'set null' }),
 		keyCenter: text('key_center').notNull(),
 		bpm: integer('bpm').notNull(),
-		feel: text('feel').notNull(),
+		/** The groove it was played over. Called `feel` until grooves existed, when
+		 * a column holding 'rock' would have been a column lying about its name. */
+		groove: text('groove').notNull(),
 		startedAt: timestamp('started_at', { withTimezone: true }).notNull(),
 		endedAt: timestamp('ended_at', { withTimezone: true }),
 		/** Transport running and not paused, count-in included. Never page-open time. */
