@@ -697,6 +697,169 @@ band is better company.
 
 ---
 
+## M16 — Tempo is the other axis
+
+**A badge earned at half speed is not the badge earned at tempo, and the app
+cannot currently tell them apart.** Asked for directly, after noticing that
+fifty in a row at 60 says something quite different from fifty in a row at 140. It is right, and it is larger than badges: the app has twelve keys of
+breadth and no depth at all. Tempo is the depth.
+
+### What is wrong today
+
+`badges` stores one row per tier per tune, `play_runs` stores a `bpm`, and the
+two never meet. The shelf under a chart says you once landed fifty in a row on
+it; it does not say whether that was a crawl or a burn, and there is no way to
+ask. So the top of the ladder is reachable by slowing down until it is easy,
+which is the one thing a practice tool must not reward.
+
+It is invisible in the other direction too. Somebody grinding a tune up from
+80 to 130 over a fortnight has done the most valuable work the app can
+witness, and the shelf shows six badges that stopped changing on day one.
+
+### Bands are a share of the tune's own tempo, not an absolute
+
+The obvious design — slow, medium and fast as fixed BPM bands — is musically
+wrong, and the record already shows why. Three Little Birds is logged at 99
+and rhythm changes at 100, and those two numbers mean opposite things: one is
+the tempo the song goes at, the other is a bebop vehicle taken at walking pace
+to get it clean. A ballad at 60 is a ballad. A bebop head at 60 is homework.
+
+Every chart already carries `default_bpm` — the tempo it is meant to go at —
+so a band is a **share of the tune's own target**, and the same five words
+stay honest on a ballad and a burner:
+
+| Band       | Share of the tune's tempo |
+| ---------- | ------------------------- |
+| `learning` | under 60%                 |
+| `working`  | 60–79%                    |
+| `nearly`   | 80–99%                    |
+| `attempo`  | 100–119%                  |
+| `past`     | 120% and over             |
+
+`past` exists because taking a tune faster than it goes is a real practice
+device, and the scale should not stop at "correct".
+
+### The grade is derived, never stored
+
+The temptation is a `best_bpm` column on `badges`. That is the mistake M9 made
+once and undid: the stored best was deleted because it could drift from the
+runs that justified it, and _one place the answer comes from, and nothing to
+reconcile_ is the rule that replaced it. A stored tempo grade is the same bug
+wearing a new name.
+
+It does not need one. `play_runs` already holds `best_streak`, `bpm` and
+`chart_slug`, so the fastest band a tier has ever been reached at is a query:
+
+```
+max(bpm) over play_runs where chart_slug = ? and best_streak >= tier.from
+```
+
+The badge keeps meaning what it means today — _when did you first get there_ —
+and the grade beside it answers _how fast have you held it_. Two questions,
+one row each, neither able to contradict the other. The shelf stays six
+sockets and no existing badge changes.
+
+### Tried against the record before being proposed
+
+The nineteen runs already logged were graded by that rule, and it separates
+three tunes the current shelf cannot tell apart:
+
+| Tune               | Target | Played at | Share | Band      | Tiers earned            |
+| ------------------ | ------ | --------- | ----- | --------- | ----------------------- |
+| rhythm changes     | 160    | 100       | 63%   | `working` | five, up to untouchable |
+| jazz blues         | 140    | 140       | 100%  | `attempo` | three, up to on fire    |
+| three little birds | 76     | 99        | 130%  | `past`    | all six, best run 146   |
+
+As the shelf shows them today those three are nearly identical: rows of
+badges, no context. Graded, they are three different pieces of news. Rhythm
+changes has thirty-two in a row at 63% of the tempo the tune goes at — real
+work, obviously unfinished, with the next band sitting at 128bpm. The blues is
+the opposite shape: dead on tempo, streaks stopping at twelve. Three Little
+Birds is finished and then some.
+
+The middle two are the case for this milestone. One is fast and fragile, the
+other slow and solid, and today they wear the same badges.
+
+**A wrinkle the query alone does not solve:** the target tempo lives in
+`charts.default_bpm` for a tune you typed in and in `charts.ts` for a built-in
+one, so two of the tunes above have no row to read it from. The grade must
+resolve a chart the way the rest of the app already does — code first, then
+the database — rather than assuming a row exists.
+
+### The one thing that cannot wait, and has not
+
+Tempo moves under a running transport by design, but `play_runs.bpm` is a
+single integer. A run started at 140 and slowed to 60 records one of those,
+and if the streak was clinched after the slowdown the grade flatters in
+exactly the direction this milestone exists to correct.
+
+The fix is `play_runs.best_streak_bpm`, nullable: the tempo at the moment the
+best streak was clinched. A fact about the run rather than a copy of an
+aggregate, so it does not reopen the stored-best argument. **It cannot be
+backfilled** — the runs already logged do not know, and inventing a number for
+them would be the first estimate in a record that has never held one. Every
+day it does not exist is a day of history that can never be graded honestly,
+which is why it is pulled out of this milestone and captured during M15
+rather than waiting for the rest of this to be built.
+
+### Advancing is a ladder, and it suggests
+
+"Start slow, stay consistent, move up" is the key ladder's shape applied to
+the other axis, and it behaves identically: **it suggests, it never gates.**
+Any tempo stays playable at any time; what the ladder does is notice you have
+held a band cleanly and say so.
+
+Per tune, because tempo does not transfer the way a numeral does — holding
+rhythm changes at 100 says nothing about a bossa. The threshold reuses M15's
+mission goal rather than inventing a second standard, since both are asking
+_did you hold it_, and one definition of that is enough.
+
+### Where it shows
+
+- **The shelf.** Each of the six sockets gains its band. Re-earning a tier
+  faster upgrades the band without touching the date it was first won.
+- **The profile.** The keys already appear as twelve swatches filling with
+  what has been played in them; tempo is the second dimension of the same
+  picture. It would be the first figure in the app that measures
+  _improvement_ rather than volume.
+- **M15's missions.** Where the two milestones meet, and why this one follows
+  rather than precedes: a mission already carries key, tune and tempo, so
+  "hold the bar at the next band up on this tune" is something the composer
+  can already express. The key ladder gives the workout breadth; this gives
+  it depth.
+
+### The global concept, and its limit
+
+Asked whether this generalises beyond play-along: mostly yes, with one place
+it must not. Missions, badges, the shelf and the profile are all tempo-graded
+by the above. The **cards are not** — a flashcard has no tempo, only a
+latency, and `gradeFromPerformance` already grades on that. Stretching a band
+scale over the drills would be an analogy rather than a measurement, and this
+app does not ship numbers it cannot trace to a row.
+
+Tempo grades what is played _in time_; latency grades what is asked _as a
+question_; the two are not made to look like each other.
+
+### Done when
+
+- The shelf shows the band each badge has been held at, derived from runs,
+  with no stored best anywhere.
+- Re-earning a tier faster changes the band and not the date.
+- A run whose tempo moved is graded on where the streak was clinched.
+- The profile answers "is my tempo moving" from rows.
+- A tune's ladder suggests the next band and gates nothing.
+- `npm run verify` passes.
+
+### Open
+
+- Whether `past` should award anything beyond being shown. It is showing off,
+  and showing off is allowed, but a badge for it invites gaming the tempo
+  slider rather than playing.
+- Whether crossing a band deserves the fun layer's noise. Consistent with the
+  existing switch: available, and off by default.
+
+---
+
 ## What this changes about the parked milestones
 
 ### M6 — partly unparked
@@ -737,9 +900,13 @@ not have: there is now a record worth taking with you, not just charts.
 
 ## Order
 
-**M15 → M12 → M13.** M14, M9 and M10 have landed, in that order, with M11
-before them.
+**M15 → M16 → M12 → M13.** M14, M9 and M10 have landed, in that order, with
+M11 before them.
 
+- M16 follows M15 and not the other way round, because its best vehicle is a
+  mission and missions do not exist until M15 Phase 3 has landed. One piece of
+  it does not wait: `best_streak_bpm` is captured during M15, because tempo at
+  the moment a streak was clinched can only ever be recorded forwards.
 - M15 goes first because it is the only item here that changes what daily use
   feels like now, and because it touches the tables M12 will stamp with owners
   — `sessions`, `session_blocks`, `cards` — so M12 should migrate the new
