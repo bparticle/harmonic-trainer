@@ -3,7 +3,8 @@ import { CHARTS, type ChartCategory } from '$lib/curriculum/charts';
 import { nextPosition, positionOf, rungById, type RungId } from '$lib/curriculum/ladder';
 import { PROGRESSIONS } from '$lib/curriculum/progressions';
 import { progressionSkillCode, rungSkillCode } from '$lib/curriculum/cards';
-import type { ChordQuality } from '$lib/music/chord';
+import { parseChord, type ChordQuality } from '$lib/music/chord';
+import { keyTonic } from '$lib/music/key';
 import { GUIDE_TONE_TARGET, type Goal } from '$lib/practice/goal';
 import type { CardDirection, ChartStyle } from '$lib/server/db/schema';
 import { isRetiredIntroduction, selectDue, type Schedulable } from '$lib/srs/scheduler';
@@ -194,6 +195,66 @@ export type ColdSpot = {
 	/** Guide tones landed, 0–1, or null when nothing was ever played there. */
 	accuracy: number | null;
 };
+
+/**
+ * One `GROUP BY` over the record, folded into cold spots.
+ *
+ * The query cannot answer this on its own: it groups chords as they were written
+ * — `Bb7`, `Dm7b5` — and a cold spot is about the *quality*, which is what makes
+ * a dominant a dominant in all twelve keys. So the grouping stays in SQL, where
+ * counting belongs, and the reading of a symbol stays in `parseChord`, which is
+ * the one place in the app allowed to decide what a chord symbol means.
+ *
+ * A symbol that will not parse is dropped rather than filed under a guess: a
+ * cold spot is used to steer a mission, and steering by a misread chord is worse
+ * than steering by one fewer.
+ *
+ * **Nothing is invented for a quality the record has never seen.** A row here
+ * would have to name a key to be filed under, and there is no honest answer to
+ * "which key have you never played a diminished chord in" — the truthful answer
+ * is all of them. So the composer steers by the coldest quality the record
+ * actually holds, and a quality with no rows at all steers nothing, exactly as
+ * an empty record steers nothing on a first workout.
+ */
+export function coldSpotsFrom(
+	rows: Array<{ localKey: string; chord: string; attempts: number; landed: number }>
+): ColdSpot[] {
+	const folded = new Map<string, ColdSpot & { landed: number }>();
+
+	for (const row of rows) {
+		let quality: ChordQuality;
+		try {
+			quality = parseChord(row.chord).quality;
+		} catch {
+			continue;
+		}
+
+		// The tonic, not the label. A chord heard in `Eb dorian` was heard in E♭,
+		// and a cold spot filed under the mode would leave the key looking colder
+		// than the record says it is.
+		const keyCenter = keyTonic(row.localKey);
+		const at = `${keyCenter}\0${quality}`;
+		const spot = folded.get(at) ?? {
+			keyCenter,
+			quality,
+			attempts: 0,
+			accuracy: null,
+			landed: 0
+		};
+		spot.attempts += row.attempts;
+		spot.landed += row.landed;
+		folded.set(at, spot);
+	}
+
+	return [...folded.values()]
+		.map(({ landed, ...spot }) => ({
+			...spot,
+			// Null rather than zero where nothing was played, which is the difference
+			// between a key you played badly and a key you have never been in.
+			accuracy: spot.attempts > 0 ? landed / spot.attempts : null
+		}))
+		.sort((a, b) => a.attempts - b.attempts);
+}
 
 /** What the home picker pinned. Choosing pins the material; the day still varies around it. */
 export type Choice =

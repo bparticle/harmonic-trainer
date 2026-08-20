@@ -8,6 +8,8 @@ import { describeGoal } from '$lib/practice/goal';
 import {
 	TASK_COUNT,
 	chooseNovelty,
+	coldSpotsFrom,
+	coldestKeys,
 	composeWorkout,
 	dayNumber,
 	earQueue,
@@ -603,5 +605,50 @@ describe('a brand-new account', () => {
 		for (const mission of missions(first)) expect(mission.keyCenter).toBe('C');
 		if (first.novelty?.kind === 'progression') expect(first.novelty.keyCenter).toBe('C');
 		if (first.novelty?.kind === 'rung') expect(first.novelty.key).toBe('C');
+	});
+});
+
+describe('the record’s cold spots, folded out of one GROUP BY', () => {
+	const rows = [
+		{ localKey: 'C', chord: 'C7', attempts: 40, landed: 36 },
+		{ localKey: 'C', chord: 'F7', attempts: 20, landed: 10 },
+		{ localKey: 'C', chord: 'Dm7', attempts: 6, landed: 6 },
+		{ localKey: 'A', chord: 'Amaj7', attempts: 4, landed: 2 }
+	];
+
+	it('groups chords by what they are, not by how they were written', () => {
+		const dominants = coldSpotsFrom(rows).find(
+			(spot) => spot.keyCenter === 'C' && spot.quality === 'dom'
+		);
+		expect(dominants?.attempts).toBe(60);
+		expect(dominants?.accuracy).toBeCloseTo(46 / 60);
+	});
+
+	it('files a chord under the key it was heard in, whatever mode that was called', () => {
+		const spots = coldSpotsFrom([
+			{ localKey: 'Eb dorian', chord: 'Ebm7', attempts: 3, landed: 1 },
+			{ localKey: 'Eb', chord: 'Ebm7', attempts: 2, landed: 2 }
+		]);
+		expect(spots).toHaveLength(1);
+		expect(spots[0]).toMatchObject({ keyCenter: 'Eb', quality: 'min', attempts: 5 });
+	});
+
+	it('hands them over coldest first, which is the order the mission reads', () => {
+		const attempts = coldSpotsFrom(rows).map((spot) => spot.attempts);
+		expect(attempts).toEqual([...attempts].sort((a, b) => a - b));
+	});
+
+	it('drops a symbol it cannot read rather than filing it under a guess', () => {
+		expect(coldSpotsFrom([{ localKey: 'C', chord: '???', attempts: 9, landed: 0 }])).toEqual([]);
+	});
+
+	it('invents nothing for a quality the record has never held', () => {
+		const qualities = coldSpotsFrom(rows).map((spot) => spot.quality);
+		expect(qualities).not.toContain('dim7');
+		expect(coldSpotsFrom([])).toEqual([]);
+	});
+
+	it('steers the day’s key ranking towards what the record has least of', () => {
+		expect(coldestKeys(['C', 'A', 'Eb'], coldSpotsFrom(rows), 2)).toEqual(['Eb', 'A']);
 	});
 });

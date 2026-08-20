@@ -50,6 +50,13 @@
       "when": 1787242996312,
       "tag": "0006_missions",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787244065365,
+      "tag": "0007_streak_tempo",
+      "breakpoints": true
     }
   ]
 }

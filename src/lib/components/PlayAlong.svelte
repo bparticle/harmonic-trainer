@@ -381,6 +381,15 @@
 	let runningSince: number | null = null;
 	let runAttempts: AttemptPayload[] = [];
 	let runBadges: BadgePayload[] = [];
+	/**
+	 * The tempo the run's best streak was clinched at.
+	 *
+	 * The slider moves while the transport runs, so by the time the run is banked
+	 * `bpm` is where the tempo *ended up* and not where the streak was reached.
+	 * Written at the one moment that fact exists — see `celebrateChord` — and null
+	 * until then, because a run that never landed two in a row clinched nothing.
+	 */
+	let runBestStreakBpm: number | null = null;
 
 	/**
 	 * How the mission went, once the transport has stopped.
@@ -411,6 +420,7 @@
 		runningSince = null;
 		runAttempts = [];
 		runBadges = [];
+		runBestStreakBpm = null;
 	}
 
 	/**
@@ -465,6 +475,7 @@
 			playingMs: Math.round(runPlayedMs),
 			...tallyColumns(tally),
 			bestStreak: streak.best,
+			bestStreakBpm: runBestStreakBpm,
 			attempts: runAttempts
 		};
 
@@ -907,6 +918,12 @@
 
 		const before = streak;
 		streak = advanceStreak(streak, finished.attempt.landing);
+
+		// The tempo, at the one moment it means anything: the chord that raised the
+		// best. Recorded here rather than read off the run at the end, because the
+		// slider can be somewhere else by then and a streak clinched at 140 is not
+		// the same achievement as the same streak clinched at 60.
+		if (streak.best > before.best) runBestStreakBpm = bpm;
 
 		const at = new Date().toISOString();
 		const banked = award(record, before, streak, {
@@ -1609,6 +1626,12 @@
 						<p class="mission-verdict" class:is-met={verdict.met} aria-live="polite">
 							{verdict.says}
 						</p>
+					{/if}
+					<!-- The way back, and only for a mission a workout actually set. A
+					     mission opened by hand belongs to no workout and is offered no
+					     door out of a page nobody sent you to. -->
+					{#if mission.blockId}
+						<a class="mission-back" href="/session">back to the workout</a>
 					{/if}
 				</section>
 			{/if}
@@ -2664,6 +2687,19 @@
 	}
 
 	.mission-verdict.is-met {
+		color: var(--color-ink);
+	}
+
+	.mission-back {
+		display: inline-block;
+		margin-top: 0.4rem;
+		font-family: var(--font-mono);
+		font-size: 0.68rem;
+		color: var(--color-ink-dim);
+		text-decoration: underline;
+	}
+
+	.mission-back:hover {
 		color: var(--color-ink);
 	}
 

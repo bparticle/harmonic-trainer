@@ -17,6 +17,7 @@ import {
 import { sql } from 'drizzle-orm';
 import type { Landing } from '$lib/practice/match';
 import type { Groove } from '$lib/audio/groove';
+import type { TaskKind } from '$lib/session/workout';
 
 /*
  * Conventions
@@ -79,8 +80,34 @@ export const reviewRating = pgEnum('review_rating', ['again', 'hard', 'good', 'e
 // Narrowed text vocabularies
 // ---------------------------------------------------------------------------
 
+/**
+ * A workout's task, as the row that records it names itself.
+ *
+ * The kind and the position, because neither alone identifies a task: a long
+ * workout holds two missions, and `session_blocks` is keyed by session and type.
+ * The position is what tells them apart; the kind is there so a row read on its
+ * own still says what happened. The plan in `plan_json` stays the authority on
+ * what task 2 actually was — this is how a block points at it.
+ */
+export type WorkoutBlockType = `${TaskKind}_${number}`;
+
+/**
+ * What a block of practice was.
+ *
+ * The six original values are the six-block session, and they are kept because
+ * the rows are: `block_type` is text narrowed by a union precisely so that a
+ * vocabulary can be added to without a migration, and the profile counts the
+ * hours those blocks hold. Widened rather than replaced, so history keeps its
+ * names.
+ */
 export type BlockType =
-	'wheel_warmup' | 'name_what_you_play' | 'ear_drill' | 'new_atom' | 'apply' | 'log';
+	| 'wheel_warmup'
+	| 'name_what_you_play'
+	| 'ear_drill'
+	| 'new_atom'
+	| 'apply'
+	| 'log'
+	| WorkoutBlockType;
 
 export type SkillCategory =
 	'inventory' | 'keys' | 'voicings' | 'progressions' | 'modes' | 'reharm' | 'application';
@@ -442,7 +469,26 @@ export const playRuns = pgTable(
 		notesChord: integer('notes_chord').notNull(),
 		notesColour: integer('notes_colour').notNull(),
 		notesOutside: integer('notes_outside').notNull(),
-		bestStreak: integer('best_streak').notNull()
+		bestStreak: integer('best_streak').notNull(),
+		/**
+		 * The tempo the best streak was clinched at, or null when it was not
+		 * witnessed.
+		 *
+		 * Tempo moves under a running transport by design, so `bpm` above is the
+		 * tempo the run *ended* at and says nothing about where a streak was
+		 * reached: a run started at 140 and slowed to 60 records one number, and if
+		 * the streak was clinched after the slowdown the record flatters. This is a
+		 * fact about the run rather than a copy of an aggregate — the tempo showing
+		 * at the moment `best` was last raised — so it does not reopen the argument
+		 * that deleted the stored best.
+		 *
+		 * **It cannot be backfilled.** The runs already logged do not know, and
+		 * inventing a number for them would be the first estimate in a record that
+		 * has never held one. Nothing reads it yet; it is captured now because every
+		 * day it does not exist is a day of history that can never be graded
+		 * honestly.
+		 */
+		bestStreakBpm: integer('best_streak_bpm')
 	},
 	(t) => [
 		index('play_runs_user_started_idx').on(t.userId, t.startedAt),

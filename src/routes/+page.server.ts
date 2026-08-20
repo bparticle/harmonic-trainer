@@ -4,24 +4,39 @@ import { redirect } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { cards, reviews, srsState } from '$lib/server/db/schema';
 import {
+	activeWorkout,
 	advanceLadder,
 	currentPosition,
+	previewWorkouts,
 	rungProgress,
-	startOrResume,
-	todaysSession
+	startWorkout
 } from '$lib/server/db/session-store';
+import { currentUserId } from '$lib/server/db/user';
 import { nextPosition, positionOf, RUNGS, STAGES } from '$lib/curriculum/ladder';
 import { PROGRESSIONS, PROGRESSION_LEVELS } from '$lib/curriculum/progressions';
-import { blockDurations, type SessionLength } from '$lib/session/plan';
+import {
+	previewTasks,
+	readChoice,
+	readSize,
+	sizeFromMinutes,
+	type TaskPreview
+} from '$lib/session/progress';
+import type { WorkoutSize } from '$lib/session/workout';
 import { saveSettings, loadSettings } from '$lib/server/db/settings';
 
 /**
- * Home: where you are, and the one thing to do next.
+ * Home: where you are, and what today is made of.
  *
  * There is no scheduler deciding which of twelve keys to ambush you with. There
  * is a ladder, you are somewhere on it, and you move when you decide to.
+ *
+ * What changed with the workout is the preview. Six block durations were an
+ * estimate of an estimate — the minutes never ended a block and the blocks never
+ * varied — so the page showed the same six numbers every day of its life. Today's
+ * actual tasks are countable, so they are counted, at all three sizes, and the
+ * picker below them still pins whatever it likes without gating anything.
  */
-export const load: PageServerLoad = async ({ parent }) => {
+export const load: PageServerLoad = async ({ parent, locals }) => {
 	const { settings, authed } = await parent();
 
 	// The project presentation must not depend on a working personal database.
@@ -51,7 +66,11 @@ export const load: PageServerLoad = async ({ parent }) => {
 			due: 0,
 			totalCards: 0,
 			reviewsThisWeek: 0,
-			blockPreview: blockDurations(settings.prefs.sessionLengthMinutes)
+			// A visitor has no record to compose a workout from, and inventing one
+			// would be the landing page promising a day of practice that nobody's
+			// rows asked for. The picker below it is hidden for a visitor anyway.
+			size: 'standard' as WorkoutSize,
+			previews: {} as Record<WorkoutSize, TaskPreview[]>
 		};
 	}
 
@@ -72,10 +91,12 @@ export const load: PageServerLoad = async ({ parent }) => {
 
 	const next = nextPosition(position);
 
+	const previews = await previewWorkouts(currentUserId(locals.userId));
+
 	return {
 		public: false,
 		settings,
-		active: await todaysSession(),
+		active: await activeWorkout(),
 		position: {
 			key: position.stage.key,
 			relativeMinor: position.stage.relativeMinor,
@@ -93,24 +114,44 @@ export const load: PageServerLoad = async ({ parent }) => {
 		due: due?.n ?? 0,
 		totalCards: totalCards?.n ?? 0,
 		reviewsThisWeek: reviewed?.n ?? 0,
-		blockPreview: blockDurations(settings.prefs.sessionLengthMinutes)
+		// The saved length preference, read as a size. Nothing in a workout is
+		// timed, so the minutes are consulted exactly here and for nothing else.
+		size: sizeFromMinutes(settings.prefs.sessionLengthMinutes),
+		previews: {
+			short: previewTasks(previews.short),
+			standard: previewTasks(previews.standard),
+			long: previewTasks(previews.long)
+		}
 	};
 };
 
 export const actions: Actions = {
-	start: async ({ request }) => {
+	/**
+	 * Start a workout around whatever the picker pinned.
+	 *
+	 * The same four fields the picker has always posted, plus a size where the
+	 * minutes used to be. Pinning still does exactly what it did: it leads the
+	 * queues and takes the workout to its key, and it leaves the ladder alone —
+	 * exploring a rung eight keys ahead is a legitimate thing to ask for and
+	 * advancing is a separate decision, taken by the buttons below.
+	 */
+	start: async ({ request, locals }) => {
 		const form = await request.formData();
-		const length = Number(form.get('length') ?? 20);
-		const valid: SessionLength[] = [10, 20, 35];
+		const position = await currentPosition();
 
-		const progressionId = form.get('progression');
-		await startOrResume({
-			lengthMinutes: valid.includes(length as SessionLength) ? (length as SessionLength) : 20,
-			progressionId: typeof progressionId === 'string' && progressionId ? progressionId : null,
-			progressionKey: (form.get('progressionKey') as string) || null,
-			// Exploring a step somewhere else on the ladder. Does not move it.
-			focusKey: (form.get('focusKey') as string) || null,
-			focusRung: (form.get('focusRung') as string) || null
+		const choice = readChoice(
+			{
+				progressionId: (form.get('progression') as string) || null,
+				progressionKey: (form.get('progressionKey') as string) || null,
+				focusKey: (form.get('focusKey') as string) || null,
+				focusRung: (form.get('focusRung') as string) || null
+			},
+			position.stage.key
+		);
+
+		await startWorkout(currentUserId(locals.userId), {
+			size: readSize(form.get('size')),
+			choice
 		});
 		redirect(303, '/session');
 	},

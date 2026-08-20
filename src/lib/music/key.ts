@@ -145,6 +145,27 @@ export function parseKey(text: string): Key {
 	return { tonic: parseNote(trimmed), mode: 'ionian' };
 }
 
+/**
+ * The tonic a stored key label names.
+ *
+ * The record spells a key three ways because three different things write one:
+ * `Eb` from a card, `Ebm` from a minor rung, `Eb dorian` from a chord heard
+ * inside a tune. All three are the record having been in E♭, and anything asking
+ * "have I been here" has to agree with that or it will report a key as untouched
+ * because the last visit called it something else.
+ *
+ * An unreadable label is handed back as it came, trimmed. It is a string
+ * somebody's data wrote, and refusing to answer is worse than answering that a
+ * label nothing else recognises is its own key.
+ */
+export function keyTonic(label: string): string {
+	try {
+		return formatPitch(parseKey(label).tonic);
+	} catch {
+		return label.trim();
+	}
+}
+
 /** The relative major of a minor key, and vice versa. */
 export function relativeKey(k: Key): Key {
 	if (k.mode === 'ionian') return { tonic: transpose(k.tonic, ivl('M6')), mode: 'aeolian' };
