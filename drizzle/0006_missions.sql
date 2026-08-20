@@ -1,0 +1,25 @@
+-- A run can now say which mission it answered.
+--
+-- A mission is the play-along page under a constraint with a goal, and a goal
+-- that cannot be traced back to the playing that met it is an opinion. This is
+-- the link that makes it evidence: the block holds the verdict, the run holds
+-- the totals, and `chord_attempts` holds every chord the verdict was reached on.
+--
+-- Null is the column's normal value and stays so. A free run on `/backing`
+-- belongs to no session — which is nearly every run there has ever been, and all
+-- 19 of the ones already recorded. Nothing is backfilled, because there is
+-- nothing to backfill: no run before this migration was played for a block, and
+-- writing a guess into a column meant for a fact would be worse than the null.
+--
+-- Nothing already recorded breaks. The column is added nullable with no default,
+-- so no existing row is rewritten and no existing query changes meaning — the
+-- profile's sums, the two bests and the blind-spot groupings all read columns
+-- this does not touch. `on delete set null` follows `chart_id` next door and for
+-- the same reason: deleting a session must not delete an hour of playing. The
+-- run happened, and the chart it was played over still names itself.
+--
+-- The foreign key points at `session_blocks` and not at `sessions`, per M9's
+-- ownership rule that a child does not repeat what its parent knows: a block
+-- knows its session, so a run that knows its block knows its session too.
+ALTER TABLE "play_runs" ADD COLUMN "session_block_id" uuid;--> statement-breakpoint
+ALTER TABLE "play_runs" ADD CONSTRAINT "play_runs_session_block_id_session_blocks_id_fk" FOREIGN KEY ("session_block_id") REFERENCES "public"."session_blocks"("id") ON DELETE set null ON UPDATE no action;

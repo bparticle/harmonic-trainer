@@ -64,8 +64,16 @@
 		type AttemptPayload,
 		type BadgePayload,
 		type Bests,
+		type BlockResultPayload,
 		type RunPayload
 	} from '$lib/practice/run';
+	import {
+		describeGoal,
+		evaluateGoal,
+		readMission,
+		type MissionParams,
+		type Verdict
+	} from '$lib/practice/goal';
 	import { chordSymbolLabel } from '$lib/music/symbol';
 	import StreakBadges from '$lib/components/StreakBadges.svelte';
 	import ChartEditor from '$lib/components/ChartEditor.svelte';
@@ -131,6 +139,23 @@
 	const initialSeed = initialRepertoire.find((chart) => chart.slug === requestedSlug) ?? CHARTS[0];
 	const repertoire = $derived<ChartSeed[]>([...CHARTS, ...mine]);
 
+	/*
+	 * A mission, if this URL is one.
+	 *
+	 * Read once, from the query string, beside the `?chart=` above it — because a
+	 * mission is an additional reading of the URL and never a mode this page is
+	 * put into. `readMission` returns null for every URL without a goal on it, and
+	 * every branch below is written so that null means the page behaves exactly as
+	 * it did before missions existed: same defaults, same controls, same
+	 * recording, same streaks and same badges.
+	 *
+	 * The constraint travels as parameters rather than as a component prop so that
+	 * both routes get it for free and neither has to know what a mission is —
+	 * which also means the demo can be handed one and will still write nothing,
+	 * because everything that writes is already behind `demo`.
+	 */
+	const mission: MissionParams | null = readMission(page.url.searchParams);
+
 	// svelte-ignore state_referenced_locally
 	let slug = $state(initialSeed.slug);
 	/*
@@ -147,10 +172,13 @@
 	let importing = $state(Boolean(form) && !form?.id);
 	let confirmingDelete = $state(false);
 
-	// A chart with a home key opens in it; a form has none and opens in C.
-	let keyName = $state(initialSeed.defaultKey ?? 'C');
-	let bpm = $state(initialSeed.defaultBpm);
-	let groove = $state<Groove>(initialSeed.defaultGroove);
+	// A chart with a home key opens in it; a form has none and opens in C. A
+	// mission names what it names and leaves the rest alone — its tempo is a floor
+	// rather than a setting, so it is where the slider starts and not where it
+	// stays.
+	let keyName = $state(mission?.keyCenter ?? initialSeed.defaultKey ?? 'C');
+	let bpm = $state(mission?.bpmFloor ?? initialSeed.defaultBpm);
+	let groove = $state<Groove>(mission?.groove ?? initialSeed.defaultGroove);
 	let countIn = $state(true);
 
 	let loopFrom = $state<number | null>(null);
@@ -278,6 +306,7 @@
 			if (unseen.length > 0) {
 				queue(localStorage, {
 					runs: [],
+					blocks: [],
 					badges: unseen.map((badge) => ({
 						chartSlug: badge.chart,
 						tier: badge.tier,
@@ -353,6 +382,15 @@
 	let runAttempts: AttemptPayload[] = [];
 	let runBadges: BadgePayload[] = [];
 
+	/**
+	 * How the mission went, once the transport has stopped.
+	 *
+	 * Null until there is something to say, and null again the moment a new run
+	 * starts — the same lifetime `lastRun` has, because they are two readings of
+	 * the same thing and it would be odd for one to outlive the other.
+	 */
+	let verdict = $state<Verdict | null>(null);
+
 	/** How far into the run we are, on the only clock that counts. */
 	const elapsedMs = () =>
 		Math.round(runPlayedMs + (runningSince === null ? 0 : performance.now() - runningSince));
@@ -395,12 +433,30 @@
 		stopClock();
 		const id = runId;
 		runId = null;
+
+		/*
+		 * The mission is judged before the demo's early return, because the verdict
+		 * is about the playing rather than about the record: a visitor gets to see
+		 * how it went and still leaves nothing behind. Judged from the same rows
+		 * that are about to be written down, so the sentence on screen and the one
+		 * in the database cannot disagree.
+		 */
+		if (mission) {
+			verdict = evaluateGoal(mission.goal, runAttempts, {
+				chartSlug: slug,
+				keyCenter: keyName,
+				bpm,
+				barsPerChorus: barCount
+			});
+		}
+
 		if (demo || !id || runPlayedMs < 1000) return;
 
 		const run: RunPayload = {
 			id,
 			chartSlug: slug,
 			chartId: mineId,
+			sessionBlockId: mission?.blockId ?? null,
 			keyCenter: keyName,
 			bpm,
 			groove,
@@ -412,7 +468,13 @@
 			attempts: runAttempts
 		};
 
-		queue(localStorage, { runs: [run], badges: runBadges });
+		// The verdict rides with the run that earned it. Only a mission a session
+		// actually set has a block to report to; one opened by hand is judged on
+		// screen and written down as an ordinary run, which is all it is.
+		const blocks: BlockResultPayload[] =
+			mission?.blockId && verdict ? [{ blockId: mission.blockId, runId: id, verdict }] : [];
+
+		queue(localStorage, { runs: [run], badges: runBadges, blocks });
 		runAttempts = [];
 		runBadges = [];
 		void flush();
@@ -798,6 +860,9 @@
 		bankRun();
 		tally = emptyTally();
 		lastRun = null;
+		// Cleared after the banking, not before: `bankRun` is what works the verdict
+		// out, and a mission's last answer belongs to the run that gave it.
+		verdict = null;
 		streak = noStreak();
 	}
 
@@ -995,21 +1060,29 @@
 				if (!requestedSlug && savedSeed) slug = savedSeed.slug;
 				// The saved key belongs to the sitting; a song's home key belongs to the
 				// song, and on the way in the song wins. A form has no home key — a
-				// blues is a blues in all twelve — so nothing overrides there.
+				// blues is a blues in all twelve — so nothing overrides there. A key a
+				// mission asked for outranks both: being sent somewhere cold and landing
+				// in yesterday's comfortable key would be the mission not happening.
 				if (
 					!initialSeed.defaultKey &&
+					!mission?.keyCenter &&
 					typeof saved.keyName === 'string' &&
 					KEYS.includes(saved.keyName)
 				) {
 					keyName = saved.keyName;
 				}
-				if (!requestedSlug && typeof saved.bpm === 'number' && Number.isFinite(saved.bpm)) {
+				if (
+					!requestedSlug &&
+					!mission?.bpmFloor &&
+					typeof saved.bpm === 'number' &&
+					Number.isFinite(saved.bpm)
+				) {
 					bpm = Math.max(MIN_BPM, Math.min(MAX_BPM, Number(saved.bpm)));
 				}
 				// `feel` is the old two-value key. Reading it keeps a sitting set up
 				// before grooves existed opening on the groove it used to be.
 				const savedGroove = isGroove(saved.groove) ? saved.groove : saved.feel;
-				if (!requestedSlug && isGroove(savedGroove)) groove = savedGroove;
+				if (!requestedSlug && !mission?.groove && isGroove(savedGroove)) groove = savedGroove;
 				if (typeof saved.countIn === 'boolean') countIn = saved.countIn;
 				if (typeof saved.fireworks === 'boolean') fireworks = saved.fireworks;
 				for (const [part] of PARTS) {
@@ -1517,6 +1590,28 @@
 					{/if}
 				{/if}
 			</div>
+
+			<!--
+				The mission, directly over the transport it is played on.
+
+				Drawn only when the URL carries one, which is what keeps this page the
+				page: without a goal in the query string nothing here renders and there
+				is no branch anywhere below it. Weight and no hue, like the score strip
+				— a goal is not a pitch, so it does not get a colour.
+			-->
+			{#if mission}
+				<section class="mission" aria-label="Mission">
+					<span class="study-kicker">Mission</span>
+					<p class="mission-goal">{describeGoal(mission.goal)}</p>
+					{#if verdict}
+						<!-- Announced rather than shouted: the run has just stopped and the
+						     eyes are still on the chart. -->
+						<p class="mission-verdict" class:is-met={verdict.met} aria-live="polite">
+							{verdict.says}
+						</p>
+					{/if}
+				</section>
+			{/if}
 
 			<div class="mt-5 flex items-stretch gap-2">
 				{#if playing || paused}
@@ -2532,6 +2627,44 @@
 		color: var(--color-ink-dim);
 		font-size: 0.78rem;
 		line-height: 1.5;
+	}
+
+	/*
+	 * What was asked for, and how it went.
+	 *
+	 * Type sizes on the assumption of a screen most of a metre away, because this
+	 * is the one thing on the page you are meant to read with your hands already
+	 * on the keys. A met goal is drawn in full ink and a missed one in muted ink:
+	 * weight rather than hue, and nothing goes red, because a mission short of its
+	 * bar is a mission to play again and not a telling-off.
+	 */
+	.mission {
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+		margin-top: 1.25rem;
+		padding: 0.75rem 1rem;
+		border: 1px solid var(--color-ground-line);
+		border-radius: 11px;
+		background: color-mix(in oklab, var(--color-ground-raised) 60%, transparent);
+	}
+
+	.mission-goal {
+		color: var(--color-ink);
+		font-size: 1rem;
+		font-weight: 600;
+		line-height: 1.4;
+	}
+
+	.mission-verdict {
+		color: var(--color-ink-muted);
+		font-family: var(--font-mono);
+		font-size: 0.78rem;
+		line-height: 1.5;
+	}
+
+	.mission-verdict.is-met {
+		color: var(--color-ink);
 	}
 
 	/* Where the notes sat, as one bar. Weight, not hue — the same language the

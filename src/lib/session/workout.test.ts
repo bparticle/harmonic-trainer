@@ -4,12 +4,12 @@ import { initialState, type Schedulable } from '$lib/srs/scheduler';
 import { FIRST_POSITION, positionOf, reachedSoFar, type RungId } from '$lib/curriculum/ladder';
 import { cardsForRung } from '$lib/curriculum/cards';
 import { STAGES } from '$lib/curriculum/ladder';
+import { describeGoal } from '$lib/practice/goal';
 import {
 	TASK_COUNT,
 	chooseNovelty,
 	composeWorkout,
 	dayNumber,
-	describeGoal,
 	earQueue,
 	functionQueue,
 	noveltyId,

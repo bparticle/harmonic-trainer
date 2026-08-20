@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { db } from './index';
-import { badges, chordAttempts, playRuns } from './schema';
+import { badges, chordAttempts, playRuns, sessionBlocks } from './schema';
 import { emptyRecord, type StreakRecord } from '$lib/effects/badges';
 import { noBests, type Bests, type Flush } from '$lib/practice/run';
 
@@ -83,9 +83,13 @@ export async function loadRecord(userId: string): Promise<StreakRecord> {
  * arrive with no run at all, which is how a shelf that predates this milestone
  * is carried in from local storage: the unique constraint means doing that
  * every load costs nothing after the first.
+ *
+ * Mission verdicts come after the runs for the same reason, and are the one
+ * thing here that is an update rather than an insert — a block is a row a
+ * session already made. The rule is written below where it is applied.
  */
 export async function saveFlush(userId: string, flush: Flush): Promise<void> {
-	if (flush.runs.length === 0 && flush.badges.length === 0) return;
+	if (flush.runs.length === 0 && flush.badges.length === 0 && flush.blocks.length === 0) return;
 
 	await db.transaction(async (tx) => {
 		for (const run of flush.runs) {
@@ -96,6 +100,7 @@ export async function saveFlush(userId: string, flush: Flush): Promise<void> {
 					userId,
 					chartSlug: run.chartSlug,
 					chartId: run.chartId,
+					sessionBlockId: run.sessionBlockId,
 					keyCenter: run.keyCenter,
 					bpm: run.bpm,
 					groove: run.groove,
@@ -134,6 +139,33 @@ export async function saveFlush(userId: string, flush: Flush): Promise<void> {
 					atMs: attempt.atMs
 				}))
 			);
+		}
+
+		/*
+		 * A mission's verdict, on the block that set it.
+		 *
+		 * A block ends when its goal is met, and not before. Until then the latest
+		 * verdict stands in `result_json` with `ended_at` still null, so a session
+		 * can see how close the last attempt came and the mission stays open to be
+		 * played again — which is what "a goal that can be met rather than a clock
+		 * that runs out" has to mean in the row. A block already ended is left
+		 * exactly as it is, so a post retried after a timeout changes nothing and
+		 * neither does a later, worse run.
+		 *
+		 * Stamped with the end of the run that reached it rather than with now: a
+		 * mission played on a train and flushed the next morning was finished on
+		 * the train.
+		 */
+		for (const block of flush.blocks) {
+			const run = flush.runs.find((candidate) => candidate.id === block.runId);
+			const at = run?.endedAt ? new Date(run.endedAt) : new Date();
+			await tx
+				.update(sessionBlocks)
+				.set({
+					resultJson: block.verdict as never,
+					endedAt: block.verdict.met ? at : null
+				})
+				.where(and(eq(sessionBlocks.id, block.blockId), isNull(sessionBlocks.endedAt)));
 		}
 
 		if (flush.badges.length === 0) return;
