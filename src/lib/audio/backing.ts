@@ -1,7 +1,14 @@
 import type { Key } from '$lib/music/key';
 import { WakeLock } from '$lib/wake-lock';
-import { totalBeats, walkingBass, type BarChord } from './bass';
-import { compPattern, drumPattern, type CompHit, type DrumHit, type Feel } from './groove';
+import { bassLine, totalBeats, type BarChord } from './bass';
+import {
+	compPattern,
+	drumPattern,
+	grooveSpec,
+	type CompHit,
+	type DrumHit,
+	type Groove
+} from './groove';
 
 /**
  * The backing track.
@@ -22,7 +29,8 @@ export type Part = 'bass' | 'drums' | 'comp' | 'metronome';
 export type BackingConfig = {
 	bars: BarChord[];
 	bpm: number;
-	feel: Feel;
+	/** The whole rhythm section — kit, bass style, comping and feel. */
+	groove: Groove;
 	key?: Key;
 	/** Bars to loop, counted from one and inclusive. Omit for the whole form. */
 	loopFrom?: number;
@@ -191,23 +199,34 @@ function score(config: BackingConfig): { events: Event[]; beats: number } {
 	if (beats === 0) return { events: [], beats: 0 };
 
 	const events: Event[] = [];
+	const spec = grooveSpec(config.groove);
 
-	for (const note of walkingBass(bars, { key: config.key })) {
-		// Just short of the beat, so consecutive notes articulate instead of
-		// smearing into one continuous tone.
+	/*
+	 * Each note is held for most of the gap to the next one.
+	 *
+	 * The walking line puts a note on every beat, so this is the 0.86 of a beat
+	 * it has always been — just short, so consecutive notes articulate instead
+	 * of smearing into one continuous tone. A ballad's root has four beats to
+	 * itself and now gets nearly all of them, which is the difference between a
+	 * bass player holding a note and one playing staccato quarter notes with
+	 * three beats of silence after each.
+	 */
+	const line = bassLine(bars, spec.bass, { key: config.key });
+	for (const [index, note] of line.entries()) {
+		const until = line[index + 1]?.beat ?? beats;
 		events.push({
 			kind: 'bass',
 			beat: note.beat,
 			midi: note.midi,
-			duration: 0.86
+			duration: Math.max(0.1, (until - note.beat) * 0.86)
 		});
 	}
 
-	for (const hit of drumPattern(beats, config.feel)) {
+	for (const hit of drumPattern(beats, config.groove)) {
 		events.push({ kind: 'drum', beat: hit.beat, hit });
 	}
 
-	for (const hit of compPattern(bars, config.feel)) {
+	for (const hit of compPattern(bars, config.groove)) {
 		// A push at the very end of the form belongs to the next time round.
 		events.push({ kind: 'comp', beat: hit.beat % beats, hit });
 	}
@@ -478,7 +497,7 @@ export class BackingTrack {
 	/**
 	 * Continue from `pause`.
 	 *
-	 * If the key, chart, feel or loop changed while paused, the schedule that
+	 * If the key, chart, groove or loop changed while paused, the schedule that
 	 * was paused no longer matches what should be playing — there is no "same
 	 * place" to return to — so this rebuilds fresh instead, exactly as `start`
 	 * would. Returns whether it actually resumed in place, so the caller knows
@@ -532,7 +551,7 @@ export class BackingTrack {
 	}
 
 	/**
-	 * Anything that changes the notes — feel, loop points, the chart itself —
+	 * Anything that changes the notes — the groove, loop points, the chart itself —
 	 * has to be rebuilt. Restarted from the top rather than spliced in, because
 	 * a loop that changes length underneath you is disorienting to play over.
 	 */

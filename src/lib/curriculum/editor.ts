@@ -5,6 +5,7 @@ import { midi } from '$lib/music/note';
 import { chordFromNumeral } from './progressions';
 import { importedToSeed } from './import';
 import type { ChartSeed } from './charts';
+import { parseChordSheet } from './lyrics';
 
 /**
  * Writing a chart down, one bar at a time.
@@ -28,8 +29,9 @@ import type { ChartSeed } from './charts';
  * lossless for every chord symbol anyone can write.
  */
 
-/** A bar as it is being typed: chord symbols separated by spaces. */
-export type Bar = { text: string };
+/** A bar as it is being typed: chord symbols separated by spaces, and the words
+ * sung over them if the chart has any. */
+export type Bar = { text: string; lyric?: string };
 
 /** Rows of bars. Four to a row is how a chart is read, not a rule. */
 export type Grid = Bar[][];
@@ -64,6 +66,9 @@ export type BarReading = {
 	/** Position in the form, counting only bars that hold something. */
 	number: number | null;
 	text: string;
+	/** Carried through untouched. It is here so that the words and the numerals
+	 * are filtered by one function rather than two — see `lyricsToRows`. */
+	lyric: string;
 	chords: ChordReading[];
 	empty: boolean;
 	problem: string | null;
@@ -143,11 +148,11 @@ export function readChord(written: string, k: Key): ChordReading {
 }
 
 /** One bar: the chords sharing it, split on whitespace. */
-export function readBar(text: string, k: Key, number: number | null): BarReading {
+export function readBar(text: string, k: Key, number: number | null, lyric = ''): BarReading {
 	const symbols = text.trim().split(/\s+/).filter(Boolean);
 
 	if (symbols.length === 0) {
-		return { number: null, text, chords: [], empty: true, problem: null };
+		return { number: null, text, lyric, chords: [], empty: true, problem: null };
 	}
 
 	const chords = symbols.map((symbol) => readChord(symbol, k));
@@ -156,7 +161,7 @@ export function readBar(text: string, k: Key, number: number | null): BarReading
 			? `${symbols.length} chords in one bar. Four is the most a bar can hold.`
 			: null;
 
-	return { number, text, chords, empty: false, problem };
+	return { number, text, lyric, chords, empty: false, problem };
 }
 
 /**
@@ -178,7 +183,7 @@ export function readGrid(grid: Grid, keyName: string): GridReading {
 	const rows = grid.map((row, r) =>
 		row.map((bar, c) => {
 			const filled = bar.text.trim().length > 0;
-			const reading = readBar(bar.text, k, filled ? ++number : null);
+			const reading = readBar(bar.text, k, filled ? ++number : null, bar.lyric ?? '');
 			// An empty bar has no place in the form, so it cannot be named after
 			// one. Everything else is numbered the way a player counts.
 			const where = filled ? `Bar ${reading.number}` : `Row ${r + 1}, bar ${c + 1}`;
@@ -221,13 +226,28 @@ export function readGrid(grid: Grid, keyName: string): GridReading {
 
 /** The numerals to store, dropping the bars that hold nothing. */
 export function gridToRows(reading: GridReading): string[][] {
-	return reading.rows
-		.map((row) =>
-			row
-				.filter((bar) => !bar.empty)
-				.map((bar) => bar.chords.map((chord) => chord.numeral).join(' '))
-		)
-		.filter((row) => row.length > 0);
+	return keptRows(reading).map((row) =>
+		row.map((bar) => bar.chords.map((chord) => chord.numeral).join(' '))
+	);
+}
+
+/**
+ * The words to store, in the shape `gridToRows` just produced.
+ *
+ * The two have to agree bar for bar or every lyric after the first empty bar is
+ * sung over the wrong chord — so they are filtered by one function and not by
+ * two that happen to be written the same way today. Returns null when there is
+ * nothing to sing, which is what keeps an instrumental's column null rather
+ * than a grid of empty strings.
+ */
+export function lyricsToRows(reading: GridReading): string[][] | null {
+	const rows = keptRows(reading).map((row) => row.map((bar) => bar.lyric.trim()));
+	return rows.some((row) => row.some(Boolean)) ? rows : null;
+}
+
+/** Bars that made it into the form, grouped as they will be printed. */
+function keptRows(reading: GridReading): BarReading[][] {
+	return reading.rows.map((row) => row.filter((bar) => !bar.empty)).filter((row) => row.length > 0);
 }
 
 /**
@@ -281,6 +301,21 @@ export function parseIntoGrid(text: string): Grid {
 		if (cells.length) rows.push(cells.map((text) => ({ text })));
 	}
 
+	return rows.length ? rows : emptyGrid();
+}
+
+/**
+ * A chord sheet — chords written above the words — as a grid.
+ *
+ * The sibling of `parseIntoGrid`, for the other format a song arrives in. Each
+ * chord becomes a bar and each line of the sheet becomes a row, which means a
+ * row of the chart is a line of the song: exactly the arrangement somebody
+ * singing it wants to read.
+ */
+export function sheetIntoGrid(text: string): Grid {
+	const rows = parseChordSheet(text).rows.map((row) =>
+		row.bars.map((bar, i) => ({ text: bar, lyric: row.lyrics[i] ?? '' }))
+	);
 	return rows.length ? rows : emptyGrid();
 }
 

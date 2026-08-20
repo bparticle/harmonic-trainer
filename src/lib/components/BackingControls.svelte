@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onDestroy, untrack } from 'svelte';
 	import { BackingTrack, type Part } from '$lib/audio/backing';
-	import type { Feel } from '$lib/audio/groove';
+	import type { Groove } from '$lib/audio/groove';
 	import { CHARTS, chartBySlug, realiseChart } from '$lib/curriculum/charts';
 	import { parseKey } from '$lib/music/key';
 
@@ -20,9 +20,9 @@
 
 	let {
 		keyName,
-		feel = 'swing',
+		groove,
 		defaultSlug = 'blues-12'
-	}: { keyName: string; feel?: Feel; defaultSlug?: string } = $props();
+	}: { keyName: string; groove?: Groove; defaultSlug?: string } = $props();
 
 	const MIN_BPM = 40;
 	const MAX_BPM = 300;
@@ -51,10 +51,14 @@
 	track.onBeat = (state) => (liveBar = state.playing ? state.bar : 0);
 	track.onStart = () => (counting = false);
 
+	// The chart's own groove unless the block asked for one. A blues in a session
+	// should shuffle here for the same reason it shuffles on the play-along page.
+	const activeGroove = $derived<Groove>(groove ?? seed.defaultGroove);
+
 	const config = () => ({
 		bars: chart.bars,
 		bpm,
-		feel,
+		groove: activeGroove,
 		key: parseKey(keyName),
 		beatsPerBar: chart.beatsPerBar,
 		countInBars: 1
@@ -80,6 +84,8 @@
 	function chooseChart(next: string) {
 		slug = next;
 		bpm = chartBySlug(next)?.defaultBpm ?? bpm;
+		// The groove follows from the seed via `activeGroove`; only the tempo has
+		// to be copied, because it is yours to nudge once it has arrived.
 		if (playing) {
 			counting = true;
 			void track.start(config());

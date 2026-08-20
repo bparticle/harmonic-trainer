@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { pitchClass } from '$lib/music/note';
+	import { GROOVES, grooveSpec, isGroove, type Groove } from '$lib/audio/groove';
 	import { playProgression, stopAll } from '$lib/audio/engine';
 	import {
 		BARS_PER_ROW,
@@ -9,8 +10,10 @@
 		looksLikeChart,
 		parseIntoGrid,
 		readGrid,
+		sheetIntoGrid,
 		type Grid
 	} from '$lib/curriculum/editor';
+	import { looksLikeChordSheet } from '$lib/curriculum/lyrics';
 
 	/*
 	 * Writing a chart down.
@@ -34,12 +37,34 @@
 		keys: string[];
 		keyLabel: (k: string) => string;
 		initialKey?: string;
-		/** Submitted values kept across a failed save. */
-		initial?: { name?: string; text?: string; key?: string; mode?: string; bpm?: number } | null;
+		/** Submitted values kept across a failed save, or an existing chart opened
+		 * to be changed. Both are the same thing from here: a grid and the fields
+		 * around it, arriving already filled in. */
+		initial?: {
+			name?: string;
+			text?: string;
+			key?: string;
+			mode?: string;
+			bpm?: number;
+			groove?: string;
+			notes?: string;
+			/** The words, in the grid's shape. */
+			lyrics?: string[][];
+		} | null;
+		/** The chart being changed, or null to write a new one. Only the id is
+		 * needed: everything else comes through `initial` either way. */
+		editing?: { id: string; name: string } | null;
 		onCancel: () => void;
 	};
 
-	let { keys, keyLabel, initialKey = 'C', initial = null, onCancel }: Props = $props();
+	let {
+		keys,
+		keyLabel,
+		initialKey = 'C',
+		initial = null,
+		editing = null,
+		onCancel
+	}: Props = $props();
 
 	/*
 	 * The props seed the fields and then let go of them. A refused save comes
@@ -55,14 +80,51 @@
 	let mode = $state<'major' | 'minor'>(initial?.mode === 'minor' ? 'minor' : 'major');
 	// svelte-ignore state_referenced_locally
 	let bpm = $state(initial?.bpm ?? 140);
-	let notes = $state('');
 	// svelte-ignore state_referenced_locally
-	let grid = $state<Grid>(initial?.text ? parseIntoGrid(initial.text) : emptyGrid());
+	let groove = $state<Groove>(isGroove(initial?.groove) ? initial.groove : 'swing');
+	// svelte-ignore state_referenced_locally
+	let notes = $state(initial?.notes ?? '');
+	/*
+	 * The grid, with the words already attached where there are any.
+	 *
+	 * They travel on the bars rather than beside them for the same reason the
+	 * server keeps them there: a bar and the words sung over it are one thing,
+	 * and two arrays that have to stay the same length are two things waiting to
+	 * disagree about which chord a line is sung on.
+	 */
+	function seedGrid(): Grid {
+		const base = initial?.text ? parseIntoGrid(initial.text) : emptyGrid();
+		const words = initial?.lyrics;
+		if (!words) return base;
+		return base.map((row, r) => row.map((bar, c) => ({ ...bar, lyric: words[r]?.[c] ?? '' })));
+	}
+
+	// svelte-ignore state_referenced_locally
+	let grid = $state<Grid>(seedGrid());
+	/*
+	 * Whether the words are being written.
+	 *
+	 * Off unless there is something to sing, so writing an instrumental down is
+	 * the same editor it has always been — no extra row of empty boxes under
+	 * every bar to explain away. A pasted chord sheet turns it on by itself,
+	 * because arriving with words is as clear a statement of intent as pressing
+	 * the button would have been.
+	 */
+	// svelte-ignore state_referenced_locally
+	let singing = $state(grid.some((row) => row.some((bar) => bar.lyric)));
 	let hearing = $state(false);
 
 	const reading = $derived(readGrid(grid, writtenKey));
 	/** The chords as typed, which is what the server is sent. */
 	const source = $derived(grid.map((row) => row.map((bar) => bar.text)));
+	/** And the words, in the same shape. */
+	const sung = $derived(grid.map((row) => row.map((bar) => bar.lyric ?? '')));
+
+	/** Turning the words on gives every bar somewhere to put them. */
+	function toggleSinging() {
+		if (!singing) grid = grid.map((row) => row.map((bar) => ({ ...bar, lyric: bar.lyric ?? '' })));
+		singing = !singing;
+	}
 
 	/*
 	 * Pasting a chart in still works, because it is how a tune arrives from an
@@ -72,10 +134,14 @@
 	 */
 	function onPaste(event: ClipboardEvent, r: number, c: number) {
 		const text = event.clipboardData?.getData('text') ?? '';
-		if (!looksLikeChart(text)) return;
+		// A chord sheet is checked for first: it has newlines too, so the older
+		// grid parser would happily read one and throw every word away.
+		const sheet = looksLikeChordSheet(text);
+		if (!sheet && !looksLikeChart(text)) return;
 
 		event.preventDefault();
-		const pasted = parseIntoGrid(text);
+		const pasted = sheet ? sheetIntoGrid(text) : parseIntoGrid(text);
+		if (sheet) singing = true;
 		// Pasting into the first cell replaces the chart; anywhere else, only the
 		// row you are standing in, so one line can be re-pasted without losing the
 		// rest of the form.
@@ -115,10 +181,22 @@
 	};
 </script>
 
-<form method="POST" action="?/create" class="editor">
+<form method="POST" action={editing ? '?/update' : '?/create'} class="editor">
+	{#if editing}
+		<input type="hidden" name="id" value={editing.id} />
+	{/if}
+
 	<div class="flex flex-wrap items-baseline justify-between gap-2">
-		<h2 class="panel-title">Add a chart</h2>
-		<p class="hint">Stored as numerals, so typing it in once gives you all twelve keys.</p>
+		<h2 class="panel-title">{editing ? `Edit ${editing.name}` : 'Add a chart'}</h2>
+		<p class="hint">
+			{#if editing}
+				The chords come back as they were written down. Its place in the record does not change, so
+				runs and badges on it survive a rename.
+			{:else}
+				Stored as numerals, so typing it in once gives you all twelve keys. Paste a chord sheet —
+				chords above the words — and the words land under the right bars.
+			{/if}
+		</p>
 	</div>
 
 	<div class="head">
@@ -145,11 +223,23 @@
 			<span class="field-label">Tempo</span>
 			<input bind:value={bpm} name="bpm" type="number" min="40" max="300" class="field w-20" />
 		</label>
+		<label class="field-wrap">
+			<span class="field-label">Groove</span>
+			<select bind:value={groove} name="groove" class="field">
+				{#each GROOVES as option (option.id)}
+					<option value={option.id}>{option.name}</option>
+				{/each}
+			</select>
+		</label>
 	</div>
 
 	<p class="hint">
 		The key you say it is written in decides every numeral below. Change it and watch them move — if
 		they stop making sense, the key is wrong.
+	</p>
+	<p class="hint">
+		{grooveSpec(groove).notes} The groove, the tempo and the key are saved with the chart, so it opens
+		the way you left it.
 	</p>
 
 	<div class="grid-wrap">
@@ -183,6 +273,17 @@
 								reads as {cell.chords.map((ch) => ch.read ?? '?').join(' ')}
 							</span>
 						{/if}
+						{#if singing}
+							<input
+								value={bar.lyric ?? ''}
+								oninput={(e) => (bar.lyric = e.currentTarget.value)}
+								class="cell-lyric"
+								placeholder="words"
+								aria-label={cell?.number
+									? `Words in bar ${cell.number}`
+									: `Words in row ${r + 1}, bar ${c + 1}`}
+							/>
+						{/if}
 					</div>
 				{/each}
 				<div class="row-tools">
@@ -199,7 +300,15 @@
 
 	<div class="flex flex-wrap items-center gap-2">
 		<button type="button" class="chip" onclick={addRow}>+ row</button>
+		<button type="button" class="chip" class:is-on={singing} onclick={toggleSinging}>
+			{singing ? '− words' : '+ words'}
+		</button>
 		<span class="count">{reading.bars} bars</span>
+		{#if singing}
+			<span class="count">
+				Words sit under the chord they are sung over, and light up with the bar.
+			</span>
+		{/if}
 	</div>
 
 	{#if reading.problems.length}
@@ -244,9 +353,12 @@
 		each other.
 	-->
 	<input type="hidden" name="grid" value={JSON.stringify(source)} />
+	<input type="hidden" name="lyrics" value={JSON.stringify(sung)} />
 
 	<div class="flex flex-wrap items-center gap-2">
-		<button type="submit" class="chip is-on" disabled={!reading.ok}>Save chart</button>
+		<button type="submit" class="chip is-on" disabled={!reading.ok}>
+			{editing ? 'Save changes' : 'Save chart'}
+		</button>
 		<button type="button" class="chip" onclick={hear} disabled={reading.bars === 0}>
 			{hearing ? 'Stop' : 'Hear it'}
 		</button>
@@ -385,6 +497,35 @@
 		font-family: var(--font-mono);
 		font-size: 0.62rem;
 		color: var(--color-ink-dim);
+	}
+
+	/* The words, in the reading face rather than the mono one: they are sung, not
+	   measured. Ruled off above so a bar reads chord-then-words, the same way it
+	   does on the chart itself. */
+	.cell-lyric {
+		width: 100%;
+		margin-top: 0.35rem;
+		padding-top: 0.3rem;
+		border: 0;
+		border-top: 1px solid var(--color-ground-line);
+		background: transparent;
+		color: var(--color-ink-muted);
+		font-size: 0.76rem;
+	}
+
+	.cell-lyric::placeholder {
+		color: var(--color-ink-dim);
+	}
+
+	.cell-lyric:focus {
+		outline: none;
+		color: var(--color-ink);
+	}
+
+	.cell-lyric:focus-visible {
+		outline: 2px solid var(--color-ink);
+		outline-offset: 3px;
+		border-radius: 3px;
 	}
 
 	.row-tools {

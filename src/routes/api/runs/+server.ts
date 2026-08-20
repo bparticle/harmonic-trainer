@@ -141,9 +141,12 @@ function parseRun(value: unknown): RunPayload[] {
 	const id = typeof value.id === 'string' && UUID.test(value.id) ? value.id : null;
 	const chartSlug = text(value.chartSlug);
 	const keyCenter = text(value.keyCenter);
-	const feel = text(value.feel);
+	// `feel` is what this was called before grooves existed. A browser can be
+	// holding an unflushed run written by the old page, and dropping it over a
+	// renamed field would lose a sitting to a rename.
+	const groove = text(value.groove) ?? text(value.feel);
 	const startedAt = when(value.startedAt);
-	if (!id || !chartSlug || !keyCenter || !feel || !startedAt) return [];
+	if (!id || !chartSlug || !keyCenter || !groove || !startedAt) return [];
 
 	const numbers = {
 		bpm: count(value.bpm, 400),
@@ -170,7 +173,7 @@ function parseRun(value: unknown): RunPayload[] {
 			chartSlug,
 			chartId: typeof value.chartId === 'string' && UUID.test(value.chartId) ? value.chartId : null,
 			keyCenter,
-			feel,
+			groove,
 			startedAt: startedAt.toISOString(),
 			// A run cannot end before it started, whatever the clock on the machine
 			// that wrote it thought.
