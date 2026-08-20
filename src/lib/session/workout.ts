@@ -4,6 +4,7 @@ import { nextPosition, positionOf, rungById, type RungId } from '$lib/curriculum
 import { PROGRESSIONS } from '$lib/curriculum/progressions';
 import { progressionSkillCode, rungSkillCode } from '$lib/curriculum/cards';
 import type { ChordQuality } from '$lib/music/chord';
+import { GUIDE_TONE_TARGET, type Goal } from '$lib/practice/goal';
 import type { CardDirection, ChartStyle } from '$lib/server/db/schema';
 import { isRetiredIntroduction, selectDue, type Schedulable } from '$lib/srs/scheduler';
 
@@ -25,8 +26,10 @@ import { isRetiredIntroduction, selectDue, type Schedulable } from '$lib/srs/sch
  *
  * The four task kinds are the ones the play-along page cannot ask, plus the page
  * itself. The ear and the function are questions no chart poses; the mission
- * *is* the chart, under a constraint, with a goal. The goal evaluator arrives in
- * a later phase; everything the drill room asks is here.
+ * *is* the chart, under a constraint, with a goal. `Goal` itself, the line that
+ * describes one and the bar a guide-tone goal is set at now live in
+ * `practice/goal.ts` beside the evaluator that answers them — see the note there
+ * for why they had to move out of this module.
  *
  * Both drill tasks are queues of card ids over one bank, and they partition it
  * by direction — the ear takes `hear_play` and `hear_name`, the function takes
@@ -89,39 +92,6 @@ export type WorkoutSize = 'short' | 'standard' | 'long';
 export const TASK_COUNT: Record<WorkoutSize, number> = { short: 3, standard: 4, long: 5 };
 
 export type TaskKind = 'ear' | 'function' | 'mission' | 'new_thing';
-
-/**
- * The end of a task, expressed as something that can be met.
- *
- * Timers may still bound a task from above; nothing ends because of one. Each
- * variant is a question a later phase can answer from rows — how many were
- * asked, what the run's attempts add up to — rather than from an estimate.
- */
-export type Goal =
-	/** Ear and function: a fixed number of questions. */
-	| { kind: 'questions'; count: number }
-	/** A mission judged on guide tones, as a percentage over a number of choruses. */
-	| { kind: 'guide_tones'; percent: number; choruses: number }
-	/** A mission judged on getting round the form at all. */
-	| { kind: 'choruses'; count: number }
-	/** One new thing: shown once, tried once. */
-	| { kind: 'once' };
-
-/** The goal in a line, for showing it while the task runs. */
-export function describeGoal(goal: Goal): string {
-	switch (goal.kind) {
-		case 'questions':
-			return `${goal.count} questions.`;
-		case 'guide_tones':
-			return `Land ${goal.percent}% of the guide tones over ${goal.choruses} ${
-				goal.choruses === 1 ? 'chorus' : 'choruses'
-			}.`;
-		case 'choruses':
-			return goal.count === 1 ? 'All the way round, once.' : `${goal.count} times round.`;
-		case 'once':
-			return 'Once through. Nothing is being counted.';
-	}
-}
 
 /**
  * A mission: the real play-along page under a constraint.
@@ -294,14 +264,6 @@ const MAX_PASSES = 3;
  * it — so eight of these is about the same amount of work as ten of those.
  */
 const FUNCTION_QUESTIONS = 8;
-
-/**
- * The guide-tone threshold, and it is a first guess.
- *
- * The plan says as much: tune it against the record once missions produce rows,
- * not against theory. It lives here alone so that tuning is one edit.
- */
-const GUIDE_TONE_TARGET = 70;
 
 /**
  * How much of a queue a pinned choice may take.

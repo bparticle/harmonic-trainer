@@ -413,6 +413,19 @@ export const playRuns = pgTable(
 			.references(() => users.id, { onDelete: 'cascade' }),
 		chartSlug: text('chart_slug').notNull(),
 		chartId: uuid('chart_id').references(() => charts.id, { onDelete: 'set null' }),
+		/**
+		 * The mission block this run answered, or null for a free run — which stays
+		 * the common case, because playing along belongs to no session.
+		 *
+		 * It is what makes a goal's verdict traceable: the block holds the verdict,
+		 * this points at the run that earned it, and `chord_attempts` holds every
+		 * chord the run was judged on. `set null` rather than `cascade`, following
+		 * the same reasoning as `chart_id` above — deleting a session must not
+		 * delete an hour of playing.
+		 */
+		sessionBlockId: uuid('session_block_id').references(() => sessionBlocks.id, {
+			onDelete: 'set null'
+		}),
 		keyCenter: text('key_center').notNull(),
 		bpm: integer('bpm').notNull(),
 		/** The groove it was played over. Called `feel` until grooves existed, when
