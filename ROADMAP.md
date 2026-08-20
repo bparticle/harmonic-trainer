@@ -392,6 +392,234 @@ seconds of clicking one link on the landing page.
 
 ---
 
+## M15 — The practice room, rebuilt
+
+**The exercise section, rethought from the ground up around the page that
+actually gets used.** Reported after real use, like the progression rebuild
+before it, and recorded with the same honesty: the daily session orbits one
+subject, it ends too easily, tomorrow looks like today, and half its blocks are
+worse versions of pages that already exist — so the player uses the play-along
+page all the time and ignores the exercise section altogether. All four
+complaints are true, and every one of them traces to a cause in the code.
+
+### Where each complaint comes from
+
+**One subject.** `startOrResume` narrows every drill to a single skill code on
+every path, including the default — `focusSkills` is always exactly one entry
+(`session-store.ts:255,263,268`). A rung holds between one and seven items, so
+twenty minutes orbit a handful of facts asked four ways. The narrowing was
+built as a courtesy ("a chosen focus narrows the drills") and became a cage
+when it also applied to the day nobody chose anything.
+
+**Ends too easily.** Blocks are sized by a timer but filled from the FSRS due
+pile (`plan.ts`, `SECONDS_PER_CARD`), and FSRS exists to make that pile small.
+A well-run deck has almost nothing due, so "Nothing due for this block today"
+is a normal sight and a session can be clicked through in three minutes. The
+timer measures nothing — no block ends because of it — and completion is not
+measured at all. The scheduler is doing its job; the session was built as if
+the scheduler's leftovers were a syllabus.
+
+**The same thing the next day.** Composition is static: the same six blocks in
+the same order with the same copy, every day, forever. The only input that
+varies is the due pile, and FSRS varies it towards _less_. The "one new thing"
+block shows the same rung text every day until the ladder is advanced by hand
+on the home page, so the one block named for novelty is the most repetitive
+thing in the app.
+
+**Already practised elsewhere.** The warm-up asks `see_play` — and a chart on
+the play-along page _is_ `see_play`, with a rhythm section behind it and
+chord-by-chord judging in front. "Name what you play" is `/play` with a timer
+on it. "Apply it" embeds `BackingControls` — `/backing` with fewer knobs, no
+scoring, no streaks, no badges and no record. A player who drifts to the
+better page and skips the section is not lazy; they are correct, and a
+practice feature that is rational to skip is a bug in the feature.
+
+The root mistake is historical. The session engine was designed at M5 as the
+centre of the app, before the rhythm section existed. M7 and everything after
+it — scoring, streaks, badges, the record, grooves — made the play-along page
+the centre, and the session was never re-founded on it. This milestone
+re-founds it.
+
+### The principle
+
+**If the band can ask it, the band asks it. The drill room keeps only the
+questions the band cannot pose.** Those are:
+
+- **The ear** — `hear_play`, `hear_name`. The transport never plays you a
+  chord and waits.
+- **The name** — `play_name`. The chart names everything for you; it never
+  asks you to.
+- **The function** — "play the IV chord of E♭." The chart shows symbols, not
+  degrees-as-questions, and connecting symbol to function is the app's stated
+  reason to exist.
+- **Coverage** — the keys, tempos and tunes the record shows you avoiding.
+  The play-along page grants total freedom, and total freedom is how twelve
+  keys become four.
+
+Everything else stops being a block beside the band and becomes a **mission on
+the transport**: the real play-along page, under a constraint, with a
+measurable goal. This also ends the two-currency problem — practice finally
+deposits into the same record, streaks and badges the player already cares
+about, instead of minting review rows nothing celebrates.
+
+### The workout
+
+A session becomes a **workout**: three to five tasks, each with a goal that
+can be met rather than a clock that runs out. Composed fresh each day from
+four inputs — the due pile, the neighbourhood of the current ladder position,
+the record's cold spots (a `GROUP BY` over `chord_attempts` by key and
+quality: the blind-spot report from M6, finally built, arriving as an _input_
+rather than a finding), and one novelty slot. Composition is deterministic per
+date, seeded the way `chooseKey` already seeds its rotation, so a reload
+resumes the same workout and tomorrow's genuinely differs.
+
+Four task kinds:
+
+1. **Ear** — a fixed count of questions (ten), drawn `hear_play` and
+   `hear_name`. The queue never runs dry: due cards first, near-due next,
+   fresh material from anything already reached last. The task ends at the
+   count, never at pile-empty. Reviews are still recorded and FSRS still
+   schedules; it just stops being the only source of questions.
+2. **Function** — degree prompts: "the IV chord — E♭" → play it, then name
+   it. A new card direction `degree_play`, because seeing "A♭" and producing
+   A♭ is spelling, while seeing "IV of E♭" and producing A♭ is harmony. The
+   ladder already stores each item's degree, so the material exists; only the
+   question is new.
+3. **Mission** — the real `/backing` page opened under a constraint with a
+   goal judged by the machinery that already judges everything there:
+   _Blues in D♭ at 100, land 70% of guide tones over two choruses_ · _the
+   ii–V–I cycle chart, all the way round_ · _a tune from your list in a key
+   you have never played it in_ · _hands off the roots: chord tones only,
+   thirds and sevenths doing the work_. Cold keys and cold qualities from the
+   record steer which mission is offered. Streaks, badges and the fun switch
+   all apply, because it is not a copy of the page — it is the page.
+4. **One new thing** — a single unseen item: the next rung, the next
+   progression, or a groove never yet played over. Shown once, tried once,
+   and if it was yesterday's it is not today's. When the current rung looks
+   solid, this slot is where "ready to move on" gets said out loud, instead
+   of being a small button at the bottom of the home page.
+
+The home picker survives untouched in spirit: choosing a rung or a progression
+pins the workout's material, and composition still varies around the choice.
+Agency stays; the scheduler still never ambushes.
+
+### What gets deleted
+
+- **Block types `wheel_warmup`, `name_what_you_play`, `apply` and `log`**, and
+  the proportional `SHAPE` timer model with them. `block_type` is text
+  narrowed by a union, so historical rows keep their names and the profile
+  keeps counting the hours they hold. The log block's self-rating was written
+  and never read; the grade already comes from performance.
+- **`see_play` retires from review.** It remains the introduction — a card in
+  `new` or `learning` state may still be shown its symbol — and stops being
+  re-asked once the card graduates, because from then on the chart asks that
+  question with a band behind it. A selection filter, not a schema change.
+- **The 10/20/35 length picker** becomes workout sizes — short, standard,
+  long: three, four, five tasks — and the block preview on the home page
+  becomes a task preview. Minutes were always an estimate; tasks are countable.
+
+### Schema
+
+Two additive migrations, nothing destructive:
+
+```
+play_runs
+  session_block_id  uuid null -> session_blocks on delete set null
+```
+
+so a mission's result traces to the run and the chord attempts that earned it
+— the house rule that every number traces to a row, applied to goals. Null
+stays the common case: a free run on `/backing` belongs to no session, exactly
+as now. The FK follows M9's ownership rule (the child does not repeat what the
+parent knows), and M12 stamps `sessions` with its owner later without this
+table changing again.
+
+And `ALTER TYPE card_direction ADD VALUE 'degree_play'`, plus its entry in
+`DIRECTION_WEIGHT` (suggest 1.3 — function knowledge is the problem statement,
+just behind `play_name`).
+
+`plan_json` gains a `version: 2` workout shape. An unfinished v1 session found
+on upgrade is left where it lies — `endedAt` null, never resumed, its finished
+blocks still counted — and the home page simply offers a fresh workout. Honest
+and cheap.
+
+### Order of work
+
+Five phases; each lands with `npm run verify` green and each is independently
+shippable.
+
+**Phase 1 — the composer, pure.** `src/lib/session/workout.ts`: `Task`,
+`Goal`, `Workout` types and `composeWorkout(input)` — same discipline as
+`planSession`, testable without a database, a clock or a keyboard. Inputs: due
+cards, reached positions, cold spots from the record, yesterday's novelty,
+the picker's choice, the date. Tests assert: consecutive days differ for
+identical state; the ear queue is never empty even with nothing due; a picker
+choice is honoured; the novelty slot never repeats yesterday. `plan.ts` stays
+alive until Phase 4 flips the page, then dies.
+
+**Phase 2 — the queue and the function cards.** The never-dry queue builder
+(due → near-due → fresh, one pool per workout so nothing is asked twice); the
+`degree_play` enum migration; degree items posed in `drill.ts` (`pose` gains
+one case; `markPlayed` and `markNamed` already know how to mark both halves);
+`see_play`'s graduation filter in selection.
+
+**Phase 3 — missions.** `src/lib/practice/goal.ts`: a pure evaluator from a
+run's attempts to a goal verdict — given the rows, was 70% of guide tones over
+two choruses met? `/backing` learns mission parameters in the URL beside the
+`?chart=` it already reads (key, bpm floor, groove, choruses, goal), shows the
+goal while the transport runs, evaluates when it stops, and posts the block
+result with the run id. `/api/runs` accepts `session_block_id`. A mission
+played with the network away follows the run outbox's fate: the run arrives on
+the next load, the block simply is not finished yet, and nothing is lost.
+
+**Phase 4 — the pages.** `/session` rebuilt around the task list: tasks in
+order, goal progress visible, done when done. The end screen reports what
+actually changed — accuracy against last time, a cold key touched, a badge
+earned — from rows, never estimates. The home page previews today's actual
+tasks instead of six block durations. Finishing a workout offers another one:
+`todaysSession` becomes latest-unfinished, because "you have practised enough
+today" is a sentence this app has no business saying.
+
+**Phase 5 — the deletion and the record.** Dead block code removed, README's
+practice sections rewritten to describe what exists, and the DECISIONS.md
+entry written in prose — the change is not done until it is recorded.
+
+### Done when
+
+- Composing workouts for the same state on two consecutive days yields
+  visibly different task lists, proven by a test.
+- No task can render "nothing due": an empty pile still yields a full ear
+  task from fresh material, proven by a test.
+- Every remaining drill question is one the play-along page cannot ask; every
+  overlap either died or became a mission constraint.
+- A mission's verdict traces to a run and its chord attempts through
+  `session_block_id`.
+- A brand-new account's first workout is playable start to finish with C
+  major material only.
+- `npm run verify` passes.
+
+### Decided here, so execution does not reopen them
+
+- **Completion replaces the clock.** Timers may remain as an upper bound on a
+  task; nothing ends because of one.
+- **Still no daily streak.** A workout skipped is a workout skipped; the app
+  has never told anyone off and does not start now.
+- **Missions do not require MIDI.** The on-screen keyboard feeds the same
+  pipeline on `/backing` already.
+- **The fun layer stays on its switch** and missions inherit it for free,
+  because they run the real page.
+
+### Open within this milestone
+
+- Goal thresholds. 70% of guide tones over two choruses is a first guess;
+  tune them against the record once missions produce rows, not against
+  theory.
+- Whether the ear task should ever play sequences (scales) or only chords.
+  Recommendation: chords and progressions only — the scale cards' natural
+  home is the introduction, not the review loop.
+
+---
+
 ## What this changes about the parked milestones
 
 ### M6 — partly unparked
@@ -432,7 +660,14 @@ not have: there is now a record worth taking with you, not just charts.
 
 ## Order
 
-**M12 → M13.** M14, M9 and M10 have landed, in that order, with M11 before them.
+**M15 → M12 → M13.** M14, M9 and M10 have landed, in that order, with M11
+before them.
+
+- M15 goes first because it is the only item here that changes what daily use
+  feels like now, and because it touches the tables M12 will stamp with owners
+  — `sessions`, `session_blocks`, `cards` — so M12 should migrate the new
+  shape once rather than the old shape and then the new one. It depends on
+  nothing planned: the record it reads has been filling since M9.
 
 - M14 went first, which was a change. It depended on nothing — no persistence,
   no account, no database — so it was not waiting for M9, and it was the only

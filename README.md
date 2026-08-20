@@ -302,6 +302,7 @@ with its degree. `DECISIONS.md` has the reasoning for each.
 
 | M       | Deliverable                                                     | Status  |
 | ------- | --------------------------------------------------------------- | ------- |
+| **M15** | The practice room, rebuilt around the band                      | planned |
 | **M12** | Accounts — real credentials, and every owned row actually owned | planned |
 | **M13** | The subscription — a hosted instance somebody else can pay for  | planned |
 
