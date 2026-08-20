@@ -649,12 +649,51 @@ entry written in prose — the change is not done until it is recorded.
 
 ### Open within this milestone
 
-- Goal thresholds. 70% of guide tones over two choruses is a first guess;
-  tune them against the record once missions produce rows, not against
-  theory.
-- Whether the ear task should ever play sequences (scales) or only chords.
-  Recommendation: chords and progressions only — the scale cards' natural
-  home is the introduction, not the review loop.
+- ~~Whether the ear task should ever play sequences (scales) or only chords.~~
+  **Settled in Phase 2, against the recommendation.** Chords only would leave
+  a brand-new account — one rung, the C major scale — with no ear material at
+  all, and "a first workout playable with C major material only" is the
+  stronger constraint. Scales stay in. `directionsForRung` already refuses to
+  ask a scale to be _named_, so only "listen, play it back" can be posed.
+
+### What the record already says about the thresholds
+
+The plan said to tune the goals against the record once missions produce
+rows. It turns out the record could answer sooner: 813 chord attempts across
+19 runs were already there, and they say the first guess was wrong.
+
+**92% of all attempts landed every guide tone.** Across the seven runs long
+enough to mean anything (twelve attempts or more) the median run landed 93%,
+the lower quartile 81%, and only one run in the whole record fell below 70%.
+A 70% bar is therefore not a goal — it is a thing that happens anyway, and a
+goal that cannot be missed teaches nothing and celebrates nothing.
+
+Two cautions before simply raising the number, both visible in the same rows:
+
+- **Those rates are from two keys.** C holds 588 attempts and A holds 225.
+  The other ten have _none at all_. The high percentages are what a
+  well-known tune in a comfortable key sounds like, and a mission's whole
+  premise is that it is neither. Expect the rate to fall in a cold key, and
+  do not read 93% as a baseline that will survive being moved.
+- **Tempo and tune move it more than key does so far.** The blues at 140
+  lands 69–81% while rhythm changes at 100 lands 92–94%, in the same key. So
+  a single global percentage is the wrong shape for this goal whatever
+  number is chosen.
+
+The recommendation, to be argued with rather than obeyed: **85% as the
+starting bar in a key the record has nothing on**, which is meaningfully
+above the lower quartile and well below what a comfortable run produces, and
+a goal that carries its context — key, tune, tempo — so that a later pass can
+calibrate per-context instead of moving one constant for everybody. The
+constant lives in one place either way, and the first month of mission rows
+is what settles it.
+
+That the record could answer this at all is worth noticing on its own: it is
+the blind-spot report doing its job a phase before it was scheduled to exist.
+And the coverage figure is the milestone's own premise, quantified — two keys
+out of twelve, 19 runs against 8 reviews. The exercises are not being
+skipped because practice is unwelcome. They are being skipped because the
+band is better company.
 
 ---
 
