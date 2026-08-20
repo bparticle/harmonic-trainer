@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Goal } from '$lib/practice/goal';
+import type { LegacyBlockType } from '$lib/server/db/schema';
 import {
 	hydrateWorkout,
 	isWorkout,
@@ -113,17 +114,20 @@ describe('a task names the row that records it', () => {
 		expect(taskBlockType('mission', 2)).not.toBe(taskBlockType('mission', 4));
 	});
 
+	// Every one of them, named against the type that keeps them alive: these are
+	// rows in the database and no longer words the app can say, and a reader who
+	// deletes `LegacyBlockType` as dead code fails here rather than in production.
 	it('refuses to read a six-block session’s rows as tasks', () => {
-		for (const old of [
+		const old = [
 			'wheel_warmup',
 			'name_what_you_play',
 			'ear_drill',
 			'new_atom',
 			'apply',
 			'log'
-		]) {
-			expect(taskIndexOf(old)).toBeNull();
-		}
+		] satisfies LegacyBlockType[];
+
+		for (const blockType of old) expect(taskIndexOf(blockType)).toBeNull();
 	});
 
 	it('refuses anything that is not a kind and a number', () => {
