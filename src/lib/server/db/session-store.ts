@@ -13,7 +13,7 @@ import {
 	skills,
 	srsState
 } from './schema';
-import type { BlockType, ReviewRating } from './schema';
+import type { ReviewRating, WorkoutBlockType } from './schema';
 import { initialState, schedule, type Schedulable, type SrsState } from '$lib/srs/scheduler';
 import {
 	coldSpotsFrom,
@@ -518,7 +518,16 @@ export async function finishTask(
 	return true;
 }
 
-export async function beginBlock(sessionId: string, blockType: BlockType): Promise<string> {
+/**
+ * Open a block's row, or hand back the one already open.
+ *
+ * `WorkoutBlockType` and not `BlockType`, which is where the old six-block
+ * vocabulary is actually retired: the names those blocks used are still readable
+ * — `practiceTotals` counts their hours and always will — but there is no longer
+ * a way to write one, and the type says so rather than a comment somewhere
+ * hoping to be read.
+ */
+export async function beginBlock(sessionId: string, blockType: WorkoutBlockType): Promise<string> {
 	const [existing] = await db
 		.select({ id: sessionBlocks.id })
 		.from(sessionBlocks)
@@ -533,7 +542,7 @@ export async function beginBlock(sessionId: string, blockType: BlockType): Promi
 
 export async function finishBlock(
 	sessionId: string,
-	blockType: BlockType,
+	blockType: WorkoutBlockType,
 	result: unknown,
 	now = new Date()
 ): Promise<void> {
@@ -856,6 +865,13 @@ export async function rungProgress(position: Position) {
  * halfway is not counted, for the same reason the play-along clock stops when
  * the transport does: the number has to mean something a person would recognise
  * as time at the piano.
+ *
+ * Every finished block, whatever it was called. The six-block session is gone
+ * and its four question-asking blocks are gone with it, but the hours somebody
+ * spent in them are not a claim this milestone gets to revise — so the query
+ * asks the column for nothing but an `ended_at`, and a `wheel_warmup` row from
+ * last spring counts exactly as a `mission_2` row from this morning does. That
+ * is why `LegacyBlockType` still exists, one file away.
  *
  * No user filter, and that is not an oversight. `sessions`, `session_blocks`
  * and `reviews` deliberately do not carry `user_id` yet — each poses a question

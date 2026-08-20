@@ -92,22 +92,32 @@ export const reviewRating = pgEnum('review_rating', ['again', 'hard', 'good', 'e
 export type WorkoutBlockType = `${TaskKind}_${number}`;
 
 /**
- * What a block of practice was.
+ * The six-block session's names for a block. **History, and not vocabulary.**
  *
- * The six original values are the six-block session, and they are kept because
- * the rows are: `block_type` is text narrowed by a union precisely so that a
- * vocabulary can be added to without a migration, and the profile counts the
- * hours those blocks hold. Widened rather than replaced, so history keeps its
- * names.
+ * Do not delete these, and do not write one. The distinction is the whole point
+ * of the type existing on its own: M15 removed the six-block session, so nothing
+ * in the app offers any of these any more — but `session_blocks` still holds the
+ * rows, `practiceTotals` still counts the hours in them, and a row whose
+ * `block_type` no type will admit is a row nobody can read back. The vocabulary
+ * stopped; the record did not.
+ *
+ * `block_type` is text narrowed by a union rather than an enum precisely so this
+ * could happen without a migration — the column was widened when workouts
+ * arrived and nothing had to be rewritten, and nothing has to be rewritten now
+ * that the older half is closed.
  */
-export type BlockType =
-	| 'wheel_warmup'
-	| 'name_what_you_play'
-	| 'ear_drill'
-	| 'new_atom'
-	| 'apply'
-	| 'log'
-	| WorkoutBlockType;
+export type LegacyBlockType =
+	'wheel_warmup' | 'name_what_you_play' | 'ear_drill' | 'new_atom' | 'apply' | 'log';
+
+/**
+ * What a block of practice was: what can be written today, plus what was.
+ *
+ * This is the *reading* type, and the column carries it. The writing side is
+ * narrower — `beginBlock` and `finishBlock` take a `WorkoutBlockType` and
+ * nothing else — so the old names can still come back out of the database and
+ * can no longer go into it.
+ */
+export type BlockType = WorkoutBlockType | LegacyBlockType;
 
 export type SkillCategory =
 	'inventory' | 'keys' | 'voicings' | 'progressions' | 'modes' | 'reharm' | 'application';

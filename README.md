@@ -34,9 +34,11 @@ says what is being done now to make them cheap later.
 
 - **Play** — connect a MIDI keyboard and it names what you play as you play it,
   with the reasoning, on a harmonic wheel that shows why.
-- **Today** — pick any key, any step or any progression and practise it.
-  Spaced repetition schedules the review; a twelve-key ladder suggests where to
-  go next but never locks anything.
+- **Today** — a workout of three to five tasks, composed fresh each morning and
+  finished by meeting its goals rather than by running a clock down. Pick any
+  key, any step or any progression to build it around; spaced repetition
+  schedules the review and a twelve-key ladder suggests where to go next, and
+  neither ever locks anything.
 - **Play along** — a rhythm section generated from a chord chart. Walking bass,
   drums, optional comping, any key, any tempo, loop any bars. Blues, rhythm
   changes, cycles and public-domain standards, plus anything you type in.
@@ -188,6 +190,7 @@ src/
                      onto the bars it is sung over
     practice/      Being judged on what you play
       match.ts       Did you land the chord, and where did your notes sit
+      goal.ts        Was a mission's goal met, judged from the chords it judged
       target.svelte.ts  Lends the sounding chord to the header
       run.ts         A run of the transport on its way to the record, and the
                      outbox that holds it when the network is away
@@ -199,9 +202,12 @@ src/
       backing.ts     The transport: bars, loops, count-in, live tempo
       bass.ts        Bass lines from the chart: walking, boogie, roots, driving
       groove.ts      The nine grooves — kit, bass style, comping and feel
-    session/       The practice sitting
-      plan.ts        Which blocks, in which order, for how long
-      drill.ts       One block's worth of cards
+    session/       The daily workout
+      workout.ts     Which tasks today holds, composed from the record and
+                     the date, and seeded so a reload resumes rather than re-rolls
+      progress.ts    A stored workout and its blocks, read back as where you are
+      report.ts      What changed while it ran - counted, never estimated
+      drill.ts       Posing one card, and marking what was played or named
     srs/
       scheduler.ts   FSRS via ts-fsrs; direction and cold-key weighting
     midi/          Web MIDI and chord clustering
@@ -224,24 +230,24 @@ src/
         index.ts     Drizzle client
         user.ts      currentUserId() - the whole multi-user seam
         settings.ts  The singleton settings row
-        session-store.ts  Sessions, blocks, reviews, and card creation
+        session-store.ts  Workouts, blocks, reviews, and card creation
         play-log.ts  The play-along record: runs, chords judged, badges
     settings.ts    Shared setting types and defaults
   routes/
     layout.css     Design tokens as Tailwind theme
     +layout.*      Injects the database-owned palette during SSR
-    +page.*        Today: pick what to practise
+    +page.*        Today: the workout previewed, and the picker that shapes it
     play/          Name what you play, live
     backing/       Play along, for the player who owns the instance
     demo/          The same page, public, writing nothing
     explore/       The wheel with every overlay
     profile/       What has actually happened
-    session/       A practice sitting, block by block
+    session/       Today's workout, task by task
     settings/
       wheel/       Calibration against your physical wheel
       colours/     OKLCH palette editor with live contrast
     api/settings/  Patches the singleton settings row
-    api/session/   The session's write endpoint
+    api/session/   The workout's write endpoint
     api/runs/      Where a run of the transport is written down
     login/         The password gate
   hooks.server.ts  Redirects unauthenticated requests to /login, and puts
@@ -279,19 +285,24 @@ local Postgres for development and tests.
 
 ## Milestones
 
-| M       | Deliverable                               | Status |
-| ------- | ----------------------------------------- | ------ |
-| **M0**  | Repo, DB, migrations, test runner, tokens | done   |
-| **M1**  | Music core + golden fixtures              | done   |
-| **M2**  | Harmonic wheel component                  | done   |
-| **M3**  | MIDI layer                                | done   |
-| **M4**  | SRS + seeded skill graph                  | done   |
-| **M5**  | Session engine                            | done   |
-| **M7**  | Backing tracks and play-along             | done   |
-| **M9**  | The record, and the multi-user seam       | done   |
-| **M10** | The profile                               | done   |
-| **M11** | The chart editor                          | done   |
-| **M14** | The way in — the public demo              | done   |
+| M       | Deliverable                                | Status |
+| ------- | ------------------------------------------ | ------ |
+| **M0**  | Repo, DB, migrations, test runner, tokens  | done   |
+| **M1**  | Music core + golden fixtures               | done   |
+| **M2**  | Harmonic wheel component                   | done   |
+| **M3**  | MIDI layer                                 | done   |
+| **M4**  | SRS + seeded skill graph                   | done   |
+| **M5**  | Session engine                             | done   |
+| **M7**  | Backing tracks and play-along              | done   |
+| **M9**  | The record, and the multi-user seam        | done   |
+| **M10** | The profile                                | done   |
+| **M11** | The chart editor                           | done   |
+| **M14** | The way in — the public demo               | done   |
+| **M15** | The practice room, rebuilt around the band | done   |
+
+M5 built the session engine and M15 replaced it. The six timed blocks are gone —
+the rows they wrote are still counted, and the reasoning for taking them out is
+in `DECISIONS.md`.
 
 Work after M7 shipped unnumbered, all of it on the play-along page: chord-by-chord
 scoring against the sounding chord, the chart following the music, streaks and
@@ -302,7 +313,6 @@ with its degree. `DECISIONS.md` has the reasoning for each.
 
 | M       | Deliverable                                                     | Status  |
 | ------- | --------------------------------------------------------------- | ------- |
-| **M15** | The practice room, rebuilt around the band                      | planned |
 | **M16** | Tempo as the other axis — badges that know how fast             | planned |
 | **M12** | Accounts — real credentials, and every owned row actually owned | planned |
 | **M13** | The subscription — a hosted instance somebody else can pay for  | planned |
@@ -329,22 +339,77 @@ menu item leading nowhere is worse than an absence.
 The blind-spot report was parked with the other two and is now unblocked, with
 the rows it needs already being written: M9 records every chord judged on the
 play-along page, which is the capture habit the vault was supposed to supply,
-and the profile's _where the time went_ panel is its first draft. See
-`ROADMAP.md`, _What this changes about the parked milestones_, and
-`DECISIONS.md` under _M6 is parked_ for what was kept for whoever builds the
-rest.
+and the profile's _where the time went_ panel is its first draft. M15 took the
+next step and used it: the same grouping now steers which key and which chord
+quality a mission is set on, so the blind spots arrive as an input to practice
+before they ever arrive as a report. What is still unbuilt is the part that says
+something out loud. See `ROADMAP.md`, _What this changes about the parked
+milestones_, and `DECISIONS.md` under _M6 is parked_ for what was kept for
+whoever builds the rest.
 
 ---
 
-## Choosing what to practise
+## The daily workout
+
+**Today** is a workout: three to five tasks, composed fresh each morning, each
+one ending because its goal was met rather than because a clock ran out.
+
+One rule decides what is in it. **If the band can ask it, the band asks it** —
+so anything the play-along page can pose belongs there, with a rhythm section
+behind it and chord-by-chord judging in front, rather than in a thinner copy of
+it somewhere else. What is left is the handful of questions a chart cannot ask,
+plus the chart itself under a constraint:
+
+| Task              | What it asks                                                                                           |
+| ----------------- | ------------------------------------------------------------------------------------------------------ |
+| **Ear**           | Ten questions: listen and play it back, or listen and name it                                          |
+| **Function**      | Eight degrees, spread across keys: "IV — E♭", played and then named                                    |
+| **Mission**       | The play-along page itself, with a key, a tempo floor, a groove and a bar to clear                     |
+| **One new thing** | A single unseen item: the next rung, a progression, a groove never played over. Shown once, tried once |
+
+The tasks are composed from four inputs — what spaced repetition says is due,
+where the ladder has got to, the keys and chord qualities the record shows you
+avoiding, and one slot kept for something you have not met. Composition is
+seeded on the date, so a reload resumes the same workout and tomorrow's is
+genuinely a different one.
+
+**A task never runs out of questions.** The ear task fills its ten from the due
+pile first, then near-due, then anything already reached — so "nothing due
+today" is not a sentence it can produce, which is what a well-scheduled deck
+used to say most days.
+
+**A mission is the play-along page, not a version of it.** It opens the real
+page with the constraint in the address bar, so the scoring, the streaks, the
+badges and the record are the same ones, and the verdict is worked out from the
+chords that were actually judged — traceable afterwards to the run that earned
+it. Missions are aimed at what the record shows you avoiding, which is how
+twelve keys stop being four.
+
+Short, standard and long are three, four and five tasks. Minutes were always an
+estimate; tasks are countable, which is why the home screen can show exactly
+what today holds instead of a set of durations that never varied.
+
+The end screen says what changed, and every figure on it traces to a row: the
+questions this workout graded against the last workout that graded any, each
+mission's verdict, a key the record held nothing in before today, a badge won
+by a run this workout set. Where a number would have to be estimated there is
+no line at all, and a shortfall is stated as a distance rather than as a
+failure.
+
+### Choosing what to practise
 
 The home screen is a picker, not a verdict. Every key, every rung and every
 progression is listed and startable, whether or not the ladder has got there —
-the ladder marks its suggestion and nothing else. Choosing something further
-along starts a session there and leaves the ladder where it was: exploring and
-advancing are separate decisions, and only the arrows at the bottom advance.
+the ladder marks its suggestion and nothing else. Pinning one leads the
+workout's queues and takes it to that key; it gates nothing, and it leaves the
+ladder exactly where it was, because exploring and advancing are separate
+decisions and only the arrows at the bottom advance.
 
 Cards for a step you have never visited are created the moment you pick it.
+
+Finishing a workout offers another one. There is no maximum, no daily streak and
+no calendar of dots: "you have practised enough today" is a sentence this app has
+no business saying, and so is anything at all about a day you did not play.
 
 ---
 
@@ -398,8 +463,10 @@ re-type.
 Charts you add live only in your database. That is the right place for anything
 still in copyright, and it never enters the repo.
 
-The same rhythm section, with fewer knobs and the forms only, is the "Apply it"
-block of a session.
+This page under a constraint — a key, a tempo floor, a groove and a bar to clear
+— is a workout's **mission**. Not a copy of it with fewer knobs: the same page,
+reading a few more parameters out of the address bar, still scoring and still
+keeping badges.
 
 ---
 
@@ -423,9 +490,10 @@ keyboard you have not been in. Colour there means what it means everywhere else:
 a key has a tonic and wears that tonic's swatch, while a chord quality has no
 pitch and is drawn in weight instead.
 
-Hours played counts the transport running and not paused, plus practice
-blocks that finished; it never counts a page left open or a session abandoned
-halfway. "Tunes practised" counts a chart something was played over, not a chart
+Hours played counts the transport running and not paused, plus practice tasks
+that finished; it never counts a page left open or a workout abandoned halfway.
+Blocks of the six-block session that came before the workout still count too —
+those hours happened, and nothing this app rebuilds gets to revise them. "Tunes practised" counts a chart something was played over, not a chart
 opened. Where a figure would have to be estimated it is not shown.
 
 There is no daily streak, no calendar of dots and no days-in-a-row counter. A
