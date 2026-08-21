@@ -4,6 +4,7 @@ import { formatChord, type AbstractChord } from '$lib/music/chord';
 import { key as makeKey, type Key } from '$lib/music/key';
 import type { ChartStyle } from '$lib/server/db/schema';
 import { chordFromNumeral } from './progressions';
+import { demandOfGrid, type Demand } from './vocabulary';
 
 /**
  * The application vehicles, as chord grids.
@@ -505,6 +506,29 @@ export const CHARTS: ChartSeed[] = [
 export function chartBySlug(slug: string): ChartSeed | undefined {
 	return CHARTS.find((c) => c.slug === slug);
 }
+
+/**
+ * What this chart would ask of a pair of hands.
+ *
+ * Derived from the grid rather than typed beside it, so a chart that is edited
+ * says something different the next time it is asked, and a chart of your own
+ * answers on exactly the same terms as a built-in. See `vocabulary.ts` for what
+ * the two axes are and why a mission is set only where they are covered.
+ */
+export const chartDemand = (chart: Pick<ChartSeed, 'grid' | 'mode'>): Demand =>
+	demandOfGrid(chart.grid, chart.mode);
+
+/**
+ * The built-ins, each carrying its demand.
+ *
+ * The shape the workout composer wants: it must stay pure and must not parse a
+ * Roman numeral, so the derivation happens once here and arrives as data. A
+ * chart of your own is given the same treatment where it is loaded.
+ */
+export const MISSION_CHARTS: Array<ChartSeed & { demand: Demand }> = CHARTS.map((chart) => ({
+	...chart,
+	demand: chartDemand(chart)
+}));
 
 // ---------------------------------------------------------------------------
 // Putting a chart into a key

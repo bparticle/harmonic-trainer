@@ -2,7 +2,7 @@
 	import { pitchClass } from '$lib/music/note';
 	import { parseKey } from '$lib/music/key';
 	import LandingPage from '$lib/components/LandingPage.svelte';
-	import { TASK_COUNT, type WorkoutSize } from '$lib/session/workout';
+	import type { WorkoutSize } from '$lib/session/workout';
 	import type { KeyStanding } from '$lib/session/warmth';
 
 	/*
@@ -46,10 +46,33 @@
 	 * because a timer ran out, so the minutes were a promise the session could not
 	 * keep. A workout is three, four or five tasks and every one of them is
 	 * countable, which is why the preview beside this can be true.
+	 *
+	 * The number on each button counts the tasks that were actually composed
+	 * rather than the tasks the size is *named* for. They agree on every day but
+	 * the first one or two, when no tune is playable yet and the play-along is
+	 * held back — see `missionHeld` below. Printing `TASK_COUNT` there would put
+	 * a 4 on a button that hands you three things, which is the same kind of
+	 * promise the minutes used to make.
 	 */
 	// svelte-ignore state_referenced_locally
 	let size = $state<WorkoutSize>(data.size);
 	const preview = $derived(data.previews[size] ?? []);
+
+	/*
+	 * The play-along being kept back, and the two nearest ways to release it.
+	 *
+	 * Two rather than all of them: the list of every progression that happens to
+	 * teach a dominant seventh is a search result, and what somebody on their
+	 * second day needs is a direction. `taughtBy` already ordered them by the
+	 * library's own levels, so the first two are the gentlest.
+	 */
+	const heldMission = $derived(data.missionHeld ?? null);
+	const heldBy = $derived(
+		(heldMission?.teaches ?? [])
+			.slice(0, 2)
+			.map((id) => data.progressions.find((progression) => progression.id === id))
+			.filter((progression) => progression !== undefined)
+	);
 
 	type Choice =
 		{ kind: 'rung'; key: string; rung: string } | { kind: 'progression'; id: string; key: string };
@@ -280,6 +303,26 @@
 						{/if}
 					</p>
 				{/if}
+
+				<!-- No play-along yet, and why.
+				     Shown instead of a silent hole. The workout composer sets a mission
+				     only on a tune whose every chord shape has been met, so on the first
+				     day or two there is nothing honest to play along to — and the useful
+				     thing to say is not "locked" but which tune is nearest, what it wants,
+				     and where that is taught. -->
+				{#if heldMission}
+					<p class="hero-note hero-held">
+						<strong>No play-along yet.</strong>
+						The nearest tune is {heldMission.chartName}, and it wants {heldMission.needs}.
+						{#if heldBy.length}
+							That is what {heldBy.map((p) => p.name).join(' and ')} below {heldBy.length === 1
+								? 'is'
+								: 'are'} for.
+						{:else}
+							Keep going up the ladder and it opens.
+						{/if}
+					</p>
+				{/if}
 			</div>
 		</section>
 
@@ -486,7 +529,8 @@
 								type="button"
 								class="minutes"
 								class:is-selected={size === option}
-								onclick={() => (size = option)}>{option} · {TASK_COUNT[option]}</button
+								onclick={() => (size = option)}
+								>{option} · {data.previews[option]?.length ?? 0}</button
 							>
 						{/each}
 					</div>
@@ -637,6 +681,26 @@
 		color: var(--color-ink-dim);
 		font-size: 0.72rem;
 		line-height: 1.45;
+	}
+
+	/*
+	 * The held-back play-along.
+	 *
+	 * A rule and a step of indent, in weight rather than in colour — this page's
+	 * hues mean pitch and a missing tune has none. Deliberately not styled as a
+	 * warning: nothing has gone wrong, there is simply a thing you have not been
+	 * shown yet, and the sentence says where to go and be shown it.
+	 */
+	.hero-held {
+		margin-top: 0.6rem;
+		padding-left: 0.6rem;
+		border-left: 2px solid color-mix(in oklab, var(--color-ground-line) 90%, transparent);
+		color: var(--color-ink-muted);
+	}
+
+	.hero-held strong {
+		color: var(--color-ink);
+		font-weight: 600;
 	}
 
 	.tasks {

@@ -3608,3 +3608,161 @@ thing that changed shape is `TempoRecord`, which now carries `ladders` beside
 `byChart`; it is a wire format rather than a stored one, and `parseTempoRecord`
 rebuilds each ladder through `suggestLadder` so a hand-edited cache cannot
 produce a ladder this build would not.
+
+---
+
+## The gap between the two rooms, and a medal for two bars
+
+Two complaints from the same sitting, and they turn out to be one shape twice: a
+measurement that never asked how much of the thing had actually happened.
+
+The first. On the second rung of the first key — the C major scale, then the C
+triad — the drill room asked for a C triad and the seven notes of C major, which
+is exactly right, and then the same workout sent the same person to the
+play-along page to get round a **three-tonic cycle**: Cmaj7 into E♭7 into A♭maj7
+into B7, eight bars, two chords a bar, at 160. Not one of those chords had been
+mentioned. Most of them are not in the key. It is a fine thing to practise and it
+is about eighteen months away.
+
+The second. Wanting to work on the first bar of that cycle, you set a loop over
+two bars, played them cleanly at full speed, and the shelf filled up: every badge
+on the tune, from a run that never saw bar three.
+
+### What was actually wrong
+
+`composeMission` reached into the whole chart list. Cold spots steered it, the
+day rotated it, the tempo ladder set its floor — and nothing anywhere asked
+whether the chords on the page were chords anybody had been shown. The ladder
+knew what had been taught and the chart list knew what was being asked for, and
+the two had never been introduced.
+
+The obvious fix is a difficulty number typed onto each chart, and it is the wrong
+one. A hand-written rating is a second opinion about material that already
+describes itself, it drifts the moment a grid is edited, it says nothing about a
+chart you typed in yourself, and it cannot answer the only question worth
+answering, which is _which chord is the problem_.
+
+### A tune states its own demand
+
+So `curriculum/vocabulary.ts` derives the demand from the grid that is already
+there, on two axes, because there are two ways to be lost.
+
+**The shape** — can your hands make this chord at all. Read off the quality, at
+the grain a player cares about: major, minor, diminished, the four sevenths.
+Folded where the fold is about the hand rather than the theory, and the folds are
+pinned by tests so that changing one has to be deliberate — a C6 is a major triad
+with a sixth on it and the chart prints the symbol, a fully-diminished seventh is
+the vii° you already met with the stack carried one third further. Never folded
+is anything whose middle changes: a minor seventh is not a minor triad plus
+colour, it is the sound the entire sevenths rung exists to teach.
+
+**The ground** — how far the chord stands from the key. Three ordered steps.
+`in_key`, every note from the scale. `coloured`, the root is a degree of the key
+but a note is not: the blues I7, a secondary dominant, a borrowed iv — one foot
+outside. `off_key`, the root itself has left: ♭II7, ♯iv°7, ♭III7.
+
+A chart demands the union of its shapes and the furthest ground it stands on. A
+mission is set only where what you have been taught covers both. That is not a
+promise the tune is _easy_ — how fast to play it is M16's question and stays
+there — only that nothing in it is unheard-of.
+
+### The two halves of the drill room already divided the work
+
+The part worth recording is that neither module had to be edited for this to come
+out right, which is the argument that it is the real structure rather than one
+imposed to make a gate work:
+
+- **The ladder teaches shapes, and never leaves the key.** Seven rungs a key: the
+  scale, the triads a few at a time, the sevenths. Every chord it builds is
+  diatonic by construction.
+- **The progression library teaches ground.** It is the only thing in the app
+  that takes you outside a key, and it does so exactly at levels four and five —
+  the blues is where a dominant seventh first sits somewhere it has no business
+  sitting, and the tritone sub and the backdoor are where the root itself leaves.
+  There is a test asserting that no progression below level four is anything but
+  `in_key`, because if that ever stops being true the gate has quietly moved.
+
+Both sides run through the same classifier, so what a progression teaches and
+what a chart demands cannot be measured on different rulers. A chart of your own
+is read from its stored grid on identical terms — being yours does not wave it
+through.
+
+### What the curriculum looks like now
+
+Ordered by reach, against the material actually shipped:
+
+| Where you are                                      | What opens                                                   |
+| -------------------------------------------------- | ------------------------------------------------------------ |
+| The scale                                          | nothing, and that is the fix                                 |
+| The home chord                                     | Linstead Market — I–IV–V–I, sixteen bars, reggae, with words |
+| All seven triads                                   | the four-chord loop, doo-wop                                 |
+| All seven sevenths                                 | Mango Walk, St. James Infirmary                              |
+| The blues progression                              | the twelve-bar blues, and most of the standards              |
+| Secondary dominants, the tritone sub, the backdoor | rhythm changes, the cycles, bird blues                       |
+
+A test asserts that with every rung and every progression met, **nothing is
+stuck**: the far end is reachable rather than decorative.
+
+### Day one is two tasks long, and says so
+
+The composer's own note used to say the mission was "always buildable because the
+built-in charts are always there", and the fallthrough leaned on it. It is not
+buildable any more. On the first day of an account there is one rung, no chord
+shape at all, and no degree card to build a function task from — so the workout
+is genuinely two tasks and nothing can honestly make it four.
+
+It therefore says so rather than padding. `missionHeld` names the nearest tune
+and what it is waiting for, in words, with the progressions that would teach it
+in the library's own order — _the nearest tune is the four-chord loop, and it
+wants a minor triad_. The size picker counts the tasks that were actually
+composed instead of printing `TASK_COUNT`, because a button saying 4 above three
+things is the same broken promise the old minutes picker made. **A count that is
+true is worth more than a count that is round.**
+
+Refusing to be a locked door is the whole design of that field. A page that can
+only say _not yet_ teaches nothing; a page that says which chord is missing and
+where it is taught is a curriculum.
+
+### A badge is a claim about a tune, so the tune has to happen
+
+The second complaint, and the same disease. A streak counts landed chords, and
+the chords in a two-bar loop are genuinely landed — nothing was cheating, the
+measurement simply never asked how much of the tune it had seen.
+
+The chorus count had the identical hole in a politer form, and a comment in
+`goal.ts` claimed the opposite: that counting bar _changes_ meant "looping a
+turnaround cannot be mistaken for playing the tune". It plainly could. Twelve
+changes are twelve changes, and twelve of them over a twelve-bar form was a
+chorus. Six passes of a two-bar loop met a goal that asks you to get round a
+blues. There was even a test called _does not let a four-bar loop add up to a
+chorus_ whose assertion said it added up to a chorus and a half.
+
+One rule now, in `practice/form.ts`, serving both: **distinct bars of the form,
+carried across the wrap rather than reset by it.** A loop shorter than the tune
+reaches its own length and stays there forever, however long it runs. A bar
+rested through on one pass and played on the next completes the form on the next,
+because the set carries over. A bar rested through _every_ time never counts, and
+that was already the rule for a single pass.
+
+The badge does not vanish, it **waits**. Everything earned is held on a shelf
+that belongs to the run, and the moment the transport has been through every bar
+it all lands at once, with the whole confetti cannon and with the timestamps it
+was earned at — a badge answers _when did you first get there_, and rewriting
+that to the downbeat that released it would be a small lie about a fact already
+recorded correctly. Playing a tune from the top therefore feels exactly as it
+did: the first chorus of a blues takes twenty seconds and the badges arrive on
+the downbeat of the second.
+
+Two deliberate details. The form is tracked from **the transport**, not from the
+chords you played, so laying out for eight bars still takes the tune round —
+where the goal evaluator reads the chords, because that one is asking whether
+_you_ went round rather than whether the tune did. And the feedback while playing
+is untouched: the streak counts, the callouts fire, the tempo shows. Woodshedding
+two bars and watching how it is going is the reason the loop exists. What you
+cannot do is take the medal home.
+
+Silence would have been worse than the bug, so it is said out loud in three
+places: a held badge gets the one-word callout naming what it waits for (_nice ·
+9 bars to go_), the score strip carries a line while any are waiting, and a run
+that ends still holding some says how many were let go and why. Dim ink, no hue —
+hue is pitch — and nothing red, because nothing has gone wrong.

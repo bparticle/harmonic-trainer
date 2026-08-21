@@ -180,6 +180,9 @@ src/
                      L0-L11 skill graph they are generated against
       ladder.ts      Twelve keys, seven rungs each; suggests, never gates
       progressions.ts  Named progressions to work on instead of a rung
+      vocabulary.ts  What a tune asks of your hands, and what the ladder and
+                     the progressions have taught. Both derived, so a mission
+                     is never set on chords nobody has been shown
       charts.ts      Forms, cycles, public-domain standards and traditionals,
                      as numerals, with the words where a tune is sung
       import.ts      Chord symbols you type in, stored as numerals
@@ -191,6 +194,8 @@ src/
     practice/      Being judged on what you play
       match.ts       Did you land the chord, and where did your notes sit
       goal.ts        Was a mission's goal met, judged from the chords it judged
+      form.ts        How much of the tune a run has been round. What a badge
+                     waits on, and what a chorus is counted in
       target.svelte.ts  Lends the sounding chord to the header
       run.ts         A run of the transport on its way to the record, and the
                      outbox that holds it when the network is away
@@ -385,9 +390,18 @@ chords that were actually judged — traceable afterwards to the run that earned
 it. Missions are aimed at what the record shows you avoiding, which is how
 twelve keys stop being four.
 
+**And only ever at a tune you have been taught the chords of.** Each chart
+derives its own demand from its grid — the shapes it uses, and how far it stands
+from the key — and the ladder and the progression library derive what they have
+taught. Where the second does not cover the first there is no mission, and the
+workout says which tune is nearest, what it wants and where that is taught,
+rather than sending you to a cycle of chords nobody has mentioned.
+
 Short, standard and long are three, four and five tasks. Minutes were always an
 estimate; tasks are countable, which is why the home screen can show exactly
-what today holds instead of a set of durations that never varied.
+what today holds instead of a set of durations that never varied — and on the
+first day or two, when there is one rung reached and no tune is playable yet, it
+shows the shorter count it can actually fill instead of a round number.
 
 The end screen says what changed, and every figure on it traces to a row: the
 questions this workout graded against the last workout that graded any, each
@@ -476,6 +490,13 @@ Every run of the transport is written down: the chart, the key, the tempo, how
 long the transport actually ran, and one row per chord judged — what it was,
 what it was heard as, and how it went. Badges are kept per tune, so six sockets
 sit under each chart and "fifty in a row" means fifty in a row **on this one**.
+
+**A badge waits for the tune to have been round.** Anything earned before the
+transport has been through every bar of the form is held and lands the moment it
+has — so playing from the top feels exactly as it did, and looping two bars of a
+standard earns nothing however cleanly it goes. The scoring while you play is
+untouched: the streak counts, the callouts fire, and the strip says what is
+being held and how many bars are left.
 
 Two consequences worth knowing. There is no stored "best": a streak cannot
 outlive the transport, so the best ever is simply the highest any run reached,

@@ -1,4 +1,5 @@
 import { isGroove, type Groove } from '$lib/audio/groove';
+import { barsCovered } from './form';
 import { accuracy, add, coverage, emptyTally, type Attempt, type Landing } from './match';
 
 /**
@@ -209,25 +210,28 @@ const wasVoiced = (chord: JudgedChord): boolean =>
  *
  * Counted from the bar numbers rather than from the clock, because the clock
  * cannot tell a chorus from a pause and the bar numbers are the grain the record
- * keeps. The chords arrive in the order they were played and a bar holding two
- * chords yields two of them, so a bar is new whenever the number changes — which
- * is also true when the form wraps from its last bar back to its first.
+ * keeps.
  *
- * Two consequences, both deliberate. A bar you rested through is not a bar you
- * covered, so resting the final bar of a form leaves the run a bar short of the
- * chorus rather than being waved through. And a loop set over four bars advances
- * this by four bars per pass and not by a whole form, so looping a turnaround
- * cannot be mistaken for playing the tune.
+ * **This used to count bar changes, and that was wrong.** The comment here
+ * claimed that a four-bar loop "cannot be mistaken for playing the tune", which
+ * it plainly could: twelve bar changes are twelve bar changes whether they came
+ * from twelve bars of a blues or from six passes of a two-bar turnaround, and
+ * the second of those met a goal that asks you to get round the form. It is the
+ * same hole the badges had, so it is now closed by the same rule, in
+ * `practice/form.ts`: distinct bars of the form, carried across the wrap, and a
+ * loop shorter than the tune is capped at its own length forever.
+ *
+ * One consequence is unchanged and worth restating: a bar you rested through is
+ * not a bar you covered. Resting the same bar on every pass therefore never
+ * completes a chorus, where resting a different one each time does — the set
+ * carries over. That is the honest reading of a goal about playing over the
+ * changes.
  */
-function barsCovered(chords: JudgedChord[]): number {
-	let bars = 0;
-	let previous: number | null = null;
-	for (const chord of chords) {
-		if (chord.bar !== previous) bars++;
-		previous = chord.bar;
-	}
-	return bars;
-}
+const coveredBars = (chords: JudgedChord[], barsPerChorus: number): number =>
+	barsCovered(
+		chords.map((chord) => chord.bar),
+		barsPerChorus
+	);
 
 /** Two decimals, so a chorus count is a number rather than a float's opinion. */
 const round2 = (value: number) => Math.round(value * 100) / 100;
@@ -253,7 +257,7 @@ export function evaluateGoal(goal: Goal, chords: JudgedChord[], context: GoalCon
 	const tally = voiced.reduce((total, chord) => add(total, asAttempt(chord)), emptyTally());
 
 	const percent = accuracy(tally);
-	const bars = barsCovered(voiced);
+	const bars = coveredBars(voiced, context.barsPerChorus);
 	const choruses = context.barsPerChorus > 0 ? round2(bars / context.barsPerChorus) : 0;
 
 	const measured: Measured = {
