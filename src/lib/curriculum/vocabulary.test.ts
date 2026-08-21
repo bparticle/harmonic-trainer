@@ -79,23 +79,43 @@ describe('the shape a chord makes', () => {
 	});
 });
 
-describe('how far from the key a chord stands', () => {
-	it('calls a chord built only from the scale in_key', () => {
-		expect(demandOf(['I', 'ii7', 'V7', 'vi']).ground).toBe('in_key');
+describe('how a chord leaves the key', () => {
+	it('says a chord built only from the scale leaves it at all', () => {
+		expect(demandOf(['I', 'ii7', 'V7', 'vi']).devices).toEqual([]);
 	});
 
-	it('calls a chord rooted in the key with a note outside it coloured', () => {
-		// The blues I7: root at home, seventh borrowed. One foot outside.
-		expect(demandOf(['I7']).ground).toBe('coloured');
-		// A secondary dominant, and the minor iv borrowed from the parallel minor.
-		expect(demandOf(['III7']).ground).toBe('coloured');
-		expect(demandOf(['iv']).ground).toBe('coloured');
+	/*
+	 * The blues: a dominant on the tonic or the fourth, where the key asks for
+	 * neither. In no key is that correct and it works anyway, which is why it is
+	 * its own device rather than a secondary dominant that happens to point home.
+	 */
+	it('calls a dominant on I or IV the blues', () => {
+		expect(demandOf(['I7']).devices).toEqual(['blues']);
+		expect(demandOf(['IV7']).devices).toEqual(['blues']);
 	});
 
-	it('calls a chord rooted outside the key off_key', () => {
-		expect(demandOf(['bII7']).ground).toBe('off_key');
-		expect(demandOf(['bIII7']).ground).toBe('off_key');
-		expect(demandOf(['#iv°7']).ground).toBe('off_key');
+	it('calls a chord from the parallel key borrowed', () => {
+		// The minor iv, the flat seven, and the flat-six major seventh: all of them
+		// diatonic to C minor, which is a place a tune in C actually goes.
+		expect(demandOf(['iv']).devices).toEqual(['borrowed']);
+		expect(demandOf(['bVII']).devices).toEqual(['borrowed']);
+		expect(demandOf(['bVII7']).devices).toEqual(['borrowed']);
+		expect(demandOf(['bVImaj7']).devices).toEqual(['borrowed']);
+	});
+
+	it('calls a dominant aimed at a degree of the key a secondary dominant', () => {
+		// E7 lands on A, A7 on D, D7 on G — every one of them already in C.
+		expect(demandOf(['III7']).devices).toEqual(['secondary']);
+		expect(demandOf(['VI7']).devices).toEqual(['secondary']);
+		expect(demandOf(['II7']).devices).toEqual(['secondary']);
+		expect(demandOf(['V7/vi']).devices).toEqual(['secondary']);
+	});
+
+	it('calls a chord belonging to neither key chromatic', () => {
+		expect(demandOf(['bII7']).devices).toEqual(['chromatic']);
+		expect(demandOf(['bIII7']).devices).toEqual(['chromatic']);
+		expect(demandOf(['#iv°7']).devices).toEqual(['chromatic']);
+		expect(demandOf(['IIImaj7']).devices).toEqual(['chromatic']);
 	});
 
 	/*
@@ -104,20 +124,29 @@ describe('how far from the key a chord stands', () => {
 	 * opposite of true.
 	 */
 	it('lets a minor key have its dominant V without leaving home', () => {
-		expect(demandOf(['i7', 'iiø7', 'V7'], 'minor').ground).toBe('in_key');
-		expect(demandOf(['i', 'iv', 'v'], 'minor').ground).toBe('in_key');
+		expect(demandOf(['i7', 'iiø7', 'V7'], 'minor').devices).toEqual([]);
+		expect(demandOf(['i', 'iv', 'v'], 'minor').devices).toEqual([]);
 	});
 
-	it('takes the furthest chord as the whole grid’s answer', () => {
+	it('collects every device a grid uses, in the order a curriculum meets them', () => {
 		expect(
 			demandOfGrid(
 				[
-					['I', 'IV'],
+					['I', 'iv'],
 					['I7', 'bII7']
 				],
 				'major'
-			).ground
-		).toBe('off_key');
+			).devices
+		).toEqual(['borrowed', 'blues', 'chromatic']);
+	});
+
+	it('is a set rather than a ladder, so one device never implies another', () => {
+		// The whole reason the ordered version was wrong: knowing the blues tells
+		// you nothing about borrowed chords, and must not unlock them.
+		const bluesOnly = vocabularyOf({ rungs: ALL_RUNGS, progressions: ['blues-basic'] });
+		expect(isReady(demandOf(['I7']), bluesOnly)).toBe(true);
+		expect(isReady(demandOf(['iv']), bluesOnly)).toBe(false);
+		expect(isReady(demandOf(['bII7']), bluesOnly)).toBe(false);
 	});
 });
 
@@ -139,8 +168,8 @@ describe('what the drill room teaches', () => {
 		expect(shapesForRung('relative-minor')).toEqual(['minor']);
 	});
 
-	it('keeps the whole ladder on home ground', () => {
-		expect(vocabularyFromRungs(ALL_RUNGS).ground).toBe('in_key');
+	it('never leaves the key anywhere on the ladder', () => {
+		expect(vocabularyFromRungs(ALL_RUNGS).devices).toEqual([]);
 	});
 
 	/*
@@ -150,25 +179,37 @@ describe('what the drill room teaches', () => {
 	 * edited for this to be true, which is the argument that it is the real
 	 * structure rather than one imposed to make the gate work.
 	 */
-	it('leaves the key only in the progression library, and only at levels four and five', () => {
+	it('leaves the key only in the progression library, and only from level four', () => {
 		for (const progression of PROGRESSIONS) {
 			const demand = demandOfNumerals(progression.numerals, progression.mode);
-			if (demand.ground !== 'in_key') expect(progression.level, progression.id).toBeGreaterThan(3);
+			if (demand.devices.length) expect(progression.level, progression.id).toBeGreaterThan(3);
 		}
-		expect(vocabularyFromProgressions(['blues-basic']).ground).toBe('coloured');
-		expect(vocabularyFromProgressions(['tritone-sub']).ground).toBe('off_key');
-		expect(vocabularyFromProgressions(['I-IV-V-I', 'ii-V-I']).ground).toBe('in_key');
+		expect(vocabularyFromProgressions(['blues-basic']).devices).toEqual(['blues']);
+		expect(vocabularyFromProgressions(['tritone-sub']).devices).toEqual(['chromatic']);
+		expect(vocabularyFromProgressions(['I-IV-V-I', 'ii-V-I']).devices).toEqual([]);
+	});
+
+	/*
+	 * The property that makes the levels worth having: each one from four up is
+	 * the first place some device is met, so no single progression can open the
+	 * whole back half of the library on its own.
+	 */
+	it('gives no progression more than its share of the ways out of the key', () => {
+		for (const progression of PROGRESSIONS) {
+			const demand = demandOfNumerals(progression.numerals, progression.mode);
+			expect(demand.devices.length, progression.id).toBeLessThanOrEqual(2);
+		}
 	});
 
 	it('adds the two halves together', () => {
 		const both = vocabularyOf({ rungs: ['all-triads'], progressions: ['blues-basic'] });
 		expect(both.shapes).toContain('minor');
 		expect(both.shapes).toContain('dominant seventh');
-		expect(both.ground).toBe('coloured');
+		expect(both.devices).toEqual(['blues']);
 	});
 
 	it('knows nothing by default, because that is the conservative reading', () => {
-		expect(emptyVocabulary()).toEqual({ shapes: [], ground: 'in_key' });
+		expect(emptyVocabulary()).toEqual({ shapes: [], devices: [] });
 		expect(isReady(chartsBySlug.get('blues-12')!.demand, emptyVocabulary())).toBe(false);
 	});
 });
@@ -196,14 +237,17 @@ describe('the gate, against the material the app actually ships', () => {
 		expect(ready('blues-12', knowing('C', 'all-sevenths', ['blues-basic']))).toBe(true);
 	});
 
-	it('holds the cycles back until something has taken you out of the key', () => {
-		const chromatic = knowing('C', 'all-sevenths', [
-			'blues-basic',
-			'secondary-dominant',
-			'tritone-sub'
-		]);
-		expect(ready('three-tonic-cycle', chromatic)).toBe(true);
-		expect(ready('fifths-cycle', chromatic)).toBe(true);
+	it('holds the cycles back until every device in them has been met', () => {
+		const some = knowing('C', 'all-sevenths', ['blues-basic', 'secondary-dominant']);
+		expect(ready('three-tonic-cycle', some)).toBe(false);
+
+		const all = knowing(
+			'C',
+			'all-sevenths',
+			PROGRESSIONS.map((p) => p.id)
+		);
+		expect(ready('three-tonic-cycle', all)).toBe(true);
+		expect(ready('fifths-cycle', all)).toBe(true);
 	});
 
 	it('lets everything in the book be reached eventually', () => {
@@ -222,18 +266,20 @@ describe('the gate, against the material the app actually ships', () => {
 	 */
 	it('puts the plainest tunes first', () => {
 		const sorted = [...MISSION_CHARTS].sort((a, b) => reachOf(a.demand) - reachOf(b.demand));
-		const grounds = sorted.map((chart) => chart.demand.ground);
-		expect(grounds).toEqual([...grounds].sort((a, b) => grounds.indexOf(a) - grounds.indexOf(b)));
-		expect(sorted[0].demand.ground).toBe('in_key');
-		expect(sorted[sorted.length - 1].demand.ground).toBe('off_key');
+		expect(sorted[0].demand.devices).toEqual([]);
+		expect(sorted[sorted.length - 1].demand.devices).toContain('chromatic');
+		// Nothing that leaves the key may sort ahead of anything that stays in it.
+		const lastPlain = sorted.map((c) => c.demand.devices.length === 0).lastIndexOf(true);
+		const firstAway = sorted.findIndex((c) => c.demand.devices.length > 0);
+		expect(lastPlain).toBeLessThan(firstAway);
 	});
 
 	it('derives a chart’s demand from its grid, so an edit changes it', () => {
 		expect(chartDemand({ grid: [['I', 'IV', 'V', 'I']], mode: 'major' })).toEqual({
 			shapes: ['major'],
-			ground: 'in_key'
+			devices: []
 		});
-		expect(chartDemand({ grid: [['I', 'bII7']], mode: 'major' }).ground).toBe('off_key');
+		expect(chartDemand({ grid: [['I', 'bII7']], mode: 'major' }).devices).toEqual(['chromatic']);
 	});
 
 	it('carries a demand for every built-in', () => {
@@ -247,18 +293,19 @@ describe('saying what is missing', () => {
 	it('reports the gap rather than a bare refusal', () => {
 		const gap = shortfall(chartsBySlug.get('blues-12')!.demand, knowing('C', 'all-sevenths'));
 		expect(gap.shapes).toEqual([]);
-		expect(gap.ground).toBe('coloured');
-		expect(describeShortfall(gap)).toContain('outside the key');
+		expect(gap.devices).toEqual(['blues']);
+		expect(describeShortfall(gap)).toContain('dominant sevenths');
 	});
 
 	it('names the shape when it is a shape that is missing', () => {
 		const gap = shortfall(chartsBySlug.get('four-chord-loop')!.demand, knowing('C', 'tonic-triad'));
 		expect(gap.shapes).toEqual(['minor']);
+		expect(gap.devices).toEqual([]);
 		expect(describeShortfall(gap)).toBe('minor');
 	});
 
 	it('says nothing at all when there is no gap', () => {
-		expect(describeShortfall({ shapes: [], ground: null })).toBe('');
+		expect(describeShortfall({ shapes: [], devices: [] })).toBe('');
 	});
 
 	it('points at a progression that would teach it, gentlest first', () => {

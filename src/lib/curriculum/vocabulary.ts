@@ -29,33 +29,25 @@ import { chordFromNumeral, PROGRESSIONS, progressionById } from './progressions'
  * shapes, get to know the names*. Shapes are counted without regard to where
  * they sit, because a B♭m7 is the same hand as a Dm7.
  *
- * **The ground.** How far from the key does the chord stand? Three steps, and
- * they are ordered:
+ * **The device.** How does the tune leave the key, if it does? Four named ways,
+ * each with its own progression teaching it — see `Device` below.
  *
- *   - `in_key`   every note is in the key. The seven triads, the seven sevenths.
- *   - `coloured` the root is a degree of the key but a note is not: the blues
- *                I7, a secondary dominant, a borrowed iv. One foot outside.
- *   - `off_key`  the root itself is not in the key: ♭II7, ♯iv°7, ♭III7. The
- *                tune has left, whether for a bar or for good.
- *
- * A chart demands the union of its shapes and the furthest ground it stands on.
- * You know a shape once anything has taught it, and you stand on ground once
- * anything has taken you there. Ready means every shape known and the ground
- * reached — which is not a promise the tune is *easy*, only that nothing in it
- * is unheard-of. How fast to play it is the tempo ladder's question and stays
- * there.
+ * A chart demands the shapes it uses and the devices it uses. Ready means both
+ * sets are covered. That is not a promise the tune is *easy* — how fast to play
+ * it is the tempo ladder's question and stays there — only that nothing in it is
+ * unheard-of.
  *
  * ## Where the teaching comes from
  *
- * The two halves of the drill room turn out to divide the work cleanly, and
- * neither had to be edited to make it so:
+ * The two halves of the drill room divide the work cleanly, and neither had to
+ * be edited to make it so:
  *
- *   - **The ladder** teaches shapes, all of them on home ground. Seven rungs a
- *     key: the scale, then the triads a few at a time, then the sevenths.
- *   - **The progressions** teach ground. The blues is where a dominant seventh
- *     first sits somewhere it has no business sitting; the tritone sub and the
- *     backdoor are where the root itself leaves the key. Level 5 of that
- *     library is exactly the chromatic vocabulary, and now it unlocks something.
+ *   - **The ladder** teaches shapes, and never leaves the key. Seven rungs a
+ *     key: the scale, then the triads a few at a time, then the sevenths. Every
+ *     chord it builds is diatonic by construction.
+ *   - **The progressions** teach devices. Levels one to three are movement
+ *     inside the key; from level four each one is the first place a particular
+ *     way out of the key is met.
  *
  * Both are read through the same classifier below, so "what a progression
  * teaches" and "what a chart demands" cannot be measured on different rulers.
@@ -96,32 +88,76 @@ export type Shape =
 	| 'minor-major seventh'
 	| 'unknown';
 
-/** How far from the key a chord stands. Ordered; `GROUND_ORDER` is the order. */
-export type Ground = 'in_key' | 'coloured' | 'off_key';
+/**
+ * A way of leaving the key, named as a musician would name it.
+ *
+ * **This was an ordered three-step scale — `in_key < coloured < off_key` — and
+ * that was wrong.** Walking the material proved it rather than arguing it: with
+ * an ordinal, crossing one step opens every tune sitting on it, so one
+ * progression unlocked eleven tunes at once and another unlocked seven. Three
+ * rungs cannot describe a curriculum with twenty-three tunes on it.
+ *
+ * These are a **set**, exactly as the shapes are, because they are genuinely not
+ * ordered. A tune full of borrowed chords is not harder or easier than one full
+ * of secondary dominants; it is a different thing to learn, and each has its own
+ * progression that teaches it.
+ *
+ *   - `blues`     a dominant seventh on I or IV, where the key asks for neither.
+ *                 In no key is that correct, and it is most of a century of music.
+ *   - `borrowed`  a chord from the parallel key: the minor iv, the ♭VII, the
+ *                 ♭VImaj7. One note moves and the colour changes.
+ *   - `secondary` a dominant aimed at a degree of the key other than the tonic —
+ *                 III7, VI7, V7/vi — so a chord already inside the key arrives
+ *                 like a destination.
+ *   - `chromatic` a chord belonging to neither parallel key and resolving to
+ *                 nothing inside it: ♭II7, ♯iv°7, ♭III7. The tune has left.
+ *
+ * The empty set is a tune that never leaves the key, which is the whole of what
+ * the ladder teaches and what a first play-along should be.
+ */
+export type Device = 'blues' | 'borrowed' | 'secondary' | 'chromatic';
 
-export const GROUND_ORDER: Record<Ground, number> = { in_key: 0, coloured: 1, off_key: 2 };
+/** Every device, in the order a curriculum meets them. */
+export const DEVICES: Device[] = ['borrowed', 'blues', 'secondary', 'chromatic'];
 
-/** Said out loud, for a page that has to explain why a tune is not on offer. */
-export const GROUND_LABELS: Record<Ground, string> = {
-	in_key: 'chords from inside the key',
-	coloured: 'chords that borrow a note from outside the key',
-	off_key: 'chords rooted outside the key'
+/** Said out loud, for a page explaining why a tune is not on offer. */
+export const DEVICE_LABELS: Record<Device, string> = {
+	blues: 'dominant sevenths where the key asks for none',
+	borrowed: 'chords borrowed from the parallel key',
+	secondary: 'dominants aimed at a chord other than the tonic',
+	chromatic: 'chords belonging to no key the tune is in'
 };
 
-/** Where each step of the ground is first met, for the same sentence. */
-export const GROUND_TAUGHT_BY: Record<Ground, string> = {
-	in_key: 'the triads and sevenths of a key',
-	coloured: 'the blues, and the secondary dominants',
-	off_key: 'the tritone sub, and the backdoor cadence'
+/** Short enough for a chip beside a tune in a list. */
+export const DEVICE_CHIPS: Record<Device, string> = {
+	blues: 'blues sevenths',
+	borrowed: 'borrowed chords',
+	secondary: 'secondary dominants',
+	chromatic: 'chromatic chords'
 };
 
-/** What a tune asks for: every shape in it, and the furthest it goes from home. */
-export type Demand = { shapes: Shape[]; ground: Ground };
+/**
+ * What each device weighs when tunes are put in order.
+ *
+ * Ordering only — nothing is ever gated on this number. Borrowing one chord from
+ * the parallel key is the smallest step out of a key there is; a chord belonging
+ * to neither parallel key is the largest, and weighs more than the other three
+ * together so that a tune which modulates never sorts ahead of one that does not.
+ */
+const DEVICE_WEIGHT: Record<Device, number> = {
+	borrowed: 1,
+	blues: 2,
+	secondary: 3,
+	chromatic: 8
+};
 
-/** What you can answer with: the shapes you have met, and how far you have been. */
-export type Vocabulary = { shapes: Shape[]; ground: Ground };
+/** What a tune asks for: every shape in it, and every way it leaves the key. */
+export type Demand = { shapes: Shape[]; devices: Device[] };
 
-export const emptyVocabulary = (): Vocabulary => ({ shapes: [], ground: 'in_key' });
+/** What you can answer with: the shapes and the devices you have met. */
+export type Vocabulary = { shapes: Shape[]; devices: Device[] };
+
+export const emptyVocabulary = (): Vocabulary => ({ shapes: [], devices: [] });
 
 // ---------------------------------------------------------------------------
 // Reading one chord
@@ -180,17 +216,57 @@ export function shapeOf(chord: AbstractChord): Shape {
  */
 const MAJOR_SCALE = new Set([0, 2, 4, 5, 7, 9, 11]);
 const MINOR_SCALE = new Set([0, 2, 3, 5, 7, 8, 10, 11]);
+/** The natural minor exactly, which is the pool a major key borrows *from*. */
+const PARALLEL_MINOR = new Set([0, 2, 3, 5, 7, 8, 10]);
 
-const scaleFor = (mode: 'major' | 'minor') => (mode === 'minor' ? MINOR_SCALE : MAJOR_SCALE);
+const homeScale = (mode: 'major' | 'minor') => (mode === 'minor' ? MINOR_SCALE : MAJOR_SCALE);
+
+/** The key of the same tonic and the other mode: where a borrowed chord comes from. */
+const parallelScale = (mode: 'major' | 'minor') =>
+	mode === 'minor' ? MAJOR_SCALE : PARALLEL_MINOR;
 
 const wrap = (pc: number) => ((pc % 12) + 12) % 12;
 
-/** How far from home one chord stands, in the mode the chart is announced in. */
-export function groundOf(chord: AbstractChord, mode: 'major' | 'minor'): Ground {
-	const inKey = scaleFor(mode);
+/** Degrees of the key a dominant may sit on and still be the blues rather than a departure. */
+const BLUES_ROOTS = new Set([0, 5]);
+
+/**
+ * How this chord leaves the key, or null if it does not.
+ *
+ * The order of the tests is load-bearing and worth reading as an argument.
+ *
+ * 1. **Everything in the key** is no device at all, and is the common case.
+ * 2. **Everything in the parallel key** is `borrowed`, and this is checked
+ *    before anything else because the parallel key is a real place a tune goes
+ *    rather than a coincidence. It is what makes ♭VII7 the backdoor dominant
+ *    instead of a chromatic accident, and the minor iv one moved note.
+ * 3. **A dominant** then splits three ways. On the tonic or the fourth it is the
+ *    `blues`, which in no key is correct and is the sound of most of the last
+ *    century. Elsewhere, if it is rooted in the key and resolves down a fifth
+ *    onto a degree of the key, it is a `secondary` dominant — aiming at
+ *    something already here. Otherwise it is aiming outside, and that is
+ *    `chromatic`.
+ * 4. **Anything else** left over belongs to neither key and resolves to nothing
+ *    in it: `chromatic`.
+ */
+export function deviceOf(chord: AbstractChord, mode: 'major' | 'minor'): Device | null {
+	const home = homeScale(mode);
+	const parallel = parallelScale(mode);
+	const notes = chordPitchClasses(chord).map(wrap);
 	const root = wrap(pitchClass(chord.root));
-	if (!inKey.has(root)) return 'off_key';
-	return chordPitchClasses(chord).every((pc) => inKey.has(wrap(pc))) ? 'in_key' : 'coloured';
+
+	if (notes.every((pc) => home.has(pc))) return null;
+	if (notes.every((pc) => parallel.has(pc))) return 'borrowed';
+
+	if (chord.quality === 'dom') {
+		if (BLUES_ROOTS.has(root)) return 'blues';
+		// Down a fifth is up a fourth. A dominant that lands on a degree of the key
+		// is pointing at something you already know; one that does not has left.
+		const resolvesTo = wrap(root + 5);
+		return home.has(root) && home.has(resolvesTo) ? 'secondary' : 'chromatic';
+	}
+
+	return 'chromatic';
 }
 
 // ---------------------------------------------------------------------------
@@ -201,19 +277,16 @@ export function groundOf(chord: AbstractChord, mode: 'major' | 'minor'): Ground 
  * C, always.
  *
  * Neither axis moves with the key — a shape is a shape in all twelve and a
- * root is inside the key or outside it in all twelve — so the demand is read
+ * chord is inside the key or outside it in all twelve — so the demand is read
  * once against C rather than twelve times against nothing in particular. This
  * is the same reason charts are stored as numerals in the first place.
  */
 const HOME = makeKey('C');
 
-const worst = (grounds: Ground[]): Ground =>
-	grounds.reduce<Ground>(
-		(far, one) => (GROUND_ORDER[one] > GROUND_ORDER[far] ? one : far),
-		'in_key'
-	);
-
 const sortShapes = (shapes: Iterable<Shape>): Shape[] => [...new Set(shapes)].sort();
+
+const sortDevices = (devices: Iterable<Device>): Device[] =>
+	DEVICES.filter((device) => new Set(devices).has(device));
 
 /**
  * What a list of Roman numerals asks for.
@@ -226,7 +299,7 @@ const sortShapes = (shapes: Iterable<Shape>): Shape[] => [...new Set(shapes)].so
  */
 export function demandOfNumerals(numerals: string[], mode: 'major' | 'minor'): Demand {
 	const shapes: Shape[] = [];
-	const grounds: Ground[] = [];
+	const devices: Device[] = [];
 
 	for (const numeral of numerals) {
 		let chord: AbstractChord;
@@ -234,14 +307,15 @@ export function demandOfNumerals(numerals: string[], mode: 'major' | 'minor'): D
 			chord = chordFromNumeral(numeral, HOME);
 		} catch {
 			shapes.push('unknown');
-			grounds.push('off_key');
+			devices.push('chromatic');
 			continue;
 		}
 		shapes.push(shapeOf(chord));
-		grounds.push(groundOf(chord, mode));
+		const device = deviceOf(chord, mode);
+		if (device) devices.push(device);
 	}
 
-	return { shapes: sortShapes(shapes), ground: worst(grounds) };
+	return { shapes: sortShapes(shapes), devices: sortDevices(devices) };
 }
 
 /**
@@ -283,8 +357,8 @@ export function vocabularyFromRungs(rungIds: Iterable<RungId>): Vocabulary {
 	const seen = new Set<RungId>(rungIds);
 	return {
 		shapes: sortShapes([...seen].flatMap(shapesForRung)),
-		// Every rung is built from the scale it belongs to. Home ground, all seven.
-		ground: 'in_key'
+		// Every rung is built from the scale it belongs to. No device, all seven.
+		devices: []
 	};
 }
 
@@ -297,7 +371,7 @@ export function vocabularyFromProgressions(ids: Iterable<string>): Vocabulary {
 
 	return {
 		shapes: sortShapes(demands.flatMap((d) => d.shapes)),
-		ground: worst(demands.map((d) => d.ground))
+		devices: sortDevices(demands.flatMap((d) => d.devices))
 	};
 }
 
@@ -310,7 +384,7 @@ export function vocabularyOf(input: {
 	const library = vocabularyFromProgressions(input.progressions ?? []);
 	return {
 		shapes: sortShapes([...ladder.shapes, ...library.shapes]),
-		ground: worst([ladder.ground, library.ground])
+		devices: sortDevices([...ladder.devices, ...library.devices])
 	};
 }
 
@@ -325,44 +399,45 @@ export function vocabularyOf(input: {
  * a boolean is deliberate: a page that can only say *not yet* is a locked door,
  * and a page that can say *you have not met a dominant seventh* is a curriculum.
  */
-export function shortfall(
-	demand: Demand,
-	known: Vocabulary
-): { shapes: Shape[]; ground: Ground | null } {
-	const have = new Set(known.shapes);
+export type Shortfall = { shapes: Shape[]; devices: Device[] };
+
+export function shortfall(demand: Demand, known: Vocabulary): Shortfall {
+	const haveShapes = new Set(known.shapes);
+	const haveDevices = new Set(known.devices);
 	return {
-		shapes: demand.shapes.filter((shape) => !have.has(shape)),
-		ground: GROUND_ORDER[demand.ground] > GROUND_ORDER[known.ground] ? demand.ground : null
+		shapes: demand.shapes.filter((shape) => !haveShapes.has(shape)),
+		devices: demand.devices.filter((device) => !haveDevices.has(device))
 	};
 }
 
 export function isReady(demand: Demand, known: Vocabulary): boolean {
 	const gap = shortfall(demand, known);
-	return gap.shapes.length === 0 && gap.ground === null;
+	return gap.shapes.length === 0 && gap.devices.length === 0;
 }
 
 /**
  * How far into what you know a tune reaches, as one number.
  *
- * Only ever used to put the ready tunes in order, so that the first play-along
- * of an account is the four-chord loop and not the thirty-two bars of rhythm
- * changes that happen to have become legal on the same day. Ground counts for
- * more than shape count because leaving the key is the thing that makes a chart
- * feel like somewhere you have never been.
+ * Only ever used to put tunes in order, so that the first play-along of an
+ * account is a four-chord loop and not the thirty-two bars of rhythm changes
+ * that happen to have become legal on the same day. Devices count for more than
+ * shapes because leaving the key is what makes a chart feel like somewhere you
+ * have never been.
  */
 export function reachOf(demand: Demand): number {
-	return GROUND_ORDER[demand.ground] * 10 + demand.shapes.length;
+	const devices = demand.devices.reduce((total, device) => total + DEVICE_WEIGHT[device], 0);
+	return devices * 10 + demand.shapes.length;
 }
 
-/** One line saying what a tune would need. For the page that has to explain a hole. */
-export function describeShortfall(gap: { shapes: Shape[]; ground: Ground | null }): string {
+/** One line saying what a tune would need. For a page that has to explain a hole. */
+export function describeShortfall(gap: Shortfall): string {
 	const parts: string[] = [];
-	if (gap.shapes.length) {
-		const named = gap.shapes.filter((shape) => shape !== 'unknown');
-		if (named.length) parts.push(named.join(', '));
-		if (named.length !== gap.shapes.length) parts.push('chords this app cannot read');
-	}
-	if (gap.ground) parts.push(GROUND_LABELS[gap.ground]);
+
+	const named = gap.shapes.filter((shape) => shape !== 'unknown');
+	if (named.length) parts.push(named.join(', '));
+	if (named.length !== gap.shapes.length) parts.push('chords this app cannot read');
+	for (const device of gap.devices) parts.push(DEVICE_LABELS[device]);
+
 	if (parts.length === 0) return '';
 	const last = parts.pop() as string;
 	return parts.length ? `${parts.join(', ')} and ${last}` : last;
@@ -376,12 +451,14 @@ export function describeShortfall(gap: { shapes: Shape[]; ground: Ground | null 
  * answer to "how do I unlock the blues" is the blues rather than the tritone
  * sub that would also technically do it.
  */
-export function taughtBy(gap: { shapes: Shape[]; ground: Ground | null }): string[] {
+export function taughtBy(gap: Shortfall): string[] {
 	const wantedShapes = new Set(gap.shapes);
+	const wantedDevices = new Set(gap.devices);
+
 	return PROGRESSIONS.filter((progression) => {
 		const demand = demandOfNumerals(progression.numerals, progression.mode);
 		if (demand.shapes.some((shape) => wantedShapes.has(shape))) return true;
-		return gap.ground !== null && demand.ground === gap.ground;
+		return demand.devices.some((device) => wantedDevices.has(device));
 	})
 		.sort((a, b) => a.level - b.level)
 		.map((progression) => progression.id);
