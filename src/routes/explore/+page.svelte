@@ -1,5 +1,6 @@
 <script lang="ts">
 	import ChordSymbol from '$lib/components/ChordSymbol.svelte';
+	import InfoHint from '$lib/components/InfoHint.svelte';
 	import Wheel from '$lib/wheel/Wheel.svelte';
 	import { formatKey, key as makeKey, type Mode } from '$lib/music/key';
 	import { formatNote, pitchClass } from '$lib/music/note';
@@ -160,16 +161,20 @@
 					>
 				{/each}
 			</div>
-			<p class="text-ink-dim max-w-lg text-center font-mono text-xs leading-relaxed">
-				Drag to turn. Every ring inward is a minor third, so a spoke spells a diminished seventh and
-				the fifth ring repeats the first. Click a cell to light it.
+			<div class="text-ink-dim flex max-w-lg items-center gap-2 text-center font-mono text-xs">
+				<span aria-hidden="true">↻</span><span>drag</span>
+				<span aria-hidden="true">◉</span><span>light</span>
+				<InfoHint
+					label="About the wheel geometry"
+					text="Each ring inward is a minor third. A spoke forms a diminished seventh; ring five repeats ring one."
+				/>
 				{#if litPitchClasses.length}
 					<button
 						class="text-ink-muted hover:text-ink ml-2 underline underline-offset-2"
 						onclick={() => (litPitchClasses = [])}>clear</button
 					>
 				{/if}
-			</p>
+			</div>
 		</section>
 
 		<!-- Explore mode: dense, information-rich, for sitting and studying. -->
@@ -202,7 +207,7 @@
 					Overlay
 				</h2>
 				<div class="grid grid-cols-2 gap-1">
-					{#each [['key', 'key + chords'], ['chord', 'chord + neighbours'], ['brightness', 'brightness'], ['modulation', 'modulation']] as [value, label] (value)}
+					{#each [['key', 'key'], ['chord', 'chord'], ['brightness', 'brightness'], ['modulation', 'modulation']] as [value, label] (value)}
 						<button
 							class="border-ground-line hover:border-ink-dim rounded border px-2 py-1.5 font-mono text-xs transition-colors"
 							class:is-selected={overlay === value}
@@ -257,8 +262,9 @@
 						</div>
 					</div>
 					<p class="text-ink-dim mb-2 font-mono text-[0.7rem] leading-relaxed">
-						Reachable from <ChordSymbol chord={selectedChord} size="0.8rem" /> by changing at most
-						{maxChanged} note{maxChanged > 1 ? 's' : ''}, nearest voice leading first.
+						<ChordSymbol chord={selectedChord} size="0.8rem" /> · ≤ {maxChanged} note{maxChanged > 1
+							? 's'
+							: ''} changed · nearest first
 					</p>
 					<ul class="flex max-h-72 flex-col gap-0.5 overflow-y-auto pr-1">
 						{#each neighbourList as neighbour, i (neighbour.symbol)}
@@ -296,8 +302,7 @@
 						Brightness
 					</h2>
 					<p class="text-ink-dim mb-3 font-mono text-[0.7rem] leading-relaxed">
-						Each step down flattens exactly one more degree, and slides the seven-note block one
-						place anticlockwise.
+						Each step flattens one more degree.
 					</p>
 					<ul class="flex flex-col gap-0.5">
 						{#each brightness as step (step.mode)}

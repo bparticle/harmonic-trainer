@@ -1,5 +1,6 @@
 <script lang="ts">
 	import ChordSymbol from '$lib/components/ChordSymbol.svelte';
+	import InfoHint from '$lib/components/InfoHint.svelte';
 	import Keyboard from '$lib/components/Keyboard.svelte';
 	import Wheel from '$lib/wheel/Wheel.svelte';
 	import { midi as session } from '$lib/midi/shared.svelte';
@@ -175,10 +176,10 @@
 				class="border-ground-line hover:border-ink-dim flex min-h-[13rem] w-full max-w-2xl
 				       items-center justify-center rounded-2xl border px-6 py-8 transition-colors"
 				onclick={claim}
-				aria-label="I had it"
+				aria-label={current && !revealed ? 'Reveal chord now' : 'Chord answer'}
 			>
 				{#if !current}
-					<span class="text-ink-dim font-mono text-sm">Play something.</span>
+					<span class="text-ink-dim font-mono text-sm">Play a chord</span>
 				{:else if !revealed}
 					<span class="text-ink-dim font-display text-[7rem] leading-none font-semibold">?</span>
 				{:else}
@@ -201,12 +202,11 @@
 				{/if}
 			</button>
 
-			<p class="text-ink-dim text-center font-mono text-xs">
+			<p class="text-ink-dim flex items-center gap-1.5 text-center font-mono text-xs">
 				{#if current && !revealed}
-					Hit the pedal or the spacebar the moment you have it.
+					<kbd>Space</kbd> / pedal when ready
 				{:else}
-					Reveal is held back {(revealDelayMs / 1000).toFixed(1)}s so your ear goes first. Turn the
-					wheel to change key.
+					{(revealDelayMs / 1000).toFixed(1)}s reveal · drag wheel for key
 				{/if}
 			</p>
 
@@ -267,9 +267,15 @@
 			</section>
 
 			<section class="border-ground-line bg-ground-raised rounded-lg border p-4">
-				<h2 class="text-ink-dim mb-3 font-mono text-[0.65rem] tracking-widest uppercase">
-					This sitting
-				</h2>
+				<div class="mb-3 flex items-center gap-2">
+					<h2 class="text-ink-dim font-mono text-[0.65rem] tracking-widest uppercase">
+						This sitting
+					</h2>
+					<InfoHint
+						label="About naming latency"
+						text="Faster naming is a useful sign that the chord has become fluent."
+					/>
+				</div>
 				<dl class="flex flex-col gap-2 font-mono text-xs">
 					<div class="flex justify-between">
 						<dt class="text-ink-dim">named before reveal</dt>
@@ -280,10 +286,6 @@
 						<dd class="text-ink-muted">{medianLatency === null ? '—' : `${medianLatency} ms`}</dd>
 					</div>
 				</dl>
-				<p class="text-ink-dim mt-3 text-[0.7rem] leading-relaxed">
-					How long it takes to name a chord tracks fluency far better than whether you can name it
-					at all.
-				</p>
 			</section>
 
 			{#if session.live.length}
@@ -332,6 +334,15 @@
 </main>
 
 <style>
+	kbd {
+		padding: 0.1rem 0.35rem;
+		border: 1px solid var(--color-ground-line);
+		border-radius: 4px;
+		background: var(--color-ground-raised);
+		color: var(--color-ink-muted);
+		font: inherit;
+	}
+
 	.is-selected {
 		background: var(--color-ground-overlay);
 		border-color: var(--color-ink-dim);

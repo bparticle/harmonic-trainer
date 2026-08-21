@@ -128,17 +128,13 @@
 <main class="mx-auto max-w-[1100px] px-5 py-7">
 	<header class="mb-6">
 		<h1 class="font-display text-ink text-2xl font-semibold tracking-tight">Profile</h1>
-		<p class="text-ink-muted mt-1 max-w-2xl text-sm leading-relaxed">
-			Everything here comes from runs you have played and sessions you have finished. Nothing is
-			estimated, and nothing counts a page left open.
-		</p>
 	</header>
 
 	{#if nothingYet}
 		<section class="panel">
 			<p class="text-ink-muted text-sm leading-relaxed">
-				Nothing to show yet. Play a tune on <a class="link" href="/backing">Play along</a> or sit
-				down for a <a class="link" href="/">session</a>, and this page starts filling itself in.
+				Nothing yet. <a class="link" href="/backing">Play a tune</a> or
+				<a class="link" href="/">start a workout</a>.
 			</p>
 		</section>
 	{:else}
@@ -158,12 +154,10 @@
 			<div class="stat">
 				<dt>tunes practised</dt>
 				<dd>{data.headline.tunesPractised}</dd>
-				<p class="note">a chord played, not a chart opened</p>
 			</div>
 			<div class="stat">
 				<dt>keys touched</dt>
 				<dd>{keysTouched}<span class="of">/12</span></dd>
-				<p class="note">counted where the chords were heard</p>
 			</div>
 			<div class="stat" style:--tone={tone(data.headline.bestOnPc)}>
 				<dt>best streak</dt>
@@ -196,12 +190,15 @@
 		-->
 		{#if data.headline.chordsJudged > 0}
 			<section class="panel">
-				<h2 class="head">The twelve keys</h2>
-				<p class="lede">
-					Round the circle of fifths, the way the wheel draws it. Each swatch fills with the chords
-					judged in that key, so the pale ones are where you have not been. Modes fold into their
-					tonic — B♭ major and G minor are the same seven notes under the hands.
-				</p>
+				<div class="panel-head">
+					<h2 class="head">Keys</h2>
+					<p
+						class="visual-key"
+						aria-label="Filled swatches show chords played; pale swatches are untouched"
+					>
+						<span><i class="filled"></i>chords</span><span><i></i>untouched</span>
+					</p>
+				</div>
 				<ul class="keys">
 					{#each data.keys as entry (entry.pc)}
 						{@const scored = percent(entry.landed, entry.voiced)}
@@ -237,13 +234,17 @@
 		-->
 		{#if data.tempo.bands.length}
 			<section class="panel">
-				<h2 class="head">How fast it has been held</h2>
-				<p class="lede">
-					A share of the tune's own tempo rather than a number of beats, because 100 is the tune
-					itself on one chart and homework on another. The mark is where a streak has actually been
-					held; the notch is where the tune goes. Road past the notch, because taking a tune faster
-					than it goes is a real thing to do and the scale should not stop at correct.
-				</p>
+				<div class="panel-head">
+					<h2 class="head">Tempo</h2>
+					<p
+						class="visual-key"
+						aria-label="Solid mark is fastest clean streak; notch is chart tempo"
+					>
+						<span><i class="tempo-solid"></i>clean</span><span
+							><i class="tempo-notch"></i>chart</span
+						>
+					</p>
+				</div>
 
 				<ul class="tempos">
 					{#each data.tempo.bands as band (band.chartSlug)}
@@ -299,11 +300,9 @@
 							</span>
 						{/if}
 						{#if data.tempo.month.tooNew > 0 && data.tempo.month.raised.length + data.tempo.month.steady > 0}
-							<span class="month-aside"
-								>{data.tempo.month.tooNew}
-								{data.tempo.month.tooNew === 1 ? 'tune has' : 'tunes have'} no history before the window,
-								so there is nothing to compare them against.</span
-							>
+							<span class="month-aside">
+								{data.tempo.month.tooNew} too new to compare.
+							</span>
 						{/if}
 					</p>
 				{/if}
@@ -312,12 +311,7 @@
 
 		{#if graded > 0}
 			<section class="panel">
-				<h2 class="head">How the chords went</h2>
-				<p class="lede">
-					Weight rather than hue: landing a chord is not a pitch, and colour is not free to mean a
-					second thing here. Nothing goes red either — a chord you played nothing over was dropped
-					rather than failed, which is why these do not add up to every bar you have seen.
-				</p>
+				<h2 class="head">Chords & notes</h2>
 
 				<div class="split">
 					<div>
@@ -363,7 +357,7 @@
 								><i class="m-missed"></i>{data.headline.notesOutside.toLocaleString()} outside</span
 							>
 						</p>
-						<p class="note">Outside is reported, never scored. Blue notes are good playing.</p>
+						<p class="note">Outside notes aren't scored.</p>
 					</div>
 				</div>
 			</section>
@@ -372,9 +366,6 @@
 		{#if data.tunes.length}
 			<section class="panel">
 				<h2 class="head">Per tune</h2>
-				<p class="lede">
-					Sorted by time spent, which is the honest answer to what you have been practising.
-				</p>
 				<div class="scroller">
 					<table>
 						<thead>
@@ -426,12 +417,7 @@
 
 		{#if data.spread.byKey.length || data.spread.byQuality.length}
 			<section class="panel">
-				<h2 class="head">Where the time went</h2>
-				<p class="lede">
-					Chords judged rather than minutes: a run knows how long it lasted, a chord does not, and
-					splitting one across the other would be an estimate wearing a number's clothes. The key is
-					the one each chord was <em>heard</em> in, so a blues in C shows time on F and G too.
-				</p>
+				<h2 class="head">Practice spread</h2>
 
 				<div class="split">
 					<div>
@@ -476,7 +462,6 @@
 								</li>
 							{/each}
 						</ul>
-						<p class="note">A quality has no pitch, so these are drawn in weight.</p>
 					</div>
 				</div>
 			</section>
@@ -485,11 +470,6 @@
 		{#if data.badges.length}
 			<section class="panel">
 				<h2 class="head">Badges won</h2>
-				<p class="lede">
-					What was actually earned, newest first, each wearing the colour of the chord that clinched
-					it. The six empty sockets live under the tune they belong to, where they are a ladder
-					rather than a list of things you have not done.
-				</p>
 				<ul class="badge-list">
 					{#each data.badges as badge (`${badge.chart} ${badge.tier}`)}
 						<li style:--tone="var(--pc-{badge.pc})" style:--tone-deep="var(--pc-{badge.pc}-deep)">
@@ -554,10 +534,6 @@
 
 		<section class="panel">
 			<h2 class="head">Practice sessions</h2>
-			<p class="lede">
-				The other half of the app. Blocks are counted when they finish, so a session abandoned
-				halfway leaves what it got through and claims nothing more.
-			</p>
 			<dl class="inline-stats">
 				<div>
 					<dt>sessions</dt>
@@ -615,12 +591,53 @@
 		margin-bottom: 0.6rem;
 	}
 
-	.lede {
-		margin-top: 0.45rem;
-		max-width: 66ch;
-		color: var(--color-ink-muted);
-		font-size: 0.78rem;
-		line-height: 1.55;
+	.panel-head,
+	.visual-key,
+	.visual-key span {
+		display: flex;
+		align-items: center;
+	}
+
+	.panel-head {
+		justify-content: space-between;
+		flex-wrap: wrap;
+		gap: 1rem;
+	}
+
+	.visual-key {
+		gap: 0.8rem;
+		color: var(--color-ink-dim);
+		font-family: var(--font-mono);
+		font-size: 0.62rem;
+	}
+
+	.visual-key span {
+		gap: 0.3rem;
+	}
+
+	.visual-key i {
+		display: block;
+		width: 0.85rem;
+		height: 0.85rem;
+		border: 1px solid var(--color-ink-dim);
+		border-radius: 3px;
+	}
+
+	.visual-key .filled {
+		background: var(--color-ink-dim);
+	}
+
+	.visual-key .tempo-solid,
+	.visual-key .tempo-notch {
+		width: 2px;
+		border: 0;
+		border-radius: 0;
+		background: var(--color-ink-muted);
+	}
+
+	.visual-key .tempo-notch {
+		height: 0.55rem;
+		background: var(--color-ink-dim);
 	}
 
 	.link {
