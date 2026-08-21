@@ -2,7 +2,8 @@ import { sql } from 'drizzle-orm';
 import type { Actions, PageServerLoad } from './$types';
 import { redirect } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
-import { cards, reviews, srsState } from '$lib/server/db/schema';
+import { srsState } from '$lib/server/db/schema';
+import { loadKeyChords } from '$lib/server/db/play-log';
 import {
 	activeWorkout,
 	advanceLadder,
@@ -22,6 +23,7 @@ import {
 	type TaskPreview
 } from '$lib/session/progress';
 import type { WorkoutSize } from '$lib/session/workout';
+import { keyStandings } from '$lib/session/warmth';
 import { saveSettings, loadSettings } from '$lib/server/db/settings';
 
 /**
@@ -35,6 +37,13 @@ import { saveSettings, loadSettings } from '$lib/server/db/settings';
  * varied — so the page showed the same six numbers every day of its life. Today's
  * actual tasks are countable, so they are counted, at all three sizes, and the
  * picker below them still pins whatever it likes without gating anything.
+ *
+ * What changed with the redesign is that the twelve keys now say what the record
+ * holds in each of them. That is one extra `GROUP BY`, and it is the same one the
+ * profile's twelve keys are drawn from — see `loadKeyChords`. Two counts that
+ * said nothing to anybody went the other way: `totalCards` was never read at all,
+ * and reviews-this-week was a number that can only fall, printed on the page you
+ * open when you have come to practise.
  */
 export const load: PageServerLoad = async ({ parent, locals }) => {
 	const { settings, authed } = await parent();
@@ -63,9 +72,12 @@ export const load: PageServerLoad = async ({ parent, locals }) => {
 			rungs: RUNGS,
 			progressions: PROGRESSIONS,
 			progressionLevels: PROGRESSION_LEVELS,
+			// Twelve keys with nothing in them, because a visitor has no record —
+			// the same shape the page reads, so one branch does not have a
+			// different data type from the other.
+			keys: keyStandings([], { stageIndex: 0, rungIndex: 0 }),
+			resume: null,
 			due: 0,
-			totalCards: 0,
-			reviewsThisWeek: 0,
 			// A visitor has no record to compose a workout from, and inventing one
 			// would be the landing page promising a day of practice that nobody's
 			// rows asked for. The picker below it is hidden for a visitor anyway.
@@ -74,6 +86,7 @@ export const load: PageServerLoad = async ({ parent, locals }) => {
 		};
 	}
 
+	const userId = currentUserId(locals.userId);
 	const position = await currentPosition();
 	const progress = await rungProgress(position);
 
@@ -82,21 +95,15 @@ export const load: PageServerLoad = async ({ parent, locals }) => {
 		.from(srsState)
 		.where(sql`${srsState.dueAt} <= now()`);
 
-	const [totalCards] = await db.select({ n: sql<number>`count(*)::int` }).from(cards);
-
-	const [reviewed] = await db
-		.select({ n: sql<number>`count(*)::int` })
-		.from(reviews)
-		.where(sql`${reviews.ts} >= now() - interval '7 days'`);
-
 	const next = nextPosition(position);
 
-	const previews = await previewWorkouts(currentUserId(locals.userId));
+	const previews = await previewWorkouts(userId);
+	const active = await activeWorkout();
 
 	return {
 		public: false,
 		settings,
-		active: await activeWorkout(),
+		active,
 		position: {
 			key: position.stage.key,
 			relativeMinor: position.stage.relativeMinor,
@@ -111,9 +118,34 @@ export const load: PageServerLoad = async ({ parent, locals }) => {
 		rungs: RUNGS,
 		progressions: PROGRESSIONS,
 		progressionLevels: PROGRESSION_LEVELS,
+		/*
+		 * The twelve keys, each carrying what the record actually holds in it.
+		 *
+		 * Every key is here whether or not anything has been played in it, because
+		 * this strip is the picker: an empty swatch is a place you can be in one
+		 * press from now, which is the opposite of the profile's problem with
+		 * showing twelve empty things somebody has not done.
+		 */
+		keys: keyStandings(await loadKeyChords(userId), position),
+		/*
+		 * The workout in flight, in the shape the page draws.
+		 *
+		 * Which tasks are finished comes from the blocks — a mission's own block is
+		 * ended by the run that met its goal — so this is the record's answer to
+		 * "where was I", not the browser's.
+		 */
+		resume: active
+			? {
+					at: active.resumeAt,
+					complete: active.complete,
+					keyCenter: active.workout.keyCenter,
+					tasks: previewTasks(active.workout).map((preview, index) => ({
+						...preview,
+						finished: active.tasks[index]?.finished ?? false
+					}))
+				}
+			: null,
 		due: due?.n ?? 0,
-		totalCards: totalCards?.n ?? 0,
-		reviewsThisWeek: reviewed?.n ?? 0,
 		// The saved length preference, read as a size. Nothing in a workout is
 		// timed, so the minutes are consulted exactly here and for nothing else.
 		size: sizeFromMinutes(settings.prefs.sessionLengthMinutes),
