@@ -1,7 +1,13 @@
 <script lang="ts">
 	import type { Badge } from '$lib/effects/badges';
 	import { BADGE_TIERS, nextTier, type Streak } from '$lib/effects/streak';
-	import { bandById, bestBand, type TempoShelf } from '$lib/practice/tempo';
+	import {
+		bandById,
+		bestBand,
+		describeLadder,
+		type TempoLadder,
+		type TempoShelf
+	} from '$lib/practice/tempo';
 
 	/*
 	 * The shelf.
@@ -44,6 +50,7 @@
 	let {
 		shelf,
 		bands = {},
+		ladder = null,
 		streak,
 		chartName,
 		best,
@@ -51,6 +58,15 @@
 	}: {
 		/** This tune's badges, by tier. */
 		shelf: Record<string, Badge>;
+		/**
+		 * What this tune's tempo ladder suggests, or nothing.
+		 *
+		 * It suggests and never gates: nothing on this component consults it before
+		 * letting anything happen, because nothing here lets anything happen. The
+		 * transport is elsewhere and takes any tempo it is given, today and after
+		 * this shipped.
+		 */
+		ladder?: TempoLadder | null;
 		/**
 		 * The band each tier has been held at, by tier, derived from the runs. A
 		 * tier with nothing to say is simply absent — the demo grades nothing, and
@@ -130,6 +146,17 @@
 	/** The fastest band anything on this tune has been held at, for the line underneath. */
 	const held = $derived(bestBand(bands));
 	const heldBand = $derived(held ? bandById(held.band) : null);
+
+	/*
+	 * The ladder's line, and the mark that goes with it.
+	 *
+	 * Said only once something has actually been held clean. Before that the
+	 * ladder has nothing to suggest, and a line explaining what it would say if
+	 * you had done something is the kind of empty scolding this app does not
+	 * write — the shelf's own hint already says what to go and do.
+	 */
+	const suggesting = $derived(ladder?.held && ladder.next && ladder.nextBpm ? ladder : null);
+	const nextBand = $derived(suggesting?.next ? bandById(suggesting.next) : null);
 </script>
 
 <section class="shelf" aria-label="Streak badges">
@@ -206,6 +233,36 @@
 		<p class="shelf-tempo">
 			Held on {chartName} at <strong>{heldBand.name}</strong> — {held.bpm}, {held.percent}% of the
 			{held.target} it goes at. {heldBand.says}
+		</p>
+	{/if}
+
+	{#if suggesting && nextBand}
+		<!--
+			The ladder, which suggests.
+
+			The same road the badges' marks sit on, at the width of a sentence: where
+			this tune has been held clean, a hollow mark where the next band starts,
+			and the notch at the tune's own tempo between or beyond them. Nothing is
+			locked, and the line says so in words rather than leaving it to be
+			inferred from the absence of a padlock.
+		-->
+		<p class="shelf-ladder" title={describeLadder(suggesting)}>
+			<svg class="ladder-road" viewBox="0 0 {TRACK.width} 11" aria-hidden="true">
+				<line class="band-road" x1={TRACK.left} y1="8" x2={TRACK.right} y2="8" />
+				<line class="band-target" x1={at(100)} y1="4.5" x2={at(100)} y2="10.5" />
+				<line
+					class="band-mark"
+					class:is-at-tempo={(suggesting.percent ?? 0) >= 100}
+					x1={at(suggesting.percent ?? 0)}
+					y1="1.5"
+					x2={at(suggesting.percent ?? 0)}
+					y2="10.5"
+				/>
+				<circle class="ladder-next" cx={at(nextBand.from)} cy="8" r="1.9" />
+			</svg>
+			Held clean at <strong>{bandById(suggesting.held!)?.name}</strong>. Next band up is
+			<strong>{nextBand.name}</strong>, from {suggesting.nextBpm}. A suggestion — every tempo stays
+			playable.
 		</p>
 	{/if}
 
@@ -407,6 +464,37 @@
 	.shelf-tempo strong {
 		color: var(--color-ink-muted);
 		font-family: var(--font-mono);
+	}
+
+	/* The ladder's line, in the badges' own vocabulary and at reading size. */
+	.shelf-ladder {
+		margin-top: 0.45rem;
+		color: var(--color-ink-dim);
+		font-size: 0.76rem;
+		line-height: 1.45;
+	}
+
+	.shelf-ladder strong {
+		color: var(--color-ink-muted);
+		font-family: var(--font-mono);
+	}
+
+	.ladder-road {
+		display: inline-block;
+		width: 3.4rem;
+		height: auto;
+		margin-right: 0.4rem;
+		vertical-align: -0.15em;
+	}
+
+	/*
+	 * Where the next band starts: hollow, because it is somewhere to go and not
+	 * something held. Ink again — a band has no pitch and therefore no colour.
+	 */
+	.ladder-next {
+		fill: none;
+		stroke: var(--color-ink-dim);
+		stroke-width: 1;
 	}
 
 	.shelf-hint {

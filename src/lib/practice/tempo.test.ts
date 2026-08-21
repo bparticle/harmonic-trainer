@@ -1,21 +1,47 @@
 import { describe, expect, it } from 'vitest';
+import { GUIDE_TONE_TARGET } from './goal';
 import {
 	BANDS,
+	bandCrossed,
 	bandFor,
 	bandsOn,
 	bestBand,
 	describeGrade,
+	describeLadder,
+	describeMonth,
 	fastestAtLeast,
 	grade,
 	gradeShelf,
+	heldCleanly,
+	ladderOn,
 	noTempo,
 	parseTempoRecord,
+	readMovement,
 	shareOfTarget,
-	type StreakTempo
+	suggestLadder,
+	type HeldRun,
+	type StreakTempo,
+	type TempoMovement
 } from './tempo';
 
 /** A run, in the shape the log hands over: how far the streak got, and how fast. */
 const run = (bestStreak: number, bpm: number): StreakTempo => ({ bestStreak, bpm });
+
+/** A run that cleared the mission's bar: every chord landed, with a real streak going. */
+const clean = (bpm: number, bestStreak = 12): HeldRun => ({
+	bpm,
+	voiced: 20,
+	landed: 20,
+	bestStreak
+});
+
+/** A run at the same tempo that did not: half the chords landed. */
+const scrappy = (bpm: number, bestStreak = 12): HeldRun => ({
+	bpm,
+	voiced: 20,
+	landed: 10,
+	bestStreak
+});
 
 describe('a band is a share of the tune’s own tempo', () => {
 	it('reads 76 on a ballad and 76 on a bebop head as two different things', () => {
@@ -169,7 +195,10 @@ describe('what a band says out loud', () => {
 });
 
 describe('reading grades back off the wire', () => {
-	const record = { byChart: { 'rhythm-changes': gradeShelf([run(32, 100)], 160) } };
+	const record = {
+		byChart: { 'rhythm-changes': gradeShelf([run(32, 100)], 160) },
+		ladders: { 'rhythm-changes': suggestLadder([clean(100)], 160) }
+	};
 
 	it('survives anything that is not a record at all', () => {
 		expect(parseTempoRecord(null)).toEqual(noTempo());
@@ -206,5 +235,214 @@ describe('reading grades back off the wire', () => {
 	it('drops a band this ladder has never had', () => {
 		const unknown = { byChart: { tune: { fire: { bpm: 100, target: 160, band: 'blazing' } } } };
 		expect(parseTempoRecord(unknown)).toEqual(noTempo());
+	});
+
+	it('rebuilds a ladder off the wire rather than believing the one it was sent', () => {
+		const lying = {
+			byChart: {},
+			ladders: { tune: { held: 'past', bpm: 40, target: 160, next: 'past', nextBpm: 12 } }
+		};
+		expect(parseTempoRecord(lying).ladders.tune).toMatchObject({
+			held: 'learning',
+			next: 'working',
+			nextBpm: 96
+		});
+	});
+
+	it('keeps the tune’s own tempo even when the ladder it was sent says nothing', () => {
+		const empty = { byChart: {}, ladders: { tune: { held: null, bpm: null, target: 140 } } };
+		expect(parseTempoRecord(empty).ladders.tune).toEqual({
+			held: null,
+			bpm: null,
+			percent: null,
+			target: 140,
+			next: null,
+			nextBpm: null
+		});
+	});
+});
+
+describe('the ladder suggests the next band and gates nothing', () => {
+	it('says where the tune has been held and what the band above it costs', () => {
+		// Rhythm changes, from the record: held clean at 100 on a tune that goes at
+		// 160, which is 63% and `working`. The roadmap puts the next band at 128,
+		// and so does this.
+		expect(suggestLadder([clean(100)], 160)).toEqual({
+			held: 'working',
+			bpm: 100,
+			percent: 63,
+			target: 160,
+			next: 'nearly',
+			nextBpm: 128
+		});
+	});
+
+	it('offers a tempo to reach for and never one that has to be reached', () => {
+		// "It suggests, it never gates", asserted on the shape: there is no field
+		// here that could withhold a tempo, and the sentence says so out loud on
+		// the screen where somebody might otherwise assume one had been.
+		const ladder = suggestLadder([clean(100)], 160);
+		expect(Object.keys(ladder).sort()).toEqual([
+			'bpm',
+			'held',
+			'next',
+			'nextBpm',
+			'percent',
+			'target'
+		]);
+		expect(describeLadder(ladder)).toContain('any tempo stays playable');
+	});
+
+	it('asks for the next band in a tempo that grades as that band', () => {
+		// 80% of 99 is 79.2, and asking for 79 would grade as the band below the
+		// one the sentence names. Rounded up, so the number keeps its own word.
+		const ladder = suggestLadder([clean(60)], 99);
+		expect(ladder.next).toBe('nearly');
+		expect(grade(ladder.nextBpm!, 99)?.band).toBe('nearly');
+	});
+
+	it('reads a run that did not clear the bar as having nothing to say', () => {
+		// Not as a failure and not as a slower band: a scrappy run at 140 simply
+		// does not move the ladder, and the clean one at 100 still decides it.
+		const ladder = suggestLadder([clean(100), scrappy(140)], 160);
+		expect(ladder.held).toBe('working');
+		expect(ladder.bpm).toBe(100);
+	});
+
+	it('borrows the mission’s bar rather than inventing a second one', () => {
+		const atTheBar = { bpm: 100, voiced: 100, landed: GUIDE_TONE_TARGET, bestStreak: 12 };
+		expect(heldCleanly(atTheBar)).toBe(true);
+		expect(heldCleanly({ ...atTheBar, landed: GUIDE_TONE_TARGET - 1 })).toBe(false);
+	});
+
+	it('will not let one perfect chord set a tune’s band', () => {
+		// A run row keeps the percentage and not how far round the form it got, so
+		// the ladder borrows the shelf's own first rung instead of inventing a
+		// length: three in a row is where a streak starts being real.
+		expect(heldCleanly({ bpm: 200, voiced: 1, landed: 1, bestStreak: 1 })).toBe(false);
+		expect(heldCleanly({ bpm: 200, voiced: 1, landed: 1, bestStreak: 3 })).toBe(true);
+	});
+
+	it('has nothing above past tempo, and offers nothing for being there', () => {
+		const ladder = suggestLadder([clean(99)], 76);
+		expect(ladder.held).toBe('past');
+		expect(ladder.next).toBeNull();
+		expect(ladder.nextBpm).toBeNull();
+		expect(describeLadder(ladder)).toContain('nothing to collect');
+	});
+
+	it('suggests nothing at all on a tune nothing has been held clean on', () => {
+		const ladder = suggestLadder([scrappy(140)], 140);
+		expect(ladder.held).toBeNull();
+		expect(ladder.next).toBeNull();
+		expect(ladder.target).toBe(140);
+		expect(describeLadder(ladder)).toContain('Every tempo is playable');
+	});
+
+	it('never tells anybody off for where the ladder has got to', () => {
+		const lines = [
+			describeLadder(suggestLadder([clean(60)], 160)),
+			describeLadder(suggestLadder([clean(100)], 160)),
+			describeLadder(suggestLadder([clean(99)], 76)),
+			describeLadder(suggestLadder([], 160))
+		];
+		for (const line of lines) {
+			expect(line).not.toMatch(/too slow|only|fail|locked|unlock|not fast|should/i);
+		}
+	});
+
+	it('keeps one tune’s ladder out of another’s, because tempo does not transfer', () => {
+		const record = parseTempoRecord({
+			byChart: {},
+			ladders: {
+				'rhythm-changes': suggestLadder([clean(100)], 160),
+				bossa: suggestLadder([], 140)
+			}
+		});
+		expect(ladderOn(record, 'rhythm-changes')?.next).toBe('nearly');
+		expect(ladderOn(record, 'bossa')?.held).toBeNull();
+		expect(ladderOn(record, 'never-played')).toBeNull();
+	});
+});
+
+describe('crossing a band, which is the only noise tempo gets to make', () => {
+	it('says so the first time a tune is held above where the record has it', () => {
+		expect(bandCrossed({ bpm: 140, target: 140, heldBefore: 'working' })?.id).toBe('attempo');
+	});
+
+	it('stays quiet about a band the record already holds', () => {
+		expect(bandCrossed({ bpm: 140, target: 140, heldBefore: 'attempo' })).toBeNull();
+		expect(bandCrossed({ bpm: 100, target: 140, heldBefore: 'attempo' })).toBeNull();
+	});
+
+	it('stays quiet about arriving where every tune starts', () => {
+		// `learning` is the ground floor rather than a crossing: nobody has gone
+		// anywhere by playing a tune slowly for the first time.
+		expect(bandCrossed({ bpm: 60, target: 160, heldBefore: null })).toBeNull();
+	});
+
+	it('says a band once and then lets it be a fact', () => {
+		expect(bandCrossed({ bpm: 140, target: 140, heldBefore: null, said: ['attempo'] })).toBeNull();
+	});
+
+	it('says nothing about a tune whose own tempo nothing records', () => {
+		expect(bandCrossed({ bpm: 140, target: 0, heldBefore: null })).toBeNull();
+	});
+});
+
+describe('whether the last month moved anything, and what it refuses to claim', () => {
+	const moved: TempoMovement = {
+		chartSlug: 'rhythm-changes',
+		before: grade(100, 160),
+		now: grade(130, 160)
+	};
+	const stood: TempoMovement = {
+		chartSlug: 'blues-12',
+		before: grade(140, 140),
+		now: grade(140, 140)
+	};
+	const fresh: TempoMovement = { chartSlug: 'birds', before: null, now: grade(99, 76) };
+
+	it('counts a tune with no history before the window as uncomparable, not as still', () => {
+		// The distinction the whole figure rests on. A tune whose entire record is
+		// inside the window has not stood still — there is nothing to compare it
+		// against, and reporting the two as one thing would be an invented fact.
+		const reading = readMovement([fresh]);
+		expect(reading.tooNew).toBe(1);
+		expect(reading.steady).toBe(0);
+		expect(reading.raised).toHaveLength(0);
+	});
+
+	it('reads a record with nothing comparable as not enough history to say', () => {
+		expect(describeMonth(readMovement([fresh]))).toContain('Not enough history to say yet');
+	});
+
+	it('says nothing whatever when there is nothing graded', () => {
+		expect(describeMonth(readMovement([]))).toBe('');
+		expect(describeMonth(readMovement([{ chartSlug: 'x', before: null, now: null }]))).toBe('');
+	});
+
+	it('reports a month that moved nothing as tunes holding the band they had', () => {
+		const says = describeMonth(readMovement([stood]));
+		expect(says).toBe('1 tune held the band it already had over the last 30 days.');
+		expect(describeMonth(readMovement([stood, { ...stood, chartSlug: 'other' }]))).toBe(
+			'2 tunes held the band they already had over the last 30 days.'
+		);
+		expect(says).not.toMatch(/nothing|failed|should|no movement/i);
+	});
+
+	it('reports movement upward and never the other way', () => {
+		// The band on a tune is the fastest it has ever been held, so it cannot
+		// fall. A quieter month than the one before it is not a decline and is
+		// never reported as one.
+		expect(readMovement([moved]).raised).toHaveLength(1);
+		expect(readMovement([stood]).raised).toHaveLength(0);
+		expect(describeMonth(readMovement([stood]))).not.toMatch(/down|slower|dropped|fell/i);
+	});
+
+	it('leads with what moved when anything did', () => {
+		expect(describeMonth(readMovement([moved, stood, fresh]))).toBe(
+			'1 tune moved to a faster band in the last 30 days.'
+		);
 	});
 });

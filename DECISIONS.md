@@ -3413,9 +3413,9 @@ clicked before the page showed you anything worth wanting.
 
 ## M16 — tempo, measured
 
-The first phase of it: the grade and the shelf. The profile's second dimension,
-the per-tune ladder and a mission that targets the next band up are still ahead,
-so `ROADMAP.md` keeps its section until they land.
+Both phases of it. The first built the grade and the shelf; the second built the
+per-tune ladder, the mission that targets the next band up, the profile's second
+dimension, and settled the two questions the roadmap left open.
 
 The complaint underneath the milestone is that a badge earned at half speed is
 not the badge earned at tempo, and until now the app could not tell them apart.
@@ -3506,3 +3506,164 @@ changes `working` at 63% of 160, the jazz blues `attempo` dead on 140, and Three
 Little Birds `past` at 130% of 76 — the three the shelf could not tell apart.
 All three are fixtures in `tempo.test.ts` rather than a paragraph here, so the
 day the logic stops agreeing with them a test says so.
+
+### The ladder suggests, and there is nothing in it that could gate
+
+"Start slow, stay consistent, move up" is the key ladder's shape on the other
+axis, and the strongest way to keep it a suggestion was to build it so that
+gating is not expressible. `TempoLadder` has six fields — the band held, the
+tempo and share it was held at, the tune's own tempo, the band above and what
+that one starts at — and not one of them is a permission. Nothing in `/backing`
+consults it before doing anything, because the transport takes the tempo it is
+given and always has. The line under the shelf ends with _"A suggestion — every
+tempo stays playable"_, which is that rule said out loud on the one screen where
+somebody might otherwise assume a tempo had been taken away.
+
+Per tune, because tempo does not transfer: holding rhythm changes at 100 says
+nothing whatever about a bossa. The ladders are keyed by chart slug and a tune
+missing from the map is a tune the ladder has nothing to say about — which is
+different from a tune with runs and nothing held clean, and the two are kept
+apart in the shape rather than collapsed into one absent value.
+
+### One definition of "held it", and the half of it the rows cannot answer
+
+The roadmap asks the threshold to reuse M15's mission goal rather than inventing
+a second standard, and `heldCleanly` imports `GUIDE_TONE_TARGET` from `goal.ts`
+so that moving the bar moves both. `landed` over `voiced` on a `play_runs` row is
+the very number `evaluateGoal` judges — `accuracy` counts chords, not tones — so
+this is the same question reaching the same answer from stored rows.
+
+**The roadmap was optimistic about the other half.** A mission goal is a
+percentage _over a number of choruses_, and a run row does not record how far
+round the form the run got: `barsCovered` counts bar-number transitions in the
+chords a run judged, and reconstructing that in SQL would be a second, weaker
+copy of it living where it cannot be tested. Estimating choruses from `voiced`
+would be worse — a run where you rested half the bars would under-report, and
+this record has never held an estimate.
+
+So the ladder asks the half the rows answer exactly, and borrows a floor the app
+already owns for the other: the run must also have reached the **first rung of
+the streak ladder**, because `streak.ts` already says that two in a row happens
+by accident inside any ii–V and three is where a streak starts being real. That
+stops one perfect chord from setting a tune's band without inventing a number to
+do it. It is a floor on which runs are worth reading, not a second definition of
+holding something together.
+
+### A mission expresses "the next band up" by carrying a band
+
+Where M15 and M16 meet, and it needed one field. A mission already carried a
+tune, a key and a tempo, so the whole of "hold the bar at the next band up on
+this tune" is `bpmFloor` coming from the ladder instead of from `charts.ts`, plus
+a `band` saying which band that number names. No new task kind, no second goal
+type, no change to what `/backing` reads off the URL.
+
+Rhythm changes is the case: held clean at 100 on a tune that goes at 160, the
+mission asks for **128 and not 160** — the thing to practise rather than the
+thing to bounce off. It stays a floor, exactly as it always was, so playing it
+faster than asked is still not cheating and a mission asking below the tune's own
+tempo is a suggestion about where the work is rather than a speed limit. A tune
+the ladder cannot speak for keeps the tempo it goes at, which is what every
+mission did before this.
+
+The instruction says why: _"That is nearly on this tune — one band up from where
+you have held it."_ A mission asking for 128 on a tune the player knows goes at
+160 has to explain itself or it reads as a bug.
+
+**The grade reaches the composer as an input.** `composeWorkout` is pure and
+stays pure, so `ladders` arrives on `WorkoutInput` exactly the way `coldSpots`
+does — derived from the runs by `loadTempoGrades` and handed over — rather than
+the composer reaching for a database. The whole of the mission-targeting
+behaviour is therefore provable with no database anywhere near the test.
+
+### The profile's second dimension, and the figures it refused
+
+The twelve keys are breadth; **how fast it has been held** is depth, and it sits
+directly under them because they are two readings of one record. Per tune: the
+fastest band anything on that tune has been held at, drawn as the shelf's mark on
+a road at reading width — mark, notch at the tune's own tempo, road continuing
+past it. No colour, again: hue means pitch and a tempo has no pitch in it.
+
+The improvement figure is the first thing in the app that measures getting better
+rather than doing more, and it is the one most able to say more than the rows do.
+It reports three counts and keeps them apart: tunes the last thirty days took to
+a faster band, tunes that held the band they already had, and tunes whose whole
+history is inside the window and therefore have **nothing to be compared
+against**. The third is not a tune standing still, and conflating the two would
+have been the invented fact this page has never printed.
+
+Movement is reported upward only. The band on a tune is the fastest it has _ever_
+been held, so it cannot fall, and a quieter month than the one before it is not a
+decline. And a month that moved nothing is reported as _"2 tunes held the band
+they already had over the last 30 days"_ — what the tunes did, never what the
+player failed to do. There is a test asserting that sentence contains no word of
+reproach, because that is the kind of thing a later edit loosens by accident.
+
+**Not enough history to say is its normal early state**, and reads as a fact:
+this record has no month-over-month history at all yet, so the honest answer today
+is that every run is inside the window and there is nothing before them.
+
+Three figures were wanted and refused. An _average band_ across the record, which
+would be a mean of five ordinal words and traceable to nothing. A _tempo trend
+line_, which is the same decoration `loadTrends` already refuses for accuracy.
+And _tempo per key_, because a band is a share of a tune's tempo and a key does
+not have one — the record's 813 attempts come from two keys anyway, so the
+figure would have been a shape with two points in it.
+
+### `past` is shown and awards nothing
+
+Settled against awarding it, and the argument is stronger than the roadmap's own
+worry. A band is a share of the tune's own `default_bpm`, and on a chart you
+typed in yourself that is a field you can edit — so an award at `past` would be
+collectable by opening the chart editor and lowering a number, without playing
+anything. Even on a built-in it would be collectable by dragging the tempo
+slider, which is the mirror image of the flattery this whole milestone exists to
+remove: M16 stops the ladder being gamed by slowing down, and a prize at the top
+would make it gameable by speeding up.
+
+So `past` is shown, described as _"showing off and is allowed"_, and that is the
+whole of it. `bandAbove('past')` is null, `describeLadder` says there is _"nothing
+to collect for being here"_, and a mission on a tune already held past tempo goes
+back to asking for the tune's own tempo rather than inventing a sixth band. The
+scale still does not stop at "correct" — being past tempo is visible, on the
+shelf, in the profile and in the ladder's own sentence. It is simply not
+currency.
+
+### Crossing a band gets the quietest noise the fun layer owns
+
+Settled in favour, narrowly, and on the house terms. Crossing into a band the
+record has never held this tune at is worth a word — it is the one moment where
+depth is actually happening, and the app was previously silent about it.
+
+It is the **one-word callout** and never the confetti cannon, which stays
+reserved for a badge earned for the first time: `celebrateChord` ranks a fresh
+badge, then a tier callout, then a band crossed, then the streak ending, and only
+the loudest speaks. It fires on a run that has just set its own best streak, at
+three in a row or more, once per band per tune per sitting — landing one chord
+fast is not crossing anything.
+
+It is opt-out and it obeys the preference **without any new code**, which is the
+reason to route it through `fx.say` rather than anywhere else: `Fireworks`
+already computes `live = enabled && motionOK`, so the existing switch turns it
+off and `prefers-reduced-motion` silences it.
+
+And the score is not behind it. The bands and the ladder's line live on the
+shelf, which has been part of the game layer since it was built and goes away
+with the switch — but the two places the tempo grade actually *does* anything are
+not on the shelf at all. A mission's floor comes from the ladder whether or not
+the fireworks were ever on, and the profile's tempo panel and month figure read
+the same rows on a page that has no fireworks switch. Turning the noise off costs
+a callout and a row of hexagons; it costs no number anywhere.
+
+Arriving in `learning` is never announced. It is the ground floor rather than a
+crossing: nobody has gone anywhere by playing a tune slowly for the first time.
+
+### No migration, and nothing new stored
+
+Phase 2 adds no column and no table. The ladder, the mission's band, the profile
+panel and the month figure are all functions of `play_runs` rows that already
+exist, `best_streak_bpm` included — which is the same argument Phase 1 made
+against `badges.best_bpm`, holding for a second time under more pressure. The one
+thing that changed shape is `TempoRecord`, which now carries `ladders` beside
+`byChart`; it is a wire format rather than a stored one, and `parseTempoRecord`
+rebuilds each ladder through `suggestLadder` so a hand-edited cache cannot
+produce a ladder this build would not.

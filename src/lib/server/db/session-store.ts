@@ -33,6 +33,7 @@ import {
 	type ActiveWorkout
 } from '$lib/session/progress';
 import { reportWorkout, type Asked, type WorkoutReport } from '$lib/session/report';
+import { loadTempoGrades } from './play-log';
 import type { Verdict } from '$lib/practice/goal';
 import { CHARTS } from '$lib/curriculum/charts';
 import { isGroove, type Groove } from '$lib/audio/groove';
@@ -327,6 +328,10 @@ export type WorkoutRequest = {
  * neighbourhood of the ladder position, the record's cold spots, and what was
  * new last time. Nothing here decides anything — the deciding is all in
  * `composeWorkout`, which is why it can be proved without any of this.
+ *
+ * Since M16 the tempo ladders come the same way, and for the same reason the
+ * cold spots do: the composer is pure, so a grade derived from the runs arrives
+ * as an input rather than the composer reaching for the runs itself.
  */
 async function gatherWorkoutInput(
 	userId: string,
@@ -334,14 +339,16 @@ async function gatherWorkoutInput(
 	request: WorkoutRequest,
 	now: Date
 ): Promise<WorkoutInput> {
-	const [cardBank, coldSpots, chartList, played, progress, yesterdaysNovelty] = await Promise.all([
-		schedulableCards(),
-		loadColdSpots(userId),
-		missionCharts(userId),
-		alreadyPlayed(userId),
-		rungProgress(position),
-		lastNovelty(now)
-	]);
+	const [cardBank, coldSpots, chartList, played, progress, yesterdaysNovelty, tempo] =
+		await Promise.all([
+			schedulableCards(),
+			loadColdSpots(userId),
+			missionCharts(userId),
+			alreadyPlayed(userId),
+			rungProgress(position),
+			lastNovelty(now),
+			loadTempoGrades(userId)
+		]);
 
 	return {
 		size: request.size,
@@ -349,6 +356,7 @@ async function gatherWorkoutInput(
 		reached: reachedSoFar(position),
 		coldSpots,
 		charts: chartList,
+		ladders: tempo.ladders,
 		played,
 		yesterdaysNovelty,
 		choice: request.choice ?? null,
