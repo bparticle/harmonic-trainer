@@ -4,6 +4,9 @@ import { initialState, type Schedulable } from '$lib/srs/scheduler';
 import { FIRST_POSITION, positionOf, reachedSoFar, type RungId } from '$lib/curriculum/ladder';
 import { cardsForRung } from '$lib/curriculum/cards';
 import { STAGES } from '$lib/curriculum/ladder';
+import { PROGRESSIONS } from '$lib/curriculum/progressions';
+import { MISSION_CHARTS, chartDemand } from '$lib/curriculum/charts';
+import { ALL_RUNGS, vocabularyOf } from '$lib/curriculum/vocabulary';
 import { describeGoal } from '$lib/practice/goal';
 import { suggestLadder, type HeldRun } from '$lib/practice/tempo';
 import {
@@ -75,9 +78,22 @@ function bank(options: { dueInDays?: number; reps?: number } = {}): Schedulable[
 	return out;
 }
 
+/**
+ * Somebody who has met everything.
+ *
+ * The fixture that keeps every assertion below about the thing it is about.
+ * Readiness has a suite of its own further down; a test asking whether a long
+ * workout repeats a tune should not also be a test of the curriculum gate.
+ */
+const KNOWS_EVERYTHING = vocabularyOf({
+	rungs: ALL_RUNGS,
+	progressions: PROGRESSIONS.map((progression) => progression.id)
+});
+
 const input = (overrides: Partial<WorkoutInput> = {}): WorkoutInput => ({
 	cards: bank(),
 	reached: REACHED,
+	vocabulary: KNOWS_EVERYTHING,
 	now: NOW,
 	...overrides
 });
@@ -95,7 +111,11 @@ const ONE_TUNE: MissionChart = {
 	category: 'standard',
 	mode: 'major',
 	defaultBpm: 160,
-	defaultGroove: 'swing'
+	defaultGroove: 'swing',
+	demand: chartDemand({
+		grid: [['I6 vi7', 'ii7 V7', 'I7', 'IV7']],
+		mode: 'major'
+	})
 };
 
 /** A run that cleared the mission's bar at a given tempo. */
@@ -560,7 +580,8 @@ describe('the mission', () => {
 						category: 'cycle',
 						mode: 'major',
 						defaultBpm: 100,
-						defaultGroove: 'swing'
+						defaultGroove: 'swing',
+						demand: chartDemand({ grid: [['ii7 V7', 'v7 I7']], mode: 'major' })
 					}
 				]
 			})
@@ -676,11 +697,46 @@ describe('a brand-new account', () => {
 	const first = composeWorkout({
 		cards: firstCards,
 		reached: firstReached,
+		vocabulary: vocabularyOf({ rungs: firstReached.map((place) => place.rungId) }),
 		now: NOW
 	});
 
-	it('gets a full workout on day one', () => {
-		expect(first.tasks).toHaveLength(4);
+	/*
+	 * Two tasks on the very first day, and this is the fix rather than a
+	 * regression.
+	 *
+	 * Day one owns one rung — the seven notes of C major — and therefore no chord
+	 * shape at all. The function task cannot be built, because a scale has no
+	 * degree to ask for, and now the mission cannot either, because every tune in
+	 * the book asks for a chord nobody has been shown. What used to fill that slot
+	 * was a chart picked out of the whole list: a Cmaj7 into an E♭7 on the second
+	 * morning of playing the piano.
+	 *
+	 * So it is short, and it says so. The size picker counts the tasks actually
+	 * composed and `missionHeld` names the tune that is nearest and what it wants.
+	 * By the second rung — the home chord — a major triad is a shape you have met
+	 * and the first play-along appears.
+	 */
+	it('is short on day one, because there is nothing honest to fill it with', () => {
+		expect(taskKinds(first)).toEqual(['ear', 'new_thing']);
+	});
+
+	it('says which tune is nearest and what it is waiting for', () => {
+		expect(first.missionHeld).not.toBeNull();
+		expect(first.missionHeld!.needs).toBeTruthy();
+		expect(first.missionHeld!.teaches.length).toBeGreaterThan(0);
+	});
+
+	it('has a play-along by the time the home chord is met', () => {
+		const second = reachedSoFar(positionOf('C', 'tonic-triad')!);
+		const workout = composeWorkout({
+			cards: firstCards,
+			reached: second,
+			vocabulary: vocabularyOf({ rungs: second.map((place) => place.rungId) }),
+			now: NOW
+		});
+		expect(taskKinds(workout)).toContain('mission');
+		expect(workout.missionHeld).toBeNull();
 	});
 
 	it('has an ear task even though it owns one aural card', () => {
@@ -697,6 +753,73 @@ describe('a brand-new account', () => {
 		for (const mission of missions(first)) expect(mission.keyCenter).toBe('C');
 		if (first.novelty?.kind === 'progression') expect(first.novelty.keyCenter).toBe('C');
 		if (first.novelty?.kind === 'rung') expect(first.novelty.key).toBe('C');
+	});
+});
+
+describe('the mission only lands on a tune you have been taught', () => {
+	/*
+	 * The complaint, end to end. The drill room would ask for a C triad and the
+	 * seven notes of C major and the same workout would send you to a three-tonic
+	 * cycle — Cmaj7 into E♭7 into A♭maj7 — chords nobody had mentioned, in keys
+	 * nobody had been to. `curriculum/vocabulary.ts` decides what is ready; this
+	 * is the proof that the composer actually asks it.
+	 */
+	const early = reachedSoFar(positionOf('C', 'all-triads')!);
+	const earlyInput = input({
+		reached: early,
+		vocabulary: vocabularyOf({ rungs: early.map((place) => place.rungId) }),
+		charts: MISSION_CHARTS
+	});
+
+	it('never sets a mission on a tune that leaves the key you have been shown', () => {
+		for (let d = 0; d < 30; d++) {
+			const workout = composeWorkout({
+				...earlyInput,
+				size: 'long',
+				now: new Date(NOW.getTime() + d * DAY)
+			});
+			for (const mission of missions(workout)) {
+				const chart = MISSION_CHARTS.find((c) => c.slug === mission.chartSlug)!;
+				expect(chart.demand.ground, `${chart.slug} on day ${d}`).toBe('in_key');
+			}
+		}
+	});
+
+	it('reaches the cycles once the chromatic devices have been met', () => {
+		const far = input({
+			charts: MISSION_CHARTS,
+			vocabulary: vocabularyOf({
+				rungs: ALL_RUNGS,
+				progressions: PROGRESSIONS.map((progression) => progression.id)
+			})
+		});
+		const slugs = new Set<string>();
+		for (let d = 0; d < 60; d++) {
+			const workout = composeWorkout({
+				...far,
+				size: 'long',
+				now: new Date(NOW.getTime() + d * DAY)
+			});
+			for (const mission of missions(workout)) slugs.add(mission.chartSlug);
+		}
+		expect(slugs.has('three-tonic-cycle')).toBe(true);
+	});
+
+	it('refuses a second mission that would be the same tune in the same key', () => {
+		// One rung, one key, one ready tune. A long workout asks for two missions;
+		// the second would be a copy of the first, so it is not built.
+		const workout = composeWorkout({ ...earlyInput, size: 'long' });
+		const set = missions(workout).map((mission) => `${mission.chartSlug} ${mission.keyCenter}`);
+		expect(new Set(set).size).toBe(set.length);
+	});
+
+	it('still steers by the coldest quality, but only among what is ready', () => {
+		const coldDominant = composeWorkout({
+			...input({ charts: MISSION_CHARTS }),
+			coldSpots: [{ keyCenter: 'C', quality: 'dom', attempts: 0, accuracy: null }]
+		});
+		const chart = MISSION_CHARTS.find((c) => c.slug === missions(coldDominant)[0].chartSlug)!;
+		expect(chart.style).toBe('blues');
 	});
 });
 

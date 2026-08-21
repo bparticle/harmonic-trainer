@@ -5,8 +5,12 @@ import {
 	badgesOn,
 	earnedCount,
 	emptyRecord,
+	holdBack,
+	nothingHeld,
 	parseRecord,
-	type StreakRecord
+	release,
+	type StreakRecord,
+	type Waiting
 } from './badges';
 import { BADGE_TIERS, type Streak } from './streak';
 
@@ -191,5 +195,83 @@ describe('the record that shipped before this', () => {
 			badges: { nice: { tier: 'nice', count: 3, at: '', pc: 0, chart: '' } }
 		});
 		expect(parsed.badges).toEqual({});
+	});
+});
+
+/*
+ * The waiting shelf.
+ *
+ * Two bars of a thirty-two bar tune, looped and played cleanly at full tempo,
+ * used to fill the shelf — a medal for a fragment. A badge waits for the form to
+ * have been round now, and these are the two halves of that: holding one back,
+ * and paying it out when the tune finally comes round.
+ */
+describe('a badge held back until the form has been round', () => {
+	/** Walk a streak up to `count`, holding rather than awarding. */
+	function hold(to: number, record = emptyRecord(), context = won): Waiting {
+		let waiting = nothingHeld();
+		for (let n = 1; n <= to; n++) {
+			waiting = holdBack(record, waiting, at(n - 1), at(n), context).waiting;
+		}
+		return waiting;
+	}
+
+	it('holds exactly what awarding would have given', () => {
+		const held = hold(BADGE_TIERS[1].from);
+		const awarded = badgesOn(climb(BADGE_TIERS[1].from), 'blues');
+		expect(Object.keys(held).sort()).toEqual(Object.keys(awarded).sort());
+	});
+
+	it('leaves the record alone while it waits', () => {
+		const record = emptyRecord();
+		hold(BADGE_TIERS[1].from, record);
+		expect(earnedCount(record, 'blues')).toBe(0);
+	});
+
+	it('never holds a tier the tune already owns', () => {
+		const already = climb(BADGE_TIERS[0].from);
+		expect(hold(BADGE_TIERS[0].from, already)).toEqual({});
+	});
+
+	it('keeps the first crossing rather than the last', () => {
+		let waiting = holdBack(emptyRecord(), nothingHeld(), at(2), at(3), won).waiting;
+		const later = { ...won, at: '2026-08-16T11:00:00.000Z', pc: 9 };
+		waiting = holdBack(emptyRecord(), waiting, at(2), at(3), later).waiting;
+		expect(waiting.nice.won.at).toBe(won.at);
+		expect(waiting.nice.won.pc).toBe(5);
+	});
+
+	it('pays everything out at once when the form comes round', () => {
+		const waiting = hold(BADGE_TIERS[1].from);
+		const paid = release(emptyRecord(), waiting);
+		expect(paid.earned.length).toBe(Object.keys(waiting).length);
+		expect(earnedCount(paid.record, 'blues')).toBe(paid.earned.length);
+	});
+
+	it('pays a badge out dated when it was earned, not when it landed', () => {
+		const paid = release(emptyRecord(), hold(3));
+		expect(badgesOn(paid.record, 'blues').nice.at).toBe(won.at);
+		expect(badgesOn(paid.record, 'blues').nice.pc).toBe(5);
+	});
+
+	it('lands on exactly the record awarding it outright would have left', () => {
+		const outright = climb(BADGE_TIERS[1].from);
+		const waited = release(emptyRecord(), hold(BADGE_TIERS[1].from)).record;
+		expect(waited).toEqual(outright);
+	});
+
+	it('changes nothing when nothing is waiting', () => {
+		const record = climb(3);
+		const paid = release(record, nothingHeld());
+		expect(paid.record).toBe(record);
+		expect(paid.earned).toEqual([]);
+	});
+
+	it('does not overwrite a badge the tune won in the meantime', () => {
+		const waiting = hold(3);
+		// The same tier, earned outright on a different chord before the pay-out.
+		const already = award(emptyRecord(), at(2), at(3), { ...won, pc: 11 }).record;
+		const paid = release(already, waiting);
+		expect(badgesOn(paid.record, 'blues').nice.pc).toBe(11);
 	});
 });

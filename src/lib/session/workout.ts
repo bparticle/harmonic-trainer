@@ -1,7 +1,17 @@
 import { GROOVES, type Groove } from '$lib/audio/groove';
-import { CHARTS, type ChartCategory } from '$lib/curriculum/charts';
+import { MISSION_CHARTS, type ChartCategory } from '$lib/curriculum/charts';
 import { nextPosition, positionOf, rungById, type RungId } from '$lib/curriculum/ladder';
 import { PROGRESSIONS } from '$lib/curriculum/progressions';
+import {
+	describeShortfall,
+	emptyVocabulary,
+	isReady,
+	reachOf,
+	shortfall,
+	taughtBy,
+	type Demand,
+	type Vocabulary
+} from '$lib/curriculum/vocabulary';
 import { progressionSkillCode, rungSkillCode } from '$lib/curriculum/cards';
 import { parseChord, type ChordQuality } from '$lib/music/chord';
 import { keyTonic } from '$lib/music/key';
@@ -181,6 +191,35 @@ export type Workout = {
 	coldSpots: ColdSpot[];
 	/** Lifted out of its task so tomorrow can avoid it. */
 	novelty: Novelty | null;
+	/**
+	 * Why there is no play-along today, on the days there is none.
+	 *
+	 * Null whenever a mission was set, which is nearly always. It is not null on
+	 * the first day or two of an account, and the difference between a workout
+	 * that quietly has three tasks instead of four and one that says *the tunes
+	 * all want a chord you have not met yet, here is the one that teaches it* is
+	 * the difference between a locked door and a curriculum. The page shows it;
+	 * nothing else reads it.
+	 */
+	missionHeld: MissionHeld | null;
+};
+
+/**
+ * A play-along that is being kept back, and what would release it.
+ *
+ * `needs` is the nearest tune's shortfall rather than the union of every tune's,
+ * because the honest answer to "what am I waiting for" is the smallest one.
+ * `teaches` names progressions by id, in the library's own order, so the page can
+ * link to the thing that unlocks it instead of leaving the reader to guess.
+ */
+export type MissionHeld = {
+	/** The nearest tune of the lot, by `reachOf`. */
+	chartSlug: string;
+	chartName: string;
+	/** What it would ask that nothing has taught. Already in words. */
+	needs: string;
+	/** Progression ids that would teach one of those, nearest first. */
+	teaches: string[];
 };
 
 // ---------------------------------------------------------------------------
@@ -287,6 +326,15 @@ export type MissionChart = {
 	mode: 'major' | 'minor';
 	defaultBpm: number;
 	defaultGroove: Groove;
+	/**
+	 * What the tune asks of a pair of hands, derived from its grid.
+	 *
+	 * Arrives as data for the same reason the cold spots and the tempo ladders
+	 * do: this module is pure and does not parse Roman numerals. See
+	 * `curriculum/vocabulary.ts`, which derives it, and `composeMission`, which
+	 * is the only thing here that reads it.
+	 */
+	demand: Demand;
 };
 
 export type WorkoutInput = {
@@ -323,6 +371,20 @@ export type WorkoutInput = {
 	played?: { progressions?: string[]; grooves?: Groove[] };
 	/** Whether the current rung looks solid, so the slot can say "ready to move on". */
 	rungLooksSolid?: boolean;
+	/**
+	 * What the drill room has taught: the shapes met and the ground reached.
+	 *
+	 * The input that stops a workout from drilling a C triad and then sending you
+	 * to a three-tonic cycle. Derived from the rungs reached and the progressions
+	 * met — see `curriculum/vocabulary.ts` — and arriving already derived, like
+	 * every other fact this pure module needs.
+	 *
+	 * Absent means *nothing has been taught*, which is only true of an account
+	 * with no ladder at all. Every real caller passes one; the default is the
+	 * conservative reading rather than the permissive one, because the failure
+	 * this milestone fixes was an over-permissive default.
+	 */
+	vocabulary?: Vocabulary;
 	now?: Date;
 };
 
@@ -642,6 +704,7 @@ export function functionQueue(
  */
 function composeMission(input: {
 	charts: MissionChart[];
+	vocabulary: Vocabulary;
 	keyCenter: string;
 	coldKeys: string[];
 	coldSpots: ColdSpot[];
@@ -649,13 +712,31 @@ function composeMission(input: {
 	day: number;
 	nth: number;
 }): Mission | null {
-	if (input.charts.length === 0) return null;
+	/*
+	 * The gate, and it comes before everything else.
+	 *
+	 * Only tunes whose every chord shape has been met and whose distance from the
+	 * key has been travelled. This is the whole of the fix: the composer used to
+	 * reach into the entire chart list, so an account two rungs old could be sent
+	 * to a chart that modulates by major thirds. It cannot now, and not because a
+	 * difficulty number says so — because the tune asks for a shape nobody has
+	 * shown you and the comparison is written down.
+	 *
+	 * Sorted by reach so the *first* tune to become available is the plainest one
+	 * that qualifies rather than whichever happened to sort first. The day still
+	 * rotates below; it now rotates a pool that is near where you are.
+	 */
+	const ready = input.charts
+		.filter((chart) => isReady(chart.demand, input.vocabulary))
+		.sort((a, b) => reachOf(a.demand) - reachOf(b.demand) || a.slug.localeCompare(b.slug));
+
+	if (ready.length === 0) return null;
 
 	// The coldest quality steers which form is offered, where it has a home.
 	const coldest = [...input.coldSpots].sort((a, b) => a.attempts - b.attempts)[0] ?? null;
 	const wantedStyle = coldest ? QUALITY_HOME[coldest.quality] : undefined;
 	const steeredSlugs = new Set(
-		wantedStyle ? input.charts.filter((c) => c.style === wantedStyle).map((c) => c.slug) : []
+		wantedStyle ? ready.filter((c) => c.style === wantedStyle).map((c) => c.slug) : []
 	);
 
 	// Rotated in two halves rather than as one list, or the day's rotation would
@@ -664,11 +745,11 @@ function composeMission(input: {
 	// is the next chart along and never the first one again.
 	const pool = [
 		...rotate(
-			input.charts.filter((c) => steeredSlugs.has(c.slug)),
+			ready.filter((c) => steeredSlugs.has(c.slug)),
 			input.day
 		),
 		...rotate(
-			input.charts.filter((c) => !steeredSlugs.has(c.slug)),
+			ready.filter((c) => !steeredSlugs.has(c.slug)),
 			input.day
 		)
 	];
@@ -894,10 +975,21 @@ function slotsFor(size: WorkoutSize, day: number): TaskKind[] {
  * without any of them.
  *
  * A slot that cannot be built falls through rather than leaving a hole — ear to
- * function to mission, ending at a mission, which is always buildable because
- * the built-in charts are always there. That is what makes the count on the
- * front of the workout a promise: three tasks means three tasks, on the first
- * day of a brand-new account with one rung reached and nothing in the record.
+ * function to mission and back round, so a slot is filled by whatever else there
+ * is before it is given up on.
+ *
+ * The mission used to be the end of every fallthrough, on the grounds that it
+ * was always buildable because the built-in charts are always there. It is not
+ * any more, and deliberately: a chart nobody has been taught the chords of is
+ * worse than no chart. On the first day of an account — one rung, seven notes,
+ * no chord shape at all — the drill room has one task in it and no tune is
+ * playable, so the workout is genuinely two tasks long and nothing can honestly
+ * make it four.
+ *
+ * It therefore says so rather than padding. `missionHeld` names the nearest tune
+ * and what it is waiting for, the size picker counts the tasks that were
+ * actually composed, and by the second rung there is a play-along. A count that
+ * is true is worth more than a count that is round.
  */
 export function composeWorkout(input: WorkoutInput): Workout {
 	const now = input.now ?? new Date();
@@ -933,8 +1025,9 @@ export function composeWorkout(input: WorkoutInput): Workout {
 		day
 	});
 
-	const charts = input.charts ?? CHARTS;
+	const charts = input.charts ?? MISSION_CHARTS;
 	const chartBySlug = new Map(charts.map((c) => [c.slug, c]));
+	const vocabulary = input.vocabulary ?? emptyVocabulary();
 
 	// Two queues, one bank, partitioned by direction — so nothing is asked twice
 	// without either queue having to know the other exists.
@@ -944,9 +1037,22 @@ export function composeWorkout(input: WorkoutInput): Workout {
 	);
 
 	let missionsBuilt = 0;
+	/*
+	 * Missions already set, as tune-and-key.
+	 *
+	 * A long workout asks for two, and early on the ready pool can hold one tune —
+	 * on an account two rungs old it holds exactly one. `composeMission` cycles
+	 * its pool with `nth % length`, so the second ask comes back with the same
+	 * chart, and with only one key reached it comes back in the same key too. Two
+	 * identical tasks is not a longer workout, so the second is refused and the
+	 * slot falls through to the drill room like any other slot that cannot be
+	 * built.
+	 */
+	const missionsSet = new Set<string>();
 	const nextMission = (): MissionTask | null => {
 		const mission = composeMission({
 			charts,
+			vocabulary,
 			keyCenter,
 			coldKeys,
 			coldSpots,
@@ -955,6 +1061,11 @@ export function composeWorkout(input: WorkoutInput): Workout {
 			nth: missionsBuilt
 		});
 		if (!mission) return null;
+
+		const already = `${mission.chartSlug} ${mission.keyCenter}`;
+		if (missionsSet.has(already)) return null;
+		missionsSet.add(already);
+
 		missionsBuilt++;
 		return missionTask(mission, chartBySlug.get(mission.chartSlug));
 	};
@@ -982,11 +1093,44 @@ export function composeWorkout(input: WorkoutInput): Workout {
 					: slot === 'new_thing'
 						? novelty
 							? newThingTask(novelty)
-							: nextMission()
-						: nextMission();
+							: (nextMission() ?? take(ear) ?? take(fn))
+						: (nextMission() ?? take(ear) ?? take(fn));
 
 		if (built) tasks.push(built);
 	}
 
-	return { version: 2, day, size, keyCenter, tasks, choice, coldSpots, novelty };
+	return {
+		version: 2,
+		day,
+		size,
+		keyCenter,
+		tasks,
+		choice,
+		coldSpots,
+		novelty,
+		// Only worth saying when a slot actually wanted one and could not have it.
+		missionHeld: missionsBuilt === 0 ? heldBack(charts, vocabulary) : null
+	};
+}
+
+/**
+ * The nearest tune that is not ready yet, and what it is waiting for.
+ *
+ * Nearest by `reachOf`, which is the same ordering `composeMission` picks from,
+ * so the tune named here is the one that will actually turn up first. Null when
+ * there is no chart list at all, which is a state no real caller is in.
+ */
+function heldBack(charts: MissionChart[], vocabulary: Vocabulary): MissionHeld | null {
+	const nearest = [...charts].sort(
+		(a, b) => reachOf(a.demand) - reachOf(b.demand) || a.slug.localeCompare(b.slug)
+	)[0];
+	if (!nearest) return null;
+
+	const gap = shortfall(nearest.demand, vocabulary);
+	return {
+		chartSlug: nearest.slug,
+		chartName: nearest.name,
+		needs: describeShortfall(gap),
+		teaches: taughtBy(gap)
+	};
 }
