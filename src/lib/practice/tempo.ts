@@ -363,13 +363,25 @@ export function suggestLadder(runs: readonly HeldRun[], target: number): TempoLa
  * never gates" rule said out loud on the screen where somebody might otherwise
  * assume a tempo had been taken away from them.
  */
+/**
+ * A band placed after the word "at".
+ *
+ * Four of the five band names take the preposition and read correctly, and
+ * `at tempo` already contains it — so the obvious template produced "held at at
+ * tempo" on every tune sitting where most tunes want to sit. The name is right
+ * standing on its own, which is where it appears most often, so the sentence
+ * bends around it rather than the name being renamed for one caller.
+ */
+export const heldAt = (band: Band): string =>
+	band.name.startsWith('at ') ? band.name : `at ${band.name}`;
+
 export function describeLadder(ladder: TempoLadder): string {
 	const held = ladder.held ? bandById(ladder.held) : null;
 	if (!held || ladder.bpm === null || ladder.percent === null) {
 		return `Nothing held clean on this tune yet — a run that lands ${GUIDE_TONE_TARGET}% of its guide tones with a streak going sets the band. Every tempo is playable meanwhile.`;
 	}
 
-	const stood = `Held clean at ${held.name} — ${ladder.bpm}, ${ladder.percent}% of the ${ladder.target} this tune goes at.`;
+	const stood = `Held clean ${heldAt(held)} — ${ladder.bpm}, ${ladder.percent}% of the ${ladder.target} this tune goes at.`;
 	const next = ladder.next ? bandById(ladder.next) : null;
 	if (!next || ladder.nextBpm === null) {
 		return `${stood} There is no band above this one, and nothing to collect for being here.`;
