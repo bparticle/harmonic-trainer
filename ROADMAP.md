@@ -37,7 +37,9 @@ in here.
 Four of the five have been built: the editor as M11, the record and the seam as
 M9, the profile as M10, and the demo as M14. Their reasoning is in
 `DECISIONS.md` and their status is in the README, per the rules at the top of
-this file. What is left here is the fifth requirement and what it costs.
+this file. What is left here is the fifth requirement and what it costs — plus
+one section that came from none of the five, because it came from playing the
+thing and finding a gap.
 
 That fifth one arrived after the others and rewrote the first. "Prepare for it
 now, build it later" was written when the second player was hypothetical and
@@ -335,60 +337,77 @@ because it is the half most likely to be discovered late:
 
 ---
 
-## M14 — The way in
+## What the readiness gate left open
 
-**A public demo that needs no account, no password and no database.** The
-cheapest milestone here and the only one that produces evidence rather than
-capability.
+A mission is now set only on a tune whose chord shapes have been taught and whose
+distance from the key has been travelled — `curriculum/vocabulary.ts`, with the
+reasoning in `DECISIONS.md` under _The gap between the two rooms_. It shipped
+unnumbered, in answer to being sent to a three-tonic cycle on the second rung of
+the first key.
 
-### The problem it fixes
+Four things it does not do, recorded here rather than left to be rediscovered.
 
-The landing page is public, detailed and good. It describes a rhythm section
-that listens to you, shows a chart following the music, and then offers a
-password box. **The only way to actually see the product is to install
-Postgres.** Everything else on this list is an argument about how to charge for
-something nobody has been able to try.
+### The curriculum above the early rungs is unproven by playing
 
-### What it is
+The tests prove the gate is _consistent_: nothing in the book is permanently
+stuck once every rung and progression is met, no progression below level four
+leaves the key, and the ready pool is ordered plainest-first. None of that proves
+each step **feels** like one step, and only playing through the ladder can.
 
-Route `/demo`, public in `isPublicRequest()` the way `/` already is. It runs the
-real play-along page — not a mock-up, not a video — over the built-in charts,
-and writes nothing anywhere.
+The failure to watch for is a tune arriving that is one shape too big. When it
+happens the diagnosis is one of two things and the gap report says which: a fold
+in `shapeOf` being too generous — a sixth chord counted as its triad, a
+fully-diminished seventh counted as the vii° — or a rung being credited with more
+than it teaches. Both are one-line changes with a test beside them; what is not
+cheap is noticing, so the thing to keep is a note of which tune and which chord.
 
-- **Charts come from code.** `charts.ts` already holds the forms, cycles and
-  standards, and `curriculum/editor.ts` already resolves them. The demo reads
-  them directly rather than through the database, so it works on an instance
-  with no Postgres at all and cannot be broken by a migration.
-- **Colours come from `DEFAULT_COLOR_MAP`.** The palette is normally injected
-  from `settings` during SSR; the demo uses the defaults in `$lib/settings` and
-  skips the read.
-- **Nothing persists.** No runs, no badges, no streak record, no localStorage
-  worth migrating later. A visitor who closes the tab has left no trace, which
-  is also the honest version of the privacy claim on the page they arrived from.
-- **MIDI works if they have it**, over HTTPS, exactly as it does signed in. The
-  on-screen keyboard is the fallback and feeds the same pipeline, so a visitor
-  with no hardware still sees chords judged.
+### A chart you typed in yourself can be permanently unready
 
-### What it must show, and what it must not
+Nothing anywhere teaches `minMaj`, `augmented` or `suspended`, and a symbol the
+parser cannot read takes the `unknown` shape, which nothing teaches by
+definition. A tune of your own using any of them is never _set_ as a mission. It
+is still in the list and still playable by hand, so this is a smaller problem
+than it sounds — but it is a real one, and the two honest answers pull in
+opposite directions:
 
-It must show the **scoring**, because that is the entire differentiator. A demo
-of the transport and the chart without the judging is a worse iReal Pro, and
-anybody who knows the category will read it that way in four seconds.
+- **Teach them.** A rung or a progression covering the minor-major and the
+  augmented, which is real material and would also unlock nothing currently in
+  the book. Cost: the ladder grows for a case almost nobody hits.
+- **Let a chart of your own opt out.** You typed it in, so you presumably know
+  what is in it. Cost: the gate stops meaning one thing, and _yours_ becomes a
+  hole in a rule whose whole value is having no holes.
 
-It must not offer to save anything, must not show an empty profile, and must not
-put a sign-up call anywhere until M13 exists to receive one. Until then the only
-honest exit is the source and "run it yourself" — which is a real offer, and the
-one this project has always made.
+Undecided on purpose. The deciding evidence is whether anybody actually types one
+in, which the record will show.
 
-One chart is enough, and it should be playing-ready on arrival: a blues in C,
-transport armed, the first bar already taken apart underneath. The visitor's
-first action should be pressing play, not choosing.
+### Nothing shows readiness where tunes are chosen
 
-### Done when
+The demand is computed for every chart and read only by the composer. The
+play-along page lists all of them undifferentiated, so somebody browsing has no
+way to tell which are within reach — and the workout's held-back note names one
+tune at a time. Marking the list with what a tune wants is cheap, since
+`shortfall` and `describeShortfall` already produce the sentence.
 
-Somebody with no account, no database and no MIDI keyboard can hear a blues, tap
-a bar to loop it, change the key, and see what the chord is doing — within ten
-seconds of clicking one link on the landing page.
+The thing to be careful about is tone. This must not become a locked list with
+padlocks on it: every chart stays openable by hand, and the mark says _wants a
+dominant seventh_, not _not available_. The gate steers what is **offered**; it
+has never gated what you may **play**, and it must not start.
+
+### The step from `in_key` to `coloured` rests on one progression
+
+`blues-basic` and `blues-quick` are the only level-4 material, and between them
+they are the whole of the `coloured` step — which opens the twelve-bar blues and
+most of the standards in one move. That may be a cliff rather than a step. If it
+reads as one, the fix is more level-4 material rather than a change to the gate:
+the secondary dominant is the obvious missing one, and it sits at level 5 today.
+
+### A note on stored verdicts
+
+`session_blocks.result_json` holds verdicts computed under the old chorus rule,
+where a loop could add up to a chorus. They are frozen JSON and are not
+recomputed, so an old verdict and a fresh evaluation of the same rows can
+disagree. Nothing reads them expecting to agree; this is written down so that
+whoever first notices does not go looking for a bug.
 
 ---
 
@@ -411,6 +430,14 @@ So it splits:
   counts and accuracy rather than as a finding. What is left is the part that
   says something — noticing that a quality is landing well everywhere except in
   three keys, and saying so without turning it into a telling-off.
+
+  One thing changed under it since this was written. A cold spot steers which
+  tune a mission is set on, but it now steers **within what the readiness gate
+  has already allowed** rather than across the whole chart list — so a cold
+  dominant cannot pull somebody towards a blues before the blues has been
+  taught. Anything built on top of the report inherits that ordering: the gate
+  decides what is eligible, and the blind spots decide which of the eligible.
+
 - **The vault** (record takes, browse, name, promote to repertoire) stays
   parked. Nothing above produces recorded MIDI, and `midi/smf.ts` still waits.
 - **Transfer detection** stays parked, unchanged: its consumer, the mastery

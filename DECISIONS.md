@@ -3766,3 +3766,37 @@ places: a held badge gets the one-word callout naming what it waits for (_nice �
 9 bars to go_), the score strip carries a line while any are waiting, and a run
 that ends still holding some says how many were let go and why. Dim ink, no hue —
 hue is pitch — and nothing red, because nothing has gone wrong.
+
+---
+
+## M14's plan is retired, and this is the argument it was carrying
+
+The demo shipped some time ago and its section went on standing in `ROADMAP.md`,
+which breaks that file's own rule: a landed milestone's plan is deleted, its
+status goes to the README table and its reasoning comes here. The status was
+already right. This is the reasoning, moved rather than rewritten, so that
+deleting the plan costs nothing.
+
+**Why a demo went in front of a payment page.** It was the cheapest item on the
+list and the only one that produced evidence rather than capability. The landing
+page was public, detailed and good — it described a rhythm section that listens
+to you and a chart that follows the music — and then offered a password box. The
+only way to actually see the product was to install Postgres. Every other
+milestone in the plan was an argument about how to charge for something nobody
+had been able to try, and the order that puts a payment page first is the order
+that spends three months learning nothing.
+
+**What it had to show, and what it had to refuse.** It had to show the
+**scoring**, because that is the entire differentiator: a demo of the transport
+and the chart without the judging is a worse iReal Pro, and anybody who knows the
+category reads it that way in four seconds. It had to refuse to offer to save
+anything, refuse to show an empty profile, and refuse to put a sign-up anywhere
+until there was something to receive one — which is the same decision recorded
+under _Somebody else's account_, reached from the other side. The only honest
+exit was, and still is, the source and _run it yourself_.
+
+What it is now needs no plan to describe it: `/demo` is public in
+`isPublicRequest`, it mounts the real `PlayAlong` with `demo` set, it reads the
+built-in charts out of code and the default palette out of `$lib/settings`, and
+it writes nothing anywhere. Not a mock-up and not a video — the same page, with
+the record turned off.

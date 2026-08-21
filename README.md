@@ -315,6 +315,11 @@ scoring against the sounding chord, the chart following the music, streaks and
 badges, the suggested scales drawn on a keyboard, and every key in them named
 with its degree. `DECISIONS.md` has the reasoning for each.
 
+Since M16, also unnumbered and both from playing the thing: a **readiness gate**,
+so a mission is only ever set on a tune whose chords have been taught, and a
+**badge that waits for the form** to have been round before it lands. What each
+of them left open is in `ROADMAP.md` under _What the readiness gate left open_.
+
 ### Planned
 
 | M       | Deliverable                                                     | Status  |
