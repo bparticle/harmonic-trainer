@@ -178,13 +178,37 @@ describe('how far round the form a run got', () => {
 		expect(verdict.measured.choruses).toBe(1.1);
 	});
 
+	/*
+	 * This test used to assert the opposite of its own name.
+	 *
+	 * It said sixteen bars and a chorus and a half, on the reasoning that a bar
+	 * change is a bar change — which is exactly how you could loop two bars of a
+	 * tune, play them cleanly, and be told you had been round it. Bars covered is
+	 * distinct bars of the form now, so a loop is worth its own length and no more
+	 * however long it runs. See `practice/form.ts`.
+	 */
 	it('does not let a four-bar loop add up to a chorus', () => {
-		// Sixteen chords, all inside bars 5 to 8. That is four bars of the form,
-		// played four times over — not a chorus and a half.
 		const looped = Array.from({ length: 16 }, (_, i) => chord(5 + (i % 4)));
 		const verdict = evaluateGoal(twoChoruses, looped, FORM);
-		expect(verdict.measured.barsCovered).toBe(16);
-		expect(verdict.measured.choruses).toBe(1.6);
+		expect(verdict.measured.barsCovered).toBe(4);
+		expect(verdict.measured.choruses).toBe(0.4);
+	});
+
+	it('does not let a longer loop get there either', () => {
+		// A hundred passes of the same four bars is still four bars of the form.
+		const looped = Array.from({ length: 400 }, (_, i) => chord(5 + (i % 4)));
+		expect(evaluateGoal(twoChoruses, looped, FORM).measured.choruses).toBe(0.4);
+	});
+
+	it('lets a bar rested through on one pass be picked up on the next', () => {
+		// Bars 1–9 played and bar 10 rested, then round again and bar 10 played.
+		// The set carries over the wrap rather than resetting at it, so the tenth
+		// bar completes the form on the second pass — where a per-pass rule would
+		// have stalled at nine forever.
+		const first = Array.from({ length: 9 }, (_, i) => chord(i + 1));
+		const verdict = evaluateGoal(twoChoruses, [...first, ...first, chord(10)], FORM);
+		expect(verdict.measured.barsCovered).toBe(10);
+		expect(verdict.measured.choruses).toBe(1);
 	});
 });
 

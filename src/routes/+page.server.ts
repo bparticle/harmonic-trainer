@@ -154,7 +154,17 @@ export const load: PageServerLoad = async ({ parent, locals }) => {
 			short: previewTasks(previews.short),
 			standard: previewTasks(previews.standard),
 			long: previewTasks(previews.long)
-		}
+		},
+		/*
+		 * The play-along that is not on offer yet, and what would put it there.
+		 *
+		 * Read off the standard workout because a held-back mission is held back at
+		 * every size — the gate is about what you have been taught, not about how
+		 * long you have got. Null on nearly every day of an account's life; not null
+		 * on the first one or two, where it is the difference between a workout that
+		 * quietly has one task fewer and one that says why.
+		 */
+		missionHeld: previews.standard.missionHeld ?? null
 	};
 };
 

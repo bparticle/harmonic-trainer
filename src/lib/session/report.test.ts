@@ -37,7 +37,8 @@ const WORKOUT: Workout = {
 	tasks: [EAR_TASK, MISSION_TASK],
 	choice: null,
 	coldSpots: [],
-	novelty: null
+	novelty: null,
+	missionHeld: null
 };
 
 const verdict = (met: boolean, says: string): Verdict => ({

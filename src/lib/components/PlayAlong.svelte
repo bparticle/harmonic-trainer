@@ -50,10 +50,15 @@
 		award,
 		badgesOn,
 		emptyRecord,
+		holdBack,
 		missingFrom,
+		nothingHeld,
 		parseRecord,
-		type StreakRecord
+		release,
+		type StreakRecord,
+		type Waiting
 	} from '$lib/effects/badges';
+	import { barsLeft, noPass, visitBar, wentRound, type FormPass } from '$lib/practice/form';
 	import {
 		isEmpty,
 		noBests,
@@ -422,6 +427,39 @@
 	 */
 	let runBestStreakBpm: number | null = null;
 
+	/*
+	 * How much of the form this run has been through.
+	 *
+	 * Fed from the transport rather than from the chords you played, and the
+	 * difference is the whole point: the transport visits every bar whether or not
+	 * your hands do, so laying out for eight bars still takes the tune round.
+	 * Comping over a two-bar loop does not, because the transport never leaves
+	 * those two bars.
+	 *
+	 * This is what a badge waits on — see `celebrateChord` and `formPass` below.
+	 * Nothing else on the page is gated by it: the streak counts, the callouts
+	 * fire and the tempo shows exactly as they always did, because being able to
+	 * woodshed two bars and watch how it is going is the reason the loop exists.
+	 */
+	let formPass = $state<FormPass>(noPass());
+	const wentAllTheWayRound = $derived(wentRound(formPass));
+	// Computed where it is asked for rather than derived up here: `barCount` is
+	// declared further down with the realised chart, and a derived that reaches
+	// backwards for it would be one careless read away from a temporal-dead-zone
+	// error on mount.
+	const toGo = () => barsLeft(formPass, barCount);
+
+	/**
+	 * Badges earned this run and not yet paid out.
+	 *
+	 * They land the moment the form has been round, all together, keeping the
+	 * timestamps they were earned at. A run that never gets round the tune keeps
+	 * them until it ends and then drops them — see `bankRun`, which says so on
+	 * screen rather than letting six medals evaporate in silence.
+	 */
+	let waiting = $state<Waiting>(nothingHeld());
+	const waitingCount = $derived(Object.keys(waiting).length);
+
 	/**
 	 * How the mission went, once the transport has stopped.
 	 *
@@ -452,7 +490,21 @@
 		runAttempts = [];
 		runBadges = [];
 		runBestStreakBpm = null;
+		// A new run has been nowhere and is owed nothing. Both belong to one press
+		// of play, exactly as the streak does.
+		formPass = noPass();
+		waiting = nothingHeld();
+		missedOut = 0;
 	}
+
+	/**
+	 * Badges this run earned and never got to keep, for saying so afterwards.
+	 *
+	 * Held past `bankRun` on purpose: the sentence that explains why the shelf did
+	 * not move belongs on the screen you are looking at when you stop, beside the
+	 * total. Cleared by the next press of play.
+	 */
+	let missedOut = $state(0);
 
 	/**
 	 * Write the run down, if there was one.
@@ -472,6 +524,9 @@
 	function bankRun() {
 		closeSlot();
 		stopClock();
+		// Before the early returns below, because a demo run and a two-second run
+		// both end here and both should say why the shelf did not move.
+		dropWaiting();
 		const id = runId;
 		runId = null;
 
@@ -520,6 +575,22 @@
 		runAttempts = [];
 		runBadges = [];
 		void flush();
+	}
+
+	/**
+	 * Let go of anything the run earned and never got round to keeping.
+	 *
+	 * Called as a run ends, and it counts before it clears. Dropping them in
+	 * silence would be the worst of both worlds — you would have watched a streak
+	 * go past a tier, seen no badge, and been given no reason — so the number
+	 * survives into `missedOut`, which is what the line beside the shelf reads.
+	 * The next press of play resets it.
+	 */
+	function dropWaiting() {
+		const held = Object.keys(waiting).length;
+		if (held === 0) return;
+		missedOut = held;
+		waiting = nothingHeld();
 	}
 	let transportEl = $state<HTMLDivElement | null>(null);
 	let transportBeat: Animation | null = null;
@@ -957,42 +1028,57 @@
 		if (streak.best > before.best) runBestStreakBpm = bpm;
 
 		const at = new Date().toISOString();
-		const banked = award(record, before, streak, {
-			pc: finished.pc,
-			chart: slug,
-			at,
-			key: keyName
-		});
-		record = banked.record;
+		const won = { pc: finished.pc, chart: slug, at, key: keyName };
 
-		// Carried with the run rather than posted as it happens: a badge and the
-		// run that won it should land together or not at all.
-		for (const tier of banked.earned) {
-			runBadges.push({
-				chartSlug: slug,
-				tier: tier.id,
-				wonAt: at,
-				count: streak.count,
-				pc: finished.pc,
-				keyCenter: keyName,
-				runId
-			});
-		}
-
+		// The chord's own spark, which has nothing to do with badges and fires
+		// whether or not the tune has been round.
 		if (finished.attempt.landing === 'landed') {
 			fx?.land(slotEl(finished.where), finished.pc, 0.55 + 0.45 * tier.intensity);
 		}
 
 		/*
-		 * Three things can be worth saying, and only the loudest of them gets to.
-		 * A badge earned for the first time outranks reaching the tier it sits
-		 * on, which outranks the streak having ended — and a badge is rare enough
-		 * to be worth the whole confetti cannon, six times ever.
+		 * A badge is only banked once the tune has been round.
+		 *
+		 * Until then it waits. Two bars looped cleanly at full tempo used to fill
+		 * the shelf on a thirty-two bar tune, which is a medal for something that
+		 * never happened — see the note in `effects/badges.ts`. So the record moves
+		 * where the form has been covered and the waiting shelf takes it otherwise;
+		 * `payOut` below is what releases them, on the downbeat the form completes.
 		 */
-		const [fresh] = banked.earned.slice(-1);
-		if (fresh) {
-			fx?.finale([finished.pc], `${fresh.name} · new badge`);
-			return;
+		if (wentAllTheWayRound) {
+			const banked = award(record, before, streak, won);
+			record = banked.record;
+			// Carried with the run rather than posted as it happens: a badge and the
+			// run that won it should land together or not at all.
+			for (const badge of banked.earned) keepBadge(badge.id, won, streak.count);
+
+			/*
+			 * Three things can be worth saying, and only the loudest of them gets to.
+			 * A badge earned for the first time outranks reaching the tier it sits
+			 * on, which outranks the streak having ended — and a badge is rare enough
+			 * to be worth the whole confetti cannon, six times ever.
+			 */
+			const [fresh] = banked.earned.slice(-1);
+			if (fresh) {
+				fx?.finale([finished.pc], `${fresh.name} · new badge`);
+				return;
+			}
+		} else {
+			const kept = holdBack(record, waiting, before, streak, won);
+			waiting = kept.waiting;
+
+			/*
+			 * Held back, and said so quietly. The confetti cannon is what a badge
+			 * landing sounds like and this is not one yet — but going silent would
+			 * leave you wondering whether the app noticed, so it gets the same
+			 * one-word callout a streak does, naming what it is waiting for.
+			 */
+			const [held] = kept.held.slice(-1);
+			if (held) {
+				const left = toGo();
+				fx?.say(`${held.name} · ${left} bar${left === 1 ? '' : 's'} to go`, finished.pc);
+				return;
+			}
 		}
 
 		const words = streakCallout(before, streak);
@@ -1009,6 +1095,50 @@
 
 		const ended = farewell(before, streak);
 		if (ended) fx?.say(ended, finished.pc, 'end');
+	}
+
+	/**
+	 * A badge, on its way to the record with the run that won it.
+	 *
+	 * One place rather than two, because a badge earned outright and a badge
+	 * released after the form came round are the same badge — the only difference
+	 * is how long it waited.
+	 */
+	function keepBadge(tierId: string, won: { pc: number; at: string }, count: number) {
+		runBadges.push({
+			chartSlug: slug,
+			tier: tierId,
+			wonAt: won.at,
+			count,
+			pc: won.pc,
+			keyCenter: keyName,
+			runId
+		});
+	}
+
+	/**
+	 * The form has just been round. Everything waiting lands now.
+	 *
+	 * All at once, and with the whole confetti cannon: this is the moment the run
+	 * stops being a fragment, and a first pass of a tune you have been chipping at
+	 * is worth exactly the noise a badge has always been worth. Nothing happens
+	 * when nothing is waiting, which is the common case — most runs start at the
+	 * top and earn their badges outright on the second chorus.
+	 */
+	function payOut() {
+		if (Object.keys(waiting).length === 0) return;
+
+		const paid = release(record, waiting);
+		record = paid.record;
+		for (const { tier, won, count } of paid.earned) keepBadge(tier.id, won, count);
+		waiting = nothingHeld();
+
+		const [last] = paid.earned.slice(-1);
+		const many = paid.earned.length > 1 ? ` ×${paid.earned.length}` : '';
+		fx?.finale(
+			paid.earned.map((held) => held.won.pc),
+			`${last.tier.name}${many} · new badge`
+		);
 	}
 
 	/**
@@ -1228,6 +1358,20 @@
 		}
 		liveBeat = state.beat;
 		liveBar = state.bar === 0 ? 0 : (loopFrom ?? 1) + state.bar - 1;
+
+		/*
+		 * Which bars of the form this run has been through, read from the transport
+		 * rather than from the notes. `visitBar` ignores anything outside the form,
+		 * which is what makes the count-in's bar zero harmless here.
+		 *
+		 * The pay-out is checked on the transition and not in an effect, because
+		 * the badge should land on the downbeat that completes the form — an effect
+		 * would fire it a frame later and, worse, would fire it again on any
+		 * unrelated re-read of the same state.
+		 */
+		const wasRound = wentRound(formPass);
+		formPass = visitBar(formPass, liveBar, barCount);
+		if (!wasRound && wentRound(formPass)) payOut();
 
 		// The count-in gets its pulses too — it is the one moment the screen can
 		// say "here it comes". Its beats are negative, hence the two-step modulo.
@@ -1790,6 +1934,27 @@
 									&middot; best run {streak.best} in a row
 								{/if}
 							</p>
+
+							<!--
+								Why the shelf is not moving.
+								A streak past a tier used to fill the shelf regardless of how much of
+								the tune had been played, so two bars looped cleanly earned every
+								badge on a thirty-two bar standard. A badge waits for one full pass
+								now — and waiting in silence would be worse than the bug, so this
+								says what is being held and what would release it.
+							-->
+							{#if fireworks && waitingCount > 0}
+								<p class="match-hold">
+									{waitingCount} badge{waitingCount === 1 ? '' : 's'} waiting on a full pass &middot;
+									{toGo()} of {barCount} bars still to go.
+								</p>
+							{:else if fireworks && missedOut > 0 && !playing && !paused}
+								<p class="match-hold">
+									{missedOut} badge{missedOut === 1 ? '' : 's'}
+									{missedOut === 1 ? 'was' : 'were'} earned and not kept: the run never went all the way
+									round the form. Everything else here counted.
+								</p>
+							{/if}
 
 							{#if spread}
 								<!-- Where the notes sat. Reported, never scored: a note outside the
@@ -2738,6 +2903,22 @@
 		max-width: 44rem;
 		color: var(--color-ink-dim);
 		font-size: 0.78rem;
+		line-height: 1.5;
+	}
+
+	/*
+	 * A badge being held back, or one that was let go.
+	 *
+	 * Dim ink and nothing else — no hue, because hue is pitch here, and no red,
+	 * because nothing has gone wrong: the playing counted, the streak counted,
+	 * and the one thing waiting is the lap of the form that turns a fragment into
+	 * a run of the tune.
+	 */
+	.match-hold {
+		max-width: 44rem;
+		margin-top: 0.35rem;
+		color: var(--color-ink-dim);
+		font-size: 0.74rem;
 		line-height: 1.5;
 	}
 
