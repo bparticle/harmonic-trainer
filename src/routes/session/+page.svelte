@@ -65,6 +65,9 @@
 	let report = $state<WorkoutReport | null>(null);
 	const finished = $derived(report !== null);
 
+	/** Whether the workout was closed with tasks still unplayed, so the end screen can say so without making anything of it. */
+	let stoppedShort = $state(false);
+
 	let busy = $state(false);
 	let problem = $state<string | null>(null);
 
@@ -410,7 +413,42 @@
 	async function leave() {
 		// Costs nothing: every finished task is already saved, and the workout stays
 		// open to be picked up later.
+		await stopAll();
 		await goto('/');
+	}
+
+	/**
+	 * Stop here, and be told what it came to.
+	 *
+	 * Deliberately not the same button as leaving, and the difference is the
+	 * point: leaving keeps the workout open to be picked up later, and this closes
+	 * it. Until this existed there was no way out of a workout except playing
+	 * every task in it to the end — `activeWorkout` has no time bound, so an open
+	 * one stays open indefinitely, and the home page offers the open one and hides
+	 * the picker behind it. A workout begun by accident therefore followed you
+	 * around for good, and pressing start again only handed back the same one.
+	 *
+	 * Reported by the owner, who opened one to look at the screen and could not
+	 * get rid of it. A room this app puts you in has to have a door.
+	 *
+	 * Stopping costs nothing and hides nothing. Every task already finished is
+	 * already on record, and this writes the same report finishing writes, over
+	 * whatever actually happened — which for a workout nobody played is a report
+	 * that honestly says very little.
+	 */
+	async function endNow() {
+		if (!data.workout || busy) return;
+		busy = true;
+		problem = null;
+		try {
+			stoppedShort = !data.workout.complete;
+			await stopAll();
+			await endWorkout();
+		} catch (e) {
+			problem = e instanceof Error ? e.message : 'Could not close that workout.';
+		} finally {
+			busy = false;
+		}
 	}
 
 	// ---- the wheel ----------------------------------------------------------
@@ -445,7 +483,11 @@
 		<!-- What changed, and nothing the rows cannot say ---------------------- -->
 		<div class="grid flex-1 place-items-center text-center">
 			<div class="max-w-lg">
-				<h1 class="font-display text-ink mb-4 text-4xl font-semibold tracking-tight">Done.</h1>
+				<!-- Stopping early is a thing you are allowed to do, so it is stated
+				     plainly and never as a shortfall. Nothing punishes. -->
+				<h1 class="font-display text-ink mb-4 text-4xl font-semibold tracking-tight">
+					{stoppedShort ? 'Stopped there.' : 'Done.'}
+				</h1>
 				<ul class="mb-7 flex flex-col gap-2">
 					{#each report.says as line, i (i)}
 						<li class="text-ink-muted leading-relaxed">{line}</li>
@@ -482,9 +524,18 @@
 					onclick={() => finishTask({ skipped: true })}
 					disabled={busy}>skip</button
 				>
+				<!-- Two different exits, each named for what it actually does. One
+				     button called "leave" kept the workout open, which is how a
+				     workout opened to look at the screen ended up following somebody
+				     around all day. -->
 				<button
 					class="text-ink-dim hover:text-ink rounded-md px-2 py-2 font-mono text-xs transition-colors"
-					onclick={leave}>leave</button
+					onclick={leave}>keep for later</button
+				>
+				<button
+					class="text-ink-dim hover:text-ink rounded-md px-2 py-2 font-mono text-xs transition-colors"
+					onclick={endNow}
+					disabled={busy}>stop workout</button
 				>
 			</div>
 		</header>

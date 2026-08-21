@@ -493,6 +493,18 @@
 				{/if}
 			</form>
 
+			<!-- The way out, without having to go in first.
+			     An open workout replaces the start button and hides the picker, so
+			     without this the only way to be rid of one was to enter it and play
+			     it to the end. -->
+			{#if resuming}
+				<form method="POST" action="?/end">
+					<button class="text-ink-dim hover:text-ink font-mono text-[0.7rem] transition-colors">
+						{data.resume?.complete ? 'close it and start another' : 'stop this workout'}
+					</button>
+				</form>
+			{/if}
+
 			<!-- Moving the ladder is a separate decision from what to play today, so
 		     these sit outside the form that starts a session. -->
 			{#if !resuming}

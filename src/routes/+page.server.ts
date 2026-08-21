@@ -8,6 +8,7 @@ import {
 	activeWorkout,
 	advanceLadder,
 	currentPosition,
+	finishWorkout,
 	previewWorkouts,
 	rungProgress,
 	startWorkout
@@ -186,6 +187,25 @@ export const actions: Actions = {
 			choice
 		});
 		redirect(303, '/session');
+	},
+
+	/**
+	 * Close the workout that is open, from here.
+	 *
+	 * The session page can stop one too, and this exists because that was not
+	 * enough: an open workout hides the picker and replaces the start button with
+	 * "carry on", so somebody who did not want the workout had to enter it in
+	 * order to get rid of it. Two presses to undo one accident, and the first of
+	 * them looks like agreeing to practise.
+	 *
+	 * Ending is not abandoning and nothing is discarded. Every finished task keeps
+	 * its rows and the same report is written that finishing writes; all that
+	 * changes is that the day stops offering this one back.
+	 */
+	end: async ({ locals }) => {
+		const open = await activeWorkout();
+		if (open) await finishWorkout(open.id, currentUserId(locals.userId));
+		redirect(303, '/');
 	},
 
 	/** Move on. Deliberately unguarded — you can tell better than a review count. */
