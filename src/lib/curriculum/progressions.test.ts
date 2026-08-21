@@ -1,3 +1,4 @@
+import { demandOfNumerals } from './vocabulary';
 import { describe, expect, it } from 'vitest';
 import {
 	PROGRESSIONS,
@@ -231,7 +232,37 @@ describe('the progression library', () => {
 
 	it('gets harder in steps', () => {
 		expect(progressionsAtLevel(3).some((p) => p.id === 'ii-V-I')).toBe(true);
-		expect(progressionsAtLevel(5).some((p) => p.id === 'tritone-sub')).toBe(true);
+		expect(progressionsAtLevel(5).some((p) => p.id === 'blues-basic')).toBe(true);
+		expect(progressionsAtLevel(7).some((p) => p.id === 'tritone-sub')).toBe(true);
+	});
+
+	/*
+	 * From level four up, one level is one way out of the key.
+	 *
+	 * The property the readiness gate leans on, asserted here rather than there
+	 * because it is a fact about the library rather than about the gate. Before
+	 * this the top two levels held four different devices between them, and
+	 * meeting any one progression on level five unlocked the whole back half of
+	 * the songbook.
+	 */
+	it('gives each level above three a single way out of the key', () => {
+		const devicesAt = new Map<number, Set<string>>();
+		for (const p of PROGRESSIONS) {
+			const demand = demandOfNumerals(p.numerals, p.mode);
+			if (p.level <= 3) {
+				expect(demand.devices, `${p.id} is level ${p.level}`).toEqual([]);
+				continue;
+			}
+			expect(demand.devices.length, p.id).toBe(1);
+			const seen = devicesAt.get(p.level) ?? new Set<string>();
+			seen.add(demand.devices[0]);
+			devicesAt.set(p.level, seen);
+		}
+		for (const [level, devices] of devicesAt) {
+			expect([...devices], `level ${level}`).toHaveLength(1);
+		}
+		// And every device the app knows about is taught somewhere.
+		expect(new Set([...devicesAt.values()].flatMap((set) => [...set])).size).toBe(4);
 	});
 
 	it('describes each one and says what to listen for', () => {

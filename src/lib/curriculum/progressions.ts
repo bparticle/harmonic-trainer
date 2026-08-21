@@ -24,7 +24,7 @@ import { spell } from '$lib/music/spell';
  * moment, so one definition covers all twelve.
  */
 
-export type ProgressionLevel = 1 | 2 | 3 | 4 | 5;
+export type ProgressionLevel = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 export type Progression = {
 	id: string;
@@ -38,12 +38,38 @@ export type Progression = {
 	listenFor: string;
 };
 
+/**
+ * Seven levels, and from the fourth up each one is a way out of the key.
+ *
+ * **This was five, and the top two did too much.** Level 4 was "Blues" and level
+ * 5 was "Colour and substitution", which put the borrowed iv, the secondary
+ * dominant, the tritone sub and the backdoor cadence in one bucket — four
+ * genuinely different devices sharing a shelf. It did not matter while nothing
+ * depended on the levels. Once the readiness gate made them load-bearing, one
+ * progression was opening eleven tunes at once and another seven, because
+ * crossing a level meant crossing everything on it.
+ *
+ * So the levels below four are unchanged — they are movement *inside* a key, and
+ * the ladder has already taught the chords — and the levels above it are one
+ * device each, in the order the step out of the key gets bigger:
+ *
+ *   4  borrowed   one note moves and the colour changes
+ *   5  blues      a dominant where the key asks for none
+ *   6  secondary  a dominant aimed at a chord already in the key
+ *   7  chromatic  a chord belonging to no key the tune is in
+ *
+ * `vocabulary.ts` derives which device each progression teaches from its own
+ * numerals rather than from its level, so these names describe the library
+ * instead of governing it — and a test asserts the two agree.
+ */
 export const PROGRESSION_LEVELS: Record<ProgressionLevel, string> = {
 	1: 'First progressions',
 	2: 'Turnarounds',
 	3: 'The jazz cadence',
-	4: 'Blues',
-	5: 'Colour and substitution'
+	4: 'Borrowed chords',
+	5: 'Blues',
+	6: 'Secondary dominants',
+	7: 'Substitution and chromatic lines'
 };
 
 export const PROGRESSIONS: Progression[] = [
@@ -93,6 +119,26 @@ export const PROGRESSIONS: Progression[] = [
 		listenFor: 'Roots falling in fifths all the way home.'
 	},
 	{
+		id: 'andalusian',
+		name: 'i – ♭VII – ♭VI – V',
+		level: 2,
+		mode: 'minor',
+		numerals: ['i', 'bVII', 'bVI', 'V'],
+		describes:
+			'The Andalusian cadence. Flamenco, surf, half the minor-key rock ever written, and not one note from outside the key.',
+		listenFor: 'The bass walks down four steps and then refuses to take the last one.'
+	},
+	{
+		id: 'pachelbel',
+		name: 'I – V – vi – iii – IV – I – IV – V',
+		level: 2,
+		mode: 'major',
+		numerals: ['I', 'V', 'vi', 'iii', 'IV', 'I', 'IV', 'V'],
+		describes:
+			'The canon progression. Eight bars, every triad in the key but the diminished one, and it has been carrying songs for three hundred years.',
+		listenFor: 'The top note barely moves while the bass falls all the way through the scale.'
+	},
+	{
 		id: 'ii-V-I',
 		name: 'ii7 – V7 – Imaj7',
 		level: 3,
@@ -111,9 +157,47 @@ export const PROGRESSIONS: Progression[] = [
 		listenFor: 'The V has a note from outside the key. That is what makes it pull.'
 	},
 	{
+		id: 'sus-resolution',
+		name: 'V7sus4 – V7 – Imaj7',
+		level: 3,
+		mode: 'major',
+		numerals: ['V7sus4', 'V7', 'Imaj7'],
+		describes:
+			'The same cadence with the fourth held over the third and then let go. Gospel, soul, and every ballad ending ever played.',
+		listenFor: 'One note falls a semitone and the chord stops asking and starts answering.'
+	},
+	{
+		id: 'borrowed-four',
+		name: 'I – IV – iv – I',
+		level: 4,
+		mode: 'major',
+		numerals: ['I', 'IV', 'iv', 'I'],
+		describes: 'The major four turning minor on its way home. One note moves.',
+		listenFor: 'The moment of sweetness. It is a single semitone.'
+	},
+	{
+		id: 'backdoor',
+		name: 'iv – ♭VII7 – Imaj7',
+		level: 4,
+		mode: 'major',
+		numerals: ['iv', 'bVII7', 'Imaj7'],
+		describes: 'Arriving at the tonic from below instead of above.',
+		listenFor: 'The pull is upwards. Everything else you play resolves downwards.'
+	},
+	{
+		id: 'mixolydian-cadence',
+		name: 'I – ♭VII – IV – I',
+		level: 4,
+		mode: 'major',
+		numerals: ['I', 'bVII', 'IV', 'I'],
+		describes:
+			'The flat seven, borrowed and left major. Rock, folk, gospel and anything with a hymn under it.',
+		listenFor: 'No leading note anywhere. Nothing pulls, and it still gets home.'
+	},
+	{
 		id: 'blues-basic',
 		name: 'Twelve-bar blues',
-		level: 4,
+		level: 5,
 		mode: 'major',
 		numerals: ['I7', 'I7', 'I7', 'I7', 'IV7', 'IV7', 'I7', 'I7', 'V7', 'IV7', 'I7', 'V7'],
 		describes: 'Three chords, twelve bars, and most of the twentieth century.',
@@ -122,7 +206,7 @@ export const PROGRESSIONS: Progression[] = [
 	{
 		id: 'blues-quick',
 		name: 'Blues with a quick change',
-		level: 4,
+		level: 5,
 		mode: 'major',
 		numerals: ['I7', 'IV7', 'I7', 'I7', 'IV7', 'IV7', 'I7', 'I7', 'ii7', 'V7', 'I7', 'V7'],
 		describes: 'The same twelve bars, with the IV arriving early and a ii–V at the end.',
@@ -131,38 +215,40 @@ export const PROGRESSIONS: Progression[] = [
 	{
 		id: 'secondary-dominant',
 		name: 'I – V7/vi – vi – V',
-		level: 5,
+		level: 6,
 		mode: 'major',
 		numerals: ['I', 'V7/vi', 'vi', 'V'],
 		describes: 'Giving the vi chord its own dominant, so it arrives like a destination.',
 		listenFor: 'One note from outside the key, and the vi suddenly means more.'
 	},
 	{
-		id: 'borrowed-four',
-		name: 'I – IV – iv – I',
-		level: 5,
+		id: 'ragtime-circle',
+		name: 'III7 – VI7 – II7 – V7',
+		level: 6,
 		mode: 'major',
-		numerals: ['I', 'IV', 'iv', 'I'],
-		describes: 'The major four turning minor on its way home. One note moves.',
-		listenFor: 'The moment of sweetness. It is a single semitone.'
+		numerals: ['III7', 'VI7', 'II7', 'V7'],
+		describes:
+			'Every chord a dominant, each one the dominant of the next, falling in fifths all the way home. Ragtime, trad jazz, and the bridge of rhythm changes.',
+		listenFor: 'Four chords that all want to move, and only the last one arrives.'
 	},
 	{
 		id: 'tritone-sub',
 		name: 'ii7 – ♭II7 – Imaj7',
-		level: 5,
+		level: 7,
 		mode: 'major',
 		numerals: ['ii7', 'bII7', 'Imaj7'],
 		describes: 'The V replaced by the chord a tritone away. The bass now walks down in semitones.',
 		listenFor: 'The guide tones barely move. Only the bass changed.'
 	},
 	{
-		id: 'backdoor',
-		name: 'iv – ♭VII7 – Imaj7',
-		level: 5,
-		mode: 'major',
-		numerals: ['iv', 'bVII7', 'Imaj7'],
-		describes: 'Arriving at the tonic from below instead of above.',
-		listenFor: 'The pull is upwards. Everything else you play resolves downwards.'
+		id: 'line-cliche',
+		name: 'i – i(maj7) – i7 – i6',
+		level: 7,
+		mode: 'minor',
+		numerals: ['i', 'imM7', 'i7', 'i6'],
+		describes:
+			'One voice walking down chromatically inside a chord that never changes. Spy themes, torch songs, and My Funny Valentine.',
+		listenFor: 'Three of the four notes are standing still. Only the top of the chord is moving.'
 	}
 ];
 
