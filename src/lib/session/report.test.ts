@@ -16,7 +16,8 @@ const MISSION_TASK: Task = {
 		groove: 'swing',
 		choruses: 2,
 		rootless: false,
-		coldSpot: null
+		coldSpot: null,
+		band: null
 	}
 };
 

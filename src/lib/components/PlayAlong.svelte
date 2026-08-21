@@ -39,6 +39,7 @@
 	} from '$lib/practice/match';
 	import {
 		advance as advanceStreak,
+		BADGE_TIERS,
 		callout as streakCallout,
 		farewell,
 		noStreak,
@@ -74,7 +75,16 @@
 		type MissionParams,
 		type Verdict
 	} from '$lib/practice/goal';
-	import { bandsOn, noTempo, parseTempoRecord, type TempoRecord } from '$lib/practice/tempo';
+	import {
+		bandCrossed,
+		bandsOn,
+		bestBand,
+		ladderOn,
+		noTempo,
+		parseTempoRecord,
+		type BandId,
+		type TempoRecord
+	} from '$lib/practice/tempo';
 	import { chordSymbolLabel } from '$lib/music/symbol';
 	import StreakBadges from '$lib/components/StreakBadges.svelte';
 	import ChartEditor from '$lib/components/ChartEditor.svelte';
@@ -298,6 +308,8 @@
 	 * the outbox lands, which is the same moment the record hears about it.
 	 */
 	const bands = $derived(bandsOn(tempo, slug));
+	/** What this tune's ladder suggests. It never decides anything on this page. */
+	const ladder = $derived(ladderOn(tempo, slug));
 	/*
 	 * The run under way counts towards both bests before it has been written
 	 * down. Waiting for the flush would mean landing a new personal best and
@@ -989,8 +1001,58 @@
 			return;
 		}
 
+		const crossed = crossBand();
+		if (crossed) {
+			fx?.say(`held at ${crossed}`, finished.pc);
+			return;
+		}
+
 		const ended = farewell(before, streak);
 		if (ended) fx?.say(ended, finished.pc, 'end');
+	}
+
+	/**
+	 * Bands already said out loud this sitting, so a first is a first once.
+	 *
+	 * Not persisted, deliberately. What makes crossing a band worth a word is
+	 * that the record has never seen it, and the record is the thing that
+	 * remembers — the moment the run lands, `bands` says so and this stops firing
+	 * on its own.
+	 */
+	let bandsSaid = new Set<string>();
+
+	/** Keyed by tune as well as band: crossing one on a blues says nothing about a bossa. */
+	const saidOn = (chart: string, band: BandId) => `${chart}\0${band}`;
+
+	/**
+	 * A band crossed, which is the only tempo news the fun layer gets to make.
+	 *
+	 * Settled deliberately rather than by default: yes, crossing a band is worth
+	 * a noise, and it is the **quietest** noise available — the one-word callout,
+	 * never the confetti cannon, which stays reserved for a badge earned for the
+	 * first time. It rides the existing fireworks switch and the existing
+	 * reduced-motion check, both of which live inside `fx` — so it is opt-out, it
+	 * respects the preference, and switching it off costs a word on a screen and
+	 * not one number anywhere.
+	 *
+	 * It only fires on a run that has just set its own best streak, at a tempo in
+	 * a band above anything the record holds for this tune. Landing one chord
+	 * fast is not crossing anything.
+	 */
+	function crossBand(): string | null {
+		// The shelf's own first rung, so a band is crossed by a streak and not by
+		// a chord. Three in a row is where `streak.ts` says a streak starts.
+		if (streak.count < BADGE_TIERS[0].from || streak.count < streak.best) return null;
+
+		const crossed = bandCrossed({
+			bpm,
+			target: seed.defaultBpm,
+			heldBefore: bestBand(bands)?.band ?? null
+		});
+		if (!crossed || bandsSaid.has(saidOn(slug, crossed.id))) return null;
+
+		bandsSaid.add(saidOn(slug, crossed.id));
+		return crossed.name;
 	}
 
 	/**
@@ -1758,7 +1820,15 @@
 				you are on it would be no use for deciding to get on it.
 			-->
 			{#if fireworks}
-				<StreakBadges {shelf} {bands} {streak} chartName={seed.name} best={bestEver} {bestHere} />
+				<StreakBadges
+					{shelf}
+					{bands}
+					{ladder}
+					{streak}
+					chartName={seed.name}
+					best={bestEver}
+					{bestHere}
+				/>
 			{/if}
 
 			<!--
