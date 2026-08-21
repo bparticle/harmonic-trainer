@@ -30,7 +30,7 @@ const RATINGS: ReviewRating[] = ['again', 'hard', 'good', 'easy'];
 
 export const GET: RequestHandler = async ({ locals }) => {
 	if (!locals.authed) error(401, 'Not signed in');
-	return json(await activeWorkout());
+	return json(await activeWorkout(currentUserId(locals.userId)));
 };
 
 export const POST: RequestHandler = async ({ request, locals }) => {
@@ -66,19 +66,24 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!sessionId) error(400, 'Which workout?');
 
 	if (action === 'begin-task') {
-		const blockId = await beginTask(sessionId, taskIndex(body.index));
+		const blockId = await beginTask(userId, sessionId, taskIndex(body.index));
 		if (!blockId) error(400, 'No such task');
 		return json({ blockId });
 	}
 
 	if (action === 'finish-task') {
 		const batch = parseReviews(body.reviews);
-		if (batch.length) await recordReviews(sessionId, batch);
+		if (batch.length) await recordReviews(userId, sessionId, batch);
 
-		const finished = await finishTask(sessionId, taskIndex(body.index), body.result ?? null);
+		const finished = await finishTask(
+			userId,
+			sessionId,
+			taskIndex(body.index),
+			body.result ?? null
+		);
 		if (!finished) error(400, 'No such task');
 
-		return json(await activeWorkout());
+		return json(await activeWorkout(userId));
 	}
 
 	if (action === 'finish') {

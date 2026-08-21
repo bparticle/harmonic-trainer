@@ -89,6 +89,6 @@
 {#if bare}
 	{@render children()}
 {:else}
-	<AppNav prefs={data.settings.prefs} />
+	<AppNav prefs={data.settings.prefs} user={data.user} />
 	{@render children()}
 {/if}

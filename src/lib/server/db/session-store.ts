@@ -82,8 +82,8 @@ import { loadSettings, saveSettings } from './settings';
  */
 
 /** Where the ladder currently is, from settings, falling back to the very start. */
-export async function currentPosition(): Promise<Position> {
-	const settings = await loadSettings();
+export async function currentPosition(userId: string): Promise<Position> {
+	const settings = await loadSettings(userId);
 	return positionOf(settings.prefs.ladderKey, settings.prefs.ladderRung) ?? FIRST_POSITION;
 }
 
@@ -93,13 +93,16 @@ export async function currentPosition(): Promise<Position> {
  * Idempotent through the identity string, so it can be called on every session
  * start without duplicating anything.
  */
-export async function ensureCards(generated: GeneratedCard[]): Promise<number> {
+export async function ensureCards(userId: string, generated: GeneratedCard[]): Promise<number> {
 	if (generated.length === 0) return 0;
 
 	const skillRows = await db.select({ id: skills.id, code: skills.code }).from(skills);
 	const skillIds = new Map(skillRows.map((s) => [s.code, s.id]));
 
-	const existing = await db.select({ payload: cards.payloadJson }).from(cards);
+	const existing = await db
+		.select({ payload: cards.payloadJson })
+		.from(cards)
+		.where(eq(cards.userId, userId));
 	const known = new Set(
 		existing
 			.map((row) => (row.payload as { identity?: string })?.identity)
@@ -122,6 +125,7 @@ export async function ensureCards(generated: GeneratedCard[]): Promise<number> {
 		const id = randomUUID();
 		newCards.push({
 			id,
+			userId,
 			skillId,
 			direction: card.direction,
 			keyCenter: card.keyCenter,
@@ -137,32 +141,33 @@ export async function ensureCards(generated: GeneratedCard[]): Promise<number> {
 }
 
 /** Bring the ladder's cards up to date with where you have got to. */
-export async function ensureLadderCards(position: Position): Promise<number> {
-	return ensureCards(cardsForReached(reachedSoFar(position)));
+export async function ensureLadderCards(userId: string, position: Position): Promise<number> {
+	return ensureCards(userId, cardsForReached(reachedSoFar(position)));
 }
 
 /** Bring a progression into existence in a key, the first time it is asked for. */
 export async function ensureProgressionCards(
+	userId: string,
 	progressionId: string,
 	keyName: string
 ): Promise<number> {
 	const progression = progressionById(progressionId);
 	if (!progression) return 0;
-	return ensureCards(cardsForProgression(progression, keyName));
+	return ensureCards(userId, cardsForProgression(progression, keyName));
 }
 
 /** Move one step along the ladder, and create whatever that unlocks. */
-export async function advanceLadder(to: Position): Promise<Position> {
-	const settings = await loadSettings();
-	await saveSettings({
+export async function advanceLadder(userId: string, to: Position): Promise<Position> {
+	const settings = await loadSettings(userId);
+	await saveSettings(userId, {
 		prefs: { ...settings.prefs, ladderKey: to.stage.key, ladderRung: to.rung.id }
 	});
-	await ensureLadderCards(to);
+	await ensureLadderCards(userId, to);
 	return to;
 }
 
 /** Everything with a schedule, due or not, in the shape the composer reads. */
-async function schedulableCards(): Promise<Schedulable[]> {
+async function schedulableCards(userId: string): Promise<Schedulable[]> {
 	const scheduled = await db
 		.select({
 			cardId: cards.id,
@@ -179,7 +184,8 @@ async function schedulableCards(): Promise<Schedulable[]> {
 		})
 		.from(cards)
 		.innerJoin(srsState, eq(srsState.cardId, cards.id))
-		.innerJoin(skills, eq(skills.id, cards.skillId));
+		.innerJoin(skills, eq(skills.id, cards.skillId))
+		.where(eq(cards.userId, userId));
 
 	const schedulable: Schedulable[] = scheduled.map((row) => ({
 		cardId: row.cardId,
@@ -219,7 +225,7 @@ async function schedulableCards(): Promise<Schedulable[]> {
  * workout will not set.
  */
 export async function currentVocabulary(userId: string): Promise<Vocabulary> {
-	const position = await currentPosition();
+	const position = await currentPosition(userId);
 	const played = await alreadyPlayed(userId);
 	return vocabularyOf({
 		rungs: reachedSoFar(position).map((place) => place.rungId),
@@ -294,7 +300,7 @@ async function alreadyPlayed(
 		.selectDistinct({ code: skills.code })
 		.from(cards)
 		.innerJoin(skills, eq(skills.id, cards.skillId))
-		.where(sql`${skills.code} like 'prog:%'`);
+		.where(and(eq(cards.userId, userId), sql`${skills.code} like 'prog:%'`));
 
 	const heard = await db
 		.selectDistinct({ groove: playRuns.groove })
@@ -314,11 +320,11 @@ async function alreadyPlayed(
  * thing new is having been *shown* it, and a workout walked away from still
  * showed it.
  */
-async function lastNovelty(before: Date): Promise<string | null> {
+async function lastNovelty(userId: string, before: Date): Promise<string | null> {
 	const rows = await db
 		.select({ planJson: sessions.planJson })
 		.from(sessions)
-		.where(lt(sessions.startedAt, before))
+		.where(and(eq(sessions.userId, userId), lt(sessions.startedAt, before)))
 		.orderBy(desc(sessions.startedAt))
 		.limit(RECENT_SESSIONS);
 
@@ -365,12 +371,12 @@ async function gatherWorkoutInput(
 ): Promise<WorkoutInput> {
 	const [cardBank, coldSpots, chartList, played, progress, yesterdaysNovelty, tempo] =
 		await Promise.all([
-			schedulableCards(),
+			schedulableCards(userId),
 			loadColdSpots(userId),
 			missionCharts(userId),
 			alreadyPlayed(userId),
-			rungProgress(position),
-			lastNovelty(now),
+			rungProgress(userId, position),
+			lastNovelty(userId, now),
 			loadTempoGrades(userId)
 		]);
 
@@ -417,8 +423,8 @@ export async function previewWorkouts(
 	userId: string,
 	now = new Date()
 ): Promise<Record<WorkoutSize, Workout>> {
-	const position = await currentPosition();
-	await ensureLadderCards(position);
+	const position = await currentPosition(userId);
+	await ensureLadderCards(userId, position);
 	const input = await gatherWorkoutInput(userId, position, {}, now);
 
 	return {
@@ -438,11 +444,11 @@ export async function previewWorkouts(
  * abandoned by any reasonable reading and dragging it back would be stranger
  * than leaving it.
  */
-export async function activeWorkout(): Promise<ActiveWorkout | null> {
+export async function activeWorkout(userId: string): Promise<ActiveWorkout | null> {
 	const rows = await db
 		.select()
 		.from(sessions)
-		.where(isNull(sessions.endedAt))
+		.where(and(eq(sessions.userId, userId), isNull(sessions.endedAt)))
 		.orderBy(desc(sessions.startedAt))
 		.limit(RECENT_SESSIONS);
 
@@ -479,18 +485,18 @@ export async function startWorkout(
 	request: WorkoutRequest = {},
 	now = new Date()
 ): Promise<ActiveWorkout> {
-	const open = await activeWorkout();
+	const open = await activeWorkout(userId);
 	if (open) return open;
 
-	const position = await currentPosition();
-	await ensureLadderCards(position);
+	const position = await currentPosition(userId);
+	await ensureLadderCards(userId, position);
 
 	const choice = request.choice ?? null;
 	if (choice?.kind === 'progression') {
-		await ensureProgressionCards(choice.progressionId, choice.keyCenter);
+		await ensureProgressionCards(userId, choice.progressionId, choice.keyCenter);
 	} else if (choice?.kind === 'rung') {
 		const stage = stageByKey(choice.key);
-		if (stage) await ensureCards(cardsForRung(choice.rungId, stage));
+		if (stage) await ensureCards(userId, cardsForRung(choice.rungId, stage));
 	}
 
 	const workout = composeWorkout(
@@ -500,6 +506,7 @@ export async function startWorkout(
 	const id = randomUUID();
 	await db.insert(sessions).values({
 		id,
+		userId,
 		startedAt: now,
 		keyCenter: workout.keyCenter,
 		planJson: workout
@@ -511,11 +518,11 @@ export async function startWorkout(
 }
 
 /** The workout a session holds, or null when the row is not one. */
-async function workoutOf(sessionId: string): Promise<Workout | null> {
+async function workoutOf(sessionId: string, userId: string): Promise<Workout | null> {
 	const [row] = await db
 		.select({ planJson: sessions.planJson })
 		.from(sessions)
-		.where(eq(sessions.id, sessionId))
+		.where(and(eq(sessions.id, sessionId), eq(sessions.userId, userId)))
 		.limit(1);
 
 	return row && isWorkout(row.planJson) ? row.planJson : null;
@@ -531,8 +538,12 @@ async function workoutOf(sessionId: string): Promise<Workout | null> {
  * can hand off to `/backing`, which is the other reason this is a call and not a
  * side effect.
  */
-export async function beginTask(sessionId: string, index: number): Promise<string | null> {
-	const workout = await workoutOf(sessionId);
+export async function beginTask(
+	userId: string,
+	sessionId: string,
+	index: number
+): Promise<string | null> {
+	const workout = await workoutOf(sessionId, userId);
 	const task = workout?.tasks[index];
 	if (!task) return null;
 	return beginBlock(sessionId, taskBlockType(task.kind, index));
@@ -546,12 +557,13 @@ export async function beginTask(sessionId: string, index: number): Promise<strin
  * mission that was skipped or given up on is finished here rather than by a run.
  */
 export async function finishTask(
+	userId: string,
 	sessionId: string,
 	index: number,
 	result: unknown,
 	now = new Date()
 ): Promise<boolean> {
-	const workout = await workoutOf(sessionId);
+	const workout = await workoutOf(sessionId, userId);
 	const task = workout?.tasks[index];
 	if (!task) return false;
 
@@ -595,6 +607,7 @@ export async function finishBlock(
 }
 
 export async function finishSession(
+	userId: string,
 	sessionId: string,
 	result: unknown,
 	now = new Date()
@@ -602,7 +615,7 @@ export async function finishSession(
 	await db
 		.update(sessions)
 		.set({ endedAt: now, resultJson: result as never })
-		.where(eq(sessions.id, sessionId));
+		.where(and(eq(sessions.id, sessionId), eq(sessions.userId, userId)));
 }
 
 /**
@@ -618,7 +631,7 @@ export async function finishWorkout(
 	now = new Date()
 ): Promise<WorkoutReport | null> {
 	const report = await loadWorkoutReport(sessionId, userId);
-	await finishSession(sessionId, report, now);
+	await finishSession(userId, sessionId, report, now);
 	return report;
 }
 
@@ -639,7 +652,7 @@ export async function loadWorkoutReport(
 	const [row] = await db
 		.select({ startedAt: sessions.startedAt, planJson: sessions.planJson })
 		.from(sessions)
-		.where(eq(sessions.id, sessionId))
+		.where(and(eq(sessions.id, sessionId), eq(sessions.userId, userId)))
 		.limit(1);
 
 	if (!row || !isWorkout(row.planJson)) return null;
@@ -653,7 +666,7 @@ export async function loadWorkoutReport(
 	const [answered, keysAsked, previous, runs] = await Promise.all([
 		gradedIn(sessionId),
 		keysAskedIn(sessionId),
-		gradedBefore(since),
+		gradedBefore(userId, since),
 		runsFor(blockIds)
 	]);
 
@@ -717,7 +730,7 @@ async function gradedIn(sessionId: string): Promise<Asked> {
  * comparing this morning's accuracy against a session that has no accuracy would
  * be comparing it against nothing at all.
  */
-async function gradedBefore(since: Date): Promise<Asked | null> {
+async function gradedBefore(userId: string, since: Date): Promise<Asked | null> {
 	const [row] = await db
 		.select({
 			asked: sql<number>`count(*)::int`,
@@ -725,7 +738,7 @@ async function gradedBefore(since: Date): Promise<Asked | null> {
 		})
 		.from(reviews)
 		.innerJoin(sessions, eq(sessions.id, reviews.sessionId))
-		.where(lt(sessions.startedAt, since))
+		.where(and(eq(sessions.userId, userId), lt(sessions.startedAt, since)))
 		.groupBy(sessions.id, sessions.startedAt)
 		.orderBy(desc(sessions.startedAt))
 		.limit(1);
@@ -792,7 +805,7 @@ async function recordBefore(userId: string, since: Date): Promise<Map<string, nu
 			.select({ label: cards.keyCenter, n: sql<number>`count(*)::int` })
 			.from(reviews)
 			.innerJoin(cards, eq(cards.id, reviews.cardId))
-			.where(lt(reviews.ts, since))
+			.where(and(eq(cards.userId, userId), lt(reviews.ts, since)))
 			.groupBy(cards.keyCenter)
 	]);
 
@@ -820,18 +833,33 @@ export type ReviewInput = {
  * card was reviewed when no review exists to justify it.
  */
 export async function recordReviews(
+	userId: string,
 	sessionId: string | null,
 	batch: ReviewInput[],
 	now = new Date()
 ): Promise<void> {
 	if (batch.length === 0) return;
+	if (sessionId) {
+		const [ownSession] = await db
+			.select({ id: sessions.id })
+			.from(sessions)
+			.where(and(eq(sessions.id, sessionId), eq(sessions.userId, userId)))
+			.limit(1);
+		if (!ownSession) return;
+	}
 
 	await db.transaction(async (tx) => {
 		const ids = batch.map((r) => r.cardId);
-		const states = await tx.select().from(srsState).where(inArray(srsState.cardId, ids));
-		const byCard = new Map(states.map((s) => [s.cardId, s]));
+		const states = await tx
+			.select({ state: srsState, userId: cards.userId })
+			.from(srsState)
+			.innerJoin(cards, eq(cards.id, srsState.cardId))
+			.where(and(inArray(srsState.cardId, ids), eq(cards.userId, userId)));
+		const byCard = new Map(states.map((row) => [row.state.cardId, row.state]));
+		const owned = new Set(states.map((row) => row.state.cardId));
 
 		for (const review of batch) {
+			if (!owned.has(review.cardId)) continue;
 			const inserted = await tx
 				.insert(reviews)
 				.values({
@@ -874,7 +902,7 @@ export async function recordReviews(
 }
 
 /** How the current rung is going, for deciding whether to suggest moving on. */
-export async function rungProgress(position: Position) {
+export async function rungProgress(userId: string, position: Position) {
 	const code = rungSkillCode(position.rung.id);
 	const [row] = await db
 		.select({
@@ -884,7 +912,9 @@ export async function rungProgress(position: Position) {
 		.from(cards)
 		.innerJoin(skills, eq(skills.id, cards.skillId))
 		.leftJoin(reviews, eq(reviews.cardId, cards.id))
-		.where(and(eq(skills.code, code), eq(cards.keyCenter, position.stage.key)));
+		.where(
+			and(eq(cards.userId, userId), eq(skills.code, code), eq(cards.keyCenter, position.stage.key))
+		);
 
 	const total = row?.total ?? 0;
 	const correct = row?.correct ?? 0;
@@ -914,20 +944,19 @@ export async function rungProgress(position: Position) {
  * last spring counts exactly as a `mission_2` row from this morning does. That
  * is why `LegacyBlockType` still exists, one file away.
  *
- * No user filter, and that is not an oversight. `sessions`, `session_blocks`
- * and `reviews` deliberately do not carry `user_id` yet — each poses a question
- * that cannot be answered honestly without a second player, and M12 answers
- * them. There is one player, so this is one player's total. The day that stops
- * being true, this query has to change, which is why it is in one place.
+ * `sessions` owns blocks and `cards` owns reviews, so both totals filter through
+ * those parents. The child rows do not repeat `user_id`; storing the same owner
+ * twice would only give it a way to disagree with itself.
  */
-export async function practiceTotals() {
+export async function practiceTotals(userId: string) {
 	const [blocks] = await db
 		.select({
 			finished: sql<number>`count(*)::int`,
 			ms: sql<number>`coalesce(sum(extract(epoch from (${sessionBlocks.endedAt} - ${sessionBlocks.startedAt})) * 1000), 0)::bigint`
 		})
 		.from(sessionBlocks)
-		.where(sql`${sessionBlocks.endedAt} is not null`);
+		.innerJoin(sessions, eq(sessions.id, sessionBlocks.sessionId))
+		.where(and(eq(sessions.userId, userId), sql`${sessionBlocks.endedAt} is not null`));
 
 	const [graded] = await db
 		.select({
@@ -935,9 +964,14 @@ export async function practiceTotals() {
 			correct: sql<number>`count(*) filter (where ${reviews.correct})::int`,
 			last: sql<Date | null>`max(${reviews.ts})`
 		})
-		.from(reviews);
+		.from(reviews)
+		.innerJoin(cards, eq(cards.id, reviews.cardId))
+		.where(eq(cards.userId, userId));
 
-	const [sat] = await db.select({ total: sql<number>`count(*)::int` }).from(sessions);
+	const [sat] = await db
+		.select({ total: sql<number>`count(*)::int` })
+		.from(sessions)
+		.where(eq(sessions.userId, userId));
 
 	return {
 		sessions: sat?.total ?? 0,
@@ -951,7 +985,7 @@ export async function practiceTotals() {
 	};
 }
 
-export async function loadCards(cardIds: string[]) {
+export async function loadCards(userId: string, cardIds: string[]) {
 	if (cardIds.length === 0) return [];
 	const rows = await db
 		.select({
@@ -963,7 +997,7 @@ export async function loadCards(cardIds: string[]) {
 		})
 		.from(cards)
 		.innerJoin(skills, eq(skills.id, cards.skillId))
-		.where(inArray(cards.id, cardIds));
+		.where(and(eq(cards.userId, userId), inArray(cards.id, cardIds)));
 
 	const byId = new Map(rows.map((r) => [r.id, r]));
 	return cardIds.map((id) => byId.get(id)).filter((r): r is (typeof rows)[number] => Boolean(r));

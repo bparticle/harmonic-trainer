@@ -1,36 +1,38 @@
 import { createHmac } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 
-// $env/dynamic/private is a SvelteKit virtual module; stub it for unit tests.
 vi.mock('$env/dynamic/private', () => ({
-	env: { AUTH_SECRET: 'test-secret-aaaaaaaaaaaaaaaaaaaaaaaa', APP_PASSWORD: 'correct horse' }
+	env: { AUTH_SECRET: 'test-secret-aaaaaaaaaaaaaaaaaaaaaaaa' }
 }));
 
-const { checkPassword, issueToken, safeRedirectPath, verifyToken } = await import('./auth');
+const { hashPassword, issueToken, safeRedirectPath, verifyPassword, verifyToken } =
+	await import('./auth');
 
-describe('password check', () => {
-	it('accepts the configured password', () => {
-		expect(checkPassword('correct horse')).toBe(true);
+describe('password hashing', () => {
+	it('round-trips the right password and rejects another', async () => {
+		const hash = await hashPassword('correct horse battery staple');
+		expect(hash).not.toContain('correct horse');
+		await expect(verifyPassword('correct horse battery staple', hash)).resolves.toBe(true);
+		await expect(verifyPassword('wrong horse battery staple', hash)).resolves.toBe(false);
 	});
 
-	it('rejects a wrong password', () => {
-		expect(checkPassword('wrong horse')).toBe(false);
+	it('uses a fresh salt', async () => {
+		const first = await hashPassword('correct horse battery staple');
+		const second = await hashPassword('correct horse battery staple');
+		expect(first).not.toBe(second);
 	});
 
-	it('rejects a prefix of the password', () => {
-		expect(checkPassword('correct')).toBe(false);
-	});
-
-	it('rejects an empty password', () => {
-		expect(checkPassword('')).toBe(false);
+	it('rejects short passwords and malformed stored values', async () => {
+		await expect(hashPassword('too short')).rejects.toThrow('12 characters');
+		await expect(verifyPassword('anything long enough', 'disabled')).resolves.toBe(false);
 	});
 });
 
 describe('session token', () => {
 	const PLAYER = '00000000-0000-4000-8000-000000000001';
 
-	it('round-trips a freshly issued token, and it names the user', () => {
-		expect(verifyToken(issueToken(PLAYER))).toEqual({ userId: PLAYER });
+	it('round-trips a fresh token with its revocation epoch', () => {
+		expect(verifyToken(issueToken(PLAYER, 3))).toEqual({ userId: PLAYER, sessionEpoch: 3 });
 	});
 
 	it('rejects undefined, empty and malformed tokens', () => {
@@ -40,66 +42,38 @@ describe('session token', () => {
 		expect(verifyToken('.onlysig')).toBeNull();
 	});
 
-	it('rejects a tampered signature', () => {
-		const token = issueToken(PLAYER);
+	it('rejects a tampered signature or payload', () => {
+		const now = Date.now();
+		const token = issueToken(PLAYER, 0, now);
 		const tampered = token.slice(0, -1) + (token.at(-1) === 'A' ? 'B' : 'A');
 		expect(verifyToken(tampered)).toBeNull();
-	});
 
-	it('rejects a tampered timestamp', () => {
-		const now = Date.now();
-		const token = issueToken(PLAYER, now);
 		const signature = token.slice(token.lastIndexOf('.') + 1);
-		expect(verifyToken(`${PLAYER}.${now + 1}.${signature}`)).toBeNull();
+		expect(verifyToken(`2.${PLAYER}.1.${now}.${signature}`)).toBeNull();
 	});
 
-	it('rejects a swapped user, which is the point of signing the payload whole', () => {
+	it('expires after 90 days and rejects the future', () => {
 		const now = Date.now();
-		const token = issueToken(PLAYER, now);
-		const signature = token.slice(token.lastIndexOf('.') + 1);
-		const other = '00000000-0000-4000-8000-000000000002';
-		expect(verifyToken(`${other}.${now}.${signature}`)).toBeNull();
-	});
-
-	it('expires after 90 days', () => {
-		const now = Date.now();
-		const token = issueToken(PLAYER, now);
 		const day = 24 * 60 * 60 * 1000;
-		expect(verifyToken(token, now + 89 * day)).toEqual({ userId: PLAYER });
+		const token = issueToken(PLAYER, 0, now);
+		expect(verifyToken(token, now + 89 * day)).toEqual({ userId: PLAYER, sessionEpoch: 0 });
 		expect(verifyToken(token, now + 91 * day)).toBeNull();
+		expect(verifyToken(issueToken(PLAYER, 0, now + 60_000), now)).toBeNull();
 	});
 
-	it('rejects a token issued in the future', () => {
+	it('parses cookies from both earlier single-player formats', () => {
 		const now = Date.now();
-		expect(verifyToken(issueToken(PLAYER, now + 60_000), now)).toBeNull();
-	});
-
-	it('rejects a timestamp that is not digits', () => {
-		expect(verifyToken(signedPayload(` ${Date.now()}`))).toBeNull();
-		expect(verifyToken(signedPayload(`${PLAYER}.0x10`))).toBeNull();
+		expect(verifyToken(signedPayload(`${PLAYER}.${now}`), now)).toEqual({
+			userId: PLAYER,
+			sessionEpoch: null
+		});
+		expect(verifyToken(signedPayload(String(now)), now)).toEqual({
+			userId: null,
+			sessionEpoch: null
+		});
 	});
 });
 
-/*
- * Cookies minted before the payload named anyone.
- *
- * Nobody is signed out by the upgrade: an old cookie still verifies and simply
- * names nobody, which `currentUserId` resolves to the local player.
- */
-describe('a cookie from before users existed', () => {
-	it('is still valid, and names nobody', () => {
-		const now = Date.now();
-		expect(verifyToken(signedPayload(String(now)), now)).toEqual({ userId: null });
-	});
-
-	it('still expires on the same schedule', () => {
-		const now = Date.now();
-		const day = 24 * 60 * 60 * 1000;
-		expect(verifyToken(signedPayload(String(now)), now + 91 * day)).toBeNull();
-	});
-});
-
-/** Sign an arbitrary payload the way the module does, to build tokens it would not. */
 function signedPayload(payload: string): string {
 	const signature = createHmac('sha256', 'test-secret-aaaaaaaaaaaaaaaaaaaaaaaa')
 		.update(payload)
@@ -116,8 +90,6 @@ describe('post-login redirect', () => {
 
 	it.each(['https://evil.example', '//evil.example/path', '/\\evil.example/path', 'backing'])(
 		'rejects unsafe destination %s',
-		(destination) => {
-			expect(safeRedirectPath(destination, origin)).toBe('/');
-		}
+		(destination) => expect(safeRedirectPath(destination, origin)).toBe('/')
 	);
 });

@@ -57,9 +57,30 @@ milestones exist which did not exist before.
 milestone `SECURITY.md` already says is mandatory: multi-user cannot ship on a
 shared password.
 
+### Status: the family beta is in place
+
+The part that can be tested without pretending the service is open to strangers
+landed in August 2026:
+
+- [x] Invite-only email/password accounts, provisioned by the operator.
+- [x] Versioned scrypt hashes; no shared `APP_PASSWORD` remains in the app.
+- [x] `cards`, `sessions`, custom charts, play records and every settings value
+      resolve through the signed-in account.
+- [x] The singleton settings row is the template for a new `user_prefs` row.
+- [x] Cookies carry a revocation epoch; password changes and “sign out
+      everywhere” bump it.
+- [x] Existing history belongs to the original owner after migration, and an
+      older valid cookie continues only until that owner is provisioned or
+      revokes sessions.
+
+This is deliberately **not M12 complete**. The operator can now add a few known
+people and compare genuinely separate progress states. Opening registration to
+strangers still requires the reset, abuse, deletion and export work below.
+
 ### This, not billing, is the hosting problem
 
-Two subscribers today would not be two users. They would be two people typing
+Before the family slice, two subscribers would not have been two users. They
+would have been two people typing
 the same `APP_PASSWORD`, reading the same ladder position, grading each other's
 flashcards, and editing each other's twelve pitch colours through
 `/api/settings` — which patches a singleton row. That is four data-isolation
@@ -72,7 +93,7 @@ the server — sign in from the laptop and your badges were on the desktop. An
 account whose contents live in one browser is not an account, which is why the
 record had to come first and did.
 
-M9 fixed none of the other four on purpose, and was right not to. It built the
+M9 had fixed none of the other four on purpose, and was right not to. It built the
 seam and writes the play-along record through it; the tables the rest of the app
 writes — `cards`, `srs_state`, `reviews`, `sessions`, `session_blocks` — were
 deferred because each posed a question that could not be answered honestly
@@ -83,12 +104,12 @@ answered here.
 
 | Table                                                      | Gets `user_id` | Why                                                             |
 | ---------------------------------------------------------- | -------------- | --------------------------------------------------------------- |
-| `cards`                                                    | yes, not null  | Generated as a ladder is climbed. Two players climb differently |
-| `sessions`                                                 | yes, not null  | A practice session belongs to whoever sat down                  |
+| `cards`                                                    | done, not null | Generated as a ladder is climbed. Two players climb differently |
+| `sessions`                                                 | done, not null | A practice session belongs to whoever sat down                  |
 | `srs_state`                                                | no             | Its primary key _is_ `card_id`; the card already knows          |
 | `reviews`, `session_blocks`                                | no             | Cannot exist without their parent, and the parent knows         |
 | `skills`                                                   | no             | Seeded curriculum. A definition, not data                       |
-| `charts`                                                   | done in M9     | Null is built-in and shared; a value is yours                   |
+| `charts`                                                   | done           | Null is built-in and shared; a value is yours                   |
 | `takes`, `repertoire`, `analysis_facts`, `transfer_events` | no             | Still parked, still nothing writes to them                      |
 
 The rule is the one M9 set, applied further: a row that cannot exist without its
@@ -120,48 +141,46 @@ no hand-built wheel, no MIDI cable and no laptop with anyone. **Every value in
 the singleton is now the player's**, including both of the ones M9 flagged as
 genuinely unresolved: latency belongs to a cable that belongs to exactly one
 subscriber, and how wide a rolled chord may be belongs to one pair of hands.
-Open decision 1 does not get decided so much as dissolved.
+The room-ownership question did not get decided so much as dissolved.
 
-So `user_prefs` holds all of it — colour map, wheel config, MIDI device,
+`user_prefs` now holds all of it — colour map, wheel config, MIDI device,
 latency offset, cluster window, session length, reveal delay, ladder key and
 rung — and the singleton is not deleted but re-employed: it becomes **the
 defaults a new account is born with**. The check constraint pinning it to
 `id = 1` still never has to be dropped, which was the cheapest possible outcome
 and stays available for a reason nobody predicted.
 
-`/api/settings` stops patching the singleton and starts patching the caller's
-row. Nothing in the settings screens changes shape.
+`/api/settings` patches the caller's row rather than the singleton.
+Nothing in the settings screens changes shape.
 
 ### Credentials
 
-Email and a password, hashed with `scrypt` from `node:crypto` — memory-hard,
+Email and a password are now hashed with `scrypt` from `node:crypto` — memory-hard,
 already in the platform, no native module to break a deploy. The parameters go
 in a constant with a comment saying when they were last raised.
 
-Magic links are the real alternative and would delete a subsystem: no hash, no
-reset flow, no credential stuffing. They are listed under _Decisions still open_
-rather than chosen here, because they make e-mail delivery the only way into an
-app somebody has paid for, and a password degrades better on the morning the
-mail provider is having a bad day. The recommendation is passwords; the point
-worth knowing before deciding is that **e-mail becomes a hard dependency
-either way**, since a paid account with no password reset is hostile.
+Magic links were the real alternative and would have deleted a subsystem: no
+hash, no reset flow, no credential stuffing. Passwords won because they degrade
+better on the morning the mail provider is having a bad day. **E-mail still
+becomes a hard dependency before public registration**, since a paid account
+with no password reset is hostile.
 
-Either way this is the first external service this project has ever needed.
-That is a genuine loss of a property the README currently advertises, and it is
-recorded rather than glossed.
+The invite-only beta needs no email provider: the operator creates an account
+and passes along its generated temporary password. Email delivery becomes the
+first external service only when self-service reset opens to outside users.
 
 ### The cookie learns to be revoked
 
-The payload M9 built is `userId.issuedAt.signature`. M12 puts an epoch in front
+The payload M9 built was `userId.issuedAt.signature`. The family beta puts an epoch in front
 of the timestamp — an integer on `users`, bumped by "sign out everywhere" and by
 a password change — so a ninety-day cookie stops being permanent.
 
-Verification stops being self-sufficient: the epoch has to be read. That is one
+Verification is no longer self-sufficient: the epoch is read. That is one
 user lookup per request, and it is the same lookup M13's entitlement check needs
 anyway, so the cost is one query rather than two. `event.locals` ends up
 carrying the user, not a boolean.
 
-### The rest of what SECURITY.md says does not exist
+### What remains before accounts can open to strangers
 
 - **Rate limiting** on sign-in and on reset requests. A small table, because
   serverless instances share no memory and Postgres is already there.
@@ -173,11 +192,13 @@ carrying the user, not a boolean.
 
 ### Done when
 
-- Two accounts practise the same rung on the same evening and neither can see
-  the other's cards, charts, runs, badges or colours.
-- Signing out everywhere kills the cookie on the other machine.
-- Deleting an account leaves no row behind, proven by a test.
-- `npm run verify` passes.
+- [ ] Two provisioned family accounts practise the same rung on the same evening
+      and an acceptance pass confirms neither can see the other's cards, charts,
+      runs, badges or colours.
+- [x] Signing out everywhere kills the cookie on the other machine by epoch.
+- [ ] Deleting an account leaves no row behind, proven by an integration test.
+- [ ] Sign-in/reset rate limits, reset email, export and deletion UI exist.
+- [x] `npm run verify` passes for the family-beta slice.
 
 ---
 
@@ -512,35 +533,24 @@ timelines in it.
 
 ### The release where the app stops being what it says it is
 
-Four places stop being true and must change in the same release as accounts, and
-M9 deliberately edited none of them, because the app must not hint at what it
-cannot do: `SECURITY.md`'s threat model and its "no multi-tenancy",
-`.env.example`, the README's opening claim, and the landing copy in
-`LandingPage.svelte`. All four still stand, and the fifth requirement sharpens
-what they have to become, since the landing page currently sells the opposite of
-a hosted account — _one musician per instance_, _no user accounts_, _your
-practice data belongs on your machine_.
+Four places stopped being true with family accounts, and changed in the same
+slice: `SECURITY.md`'s threat model, `.env.example`, the README's opening claim,
+and the landing copy in `LandingPage.svelte`. M9 had deliberately left them
+alone because the app must not hint at what it cannot do.
 
-The honest replacement keeps both halves true and does not apologise for either:
-**run it yourself, or let somebody else run it for you.** The software stays free
-and self-hostable; the fee buys hosting, backups and not having to keep a
-Postgres alive. `APP_PASSWORD` remains exactly what it is — the right answer for
-a personal instance — and stops being the only answer.
-
-Not one word of it is edited before M12 ships, per the rule at the top of this
-file.
+The family beta has now made the first edit honestly: the software is
+self-hostable, carries separate invite-only accounts, and makes no claim that
+public hosting exists. The later replacement can still say **run it yourself,
+or let somebody else run it for you** when M13 makes the second half true.
 
 ---
 
 ## Decisions still open
 
-Four, all flagged where they arise, none of which should be settled by whoever
+Three, all flagged where they arise, none of which should be settled by whoever
 happens to be typing:
 
-1. **How people sign in** — password with a reset flow, or a magic link with no
-   password at all. M12 recommends passwords and explains why; the deciding
-   consideration is that e-mail becomes load-bearing either way.
-2. **Whether the VAT simplification is available at all.** The €10,000 threshold
+1. **Whether the VAT simplification is available at all.** The €10,000 threshold
    belongs to the business, not to this product, and counts every cross-border
    EU B2C digital sale it makes. If another project already crosses it, the rate
    is the customer's country's from the first subscriber here and the returns
@@ -548,12 +558,12 @@ happens to be typing:
    rather than for computing rates by hand. This is a question about somebody's
    accounts rather than about this repository, and it is recorded here because
    the answer changes what gets built.
-3. **What would move this off Revolut.** The choice is made and it is reversible
+2. **What would move this off Revolut.** The choice is made and it is reversible
    on purpose, so the triggers are written down rather than left to be felt: the
    answer to the question above, and finding that renewals cannot be tested
    without a test clock, which only shows up once the integration is real.
    Either is a reason to re-read this section, not to rewrite the app. See M13.
-4. **Retention of `chord_attempts`** — the recommendation is to keep everything
+3. **Retention of `chord_attempts`** — the recommendation is to keep everything
    forever, at a few thousand rows an hour, because it cannot be reconstructed.
    The table exists now and is filling, so this is a live question rather than a
    hypothetical one; nothing prunes it and nothing should until somebody decides
@@ -562,6 +572,8 @@ happens to be typing:
 **Settled since the last revision, by the hosting requirement rather than by
 argument:**
 
+- Passwords, not magic links. The invite-only beta exercises the credential and
+  revocation model without making email delivery the only way into the app.
 - `chordClusterWindowMs` and `midiLatencyOffsetMs` are the player's. So is
   everything else in the singleton, because hosting deletes the shared room.
 - The seeded skill graph is shared, being a definition; the cards generated from

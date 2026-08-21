@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull, or } from 'drizzle-orm';
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
@@ -264,12 +264,16 @@ export const actions: Actions = {
 		const read = readSubmission(form);
 		if (!read.ok) return fail(400, { problems: read.problems, ...read.entered });
 
-		const taken = await db.select({ slug: charts.slug }).from(charts);
+		const userId = currentUserId(locals.userId);
+		const taken = await db
+			.select({ slug: charts.slug })
+			.from(charts)
+			.where(or(isNull(charts.userId), eq(charts.userId, userId)));
 		const slug = uniqueSlug(slugify(read.name), [...BUILT_IN, ...taken.map((row) => row.slug)]);
 
 		await db.insert(charts).values({
 			id: randomUUID(),
-			userId: currentUserId(locals.userId),
+			userId,
 			slug,
 			name: read.name,
 			style: 'custom',

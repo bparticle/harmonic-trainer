@@ -40,6 +40,7 @@
 		"db:push": "drizzle-kit push",
 		"db:studio": "drizzle-kit studio",
 		"db:seed": "vite-node scripts/seed.ts",
+		"account:create": "vite-node scripts/account.ts",
 		"db:up": "docker compose up -d db",
 		"db:down": "docker compose down",
 		"format": "prettier --write .",

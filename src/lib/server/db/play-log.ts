@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { and, desc, eq, gt, gte, inArray, isNull, sql } from 'drizzle-orm';
 import { db } from './index';
-import { badges, charts, chordAttempts, playRuns, sessionBlocks } from './schema';
+import { badges, charts, chordAttempts, playRuns, sessionBlocks, sessions } from './schema';
 import { emptyRecord, type StreakRecord } from '$lib/effects/badges';
 import { noBests, type Bests, type Flush } from '$lib/practice/run';
 import {
@@ -305,6 +305,20 @@ export async function loadRecord(userId: string): Promise<StreakRecord> {
 export async function saveFlush(userId: string, flush: Flush): Promise<void> {
 	if (flush.runs.length === 0 && flush.badges.length === 0 && flush.blocks.length === 0) return;
 
+	const claimedBlocks = [
+		...flush.runs.flatMap((run) => (run.sessionBlockId ? [run.sessionBlockId] : [])),
+		...flush.blocks.map((block) => block.blockId)
+	];
+	const ownBlocks = new Set<string>();
+	if (claimedBlocks.length > 0) {
+		const rows = await db
+			.select({ id: sessionBlocks.id })
+			.from(sessionBlocks)
+			.innerJoin(sessions, eq(sessions.id, sessionBlocks.sessionId))
+			.where(and(inArray(sessionBlocks.id, claimedBlocks), eq(sessions.userId, userId)));
+		for (const row of rows) ownBlocks.add(row.id);
+	}
+
 	await db.transaction(async (tx) => {
 		for (const run of flush.runs) {
 			const inserted = await tx
@@ -314,7 +328,8 @@ export async function saveFlush(userId: string, flush: Flush): Promise<void> {
 					userId,
 					chartSlug: run.chartSlug,
 					chartId: run.chartId,
-					sessionBlockId: run.sessionBlockId,
+					sessionBlockId:
+						run.sessionBlockId && ownBlocks.has(run.sessionBlockId) ? run.sessionBlockId : null,
 					keyCenter: run.keyCenter,
 					bpm: run.bpm,
 					groove: run.groove,
@@ -372,6 +387,7 @@ export async function saveFlush(userId: string, flush: Flush): Promise<void> {
 		 * the train.
 		 */
 		for (const block of flush.blocks) {
+			if (!ownBlocks.has(block.blockId)) continue;
 			const run = flush.runs.find((candidate) => candidate.id === block.runId);
 			const at = run?.endedAt ? new Date(run.endedAt) : new Date();
 			await tx

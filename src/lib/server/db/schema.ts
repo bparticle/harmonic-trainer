@@ -12,6 +12,7 @@ import {
 	text,
 	timestamp,
 	unique,
+	uniqueIndex,
 	uuid
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
@@ -140,13 +141,8 @@ export type ChartStyle = 'blues' | 'minor_blues' | 'rhythm_changes' | 'modal_vam
 // ---------------------------------------------------------------------------
 
 /**
- * Exactly one row: the local player, seeded by the migration at a fixed id.
- *
- * An id, a name and a timestamp, and nothing else. No `email`, no empty
- * `password_hash` waiting for accounts to arrive — nothing exists until it is
- * reached, and a column nothing writes is the same smell as a table nothing
- * reads. Credentials are M12, and they cannot be faked by leaving space for
- * them.
+ * One row per invited player. The original local player keeps its fixed id so
+ * every existing foreign key and transitional cookie survives the migration.
  *
  * Everything owned cascades from here, designed in from this first migration
  * rather than discovered on the day somebody asks to be deleted.
@@ -154,14 +150,16 @@ export type ChartStyle = 'blues' | 'minor_blues' | 'rhythm_changes' | 'modal_vam
 export const users = pgTable('users', {
 	id: uuid('id').primaryKey(),
 	name: text('name').notNull(),
+	email: text('email').notNull().unique(),
+	passwordHash: text('password_hash').notNull(),
+	sessionEpoch: integer('session_epoch').notNull().default(0),
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });
 
 /**
- * Single row, id pinned to 1. Holds the editable design tokens (the twelve
- * pitch-class colours) and the harmonic wheel calibration, both of which the
- * brief requires to live in the database rather than in CSS so they can be
- * matched to a physical wheel or coloured stickers on the keys.
+ * Single row, id pinned to 1. This is the template copied into `user_prefs`
+ * when an account is created. Existing installs keep their authored palette as
+ * the template rather than silently returning to compiled defaults.
  */
 export const settings = pgTable(
 	'settings',
@@ -175,6 +173,24 @@ export const settings = pgTable(
 	},
 	(t) => [check('settings_singleton', sql`${t.id} = 1`)]
 );
+
+/**
+ * The settings that travel with one account.
+ *
+ * The singleton above is retained as the template for a newly provisioned
+ * account. The first read copies that template here; every later read and write
+ * is scoped by this primary key.
+ */
+export const userPrefs = pgTable('user_prefs', {
+	userId: uuid('user_id')
+		.primaryKey()
+		.references(() => users.id, { onDelete: 'cascade' }),
+	colorMapJson: jsonb('color_map_json').notNull(),
+	wheelConfigJson: jsonb('wheel_config_json').notNull(),
+	midiDevice: text('midi_device'),
+	prefsJson: jsonb('prefs_json').notNull(),
+	updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+});
 
 /** The curriculum DAG from section 7. Seeded, never authored at runtime. */
 export const skills = pgTable(
@@ -198,6 +214,9 @@ export const cards = pgTable(
 	'cards',
 	{
 		id: uuid('id').primaryKey().defaultRandom(),
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
 		skillId: uuid('skill_id')
 			.notNull()
 			.references(() => skills.id, { onDelete: 'cascade' }),
@@ -206,7 +225,11 @@ export const cards = pgTable(
 		payloadJson: jsonb('payload_json').notNull(),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
-	(t) => [index('cards_skill_idx').on(t.skillId), index('cards_key_idx').on(t.keyCenter)]
+	(t) => [
+		index('cards_user_idx').on(t.userId),
+		index('cards_skill_idx').on(t.skillId),
+		index('cards_key_idx').on(t.keyCenter)
+	]
 );
 
 /** FSRS scheduling state, one row per card. */
@@ -227,15 +250,22 @@ export const srsState = pgTable(
 	(t) => [index('srs_due_idx').on(t.dueAt)]
 );
 
-export const sessions = pgTable('sessions', {
-	id: uuid('id').primaryKey().defaultRandom(),
-	startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
-	endedAt: timestamp('ended_at', { withTimezone: true }),
-	keyCenter: text('key_center').notNull(),
-	planJson: jsonb('plan_json').notNull(),
-	resultJson: jsonb('result_json'),
-	notes: text('notes')
-});
+export const sessions = pgTable(
+	'sessions',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
+		endedAt: timestamp('ended_at', { withTimezone: true }),
+		keyCenter: text('key_center').notNull(),
+		planJson: jsonb('plan_json').notNull(),
+		resultJson: jsonb('result_json'),
+		notes: text('notes')
+	},
+	(t) => [index('sessions_user_started_idx').on(t.userId, t.startedAt)]
+);
 
 export const sessionBlocks = pgTable(
 	'session_blocks',
@@ -383,7 +413,7 @@ export const charts = pgTable(
 	{
 		id: uuid('id').primaryKey().defaultRandom(),
 		userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
-		slug: text('slug').notNull().unique(),
+		slug: text('slug').notNull(),
 		name: text('name').notNull(),
 		gridJson: jsonb('grid_json').$type<string[][]>().notNull(),
 		style: text('style').$type<ChartStyle>().notNull(),
@@ -420,7 +450,13 @@ export const charts = pgTable(
 		lyricsJson: jsonb('lyrics_json').$type<string[][]>(),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
-	(t) => [index('charts_slug_idx').on(t.slug)]
+	(t) => [
+		index('charts_slug_idx').on(t.slug),
+		uniqueIndex('charts_user_slug_unique').on(t.userId, t.slug),
+		uniqueIndex('charts_shared_slug_unique')
+			.on(t.slug)
+			.where(sql`${t.userId} is null`)
+	]
 );
 
 /**

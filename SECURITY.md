@@ -12,18 +12,24 @@ available.
 
 ## What this software is
 
-A self-hosted practice tool. There is no hosted service, no multi-tenancy and
-no user accounts. Each deployment belongs to whoever runs it, and the operator
-is responsible for their own instance.
+A self-hosted practice tool with invite-only accounts. There is no public hosted
+service and no self-registration. The operator provisions the people they trust
+and is responsible for their instance.
 
 ## The threat model, honestly
 
-**Authentication is a single shared password.** `APP_PASSWORD` gates the whole
-app and `AUTH_SECRET` signs the session cookie. There are no accounts, no
-roles, no password reset and no rate limiting. This is adequate for a personal
-instance on a URL nobody has guessed, and it is not adequate for anything else.
-Do not put data you care about behind it, and do not deploy it as a shared
-service without adding real authentication first.
+**Authentication is per account.** Email addresses identify accounts; passwords
+are hashed with versioned scrypt parameters, and `AUTH_SECRET` signs a 90-day
+cookie containing the account and its revocation epoch. Changing a password or
+choosing “sign out everywhere” invalidates every existing cookie for that
+account. Cards, sessions, settings, custom charts and the playing record are all
+scoped to the resolved account.
+
+**This is a family beta, not public account infrastructure.** There is no
+self-registration, password-reset email, sign-in rate limiting, role system, or
+account export/deletion interface yet. Accounts are provisioned by the operator
+with `npm run account:create`. That is appropriate for a few known people and
+is not sufficient for opening registration to strangers or taking payment.
 
 **Secrets live in environment variables.** Never commit a `.env`. The committed
 `.env.example` contains placeholders only, and `.env*` is gitignored.
@@ -35,6 +41,6 @@ and since M9 a log of every run of the play-along transport and every chord it
 judged — nothing sensitive by design, but it is still yours, and there is more of
 it than there used to be. Back it up like anything else.
 
-If you find something that lets one deployment's data reach another, or that
-bypasses the password gate, that is a real vulnerability and we would like to
-hear about it.
+If you find something that lets one account read or change another account's
+data, or that bypasses sign-in, that is a real vulnerability and we would like
+to hear about it.

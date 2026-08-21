@@ -6,9 +6,10 @@ import {
 	parsePrefs,
 	parseWheelConfig
 } from '$lib/settings-validate';
+import { currentUserId } from '$lib/server/db/user';
 
 /**
- * Patch the singleton settings row.
+ * Patch the signed-in account's settings row.
  *
  * Both callers — wheel calibration and the colour editor — send only the part
  * they own, so neither can undo the other's work by saving a stale copy of the
@@ -28,7 +29,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const patch = body as Record<string, unknown>;
 
 	try {
-		const saved = await saveSettings({
+		const saved = await saveSettings(currentUserId(locals.userId), {
 			...(patch.wheelConfig !== undefined
 				? { wheelConfig: parseWheelConfig(patch.wheelConfig) }
 				: {}),
