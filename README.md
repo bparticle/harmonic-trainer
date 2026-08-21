@@ -183,6 +183,8 @@ src/
       vocabulary.ts  What a tune asks of your hands, and what the ladder and
                      the progressions have taught. Both derived, so a mission
                      is never set on chords nobody has been shown
+      walk.test.ts   The climb, counted: how much of the songbook opens at
+                     each step. Meant to be read when it fails
       charts.ts      Forms, cycles, public-domain standards and traditionals,
                      as numerals, with the words where a tune is sung
       import.ts      Chord symbols you type in, stored as numerals
@@ -315,10 +317,12 @@ scoring against the sounding chord, the chart following the music, streaks and
 badges, the suggested scales drawn on a keyboard, and every key in them named
 with its degree. `DECISIONS.md` has the reasoning for each.
 
-Since M16, also unnumbered and both from playing the thing: a **readiness gate**,
-so a mission is only ever set on a tune whose chords have been taught, and a
-**badge that waits for the form** to have been round before it lands. What each
-of them left open is in `ROADMAP.md` under _What the readiness gate left open_.
+Since M16, also unnumbered and all of it from playing the thing: a **readiness
+gate**, so a mission is only ever set on a tune whose chords have been taught; a
+**badge that waits for the form** to have been round before it lands; and **the
+songbook** — a room of its own for finding a tune and writing one down, which
+used to be a sidebar and an editor standing in the practice area. What is still
+open is in `ROADMAP.md` under _What the readiness gate left open_.
 
 ### Planned
 
@@ -396,11 +400,13 @@ it. Missions are aimed at what the record shows you avoiding, which is how
 twelve keys stop being four.
 
 **And only ever at a tune you have been taught the chords of.** Each chart
-derives its own demand from its grid — the shapes it uses, and how far it stands
-from the key — and the ladder and the progression library derive what they have
-taught. Where the second does not cover the first there is no mission, and the
-workout says which tune is nearest, what it wants and where that is taught,
-rather than sending you to a cycle of chords nobody has mentioned.
+derives its own demand from its grid — the shapes it uses, and the ways it leaves
+the key — and the ladder and the progression library derive what they have
+taught. The ladder teaches shapes and never leaves a key; the library teaches the
+four ways out of one, a level each. Where what you know does not cover what a
+tune asks there is no mission, and the workout says which tune is nearest, what
+it wants and where that is taught, rather than sending you to a cycle of chords
+nobody has mentioned.
 
 Short, standard and long are three, four and five tasks. Minutes were always an
 estimate; tasks are countable, which is why the home screen can show exactly

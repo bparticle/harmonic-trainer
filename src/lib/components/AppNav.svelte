@@ -8,7 +8,7 @@
 	/*
 	 * One header, everywhere.
 	 *
-	 * The same three destinations in the same order on every screen, with the
+	 * The same five destinations in the same order on every screen, with the
 	 * current one marked. Pages used to carry their own headers with different
 	 * links in different places, which made moving around feel like moving
 	 * between separate tools rather than around one.
@@ -24,6 +24,7 @@
 		{ href: '/', label: 'Today' },
 		{ href: '/play', label: 'Play' },
 		{ href: '/backing', label: 'Play along' },
+		{ href: '/songbook', label: 'Songbook' },
 		{ href: '/explore', label: 'Explore' }
 	];
 
