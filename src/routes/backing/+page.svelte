@@ -14,6 +14,7 @@
 
 <PlayAlong
 	mine={data.mine}
+	ready={data.ready}
 	{form}
 	colorMap={data.settings.colorMap}
 	record={data.record}

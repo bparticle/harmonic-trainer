@@ -92,7 +92,6 @@
 	} from '$lib/practice/tempo';
 	import { chordSymbolLabel } from '$lib/music/symbol';
 	import StreakBadges from '$lib/components/StreakBadges.svelte';
-	import ChartEditor from '$lib/components/ChartEditor.svelte';
 	import { target as sharedTarget } from '$lib/practice/target.svelte';
 	import { page } from '$app/state';
 	import { shouldHandleSpace } from '$lib/shortcuts';
@@ -130,6 +129,16 @@
 	 */
 	let {
 		mine = [] as Array<ChartSeed & { id: string }>,
+		/**
+		 * Which tunes use only chords that have been taught, by slug.
+		 *
+		 * A signpost in the list and nothing more — every entry stays clickable and
+		 * every tune stays playable in every key. What it answers is the question
+		 * the list could not: of these thirty-five, which can I actually play
+		 * today. Empty for the demo, where there is no ladder to compare against
+		 * and therefore nothing honest to say.
+		 */
+		ready = {} as Record<string, boolean>,
 		form = null,
 		colorMap,
 		demo = false,
@@ -181,18 +190,18 @@
 	// svelte-ignore state_referenced_locally
 	let slug = $state(initialSeed.slug);
 	/*
-	 * The editor is one component doing two jobs: writing a chart down and
-	 * changing one you already have. `editing` says which, and a refused save
-	 * carries the id back so a rejected edit reopens as an edit rather than
-	 * silently turning into a second copy of the tune.
+	 * Writing a chart down is not something that happens here any more.
+	 *
+	 * The editor used to open *in the practice area*, replacing the chart, the
+	 * transport and the score with a grid of text boxes, reached by a small link
+	 * at the bottom of the chart list. It worked, and it read as bolted on,
+	 * because two different activities were sharing one screen for want of
+	 * anywhere else to put the second. It lives on `/songbook` now, along with
+	 * the actions that save and delete — see the note at the top of that page.
+	 *
+	 * What stays here is the list. Choosing the next tune mid-sitting is part of
+	 * practising; cataloguing is not.
 	 */
-	// svelte-ignore state_referenced_locally
-	let editing = $state<(ChartSeed & { id: string }) | null>(
-		form?.id ? (mine.find((c) => c.id === form.id) ?? null) : null
-	);
-	// svelte-ignore state_referenced_locally
-	let importing = $state(Boolean(form) && !form?.id);
-	let confirmingDelete = $state(false);
 
 	// A chart with a home key opens in it; a form has none and opens in C. A
 	// mission names what it names and leaves the rest alone — its tempo is a floor
@@ -652,29 +661,6 @@
 	 * stored: opening a chart and saving it again without touching anything must
 	 * not move a single chord.
 	 */
-	function chartAsTyped(seed: ChartSeed): string {
-		return realiseChart(seed, seed.defaultKey ?? 'C')
-			.rows.map((row) => row.map((bar) => bar.chords.map((c) => c.symbol).join(' ')).join(' | '))
-			.join('\n');
-	}
-
-	const editorInitial = $derived(
-		form ??
-			(editing
-				? {
-						name: editing.name,
-						text: chartAsTyped(editing),
-						key: editing.defaultKey ?? 'C',
-						mode: editing.mode,
-						bpm: editing.defaultBpm,
-						groove: editing.defaultGroove,
-						lyrics: editing.lyrics,
-						// `load` shows 'Yours.' where a chart has no notes. It is a placeholder
-						// on the way out and must not become real text on the way back in.
-						notes: editing.notes === 'Yours.' ? '' : editing.notes
-					}
-				: null)
-	);
 	const chart = $derived(realiseChart(seed, keyName));
 	const bars = $derived(chart.rows.flat());
 	const homeKey = $derived(makeKey(keyName, seed.mode === 'minor' ? 'aeolian' : 'ionian'));
@@ -1558,8 +1544,6 @@
 		pinnedChord = 0;
 		followPlayback = true;
 		pinnedBar = 1;
-		confirmingDelete = false;
-		editing = null;
 		loopFrom = null;
 		loopTo = null;
 		// A score against a tune you have moved on from is just a stale number.
@@ -1657,13 +1641,14 @@
 									type="button"
 									class="entry"
 									class:is-on={option.slug === slug}
+									class:is-waiting={ready[option.slug] === false}
 									onclick={() => chooseChart(option.slug)}
 								>
 									<span class="entry-name">{option.name}</span>
 									<span class="entry-meta">
 										{option.grid.flat().length} bars{option.published
 											? ` · ${option.published}`
-											: ''}
+											: ''}{ready[option.slug] === false ? ' · not yet' : ''}
 									</span>
 								</button>
 							</li>
@@ -1672,41 +1657,15 @@
 				{/each}
 
 				{#if !demo}
-					<button type="button" class="entry mt-2" onclick={() => (importing = !importing)}>
-						<span class="entry-name">+ Add a chart</span>
-						<span class="entry-meta">type in what is on the page</span>
-					</button>
+					<a class="entry mt-2" href="/songbook">
+						<span class="entry-name">Songbook →</span>
+						<span class="entry-meta">search, filter, and write one down</span>
+					</a>
 				{/if}
 			</aside>
 		{/if}
 
 		<section>
-			{#if importing || editing}
-				<!-- Typing is fine here: this is setting up, not practising. -->
-				<ChartEditor
-					keys={KEYS}
-					{keyLabel}
-					initialKey={keyName}
-					initial={editorInitial}
-					editing={editing ? { id: editing.id, name: editing.name } : null}
-					onCancel={() => {
-						importing = false;
-						editing = null;
-					}}
-				/>
-
-				{#if form?.problems?.length}
-					<div role="alert" class="border-ground-line mb-5 rounded-lg border p-3">
-						<p class="mb-1 text-sm font-semibold">The save was refused:</p>
-						<ul class="flex flex-col gap-0.5">
-							{#each form.problems as problem (problem)}
-								<li class="text-ink-muted font-mono text-xs">{problem}</li>
-							{/each}
-						</ul>
-					</div>
-				{/if}
-			{/if}
-
 			<div class="tonal-centre">
 				<span class="study-kicker">Harmonic map</span>
 				<strong>Main key: {formatStudyKey(homeKey)}</strong>
@@ -1802,34 +1761,10 @@
 					{/if}
 				</span>
 				{#if mineSeed}
-					{#if !confirmingDelete && !editing}
-						<button
-							type="button"
-							class="ml-auto rounded-md px-2 py-1 underline"
-							onclick={() => {
-								editing = mineSeed;
-								confirmingDelete = false;
-							}}>edit this chart</button
-						>
-					{/if}
-					{#if confirmingDelete}
-						<form method="POST" action="?/remove" class="ml-auto flex flex-wrap items-center gap-2">
-							<span>Delete {seed.name}?</span>
-							<input type="hidden" name="id" value={mineId} />
-							<button class="rounded-md px-2 py-1 underline">Yes, delete</button>
-							<button
-								type="button"
-								class="rounded-md px-2 py-1 underline"
-								onclick={() => (confirmingDelete = false)}>Cancel</button
-							>
-						</form>
-					{:else}
-						<button
-							type="button"
-							class="rounded-md px-2 py-1 underline"
-							onclick={() => (confirmingDelete = true)}>delete this chart</button
-						>
-					{/if}
+					<!-- Changing a chart is cataloguing, and cataloguing has a room now. -->
+					<a class="ml-auto rounded-md px-2 py-1 underline" href="/songbook"
+						>edit this chart in the songbook</a
+					>
 				{/if}
 			</div>
 
@@ -2472,6 +2407,18 @@
 
 	.entry.is-on .entry-name {
 		color: var(--color-ink);
+	}
+
+	/*
+	 * A tune whose chords have not been taught yet.
+	 *
+	 * One step dimmer and nothing else — no padlock, no strikethrough, no colour,
+	 * and the entry stays clickable. It is a note about where you are on the
+	 * ladder, not a rule about what you may open, and the songbook next door says
+	 * which chord is in the way.
+	 */
+	.entry.is-waiting:not(.is-on) .entry-name {
+		color: var(--color-ink-dim);
 	}
 
 	.entry-meta {

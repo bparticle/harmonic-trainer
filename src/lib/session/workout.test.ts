@@ -469,21 +469,9 @@ describe('one new thing', () => {
 
 	it('gives the slot to a mission when there is genuinely nothing new left', () => {
 		const everything = {
-			progressions: [
-				'I-IV-V-I',
-				'I-V-vi-IV',
-				'i-iv-v-i',
-				'I-vi-ii-V',
-				'vi-ii-V-I',
-				'ii-V-I',
-				'ii-V-i-minor',
-				'blues-basic',
-				'blues-quick',
-				'secondary-dominant',
-				'borrowed-four',
-				'tritone-sub',
-				'backdoor'
-			],
+			// Derived rather than listed: a hand-typed copy of the library goes stale
+			// the day somebody adds a progression to it, which is how this test broke.
+			progressions: PROGRESSIONS.map((progression) => progression.id),
 			grooves: [
 				'swing',
 				'straight',
@@ -780,7 +768,7 @@ describe('the mission only lands on a tune you have been taught', () => {
 			});
 			for (const mission of missions(workout)) {
 				const chart = MISSION_CHARTS.find((c) => c.slug === mission.chartSlug)!;
-				expect(chart.demand.ground, `${chart.slug} on day ${d}`).toBe('in_key');
+				expect(chart.demand.devices, `${chart.slug} on day ${d}`).toEqual([]);
 			}
 		}
 	});

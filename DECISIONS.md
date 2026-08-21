@@ -3859,3 +3859,134 @@ What it is now needs no plan to describe it: `/demo` is public in
 built-in charts out of code and the default palette out of `$lib/settings`, and
 it writes nothing anywhere. Not a mock-up and not a video — the same page, with
 the record turned off.
+
+---
+
+## The curriculum, counted — and a room for the songbook
+
+Three things in one pass, and they turned out to be one thing: making readiness
+real exposed how lumpy the material behind it was, and fixing that needed more
+material, which needed somewhere to put it.
+
+### Counting beat arguing
+
+The gate shipped and the roadmap recorded a suspicion that one step out of the
+key might be a cliff. Rather than argue about it, the climb was walked and
+counted — how many of the songbook's tunes are open at each rung of the ladder
+and then each level of the progression library:
+
+```
+1 → 3 → 5 → 5 → 5 → 5 → 5 → 16 → 16 → 23
+```
+
+Five tunes for the whole ladder plus seven progressions. Then **eleven at once**,
+then **seven at once**. Two progressions carried eighteen of the twenty-three
+tunes, and the second of them was the last item in the library.
+
+Nothing was broken. The curriculum was lumpy, nothing measured it, and so nobody
+knew. That number is now a test — `walk.test.ts` — and its header says it is
+meant to be read when it fails, because a failure means the material moved rather
+than that something is wrong.
+
+### An ordered scale was the wrong shape for the thing being described
+
+The cause was in the model. A tune's distance from its key was `in_key <
+coloured < off_key`, three ordered steps — so crossing one opened every tune
+sitting on it, and whichever progression happened to sit behind the crossing
+became the only one that mattered.
+
+The mistake was assuming these things are ordered. They are not. A tune full of
+borrowed chords is not harder or easier than one full of secondary dominants; it
+is a **different thing to learn**. So it became a set of four named devices,
+exactly as the shapes already were:
+
+- `blues` — a dominant seventh on I or IV, where the key asks for neither.
+- `borrowed` — a chord from the parallel key: the minor iv, the ♭VII, the ♭VImaj7.
+- `secondary` — a dominant aimed at a degree of the key other than the tonic.
+- `chromatic` — a chord belonging to neither parallel key and resolving to
+  nothing inside it.
+
+The order of the tests in `deviceOf` is the argument: everything in the key is no
+device at all; everything in the _parallel_ key is borrowed, checked before
+anything else because the parallel key is a real place a tune goes rather than a
+coincidence — that is what makes ♭VII7 the backdoor dominant instead of a
+chromatic accident. Only then do the dominants split, by where they resolve.
+
+The progression library was re-levelled to match, and now says something rather
+than describing something: levels one to three are movement _inside_ a key, and
+levels four to seven are one device each. A test asserts that — if a level ever
+holds two devices, the gate has quietly moved back to where it was.
+
+### The rest was a shortage of tunes, not a shortage of model
+
+Even with the model fixed, the early bands were thin: the whole ladder opened
+five tunes because only five were `in_key`. That is a content problem and it took
+content to fix.
+
+Twelve tunes went in, chosen for the bands that had none rather than for being
+good — though they are: three of nothing but major triads so the second rung of
+the first key has something, four adding the minor triads and the sevenths, a
+mixolydian fiddle tune and House of the Rising Sun for the borrowed step, and
+three eight- and twelve-bar blues for the blues step.
+
+**On the licence**, since it is the question that decides whether a tune can be
+here at all. Ten are traditional — no author to credit and none to clear, which
+is what that category _is_. Two are standards with the year recorded so the claim
+can be checked: Trouble in Mind, 1924, and How Long, How Long Blues, 1928, both
+comfortably inside the file's own rule of US publication in 1930 or earlier.
+Berger and Israels' Public Domain Song Anthology, 348 songs released CC0, was
+used to corroborate public-domain status; the harmonisations here are the
+ordinary ones anybody plays rather than anybody's arrangement. Every one of the
+twelve was run through the songbook skill's round-trip check before it was
+written down, and all twelve come back through the numerals unchanged.
+
+The climb is now **3, 7, 12, 15, 20, 28, 35**.
+
+Two bands still open nothing, and both are honest: the very first rung, where you
+know seven notes and no chord shape, and levels one to three of the library,
+which teach movement through chords the ladder has already taught. The second is
+asserted rather than tolerated, so nobody later reads it as a bug.
+
+### The songbook gets a room
+
+Thirty-five built-in tunes is past the point where a list is something you read.
+It becomes something you scroll past — and the list lived in a collapsible
+sidebar on the play-along page, with **the chart editor opening inside the
+practice area**: writing a tune down replaced the chart, the transport and the
+score with a grid of text boxes, reached by a small link at the bottom of the
+list.
+
+It read as bolted on because it was. Two activities were sharing one screen for
+want of anywhere else to put the second.
+
+They are separated by **what you are doing** rather than by what they operate on.
+`/backing` is for playing, and keeps its list, because choosing the next tune
+mid-sitting is part of practising. `/songbook` is for finding and for writing
+down — both things you do with your hands off the keys. The three chart actions
+moved with the editor, unchanged; the redirect after a save still lands on the
+play-along page with the tune open, because you typed it in in order to play it.
+
+The list narrows by words, by kind, by the rhythm section a tune opens with, and
+by whether you can play it. The filter chips are derived from the entries rather
+than from the vocabularies — a filter offering a choice that empties the list is
+a filter that has lied to you once.
+
+### Readiness is a signpost and never a lock
+
+The same fact the workout uses to place a mission is now visible where tunes are
+chosen — the question the list previously could not answer at all was _which of
+these can I actually play today_.
+
+Three rules it obeys, and they are the whole design:
+
+- **Every tune stays open.** In every key, whatever the ladder says. Nothing here
+  is disabled, greyed out, or behind a padlock.
+- **It says what, not no.** A tune you are not ready for reads _wants minor,
+  blues sevenths_ — the next thing to learn rather than a closed door.
+- **Weight, never hue.** Hue means pitch everywhere in this app and a tune is not
+  a pitch. Ready is full ink, not-yet is dim ink, and nothing anywhere is red.
+
+The play-along sidebar carries the same mark as a single quiet `· not yet`, and
+the entry stays clickable. The gate steers what is **offered**; it has never
+gated what you may **play**, and this was the change most able to break that
+promise by accident.

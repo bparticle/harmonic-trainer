@@ -377,111 +377,46 @@ because it is the half most likely to be discovered late:
 
 ## What the readiness gate left open
 
-A mission is now set only on a tune whose chord shapes have been taught and whose
-distance from the key has been travelled — `curriculum/vocabulary.ts`, with the
-reasoning in `DECISIONS.md` under _The gap between the two rooms_. It shipped
-unnumbered, in answer to being sent to a three-tonic cycle on the second rung of
-the first key.
-
-Five things it does not do, recorded here rather than left to be rediscovered.
-The first is the one to act on.
-
-### Two cliffs, and a long flat stretch — measured, not guessed
-
-Walking the ladder rung by rung and then the progression library level by level,
-counting how many of the twenty-three built-in tunes are open at each step:
-
-```
- 0  rung: scale
- 1  rung: tonic-triad          + linstead-market
- 1  rung: primary-triads
- 3  rung: all-triads           + four-chord-loop, doo-wop
- 3  rung: tonic-seventh
- 5  rung: all-sevenths         + st-james-infirmary, mango-walk
- 5  rung: relative-minor
- 5  L1 ×3, L2 ×2, L3 ×2        (nothing)
-16  L4: blues-basic            + eleven tunes at once
-16  L4: blues-quick
-16  L5: secondary-dominant
-16  L5: borrowed-four
-23  L5: tritone-sub            + seven tunes at once
-23  L5: backdoor
-```
-
-Three things are wrong with that shape and none of them is the gate's arithmetic.
-
-**The whole of the ladder plus levels one to three opens five tunes.** Seven
-rungs, twelve keys and seven progressions — months of material — and the
-play-along library barely moves. Everything the ladder teaches is `in_key` by
-construction, so the four fifths of the book that leave the key are all waiting
-on one thing.
-
-**`blues-basic` opens eleven tunes in one step and `tritone-sub` opens seven.**
-Two progressions carry eighteen of the twenty-three. That is not a curriculum, it
-is a lock with two keys, and the second is the last item in the library.
-
-**Seven library items and one rung unlock nothing at all.** The level 1–3
-progressions are diatonic, so they add no shape the rungs have not; the relative
-minor teaches the minor triad `all-triads` already gave.
-
-The fix is in the material rather than in `vocabulary.ts`, and the shape of it is
-to spread the `coloured` and `off_key` steps out. Concretely: the secondary
-dominant is a gentler first step outside the key than the blues is and sits at
-level 5 today; the borrowed iv is gentler still. Moving those two down and
-letting each open two or three tunes rather than none would turn the eleven-tune
-jump into three smaller ones. Nothing about the gate changes; the library gets
-re-levelled, and the walk above is the test of whether it worked.
-
-Worth being honest that this was true before the gate existed and invisible — a
-mission could be set on any of the twenty-three from day one, so the library's
-levelling never had to mean anything. Making readiness real is what turned the
-levels into a curriculum, and the curriculum is lumpy.
+A mission is set only on a tune whose chord shapes have been met and whose ways
+out of the key have been travelled — `curriculum/vocabulary.ts`, with the
+reasoning in `DECISIONS.md`. Five things were recorded here when it shipped.
+Three have since been dealt with and are written up there; two are still open,
+and one of them cannot be closed from a keyboard.
 
 ### The curriculum above the early rungs is unproven by playing
 
-The tests prove the gate is _consistent_: nothing in the book is permanently
-stuck once every rung and progression is met, no progression below level four
-leaves the key, and the ready pool is ordered plainest-first. None of that proves
-each step **feels** like one step, and only playing through the ladder can.
+The tests prove the gate is _consistent_ and `walk.test.ts` proves the climb has
+no cliff in it. Neither proves each step **feels** like one step, and only
+playing through the ladder can.
 
 The failure to watch for is a tune arriving that is one shape too big. When it
-happens the diagnosis is one of two things and the gap report says which: a fold
-in `shapeOf` being too generous — a sixth chord counted as its triad, a
-fully-diminished seventh counted as the vii° — or a rung being credited with more
-than it teaches. Both are one-line changes with a test beside them; what is not
-cheap is noticing, so the thing to keep is a note of which tune and which chord.
+happens the diagnosis is one of two things and the songbook's own _wants_ line
+says which: a fold in `shapeOf` being too generous — a sixth chord counted as its
+triad, a fully-diminished seventh counted as the vii° — or a rung being credited
+with more than it teaches. Both are one-line changes with a test beside them;
+what is not cheap is noticing, so the thing to keep is a note of which tune and
+which chord.
 
-### A chart you typed in yourself can be permanently unready
+### Two shapes are still taught by nothing
 
-Nothing anywhere teaches `minMaj`, `augmented` or `suspended`, and a symbol the
-parser cannot read takes the `unknown` shape, which nothing teaches by
-definition. A tune of your own using any of them is never _set_ as a mission. It
-is still in the list and still playable by hand, so this is a smaller problem
-than it sounds — but it is a real one, and the two honest answers pull in
-opposite directions:
+`sus-resolution` and `line-cliche` were added to the library and between them
+closed the suspended chord and the minor-major seventh. What remains unteachable
+is the **augmented triad**, and the `unknown` shape a numeral this app cannot
+parse takes. A chart of your own using either is never _set_ as a mission,
+though it stays in the songbook and stays playable.
 
-- **Teach them.** A rung or a progression covering the minor-major and the
-  augmented, which is real material and would also unlock nothing currently in
-  the book. Cost: the ladder grows for a case almost nobody hits.
-- **Let a chart of your own opt out.** You typed it in, so you presumably know
-  what is in it. Cost: the gate stops meaning one thing, and _yours_ becomes a
-  hole in a rule whose whole value is having no holes.
+Two honest answers, pulling opposite ways, and no evidence yet to choose between
+them:
 
-Undecided on purpose. The deciding evidence is whether anybody actually types one
-in, which the record will show.
+- **Teach it.** One more progression carrying the augmented triad — `I – I+ – IV`
+  is the obvious one and is real material. Cost: the library grows for a case
+  almost nobody hits.
+- **Let a chart of your own opt out.** You typed it in, so you know what is in
+  it. Cost: the gate stops meaning one thing, and _yours_ becomes a hole in a
+  rule whose whole value is having no holes.
 
-### Nothing shows readiness where tunes are chosen
-
-The demand is computed for every chart and read only by the composer. The
-play-along page lists all of them undifferentiated, so somebody browsing has no
-way to tell which are within reach — and the workout's held-back note names one
-tune at a time. Marking the list with what a tune wants is cheap, since
-`shortfall` and `describeShortfall` already produce the sentence.
-
-The thing to be careful about is tone. This must not become a locked list with
-padlocks on it: every chart stays openable by hand, and the mark says _wants a
-dominant seventh_, not _not available_. The gate steers what is **offered**; it
-has never gated what you may **play**, and it must not start.
+The deciding evidence is whether anybody writes one down, which the record will
+show.
 
 ### A note on stored verdicts
 

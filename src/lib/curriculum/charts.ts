@@ -450,7 +450,218 @@ export const CHARTS: ChartSeed[] = [
 			'Sixteen bars of ragtime, and about as plain as a chart gets. Worth having because the I–VI–II–V at the end is the turnaround you will play for the rest of your life.'
 	},
 
+	{
+		slug: 'trouble-in-mind',
+		name: 'Trouble in Mind',
+		style: 'blues',
+		category: 'standard',
+		mode: 'major',
+		defaultBpm: 88,
+		defaultGroove: 'shuffle',
+		defaultKey: 'C',
+		published: 1924,
+		grid: [
+			['I', 'I7', 'IV', 'IV'],
+			['I', 'V7', 'I V7', 'I']
+		],
+		notes:
+			'The eight-bar blues, which is the twelve-bar with the waiting taken out: the IV arrives in bar three and you are home by bar five. Half the length means twice the changes per chorus, so it is the shortest route to getting a blues under the hands.'
+	},
+	{
+		slug: 'how-long-blues',
+		name: 'How Long, How Long Blues',
+		style: 'blues',
+		category: 'standard',
+		mode: 'major',
+		defaultBpm: 76,
+		defaultGroove: 'shuffle',
+		defaultKey: 'C',
+		published: 1928,
+		grid: [
+			['I', 'I7', 'IV', 'IV'],
+			['I', 'V7', 'I', 'I']
+		],
+		notes:
+			'The same eight bars at a slower walk and with no turnaround at the end, so the form simply comes round again. Slow enough that every chord is a decision rather than a reflex, which is the tempo most people skip.'
+	},
 	// -- Traditional: folk songs, no author to credit and none to clear --------
+	{
+		slug: 'when-the-saints',
+		name: 'When the Saints Go Marching In',
+		style: 'custom',
+		category: 'traditional',
+		mode: 'major',
+		defaultBpm: 120,
+		defaultGroove: 'straight',
+		defaultKey: 'C',
+		grid: [
+			['I', 'I', 'I', 'I'],
+			['IV', 'IV', 'I', 'I'],
+			['I', 'I', 'V', 'V'],
+			['I', 'IV', 'I V', 'I']
+		],
+		notes:
+			'Three major triads and sixteen bars, four of which are the same chord. Almost nothing to think about harmonically, which leaves the whole of your attention for playing it in time and meaning it.'
+	},
+	{
+		slug: 'swing-low',
+		name: 'Swing Low, Sweet Chariot',
+		style: 'custom',
+		category: 'traditional',
+		mode: 'major',
+		defaultBpm: 76,
+		defaultGroove: 'ballad',
+		defaultKey: 'C',
+		grid: [
+			['I', 'I', 'IV', 'I'],
+			['I', 'I', 'V', 'V'],
+			['I', 'I', 'IV', 'I'],
+			['I', 'V', 'I', 'I']
+		],
+		notes:
+			'The same three chords taken slowly, which is a different exercise entirely: at 76 there is time to hear each chord arrive, and nowhere to hide a change that lands early.'
+	},
+	{
+		slug: 'auld-lang-syne',
+		name: 'Auld Lang Syne',
+		style: 'custom',
+		category: 'traditional',
+		mode: 'major',
+		defaultBpm: 96,
+		defaultGroove: 'pop',
+		defaultKey: 'C',
+		grid: [
+			['I', 'I', 'IV', 'I'],
+			['I', 'vi', 'ii', 'V'],
+			['I', 'I', 'IV', 'I'],
+			['I', 'V', 'I', 'I']
+		],
+		notes:
+			'The first tune here to use a minor chord, and it uses two: the vi and the ii, walking down into the V. A good first look at what the minor triads of a key are actually for.'
+	},
+	{
+		slug: 'drunken-sailor',
+		name: 'Drunken Sailor',
+		style: 'custom',
+		category: 'traditional',
+		mode: 'minor',
+		defaultBpm: 132,
+		defaultGroove: 'rock',
+		defaultKey: 'D',
+		grid: [
+			['i', 'i', 'bVII', 'bVII'],
+			['i', 'i', 'bVII', 'i'],
+			['i', 'i', 'bVII', 'bVII'],
+			['i', 'bVII', 'i', 'i']
+		],
+		notes:
+			'Two chords, sixteen bars, and one of them is the flat seven — which sounds like it should be outside the key and is not: in a minor key it is the seventh chord of the scale. Dorian without the theory lesson.'
+	},
+	{
+		slug: 'wade-in-the-water',
+		name: 'Wade in the Water',
+		style: 'custom',
+		category: 'traditional',
+		mode: 'minor',
+		defaultBpm: 92,
+		defaultGroove: 'funk',
+		defaultKey: 'D',
+		grid: [
+			['i', 'i', 'i', 'i'],
+			['iv', 'iv', 'i', 'i'],
+			['i', 'i', 'V7', 'V7'],
+			['i', 'iv', 'i', 'i']
+		],
+		notes:
+			'A minor blues shape without any of the blues chords: i, iv and the V7. Eight bars of one chord to open, so the groove has to carry it — which is the whole point of playing it over a rhythm section rather than alone.'
+	},
+	{
+		slug: 'wayfaring-stranger',
+		name: 'Wayfaring Stranger',
+		style: 'custom',
+		category: 'traditional',
+		mode: 'minor',
+		defaultBpm: 72,
+		defaultGroove: 'ballad',
+		defaultKey: 'A',
+		grid: [
+			['i', 'i', 'iv', 'i'],
+			['i', 'i', 'V7', 'i'],
+			['i', 'i', 'iv', 'i'],
+			['i', 'V7', 'i', 'i']
+		],
+		notes:
+			'The minor i–iv–V, slowly. The V7 has a note from outside the minor scale — the raised seventh — and it is the only thing pulling the tune home. Worth listening for on every one of the four times it happens.'
+	},
+	{
+		slug: 'hava-nagila',
+		name: 'Hava Nagila',
+		style: 'custom',
+		category: 'traditional',
+		mode: 'minor',
+		defaultBpm: 140,
+		defaultGroove: 'straight',
+		defaultKey: 'D',
+		grid: [
+			['i', 'i', 'iv', 'iv'],
+			['V7', 'V7', 'i', 'i'],
+			['i', 'i', 'iv', 'iv'],
+			['V7', 'V7', 'i', 'i']
+		],
+		notes:
+			'The same three minor-key chords as the last one, at nearly twice the speed and two bars each. A tune to take the tempo ladder up rather than to learn anything new on.'
+	},
+	{
+		slug: 'old-joe-clark',
+		name: 'Old Joe Clark',
+		style: 'custom',
+		category: 'traditional',
+		mode: 'major',
+		defaultBpm: 132,
+		defaultGroove: 'straight',
+		defaultKey: 'A',
+		grid: [
+			['I', 'I', 'bVII', 'bVII'],
+			['I', 'I', 'V', 'I'],
+			['I', 'I', 'bVII', 'bVII'],
+			['I', 'V', 'I', 'I']
+		],
+		notes:
+			'A fiddle tune in mixolydian: major key, flat seventh, and no leading note anywhere. The ♭VII is borrowed from the parallel minor and it is the entire sound of the tune — play the same sixteen bars with a vii° instead and it stops being folk music.'
+	},
+	{
+		slug: 'house-of-the-rising-sun',
+		name: 'House of the Rising Sun',
+		style: 'custom',
+		category: 'traditional',
+		mode: 'minor',
+		defaultBpm: 72,
+		defaultGroove: 'ballad',
+		defaultKey: 'A',
+		grid: [
+			['i', 'bIII', 'IV', 'bVI'],
+			['i', 'V', 'i', 'V']
+		],
+		notes:
+			'Eight bars that climb away from the tonic and fall back to it. The IV is major where the key wants it minor — one note borrowed from the parallel key — and that single note is why the progression has outlived everybody who ever sang it.'
+	},
+	{
+		slug: 'midnight-special',
+		name: 'The Midnight Special',
+		style: 'blues',
+		category: 'traditional',
+		mode: 'major',
+		defaultBpm: 116,
+		defaultGroove: 'shuffle',
+		defaultKey: 'C',
+		grid: [
+			['I', 'I', 'I', 'I7'],
+			['IV', 'IV', 'I', 'I'],
+			['V7', 'V7', 'I', 'I']
+		],
+		notes:
+			'A twelve-bar with only one blues seventh in it, sitting in bar four where it turns the tonic into a dominant and pushes you into the IV. The gentlest possible introduction to the chord that makes a blues a blues.'
+	},
 	{
 		slug: 'mango-walk',
 		name: 'Mango Walk',
