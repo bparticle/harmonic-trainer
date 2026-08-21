@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { connectMidi, forgetMidi, midi } from '$lib/midi/shared.svelte';
 	import type { Prefs } from '$lib/settings';
+	import InfoHint from './InfoHint.svelte';
 
 	/*
 	 * The cog.
@@ -33,7 +34,7 @@
 			const device = midi.devices.find((d) => d.id === midi.selectedId);
 			return device ? device.name : 'no device';
 		}
-		if (midi.status === 'requesting') return 'asking…';
+		if (midi.status === 'requesting') return 'permission…';
 		if (midi.status === 'idle') return 'not connected';
 		return 'unavailable';
 	});
@@ -127,18 +128,13 @@
 							</select>
 						</label>
 					{:else}
-						<p class="text-ink-dim font-mono text-xs">
-							Connected, but nothing is plugged in. Switch the piano on and it will appear.
-						</p>
+						<p class="text-ink-dim font-mono text-xs">No keyboard found. Switch it on.</p>
 					{/if}
 				{:else if midi.status === 'idle'}
 					<button
 						class="bg-ink text-ground w-full rounded px-3 py-2 text-sm font-semibold"
 						onclick={connectMidi}>Connect a keyboard</button
 					>
-					<p class="text-ink-dim mt-2 text-[0.7rem] leading-relaxed">
-						The browser will ask permission once, then remember it.
-					</p>
 				{:else if midi.status === 'requesting'}
 					<p class="text-ink-dim font-mono text-xs">Waiting for permission…</p>
 				{:else}
@@ -146,7 +142,7 @@
 					{#if midi.status === 'denied'}
 						<button
 							class="border-ground-line hover:border-ink-dim mt-2 w-full rounded border px-3 py-1.5 font-mono text-xs transition-colors"
-							onclick={connectMidi}>try again</button
+							onclick={connectMidi}>Try again</button
 						>
 					{/if}
 				{/if}
@@ -161,11 +157,19 @@
 			<hr class="border-ground-line my-4" />
 
 			<section class="flex flex-col gap-3">
-				<label class="block">
+				<div class="block">
 					<span class="text-ink-dim mb-1 flex justify-between font-mono text-[0.7rem]">
-						<span>reveal delay</span><span>{(draft.revealDelayMs / 1000).toFixed(1)}s</span>
+						<span class="flex items-center gap-1.5">
+							<label for="settings-reveal-delay">Reveal delay</label>
+							<InfoHint
+								label="About reveal delay"
+								text="Time to name a chord before the answer appears."
+							/>
+						</span>
+						<span>{(draft.revealDelayMs / 1000).toFixed(1)}s</span>
 					</span>
 					<input
+						id="settings-reveal-delay"
 						type="range"
 						min="0"
 						max="6000"
@@ -173,16 +177,21 @@
 						bind:value={draft.revealDelayMs}
 						class="w-full"
 					/>
-					<span class="text-ink-dim mt-1 block text-[0.65rem]"
-						>Time to name the chord before its answer appears.</span
-					>
-				</label>
+				</div>
 
-				<label class="block">
+				<div class="block">
 					<span class="text-ink-dim mb-1 flex justify-between font-mono text-[0.7rem]">
-						<span>chord window</span><span>{draft.chordClusterWindowMs} ms</span>
+						<span class="flex items-center gap-1.5">
+							<label for="settings-chord-window">Chord window</label>
+							<InfoHint
+								label="About chord window"
+								text="How close notes must land to count as one chord."
+							/>
+						</span>
+						<span>{draft.chordClusterWindowMs} ms</span>
 					</span>
 					<input
+						id="settings-chord-window"
 						type="range"
 						min="30"
 						max="250"
@@ -190,16 +199,18 @@
 						bind:value={draft.chordClusterWindowMs}
 						class="w-full"
 					/>
-					<span class="text-ink-dim mt-1 block text-[0.65rem]"
-						>How close together notes must land to count as one chord.</span
-					>
-				</label>
+				</div>
 
-				<label class="block">
+				<div class="block">
 					<span class="text-ink-dim mb-1 flex justify-between font-mono text-[0.7rem]">
-						<span>midi latency</span><span>{draft.midiLatencyOffsetMs} ms</span>
+						<span class="flex items-center gap-1.5">
+							<label for="settings-midi-latency">MIDI latency</label>
+							<InfoHint label="About MIDI latency" text="Offsets timing from a delayed device." />
+						</span>
+						<span>{draft.midiLatencyOffsetMs} ms</span>
 					</span>
 					<input
+						id="settings-midi-latency"
 						type="range"
 						min="-200"
 						max="200"
@@ -207,19 +218,16 @@
 						bind:value={draft.midiLatencyOffsetMs}
 						class="w-full"
 					/>
-					<span class="text-ink-dim mt-1 block text-[0.65rem]"
-						>Shift incoming timing to compensate for device delay.</span
-					>
-				</label>
+				</div>
 
 				<div>
-					<span class="text-ink-dim mb-1 block font-mono text-[0.7rem]">session length</span>
+					<span class="text-ink-dim mb-1 block font-mono text-[0.7rem]">Default workout</span>
 					<div class="flex gap-1">
-						{#each [10, 20, 35] as const as minutes (minutes)}
+						{#each [[10, 'short'], [20, 'standard'], [35, 'long']] as const as [minutes, label] (minutes)}
 							<button
 								class="border-ground-line hover:border-ink-dim flex-1 rounded border px-2 py-1 font-mono text-xs transition-colors"
 								class:is-selected={draft.sessionLengthMinutes === minutes}
-								onclick={() => (draft.sessionLengthMinutes = minutes)}>{minutes}</button
+								onclick={() => (draft.sessionLengthMinutes = minutes)}>{label}</button
 							>
 						{/each}
 					</div>
@@ -237,12 +245,12 @@
 				<a
 					href="/settings/wheel"
 					class="text-ink-dim hover:text-ink px-2 font-mono text-[0.7rem] transition-colors"
-					onclick={() => (open = false)}>wheel</a
+					onclick={() => (open = false)}>Wheel</a
 				>
 				<a
 					href="/settings/colours"
 					class="text-ink-dim hover:text-ink px-2 font-mono text-[0.7rem] transition-colors"
-					onclick={() => (open = false)}>colours</a
+					onclick={() => (open = false)}>Colours</a
 				>
 			</div>
 
@@ -262,7 +270,7 @@
 			{#if midi.status === 'ready'}
 				<button
 					class="text-ink-dim hover:text-ink mt-3 font-mono text-[0.65rem] transition-colors"
-					onclick={forgetMidi}>stop reconnecting automatically</button
+					onclick={forgetMidi}>Forget keyboard</button
 				>
 			{/if}
 		</div>

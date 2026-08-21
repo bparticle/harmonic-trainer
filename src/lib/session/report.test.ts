@@ -66,7 +66,7 @@ describe('what a workout has to show for itself', () => {
 		const report = reportWorkout(input({ tasksFinished: 1 }));
 		expect(report.tasksFinished).toBe(1);
 		expect(report.tasksTotal).toBe(2);
-		expect(report.says[0]).toBe('1 of 2 tasks in Eb.');
+		expect(report.says[0]).toBe('1/2 tasks · Eb');
 	});
 
 	it('says nothing at all about accuracy when nothing was asked', () => {
@@ -78,7 +78,7 @@ describe('what a workout has to show for itself', () => {
 	it('reports accuracy as the questions that were actually graded', () => {
 		const report = reportWorkout(input({ answered: { asked: 18, correct: 14 } }));
 		expect(report.accuracy).toEqual({ asked: 18, correct: 14, percent: 78 });
-		expect(report.says[1]).toContain('14 of 18 right');
+		expect(report.says[1]).toContain('14/18 right');
 	});
 });
 
@@ -88,20 +88,20 @@ describe('against last time', () => {
 			input({ answered: { asked: 10, correct: 9 }, previous: { asked: 10, correct: 8 } })
 		);
 		expect(report.against).toEqual({ percent: 80, delta: 10 });
-		expect(report.says[1]).toContain("10 points up on last time's 80%");
+		expect(report.says[1]).toContain('+10 vs 80%');
 	});
 
 	it('says nothing about last time when there was no last time', () => {
 		const report = reportWorkout(input({ answered: { asked: 4, correct: 4 } }));
 		expect(report.against).toBeNull();
-		expect(report.says[1]).toBe('4 of 4 right — 100%.');
+		expect(report.says[1]).toBe('4/4 right · 100%');
 	});
 
 	it('states a shortfall as a distance and never as a failure', () => {
 		const report = reportWorkout(
 			input({ answered: { asked: 10, correct: 7 }, previous: { asked: 10, correct: 9 } })
 		);
-		expect(report.says[1]).toContain("20 points under last time's 90%");
+		expect(report.says[1]).toContain('−20 vs 90%');
 		expect(report.says.join(' ').toLowerCase()).not.toContain('worse');
 	});
 
@@ -109,7 +109,7 @@ describe('against last time', () => {
 		const report = reportWorkout(
 			input({ answered: { asked: 8, correct: 6 }, previous: { asked: 4, correct: 3 } })
 		);
-		expect(report.says[1]).toContain('the same as last time');
+		expect(report.says[1]).toContain('same as last');
 	});
 
 	it('refuses to compare with a workout that graded nothing', () => {
@@ -126,7 +126,7 @@ describe('what the missions said', () => {
 			input({ verdicts: [verdict(true, 'Met. 88% landed over 2 choruses.')] })
 		);
 		expect(report.missions[0].met).toBe(true);
-		expect(report.says).toContain('Jazz blues: Met. 88% landed over 2 choruses.');
+		expect(report.says).toContain('Jazz blues · Met. 88% landed over 2 choruses.');
 	});
 
 	it('names the tune the workout set, not the slug it is filed under', () => {
@@ -147,7 +147,7 @@ describe('a cold key touched', () => {
 	it('names a key the record held nothing in before today', () => {
 		const report = reportWorkout(input({ keysTouched: [{ keyCenter: 'Gb', heldBefore: 0 }] }));
 		expect(report.coldKeys).toEqual(['Gb']);
-		expect(report.says).toContain('First time in Gb. The record held nothing there before today.');
+		expect(report.says).toContain('First play in Gb.');
 	});
 
 	it('says nothing about a key the record already had something in', () => {
@@ -175,7 +175,7 @@ describe('a badge earned', () => {
 			input({ badges: [{ tier: 'fire', chartSlug: 'blues-12', count: 13 }] })
 		);
 		expect(report.badges[0].name).toBe('on fire');
-		expect(report.says).toContain('on fire — 13 in a row on blues-12. New badge.');
+		expect(report.says).toContain('on fire · 13 in a row · blues-12');
 	});
 
 	it('has nothing to say when none was won', () => {
@@ -185,6 +185,6 @@ describe('a badge earned', () => {
 
 describe('a quiet workout', () => {
 	it('says only what the rows support, and does not fill the gap', () => {
-		expect(reportWorkout(input()).says).toEqual(['2 of 2 tasks in Eb.']);
+		expect(reportWorkout(input()).says).toEqual(['2/2 tasks · Eb']);
 	});
 });

@@ -859,7 +859,7 @@ function earTask(cardIds: string[]): EarTask | null {
 	return {
 		kind: 'ear',
 		title: 'Ear',
-		instruction: `${cardIds.length} of them. Listen, then play it back or name it. Nothing here needs the screen.`,
+		instruction: `${cardIds.length} questions · listen, then play or name.`,
 		goal: { kind: 'questions', count: cardIds.length },
 		cardIds
 	};
@@ -869,17 +869,15 @@ function functionTask(cardIds: string[]): FunctionTask | null {
 	if (cardIds.length === 0) return null;
 	return {
 		kind: 'function',
-		title: 'The function',
-		instruction: `${cardIds.length} of them, and the key moves under you. Numbers, not symbols: play the chord the degree asks for, then name what you played.`,
+		title: 'Function',
+		instruction: `${cardIds.length} degrees across keys · play, then name.`,
 		goal: { kind: 'questions', count: cardIds.length },
 		cardIds
 	};
 }
 
 function missionTask(mission: Mission, chart: MissionChart | undefined): MissionTask {
-	const constraint = mission.rootless
-		? ' Hands off the roots — chord tones only, thirds and sevenths doing the work.'
-		: '';
+	const constraint = mission.rootless ? ' Rootless · thirds and sevenths only.' : '';
 	/*
 	 * Why that tempo, when it is the ladder's and not the tune's.
 	 *
@@ -889,13 +887,11 @@ function missionTask(mission: Mission, chart: MissionChart | undefined): Mission
 	 * a floor, and the sentence never claims anything is locked.
 	 */
 	const band = mission.band ? bandById(mission.band) : null;
-	const climbing = band
-		? ` That is ${band.name} on this tune — one band up from where you have held it.`
-		: '';
+	const climbing = band ? ` ${band.name} · one band up.` : '';
 	return {
 		kind: 'mission',
 		title: 'Mission',
-		instruction: `${mission.chartName} in ${mission.keyCenter}, ${mission.groove} at ${mission.bpmFloor} or faster.${climbing}${constraint}`,
+		instruction: `${mission.chartName} · ${mission.keyCenter} · ${mission.groove} · ≥${mission.bpmFloor} BPM.${climbing}${constraint}`,
 		goal: missionGoal(chart, mission),
 		mission
 	};
@@ -935,7 +931,7 @@ function noveltyLine(novelty: Novelty): string {
 		case 'groove': {
 			const groove = GROOVES.find((g) => g.id === novelty.groove);
 			return groove
-				? `Play over a ${groove.name} for once. ${groove.notes}`
+				? `New groove · ${groove.name}. ${groove.notes}`
 				: 'A rhythm section you have not played over.';
 		}
 	}

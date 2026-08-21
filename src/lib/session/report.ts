@@ -109,25 +109,25 @@ export function reportWorkout(input: ReportInput): WorkoutReport {
 	const badges = input.badges.map((badge) => ({ ...badge, name: tierName(badge.tier) }));
 
 	const says: string[] = [
-		`${input.tasksFinished} of ${tasksTotal} ${plural(tasksTotal, 'task')} in ${input.workout.keyCenter}.`
+		`${input.tasksFinished}/${tasksTotal} ${plural(tasksTotal, 'task')} · ${input.workout.keyCenter}`
 	];
 
 	if (accuracy) {
 		says.push(
-			`${accuracy.correct} of ${accuracy.asked} right — ${accuracy.percent}%${sinceLastTime(against)}`
+			`${accuracy.correct}/${accuracy.asked} right · ${accuracy.percent}%${sinceLastTime(against)}`
 		);
 	}
 
 	for (const mission of missions) {
-		says.push(`${mission.chartName}: ${mission.says}`);
+		says.push(`${mission.chartName} · ${mission.says}`);
 	}
 
 	for (const key of coldKeys) {
-		says.push(`First time in ${key}. The record held nothing there before today.`);
+		says.push(`First play in ${key}.`);
 	}
 
 	for (const badge of badges) {
-		says.push(`${badge.name} — ${badge.count} in a row on ${badge.chartSlug}. New badge.`);
+		says.push(`${badge.name} · ${badge.count} in a row · ${badge.chartSlug}`);
 	}
 
 	return {
@@ -152,13 +152,12 @@ export function reportWorkout(input: ReportInput): WorkoutReport {
  * app that tells you off, on the day you practised something hard.
  */
 function sinceLastTime(against: { percent: number; delta: number } | null): string {
-	if (!against) return '.';
-	if (against.delta === 0) return `, the same as last time.`;
+	if (!against) return '';
+	if (against.delta === 0) return ` · same as last`;
 	const points = Math.abs(against.delta);
-	const word = plural(points, 'point');
 	return against.delta > 0
-		? `, ${points} ${word} up on last time's ${against.percent}%.`
-		: `, ${points} ${word} under last time's ${against.percent}%.`;
+		? ` · +${points} vs ${against.percent}%`
+		: ` · −${points} vs ${against.percent}%`;
 }
 
 /** The tune's name as the workout wrote it down, falling back to the slug. */

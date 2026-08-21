@@ -614,7 +614,7 @@ describe('the mission', () => {
 			})
 		);
 		const task = workout.tasks.find((t) => t.kind === 'mission')!;
-		expect(task.instruction).toContain('128 or faster');
+		expect(task.instruction).toContain('≥128 BPM');
 		expect(task.instruction).toContain('one band up');
 	});
 

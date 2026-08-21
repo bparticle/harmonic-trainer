@@ -2,6 +2,7 @@
 	import { onDestroy, onMount } from 'svelte';
 	import ChordSymbol from '$lib/components/ChordSymbol.svelte';
 	import Fireworks, { type FireworksApi } from '$lib/components/Fireworks.svelte';
+	import InfoHint from '$lib/components/InfoHint.svelte';
 	import Keyboard from '$lib/components/Keyboard.svelte';
 	import ScaleKeys from '$lib/components/ScaleKeys.svelte';
 	import { BackingTrack, type Part } from '$lib/audio/backing';
@@ -1579,7 +1580,7 @@
 
 <main class="mx-auto max-w-[1500px] px-5 py-7">
 	<header class="mb-5 flex flex-wrap items-start justify-between gap-3">
-		<div>
+		<div class="flex items-center gap-2">
 			<h1
 				class="font-display text-ink flex items-baseline gap-3 text-2xl font-semibold tracking-tight"
 			>
@@ -1591,7 +1592,9 @@
 					{barCount} bars · {keyLabel(keyName)}{seed.mode === 'minor' ? ' minor' : ''}
 				</span>
 			</h1>
-			<p class="text-ink-muted mt-1 max-w-3xl text-sm leading-relaxed">{seed.notes}</p>
+			{#if seed.notes}
+				<InfoHint label={`About ${seed.name}`} text={seed.notes} />
+			{/if}
 		</div>
 		<!-- A distraction is exactly what a wall of tune names becomes mid-practice. -->
 		<div class="flex shrink-0 gap-2">
@@ -1600,16 +1603,18 @@
 				class="chip"
 				onclick={() => (sidebarCollapsed = !sidebarCollapsed)}
 				aria-pressed={sidebarCollapsed}
+				aria-label={sidebarCollapsed ? 'Show charts' : 'Hide charts'}
 			>
-				{sidebarCollapsed ? '☰ Show charts' : '« Hide charts'}
+				☰ Charts
 			</button>
 			<button
 				type="button"
 				class="chip"
 				onclick={() => (settingsOpen = !settingsOpen)}
 				aria-pressed={settingsOpen}
+				aria-label={settingsOpen ? 'Hide setup' : 'Show setup'}
 			>
-				{settingsOpen ? '⚙ Hide setup' : '⚙ Setup'}
+				⚙ Setup
 			</button>
 		</div>
 	</header>
@@ -1659,7 +1664,6 @@
 				{#if !demo}
 					<a class="entry mt-2" href="/songbook">
 						<span class="entry-name">Songbook →</span>
-						<span class="entry-meta">search, filter, and write one down</span>
 					</a>
 				{/if}
 			</aside>
@@ -1667,9 +1671,8 @@
 
 		<section>
 			<div class="tonal-centre">
-				<span class="study-kicker">Harmonic map</span>
-				<strong>Main key: {formatStudyKey(homeKey)}</strong>
-				<span>Roman function and departures are shown on every chord.</span>
+				<span class="study-kicker">Key</span>
+				<strong>{formatStudyKey(homeKey)}</strong>
 			</div>
 
 			<div
@@ -1751,22 +1754,19 @@
 				{/each}
 			</div>
 
-			<div class="text-ink-dim mt-2.5 flex flex-wrap items-baseline gap-x-3 font-mono text-xs">
-				<span>
+			{#if looping || mineSeed}
+				<div class="text-ink-dim mt-2.5 flex flex-wrap items-baseline gap-x-3 font-mono text-xs">
 					{#if looping}
-						Looping bars {loopFrom}–{loopTo}.
-						<button type="button" class="underline" onclick={clearLoop}>Whole form</button>
-					{:else}
-						Select a chord to study it. Use a bar header to set the loop range.
+						<span>
+							Loop {loopFrom}–{loopTo} ·
+							<button type="button" class="underline" onclick={clearLoop}>whole form</button>
+						</span>
 					{/if}
-				</span>
-				{#if mineSeed}
-					<!-- Changing a chart is cataloguing, and cataloguing has a room now. -->
-					<a class="ml-auto rounded-md px-2 py-1 underline" href="/songbook"
-						>edit this chart in the songbook</a
-					>
-				{/if}
-			</div>
+					{#if mineSeed}
+						<a class="ml-auto rounded-md px-2 py-1 underline" href="/songbook">edit chart</a>
+					{/if}
+				</div>
+			{/if}
 
 			<!--
 				The mission, directly over the transport it is played on.
@@ -1791,7 +1791,7 @@
 					     mission opened by hand belongs to no workout and is offered no
 					     door out of a page nobody sent you to. -->
 					{#if mission.blockId}
-						<a class="mission-back" href="/session">back to the workout</a>
+						<a class="mission-back" href="/session">← Workout</a>
 					{/if}
 				</section>
 			{/if}
@@ -1825,11 +1825,11 @@
 					</span>
 					<span class="transport-hint" aria-hidden="true">
 						{#if playing}
-							space to pause
+							Space · pause
 						{:else if paused}
-							space to resume
+							Space · resume
 						{:else}
-							space, or the sustain pedal
+							Space / pedal
 						{/if}
 					</span>
 				</button>
@@ -1852,16 +1852,20 @@
 
 					<div class="match-detail">
 						{#if shown.voiced === 0}
-							<p class="match-hint">
-								Play along and each chord is counted as it goes by. Up in the header, a solid note
-								is a chord tone, a faded one is in the key, and an outlined one is outside it.
+							<p
+								class="spread-legend"
+								aria-label="Header notes: solid is a chord tone, faded is in the key, outlined is outside"
+							>
+								<span><i class="key-chord"></i>chord</span>
+								<span><i class="key-colour"></i>in key</span>
+								<span><i class="key-outside"></i>outside</span>
 							</p>
 						{:else}
 							<p class="match-counts">
-								<strong>{shown.landed}</strong> of <strong>{shown.voiced}</strong>
-								chords landed{#if shown.partial > 0}, {shown.partial} half{/if}{#if shown.missed > 0},
-									{shown.missed}
-									missed{/if}
+								<strong>{shown.landed}/{shown.voiced}</strong> landed{#if shown.partial > 0}
+									· {shown.partial}
+									partial{/if}{#if shown.missed > 0}
+									· {shown.missed} missed{/if}
 								{#if shownCoverage !== null}
 									&middot; {shownCoverage}% of the guide tones
 								{/if}
@@ -1880,14 +1884,11 @@
 							-->
 							{#if fireworks && waitingCount > 0}
 								<p class="match-hold">
-									{waitingCount} badge{waitingCount === 1 ? '' : 's'} waiting on a full pass &middot;
-									{toGo()} of {barCount} bars still to go.
+									{waitingCount} badge{waitingCount === 1 ? '' : 's'} waiting · {toGo()} bars left
 								</p>
 							{:else if fireworks && missedOut > 0 && !playing && !paused}
 								<p class="match-hold">
-									{missedOut} badge{missedOut === 1 ? '' : 's'}
-									{missedOut === 1 ? 'was' : 'were'} earned and not kept: the run never went all the way
-									round the form. Everything else here counted.
+									{missedOut} badge{missedOut === 1 ? '' : 's'} not kept · full pass required
 								</p>
 							{/if}
 
@@ -1989,7 +1990,10 @@
 					</div>
 
 					<div class="w-60">
-						<h2 class="panel-title">Groove</h2>
+						<div class="mb-1 flex items-center gap-2">
+							<h2 class="panel-title">Groove</h2>
+							<InfoHint label="About this groove" text={grooveSpec(groove).notes} />
+						</div>
 						<!-- Three across rather than four: nine of them make a square, and
 						     the longer names fit without being cramped. -->
 						<div class="grid grid-cols-3 gap-1.5">
@@ -2006,7 +2010,6 @@
 								>
 							{/each}
 						</div>
-						<p class="groove-note">{grooveSpec(groove).notes}</p>
 					</div>
 
 					<div class="w-60">
@@ -2024,7 +2027,13 @@
 					</div>
 
 					<div class="w-60">
-						<h2 class="panel-title">Fireworks</h2>
+						<div class="mb-1 flex items-center gap-2">
+							<h2 class="panel-title">Fireworks</h2>
+							<InfoHint
+								label="About fireworks"
+								text="Visual effects only. Scoring stays the same."
+							/>
+						</div>
 						<button
 							type="button"
 							class="chip w-full"
@@ -2033,16 +2042,18 @@
 							aria-pressed={fireworks}
 						>
 							<span class="dot" class:is-lit={fireworks}></span>
-							Sparks, glow and combos
+							Visual effects
 						</button>
-						<p class="text-ink-dim mt-2 text-xs leading-snug">
-							Every chord tone you find throws off its own colour, and landing chords in a row
-							lights the room up. The score underneath is the same either way.
-						</p>
 					</div>
 
 					<div class="w-full">
-						<h2 class="panel-title">Mix</h2>
+						<div class="mb-1 flex items-center gap-2">
+							<h2 class="panel-title">Mix</h2>
+							<InfoHint
+								label="About comping"
+								text="Comping is off by default so the band leaves the chords to you."
+							/>
+						</div>
 						<div class="flex flex-col gap-2">
 							{#each PARTS as [part, label] (part)}
 								<div class="flex items-center gap-2">
@@ -2070,10 +2081,6 @@
 								</div>
 							{/each}
 						</div>
-						<p class="text-ink-dim mt-2 text-xs leading-snug">
-							Comping starts off. Two people voicing the same chord is one too many — turn it on to
-							hear the changes, off to be the one playing them.
-						</p>
 					</div>
 				</div>
 			{/if}
@@ -2202,7 +2209,7 @@
 
 					<details class="context-details">
 						<summary>
-							<span>Other useful contexts</span>
+							<span>More contexts</span>
 							<span class="context-count">{otherContexts.length}</span>
 						</summary>
 						<div class="context-list">
@@ -2321,17 +2328,6 @@
 		.bar-lyric {
 			transition: none;
 		}
-	}
-
-	/* One line saying what the selected groove is, for whoever has not met the
-	   word. It sits where the key panel's fourth row of chips would be, so the
-	   two panels stay the same height. */
-	.groove-note {
-		margin-top: 0.5rem;
-		font-family: var(--font-mono);
-		font-size: 0.65rem;
-		line-height: 1.45;
-		color: var(--color-ink-dim);
 	}
 
 	.chip {
@@ -2844,13 +2840,6 @@
 
 	.match-counts strong {
 		color: var(--color-ink);
-	}
-
-	.match-hint {
-		max-width: 44rem;
-		color: var(--color-ink-dim);
-		font-size: 0.78rem;
-		line-height: 1.5;
 	}
 
 	/*

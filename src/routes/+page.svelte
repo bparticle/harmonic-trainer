@@ -176,9 +176,7 @@
 
 	const heroLine = $derived.by(() => {
 		if (data.resume) {
-			return data.resume.complete
-				? 'Go back to it and it will tell you what changed while it ran.'
-				: 'Everything you finished is already on record. Nothing waits on you.';
+			return data.resume.complete ? 'Review what changed.' : 'Finished tasks are saved.';
 		}
 		return choice.kind === 'rung'
 			? (chosenRung?.instruction ?? '')
@@ -188,11 +186,7 @@
 	const onLadder = $derived(choice.kind === 'rung' && isHere(choice.key, choice.rung));
 
 	const eyebrow = $derived(
-		resuming
-			? 'in progress'
-			: onLadder
-				? "today · the ladder's own suggestion"
-				: 'today · your pick'
+		resuming ? 'in progress' : onLadder ? 'today · ladder suggestion' : 'today · your pick'
 	);
 
 	/** What a key has met of its seven, said as ground covered rather than as a mark. */
@@ -203,8 +197,8 @@
 
 	const held = (standing: KeyStanding) =>
 		standing.fresh
-			? `${glyph(standing.key)}: nowhere yet — somewhere to go`
-			: `${glyph(standing.key)}: ${standing.chords.toLocaleString()} chords played`;
+			? `${glyph(standing.key)} · new`
+			: `${glyph(standing.key)} · ${standing.chords.toLocaleString()} chords`;
 </script>
 
 <svelte:head>
@@ -296,12 +290,9 @@
 							</li>
 						{/each}
 					</ol>
-					<p class="hero-note">
-						Composed for today and different tomorrow. Choosing below pins what it is made of; it
-						does not change how much of it there is.{#if data.due > 0}
-							{' '}{data.due} question{data.due === 1 ? ' is' : 's are'} ready to come round again.
-						{/if}
-					</p>
+					{#if data.due > 0}
+						<p class="hero-note">↻ {data.due} due</p>
+					{/if}
 				{/if}
 
 				<!-- No play-along yet, and why.
@@ -312,14 +303,12 @@
 				     and where that is taught. -->
 				{#if heldMission}
 					<p class="hero-note hero-held">
-						<strong>No play-along yet.</strong>
-						The nearest tune is {heldMission.chartName}, and it wants {heldMission.needs}.
+						<strong>Play-along next: {heldMission.chartName}.</strong>
+						Learn {heldMission.needs}
 						{#if heldBy.length}
-							That is what {heldBy.map((p) => p.name).join(' and ')} below {heldBy.length === 1
-								? 'is'
-								: 'are'} for.
+							in {heldBy.map((p) => p.name).join(' or ')}.
 						{:else}
-							Keep going up the ladder and it opens.
+							on the ladder.
 						{/if}
 					</p>
 				{/if}
@@ -328,12 +317,16 @@
 
 		<!-- The twelve keys ----------------------------------------------------- -->
 		<section class="flex flex-col gap-3">
-			<h2 class="panel-title">The twelve keys</h2>
-			<p class="lede">
-				Each swatch fills with the chords the record has heard with that tonic. An outline is a key
-				you have not been in yet, which makes it the most interesting thing on this page — press one
-				and it becomes today's.
-			</p>
+			<div class="section-head">
+				<h2 class="panel-title">The twelve keys</h2>
+				<p
+					class="key-legend"
+					aria-label="Filled swatches show chords played; outlines are new keys"
+				>
+					<span><i class="legend-fill"></i>chords</span>
+					<span><i class="legend-outline"></i>new</span>
+				</p>
+			</div>
 
 			{#if resuming}
 				<ul class="keys">
@@ -350,9 +343,6 @@
 						</li>
 					{/each}
 				</ul>
-				<p class="text-ink-dim text-[0.78rem] leading-relaxed">
-					Where the record has been so far. The picker comes back when this workout is done.
-				</p>
 			{:else}
 				<!-- Every key, always. Nothing here is gated; the ladder only suggests. -->
 				<ul class="keys">
@@ -380,22 +370,13 @@
 					<span class="text-ink-muted">{glyph(openStage.key)}:</span>
 					{openStage.note}
 					{#if data.stages.indexOf(openStage) > reachedIndex}
-						<span class="text-ink-muted"
-							>Further along than the ladder suggests — take it anyway if you want it.</span
-						>
+						<span class="text-ink-muted">· beyond the suggestion</span>
 					{/if}
 				</p>
 
 				<!-- The rungs of whichever key is open ----------------------------- -->
 				<h3 class="panel-title mt-3">
-					Seven steps in {glyph(openKey)} ·
-					{#if openStanding.reached === 0}
-						new ground, and any of them can be first
-					{:else if openStanding.reached >= openStanding.rungs}
-						all seven met, and any of them is worth another pass
-					{:else}
-						{openStanding.reached} met, and the rest are open whenever you want them
-					{/if}
+					Steps in {glyph(openKey)} · {openStanding.reached}/{openStanding.rungs}
 				</h3>
 				<ol class="grid gap-1.5 sm:grid-cols-2">
 					{#each data.rungs as rung, i (rung.id)}
@@ -431,10 +412,6 @@
 		{#if !resuming}
 			<section class="border-ground-line flex flex-col gap-3 border-t pt-6">
 				<h2 class="panel-title">Chord progressions</h2>
-				<p class="lede">
-					Separate from the keys, on purpose. Pick one and a key — the same progression gets easier
-					every time you meet it somewhere new.
-				</p>
 
 				{#each byLevel as group (group.level)}
 					<div>
@@ -560,7 +537,7 @@
 						>
 					</form>
 					<span class="text-ink-dim font-mono text-[0.68rem]">
-						the ladder: {glyph(data.position.key)} · {data.position.rung.label.toLowerCase()}
+						Ladder · {glyph(data.position.key)} · {data.position.rung.label.toLowerCase()}
 						{#if data.progress.reviews > 0}
 							· {data.progress.correct}/{data.progress.reviews} right here
 						{/if}
@@ -593,12 +570,44 @@
 		color: var(--color-ink-dim);
 	}
 
-	.lede {
-		max-width: 66ch;
-		margin-top: -0.15rem;
-		color: var(--color-ink-muted);
-		font-size: 0.78rem;
-		line-height: 1.55;
+	.section-head,
+	.key-legend,
+	.key-legend span {
+		display: flex;
+		align-items: center;
+	}
+
+	.section-head {
+		justify-content: space-between;
+		flex-wrap: wrap;
+		gap: 1rem;
+	}
+
+	.key-legend {
+		gap: 0.8rem;
+		color: var(--color-ink-dim);
+		font-family: var(--font-mono);
+		font-size: 0.62rem;
+	}
+
+	.key-legend span {
+		gap: 0.3rem;
+	}
+
+	.key-legend i {
+		display: block;
+		width: 0.85rem;
+		height: 0.85rem;
+		border: 1px solid var(--color-ink-dim);
+		border-radius: 3px;
+	}
+
+	.legend-fill {
+		background: var(--color-ink-dim);
+	}
+
+	.legend-outline {
+		background: transparent;
 	}
 
 	/*

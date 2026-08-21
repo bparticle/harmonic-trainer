@@ -23,7 +23,7 @@
 			Harmonic&nbsp;Trainer
 		</h1>
 		<p class="text-ink-dim mt-2 font-mono text-xs tracking-widest uppercase">
-			Chord progressions, on the wheel
+			Progressions on the wheel
 		</p>
 
 		<label class="mt-10 block">
@@ -49,7 +49,7 @@
 			class="bg-ink text-ground mt-6 w-full rounded-lg px-4 py-3 text-lg font-semibold
 			       transition-opacity disabled:opacity-40"
 		>
-			{pending ? 'Checking…' : 'Enter'}
+			{pending ? 'Checking…' : 'Sign in'}
 		</button>
 	</form>
 </main>

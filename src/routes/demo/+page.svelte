@@ -54,7 +54,7 @@
 	<title>Demo · Harmonic Trainer</title>
 	<meta
 		name="description"
-		content="Play along with a generated rhythm section and see every chord explained. No account needed."
+		content="Play along with a generated rhythm section. No account needed."
 	/>
 </svelte:head>
 
@@ -65,8 +65,7 @@
 	</a>
 
 	<p>
-		<strong>Live demo.</strong> The real page, with the built-in charts. Nothing is saved and nothing
-		here needs an account.
+		<strong>Live demo</strong> · nothing saved
 	</p>
 
 	<div class="midi">

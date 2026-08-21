@@ -62,14 +62,13 @@ export class MidiSession {
 	/** Why this browser cannot do MIDI, in words worth showing a person. */
 	get unavailableReason(): string | null {
 		if (this.status === 'unsupported') {
-			return 'This browser has no Web MIDI. Safari has never supported it, and every browser on iPad and iPhone is Safari underneath. Use Chrome, Edge or Firefox on a laptop.';
+			return "MIDI isn't available here. Use Chrome, Edge or Firefox on a computer.";
 		}
 		if (this.status === 'insecure') {
-			return 'Web MIDI needs a secure connection. Open this over https rather than http.';
+			return 'MIDI needs HTTPS. Reopen this page over https://.';
 		}
 		if (this.status === 'denied') {
-			const detail = this.error ? ` (${this.error})` : '';
-			return `Permission to use MIDI devices was declined${detail}. Allow it in the browser’s site settings and reload.`;
+			return 'MIDI permission is off. Allow it in Site settings, then reload.';
 		}
 		return null;
 	}
