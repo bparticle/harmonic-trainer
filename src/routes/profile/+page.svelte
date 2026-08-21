@@ -1,4 +1,5 @@
 <script lang="ts">
+	import UserAvatar from '$lib/components/UserAvatar.svelte';
 	import { BADGE_TIERS } from '$lib/effects/streak';
 	import { bandById } from '$lib/practice/tempo';
 
@@ -126,8 +127,16 @@
 <svelte:head><title>Profile · Harmonic</title></svelte:head>
 
 <main class="mx-auto max-w-[1100px] px-5 py-7">
-	<header class="mb-6">
-		<h1 class="font-display text-ink text-2xl font-semibold tracking-tight">Profile</h1>
+	<header class="mb-7 flex items-center gap-3.5">
+		<UserAvatar name={data.user?.name ?? 'Player'} size={48} />
+		<div class="min-w-0">
+			<p class="text-ink-dim font-mono text-[0.65rem] tracking-widest uppercase">
+				Practice profile
+			</p>
+			<h1 class="font-display text-ink mt-0.5 truncate text-2xl font-semibold tracking-tight">
+				{data.user?.name ?? 'Profile'}
+			</h1>
+		</div>
 	</header>
 
 	{#if nothingYet}

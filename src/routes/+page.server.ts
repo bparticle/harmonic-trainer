@@ -1,8 +1,8 @@
-import { sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import type { Actions, PageServerLoad } from './$types';
 import { redirect } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
-import { srsState } from '$lib/server/db/schema';
+import { cards, srsState } from '$lib/server/db/schema';
 import { loadKeyChords } from '$lib/server/db/play-log';
 import {
 	activeWorkout,
@@ -88,18 +88,19 @@ export const load: PageServerLoad = async ({ parent, locals }) => {
 	}
 
 	const userId = currentUserId(locals.userId);
-	const position = await currentPosition();
-	const progress = await rungProgress(position);
+	const position = await currentPosition(userId);
+	const progress = await rungProgress(userId, position);
 
 	const [due] = await db
 		.select({ n: sql<number>`count(*)::int` })
 		.from(srsState)
-		.where(sql`${srsState.dueAt} <= now()`);
+		.innerJoin(cards, eq(cards.id, srsState.cardId))
+		.where(and(eq(cards.userId, userId), sql`${srsState.dueAt} <= now()`));
 
 	const next = nextPosition(position);
 
 	const previews = await previewWorkouts(userId);
-	const active = await activeWorkout();
+	const active = await activeWorkout(userId);
 
 	return {
 		public: false,
@@ -180,7 +181,8 @@ export const actions: Actions = {
 	 */
 	start: async ({ request, locals }) => {
 		const form = await request.formData();
-		const position = await currentPosition();
+		const userId = currentUserId(locals.userId);
+		const position = await currentPosition(userId);
 
 		const choice = readChoice(
 			{
@@ -192,7 +194,7 @@ export const actions: Actions = {
 			position.stage.key
 		);
 
-		await startWorkout(currentUserId(locals.userId), {
+		await startWorkout(userId, {
 			size: readSize(form.get('size')),
 			choice
 		});
@@ -213,22 +215,25 @@ export const actions: Actions = {
 	 * changes is that the day stops offering this one back.
 	 */
 	end: async ({ locals }) => {
-		const open = await activeWorkout();
-		if (open) await finishWorkout(open.id, currentUserId(locals.userId));
+		const userId = currentUserId(locals.userId);
+		const open = await activeWorkout(userId);
+		if (open) await finishWorkout(open.id, userId);
 		redirect(303, '/');
 	},
 
 	/** Move on. Deliberately unguarded — you can tell better than a review count. */
-	advance: async () => {
-		const position = await currentPosition();
+	advance: async ({ locals }) => {
+		const userId = currentUserId(locals.userId);
+		const position = await currentPosition(userId);
 		const next = nextPosition(position);
-		if (next) await advanceLadder(next);
+		if (next) await advanceLadder(userId, next);
 		redirect(303, '/');
 	},
 
 	/** Go back, for when moving on turned out to be optimistic. */
-	back: async () => {
-		const position = await currentPosition();
+	back: async ({ locals }) => {
+		const userId = currentUserId(locals.userId);
+		const position = await currentPosition(userId);
 		const rungIndex = position.rungIndex - 1;
 		const target =
 			rungIndex >= 0
@@ -238,8 +243,8 @@ export const actions: Actions = {
 					: null;
 
 		if (target) {
-			const settings = await loadSettings();
-			await saveSettings({
+			const settings = await loadSettings(userId);
+			await saveSettings(userId, {
 				prefs: {
 					...settings.prefs,
 					ladderKey: target.stage.key,

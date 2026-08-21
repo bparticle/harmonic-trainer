@@ -52,9 +52,8 @@ async function main() {
 		await db.execute(sql`delete from ${schema.chordAttempts}`);
 		await db.execute(sql`delete from ${schema.playRuns}`);
 		await db.execute(sql`delete from ${schema.charts}`);
-		// `users` survives a reset. It holds one row, the migration put it there,
-		// and every cookie in circulation names it — clearing it would sign the
-		// player out to prove a point about generated data it is not an example of.
+		// Accounts and their credentials survive a reset. This command clears the
+		// generated practice record for every account, not who may sign in.
 	}
 
 	const skills = skillSeeds();
@@ -112,11 +111,10 @@ async function main() {
 	// through keys whose cards no longer exist.
 	if (reset) {
 		await db.execute(sql`
-			update ${schema.settings}
+			update ${schema.userPrefs}
 			set prefs_json = prefs_json || '{"ladderKey":"C","ladderRung":"scale"}'::jsonb
-			where id = 1
 		`);
-		console.log('ladder reset to C / scale');
+		console.log('every account ladder reset to C / scale');
 	}
 
 	const counts = await db.execute<{ cards: number; reviews: number }>(sql`

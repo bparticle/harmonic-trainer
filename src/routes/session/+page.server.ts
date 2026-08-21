@@ -2,6 +2,7 @@ import { redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { activeWorkout, advanceLadder, finishTask, loadCards } from '$lib/server/db/session-store';
 import { positionOf } from '$lib/curriculum/ladder';
+import { currentUserId } from '$lib/server/db/user';
 
 type CardsByTask = Record<number, Awaited<ReturnType<typeof loadCards>>>;
 
@@ -16,9 +17,10 @@ type CardsByTask = Record<number, Awaited<ReturnType<typeof loadCards>>>;
  * because a long workout holds two of some kinds and the position is the only
  * thing that tells them apart.
  */
-export const load: PageServerLoad = async ({ parent }) => {
+export const load: PageServerLoad = async ({ parent, locals }) => {
 	const { settings } = await parent();
-	const active = await activeWorkout();
+	const userId = currentUserId(locals.userId);
+	const active = await activeWorkout(userId);
 
 	if (!active) return { settings, workout: null, cards: {} as CardsByTask };
 
@@ -26,7 +28,7 @@ export const load: PageServerLoad = async ({ parent }) => {
 	for (const entry of active.tasks) {
 		const task = entry.task;
 		if (task.kind !== 'ear' && task.kind !== 'function') continue;
-		if (task.cardIds.length) byTask[entry.index] = await loadCards(task.cardIds);
+		if (task.cardIds.length) byTask[entry.index] = await loadCards(userId, task.cardIds);
 	}
 
 	return { settings, workout: active, cards: byTask };
@@ -44,15 +46,16 @@ export const actions: Actions = {
 	 * A form post rather than a fetch, because the page keeps nothing afterwards —
 	 * the ladder has moved, the task is finished, and the reload says both.
 	 */
-	advance: async ({ request }) => {
+	advance: async ({ request, locals }) => {
+		const userId = currentUserId(locals.userId);
 		const form = await request.formData();
 		const sessionId = String(form.get('sessionId') ?? '');
 		const index = Number(form.get('index'));
 		const target = positionOf(String(form.get('key') ?? ''), String(form.get('rung') ?? ''));
 
-		if (target) await advanceLadder(target);
+		if (target) await advanceLadder(userId, target);
 		if (sessionId && Number.isInteger(index)) {
-			await finishTask(sessionId, index, { tried: true, advanced: Boolean(target) });
+			await finishTask(userId, sessionId, index, { tried: true, advanced: Boolean(target) });
 		}
 		redirect(303, '/session');
 	}

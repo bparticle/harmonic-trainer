@@ -1,5 +1,6 @@
 import { redirect, type Handle } from '@sveltejs/kit';
 import { SESSION_COOKIE, verifyToken } from '$lib/server/auth';
+import { resolveSessionUser } from '$lib/server/db/accounts';
 
 const PUBLIC_PATHS = ['/login'];
 
@@ -24,11 +25,11 @@ export function isPublicRequest(pathname: string, method: string): boolean {
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const claim = verifyToken(event.cookies.get(SESSION_COOKIE));
-	const authed = claim !== null;
+	const user = await resolveSessionUser(claim);
+	const authed = user !== null;
 	event.locals.authed = authed;
-	// What the cookie says, unresolved. `currentUserId` turns it into a user;
-	// nothing else is allowed to, which is what keeps the seam a single seam.
-	event.locals.userId = claim?.userId ?? null;
+	event.locals.userId = user?.id ?? null;
+	event.locals.user = user;
 
 	if (!authed && !isPublicRequest(event.url.pathname, event.request.method)) {
 		// Preserve where they were headed so the redirect after login is not jarring.

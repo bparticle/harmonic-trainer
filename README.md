@@ -26,9 +26,9 @@ charts fluently and staves not at all, nothing here will ask you to.
 
 Free software, AGPL licensed. Run it on your laptop, deploy it wherever you
 like, change whatever you want. It is your own instance — no telemetry, and no
-server anyone else controls. Today that means one shared password and one
-player; per-player accounts are planned rather than built, and `ROADMAP.md`
-says what is being done now to make them cheap later.
+server anyone else controls. Invite-only accounts let a small trusted group
+keep separate progress today; public registration and the paid hosted service
+remain planned in `ROADMAP.md`.
 
 ## What it does
 
@@ -100,12 +100,14 @@ cp .env.example .env    # the defaults already match docker-compose
 npm run db:up           # start Postgres in Docker
 npm run db:migrate      # apply the schema
 npm run db:seed         # skills and chord charts
+npm run account:create -- owner "Your name" "you@example.com"
 npm run dev
 ```
 
-Open `http://localhost:5173` and sign in with the `APP_PASSWORD` from your
-`.env`. Practice material is created as you go, so a fresh install starts with
-one thing to learn rather than three thousand.
+The account command prints a temporary password when one is not supplied. Open
+`http://localhost:5173`, sign in with it, then change it from **Account**.
+Practice material is created as you go, so a fresh account starts with one
+thing to learn rather than three thousand.
 
 Already have a Postgres? Skip `db:up` and point `DATABASE_URL` at it.
 
@@ -114,9 +116,10 @@ Already have a Postgres? Skip `db:up` and point `DATABASE_URL` at it.
 ## Deploying it
 
 `adapter-auto` detects Vercel, Netlify, Cloudflare Pages and Azure with no
-configuration. Set the three environment variables from `.env.example` in your
+configuration. Set the two environment variables from `.env.example` in your
 host's dashboard, point it at any Postgres, and run `npm run db:migrate` once
-against that database.
+against that database. Provision the owner account against the same
+`DATABASE_URL` before signing out of an older single-player session.
 
 To self-host instead, install `@sveltejs/adapter-node` and set it in
 `vite.config.ts`; `npm run build` then produces a plain Node server.
@@ -124,28 +127,57 @@ To self-host instead, install `@sveltejs/adapter-node` and set it in
 Two things to get right wherever you put it:
 
 - **Serve over HTTPS.** Web MIDI silently does nothing on an insecure origin.
-- **Set a real `APP_PASSWORD`.** It is the only thing in front of the app.
-  Read `SECURITY.md` before putting it anywhere public.
+- **Keep `AUTH_SECRET` long and private.** It signs every login cookie. Read
+  `SECURITY.md` before putting the family beta anywhere public.
+
+---
+
+## Invite-only accounts
+
+The first account must keep the original player's fixed id so the practice
+history already in the database stays with its owner:
+
+```bash
+npm run account:create -- owner "Bruno" "bruno@example.com"
+```
+
+Add each family member with the `add` subcommand:
+
+```bash
+npm run account:create -- add "Family member" "player@example.com"
+```
+
+Each command prints a generated temporary password. Send it to that person out
+of band; they can change it under **Account**, which also signs out any other
+device. Running the command again for the same email resets that account's
+password. A new account receives a fresh copy of the default palette, wheel and
+practice preferences, starts at C major, and sees none of another account's
+custom charts or progress.
+
+This is intentionally an operator-managed family beta. There is no public
+registration or email-based recovery yet; the remaining public-account work is
+tracked under M12 in `ROADMAP.md`.
 
 ---
 
 ## Scripts
 
-| Command               | Does                                         |
-| --------------------- | -------------------------------------------- |
-| `npm run dev`         | Dev server on `:5173`                        |
-| `npm run build`       | Production build                             |
-| `npm test`            | Vitest, once                                 |
-| `npm run test:watch`  | Vitest, watching                             |
-| `npm run check`       | `svelte-check` type check                    |
-| `npm run format`      | Format with Prettier                         |
-| `npm run verify`      | Format check, types and tests — what CI runs |
-| `npm run db:generate` | Generate migration SQL from the schema       |
-| `npm run db:migrate`  | Apply pending migrations                     |
-| `npm run db:studio`   | Drizzle Studio                               |
-| `npm run db:seed`     | Seed the skills and chord charts             |
-| `npm run db:up`       | Start the local dev Postgres in Docker       |
-| `npm run db:down`     | Stop it                                      |
+| Command                       | Does                                         |
+| ----------------------------- | -------------------------------------------- |
+| `npm run dev`                 | Dev server on `:5173`                        |
+| `npm run build`               | Production build                             |
+| `npm test`                    | Vitest, once                                 |
+| `npm run test:watch`          | Vitest, watching                             |
+| `npm run check`               | `svelte-check` type check                    |
+| `npm run format`              | Format with Prettier                         |
+| `npm run verify`              | Format check, types and tests — what CI runs |
+| `npm run db:generate`         | Generate migration SQL from the schema       |
+| `npm run db:migrate`          | Apply pending migrations                     |
+| `npm run db:studio`           | Drizzle Studio                               |
+| `npm run db:seed`             | Seed the skills and chord charts             |
+| `npm run account:create -- …` | Create or reset an invite-only account       |
+| `npm run db:up`               | Start the local dev Postgres in Docker       |
+| `npm run db:down`             | Stop it                                      |
 
 ---
 
@@ -231,12 +263,13 @@ src/
       StreakBadges.svelte  This tune's six sockets
       Fireworks.svelte   Sparks, bursts and callouts
     server/
-      auth.ts        Password check and signed session cookie
+      auth.ts        Signed, revocable session cookie
+      password.ts    Versioned scrypt password hashing
       db/
-        schema.ts    All 16 tables
+        schema.ts    All 17 tables
         index.ts     Drizzle client
         user.ts      currentUserId() - the whole multi-user seam
-        settings.ts  The singleton settings row
+        settings.ts  Per-account settings, cloned from defaults
         session-store.ts  Workouts, blocks, reviews, and card creation
         play-log.ts  The play-along record: runs, chords judged, badges
     settings.ts    Shared setting types and defaults
@@ -253,10 +286,11 @@ src/
     settings/
       wheel/       Calibration against your physical wheel
       colours/     OKLCH palette editor with live contrast
-    api/settings/  Patches the singleton settings row
+    account/       Password and session controls
+    api/settings/  Patches the signed-in account's settings
     api/session/   The workout's write endpoint
     api/runs/      Where a run of the transport is written down
-    login/         The password gate
+    login/         Email and password sign-in
   hooks.server.ts  Redirects unauthenticated requests to /login, and puts
                    what the cookie claims on event.locals
 ```
@@ -280,8 +314,8 @@ match your physical wheel. Structural colours (ground, ink) _are_ in
 
 ## Deployment
 
-Vercel, connected to the repo. Set `DATABASE_URL`, `APP_PASSWORD` and
-`AUTH_SECRET` as environment variables in the project settings. Migrations do
+Vercel, connected to the repo. Set `DATABASE_URL` and `AUTH_SECRET` as
+environment variables in the project settings. Migrations do
 not run automatically — apply them with `npm run db:migrate` against the
 production `DATABASE_URL` when the schema changes.
 
@@ -324,12 +358,12 @@ songbook** — a room of its own for finding a tune and writing one down, which
 used to be a sidebar and an editor standing in the practice area. What is still
 open is in `ROADMAP.md` under _What the readiness gate left open_.
 
-### Planned
+### In progress and planned
 
-| M       | Deliverable                                                     | Status  |
-| ------- | --------------------------------------------------------------- | ------- |
-| **M12** | Accounts — real credentials, and every owned row actually owned | planned |
-| **M13** | The subscription — a hosted instance somebody else can pay for  | planned |
+| M       | Deliverable                                                     | Status      |
+| ------- | --------------------------------------------------------------- | ----------- |
+| **M12** | Accounts — real credentials, and every owned row actually owned | family beta |
+| **M13** | The subscription — a hosted instance somebody else can pay for  | planned     |
 
 `ROADMAP.md` holds the plan: schema, scope, order and the decisions still open.
 This table carries status and nothing else, so the two cannot drift into
@@ -545,7 +579,7 @@ bank and no simulated history, and both absences are deliberate — see
 `DECISIONS.md`. Cards are created a rung at a time as the ladder is climbed, so
 a new account starts with the C major scale and nothing else.
 
-`--reset` clears every generated row first and puts the ladder back at C.
+`--reset` clears every account's generated rows first and puts every ladder back at C.
 Re-seeding without it matches existing rows by identity, so editing the
 curriculum never orphans review history.
 

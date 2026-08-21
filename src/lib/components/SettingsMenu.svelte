@@ -2,18 +2,19 @@
 	import { connectMidi, forgetMidi, midi } from '$lib/midi/shared.svelte';
 	import type { Prefs } from '$lib/settings';
 	import InfoHint from './InfoHint.svelte';
+	import UserAvatar from './UserAvatar.svelte';
 
 	/*
-	 * The cog.
+	 * The signed-in player's identity control.
 	 *
-	 * Everything that used to be scattered across page headers — which keyboard,
-	 * how long to hold a chord back, how long a session runs — lives here, on
-	 * every screen. Device management in particular has to be reachable from
-	 * anywhere: a piano switched on mid-session should not mean navigating to a
-	 * specific page to be noticed.
+	 * The trigger belongs to the account; the panel then makes the practice
+	 * profile and account settings obvious before exposing the shared controls.
+	 * Device management still has to be reachable from anywhere: a piano switched
+	 * on mid-session should not mean navigating to a specific page to be noticed.
 	 */
 
-	let { prefs }: { prefs: Prefs } = $props();
+	let { prefs, user }: { prefs: Prefs; user?: { name: string } | null } = $props();
+	const accountName = $derived(user?.name.trim() || 'Account');
 
 	let open = $state(false);
 	let saving = $state(false);
@@ -83,35 +84,68 @@
 
 <div class="relative" bind:this={panel}>
 	<button
-		class="border-ground-line hover:border-ink-dim flex items-center gap-2 rounded-lg border px-2.5 py-1.5 transition-colors"
+		type="button"
+		class="account-trigger"
 		class:is-open={open}
 		onclick={() => (open = !open)}
 		aria-expanded={open}
-		aria-label="Settings and MIDI"
+		aria-haspopup="dialog"
+		aria-label={`${accountName}: profile, account and settings`}
 	>
-		<span class="dot" style:background={dotColour}></span>
-		<span class="text-ink-muted hidden font-mono text-[0.7rem] sm:inline">{statusLabel}</span>
-		<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" class="text-ink-muted">
-			<path
-				d="M8 10.2a2.2 2.2 0 1 0 0-4.4 2.2 2.2 0 0 0 0 4.4Z M8 1.4l1 1.6a5.6 5.6 0 0 1 1.4.6l1.8-.4 1.2 2-1 1.5a5.6 5.6 0 0 1 0 1.6l1 1.5-1.2 2-1.8-.4a5.6 5.6 0 0 1-1.4.6L8 14.6l-1-1.6a5.6 5.6 0 0 1-1.4-.6l-1.8.4-1.2-2 1-1.5a5.6 5.6 0 0 1 0-1.6l-1-1.5 1.2-2 1.8.4A5.6 5.6 0 0 1 7 3l1-1.6Z"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="1.2"
-				stroke-linejoin="round"
-			/>
+		<UserAvatar name={accountName} size={30} />
+		<span class="account-copy">
+			<strong>{accountName}</strong>
+			<small>profile & settings</small>
+		</span>
+		<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" class="chevron">
+			<path d="m4 6 4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" />
 		</svg>
 	</button>
 
 	{#if open}
 		<div
-			class="border-ground-line bg-ground-raised absolute right-0 z-50 mt-2 w-[min(20rem,calc(100vw-2rem))] rounded-xl border p-4 shadow-2xl"
+			class="border-ground-line bg-ground-raised absolute right-0 z-50 mt-2 w-[min(21rem,calc(100vw-2rem))] rounded-xl border p-4 shadow-2xl"
 			role="dialog"
-			aria-label="Settings"
+			aria-label={`${accountName} account and settings`}
 		>
+			<section class="identity">
+				<UserAvatar name={accountName} size={48} />
+				<div class="min-w-0">
+					<p>Signed in as</p>
+					<h2>{accountName}</h2>
+				</div>
+			</section>
+
+			<nav class="account-routes" aria-label="Account">
+				<a href="/profile" onclick={() => (open = false)}>
+					<span>
+						<strong>Practice profile</strong>
+						<small>Progress, keys and recent playing</small>
+					</span>
+					<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+						<path d="M3 8h9M9 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.4" />
+					</svg>
+				</a>
+				<a href="/account" onclick={() => (open = false)}>
+					<span>
+						<strong>Account & password</strong>
+						<small>Security and sign out</small>
+					</span>
+					<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+						<path d="M3 8h9M9 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.4" />
+					</svg>
+				</a>
+			</nav>
+
+			<hr class="border-ground-line my-4" />
+
 			<section>
-				<h2 class="text-ink-dim mb-2 font-mono text-[0.65rem] tracking-widest uppercase">
-					Keyboard
-				</h2>
+				<div class="mb-2 flex items-center justify-between gap-3">
+					<h2 class="text-ink-dim font-mono text-[0.65rem] tracking-widest uppercase">Keyboard</h2>
+					<p class="keyboard-status">
+						<span class="dot" style:background={dotColour}></span>{statusLabel}
+					</p>
+				</div>
 
 				{#if midi.status === 'ready'}
 					{#if midi.devices.length}
@@ -254,15 +288,6 @@
 				>
 			</div>
 
-			<!-- Here rather than in the main nav: a fourth destination was already
-			     enough to make the header slide sideways on a narrow screen, and the
-			     profile is somewhere you go between sittings, not during one. -->
-			<a
-				href="/profile"
-				class="border-ground-line hover:border-ink-dim text-ink-muted hover:text-ink mt-3 block rounded border px-3 py-2 text-center font-mono text-xs transition-colors"
-				onclick={() => (open = false)}>Profile</a
-			>
-
 			{#if problem}
 				<p class="mt-2 font-mono text-xs" style="color: var(--pc-0)">{problem}</p>
 			{/if}
@@ -278,6 +303,139 @@
 </div>
 
 <style>
+	.account-trigger {
+		display: flex;
+		min-height: 42px;
+		align-items: center;
+		gap: 0.55rem;
+		padding: 0.3rem 0.55rem 0.3rem 0.35rem;
+		border: 1px solid var(--color-ground-line);
+		border-radius: 10px;
+		background: var(--color-ground-raised);
+		color: var(--color-ink-muted);
+		transition:
+			border-color 150ms ease,
+			background 150ms ease,
+			color 150ms ease;
+	}
+
+	.account-copy {
+		display: flex;
+		min-width: 0;
+		flex-direction: column;
+		align-items: flex-start;
+		line-height: 1.05;
+	}
+
+	.account-copy strong {
+		max-width: 5.5rem;
+		overflow: hidden;
+		color: var(--color-ink);
+		font-size: 0.78rem;
+		font-weight: 600;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.account-copy small {
+		display: none;
+		margin-top: 0.22rem;
+		color: var(--color-ink-dim);
+		font-family: var(--font-mono);
+		font-size: 0.56rem;
+		letter-spacing: 0.025em;
+	}
+
+	.chevron {
+		flex: none;
+		color: var(--color-ink-dim);
+		transition: transform 160ms var(--ease-wheel);
+	}
+
+	.account-trigger.is-open .chevron {
+		transform: rotate(180deg);
+	}
+
+	.identity {
+		display: flex;
+		align-items: center;
+		gap: 0.8rem;
+		padding: 0.15rem 0 0.85rem;
+	}
+
+	.identity p {
+		color: var(--color-ink-dim);
+		font-family: var(--font-mono);
+		font-size: 0.61rem;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+	}
+
+	.identity h2 {
+		overflow: hidden;
+		margin-top: 0.15rem;
+		color: var(--color-ink);
+		font-size: 1.18rem;
+		font-weight: 600;
+		letter-spacing: -0.02em;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.account-routes {
+		display: grid;
+		gap: 0.35rem;
+	}
+
+	.account-routes a {
+		display: flex;
+		min-height: 52px;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		padding: 0.55rem 0.65rem;
+		border-radius: 7px;
+		color: var(--color-ink-muted);
+		transition:
+			background 140ms ease,
+			color 140ms ease;
+	}
+
+	.account-routes a:first-child {
+		background: var(--color-ground-overlay);
+		color: var(--color-ink);
+	}
+
+	.account-routes span {
+		display: flex;
+		min-width: 0;
+		flex-direction: column;
+	}
+
+	.account-routes strong {
+		font-size: 0.78rem;
+		font-weight: 600;
+	}
+
+	.account-routes small {
+		margin-top: 0.12rem;
+		color: var(--color-ink-dim);
+		font-size: 0.68rem;
+	}
+
+	.account-routes svg {
+		flex: none;
+	}
+
+	.keyboard-status {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		color: var(--color-ink-dim);
+		font-family: var(--font-mono);
+		font-size: 0.62rem;
+	}
+
 	.dot {
 		width: 7px;
 		height: 7px;
@@ -294,5 +452,34 @@
 
 	input[type='range'] {
 		accent-color: var(--color-ink-muted);
+	}
+
+	@media (hover: hover) {
+		.account-trigger:hover {
+			border-color: var(--color-ink-dim);
+			background: var(--color-ground-overlay);
+			color: var(--color-ink);
+		}
+
+		.account-routes a:hover {
+			background: var(--color-ground-overlay);
+			color: var(--color-ink);
+		}
+	}
+
+	@media (min-width: 48rem) {
+		.account-copy strong {
+			max-width: 9rem;
+		}
+
+		.account-copy small {
+			display: block;
+		}
+	}
+
+	@media (pointer: coarse) {
+		.account-trigger {
+			min-height: 44px;
+		}
 	}
 </style>

@@ -18,7 +18,8 @@
 	 * in the app.
 	 */
 
-	let { prefs, context }: { prefs: Prefs; context?: Key } = $props();
+	let { prefs, context, user }: { prefs: Prefs; context?: Key; user?: { name: string } | null } =
+		$props();
 
 	const LINKS = [
 		{ href: '/', label: 'Today' },
@@ -53,7 +54,7 @@
 
 		<div class="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
 			<div class="hidden sm:block"><LiveNotes {context} /></div>
-			<SettingsMenu {prefs} />
+			<SettingsMenu {prefs} {user} />
 		</div>
 	</div>
 </header>

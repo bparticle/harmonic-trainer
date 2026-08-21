@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { db } from './index';
-import { settings } from './schema';
+import { settings, userPrefs } from './schema';
 import {
 	DEFAULT_COLOR_MAP,
 	DEFAULT_PREFS,
@@ -12,11 +12,11 @@ import {
 } from '$lib/settings';
 
 /**
- * The settings row is a singleton pinned to id 1. It is created on first read
- * rather than by a migration, so the defaults stay in TypeScript next to the
- * types that describe them instead of being frozen into SQL.
+ * The defaults row is a singleton pinned to id 1. It is created on first read
+ * rather than by a migration, so defaults stay in TypeScript next to their
+ * types instead of being frozen into SQL.
  */
-export async function loadSettings(): Promise<AppSettings> {
+async function loadDefaults() {
 	const [row] = await db.select().from(settings).where(eq(settings.id, 1)).limit(1);
 
 	if (!row) {
@@ -32,23 +32,48 @@ export async function loadSettings(): Promise<AppSettings> {
 			.onConflictDoNothing()
 			.returning();
 
-		if (created) return toAppSettings(created);
+		if (created) return created;
 
 		// Lost a race with a concurrent first request; re-read.
 		const [existing] = await db.select().from(settings).where(eq(settings.id, 1)).limit(1);
-		return toAppSettings(existing);
+		return existing;
 	}
 
-	return toAppSettings(row);
+	return row;
+}
+
+export async function loadSettings(userId: string): Promise<AppSettings> {
+	const [row] = await db.select().from(userPrefs).where(eq(userPrefs.userId, userId)).limit(1);
+	if (row) return toAppSettings(row);
+
+	const defaults = await loadDefaults();
+	const [created] = await db
+		.insert(userPrefs)
+		.values({
+			userId,
+			colorMapJson: defaults.colorMapJson,
+			wheelConfigJson: defaults.wheelConfigJson,
+			prefsJson: defaults.prefsJson,
+			midiDevice: defaults.midiDevice
+		})
+		.onConflictDoNothing()
+		.returning();
+	if (created) return toAppSettings(created);
+
+	const [existing] = await db.select().from(userPrefs).where(eq(userPrefs.userId, userId)).limit(1);
+	return toAppSettings(existing);
 }
 
 /**
- * Patch the singleton. Only the fields present are touched, so the colour
+ * Patch one account. Only the fields present are touched, so the colour
  * editor and the wheel calibration screen can each save without clobbering the
  * other's work.
  */
-export async function saveSettings(patch: Partial<AppSettings>): Promise<AppSettings> {
-	await loadSettings(); // guarantees the row exists
+export async function saveSettings(
+	userId: string,
+	patch: Partial<AppSettings>
+): Promise<AppSettings> {
+	await loadSettings(userId); // guarantees the row exists
 
 	const update: Record<string, unknown> = { updatedAt: new Date() };
 	if (patch.colorMap) update.colorMapJson = patch.colorMap;
@@ -56,11 +81,17 @@ export async function saveSettings(patch: Partial<AppSettings>): Promise<AppSett
 	if (patch.prefs) update.prefsJson = patch.prefs;
 	if (patch.midiDevice !== undefined) update.midiDevice = patch.midiDevice;
 
-	const [row] = await db.update(settings).set(update).where(eq(settings.id, 1)).returning();
+	const [row] = await db
+		.update(userPrefs)
+		.set(update)
+		.where(eq(userPrefs.userId, userId))
+		.returning();
 	return toAppSettings(row);
 }
 
-function toAppSettings(row: typeof settings.$inferSelect): AppSettings {
+function toAppSettings(
+	row: typeof settings.$inferSelect | typeof userPrefs.$inferSelect
+): AppSettings {
 	return {
 		colorMap: row.colorMapJson as ColorMap,
 		wheelConfig: row.wheelConfigJson as WheelConfig,

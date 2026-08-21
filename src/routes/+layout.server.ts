@@ -11,6 +11,12 @@ import { loadSettings } from '$lib/server/db/settings';
  * working database to render, so unauthenticated requests use the defaults.
  */
 export const load: LayoutServerLoad = async ({ locals }) => {
-	if (!locals.authed) return { settings: DEFAULT_SETTINGS, authed: false };
-	return { settings: await loadSettings(), authed: true };
+	if (!locals.authed || !locals.userId) {
+		return { settings: DEFAULT_SETTINGS, authed: false, user: null };
+	}
+	return {
+		settings: await loadSettings(locals.userId),
+		authed: true,
+		user: locals.user ? { name: locals.user.name } : null
+	};
 };

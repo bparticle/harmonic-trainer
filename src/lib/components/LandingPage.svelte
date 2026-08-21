@@ -77,7 +77,7 @@
 						>Explore the source <span aria-hidden="true">↗</span></a
 					>
 				</div>
-				<p class="hero-note entrance entrance-5">AGPL licensed · no telemetry · self-hosted</p>
+				<p class="hero-note entrance entrance-5">AGPL licensed · no telemetry · self-hostable</p>
 			</div>
 
 			<div class="hero-instrument entrance entrance-3" aria-label="Animated harmonic wheel">
@@ -292,8 +292,8 @@
 		<section id="open-source" class="open-source" aria-labelledby="open-title">
 			<div class="open-copy">
 				<p class="eyebrow">Free software, personal by design</p>
-				<h2 id="open-title">Your practice data<br />belongs on your machine.</h2>
-				<p>One musician. No analytics. No cloud dependency. Self-host or change anything.</p>
+				<h2 id="open-title">Your practice data<br />stays yours.</h2>
+				<p>Separate accounts. No analytics. Self-host it, inspect it, or change anything.</p>
 				<div class="open-actions">
 					<a
 						class="primary-action light"

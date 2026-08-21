@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 
-	let { form } = $props();
+	let { data, form } = $props();
 	let pending = $state(false);
 </script>
 
@@ -25,15 +25,35 @@
 		<p class="text-ink-dim mt-2 font-mono text-xs tracking-widest uppercase">
 			Progressions on the wheel
 		</p>
+		{#if data.notice}
+			<p
+				class="border-ground-line bg-ground-raised text-ink-muted mt-6 rounded-lg border px-3 py-2 text-sm"
+			>
+				{data.notice}
+			</p>
+		{/if}
 
-		<label class="mt-10 block">
-			<span class="text-ink-muted font-mono text-xs tracking-widest uppercase">Password</span>
+		<label class={data.notice ? 'mt-6 block' : 'mt-10 block'}>
+			<span class="text-ink-muted font-mono text-xs tracking-widest uppercase">Email</span>
 			<!-- svelte-ignore a11y_autofocus -->
+			<input
+				name="email"
+				type="email"
+				autocomplete="email"
+				autocapitalize="none"
+				value={form?.email ?? ''}
+				autofocus
+				required
+				class="border-ground-line bg-ground-raised text-ink focus:border-ink-dim mt-2 w-full rounded-lg border px-4 py-3 text-lg"
+			/>
+		</label>
+
+		<label class="mt-5 block">
+			<span class="text-ink-muted font-mono text-xs tracking-widest uppercase">Password</span>
 			<input
 				name="password"
 				type="password"
 				autocomplete="current-password"
-				autofocus
 				required
 				class="border-ground-line bg-ground-raised text-ink focus:border-ink-dim mt-2 w-full rounded-lg border px-4 py-3 text-lg"
 			/>

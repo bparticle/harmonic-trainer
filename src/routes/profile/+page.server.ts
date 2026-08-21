@@ -66,7 +66,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			loadSpread(userId),
 			loadRecentRuns(userId),
 			loadRecord(userId),
-			practiceTotals(),
+			practiceTotals(userId),
 			loadTempoGrades(userId),
 			loadTempoMovement(userId),
 			db

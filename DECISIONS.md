@@ -2371,6 +2371,37 @@ Charts you typed in are private for a blunter reason: a hosted service where a
 stranger's tune turns up in your list is a bug. Sharing is a feature nobody
 asked for, and this file has a long record of what happens to those.
 
+### Family accounts are the first half of M12, on purpose
+
+The second player stopped being hypothetical before public registration or
+billing was useful: a few family members are enough to exercise different
+ladder positions, schedules, palettes and playing records. That creates a useful
+cut through M12. The data and credential model has to be real; the machinery for
+unknown people does not.
+
+So the first account release is invite-only. The operator provisions an email,
+name and generated temporary password with `account:create`; there is no signup
+page and no email provider. Passwords use the platform's scrypt with the full
+parameter set stored beside each hash. The alternative was magic links, but
+making mail delivery the only entrance to a family test would have introduced
+the first external service before it could teach anything about the product.
+Password reset email is still mandatory before strangers can register.
+
+The old local player keeps the fixed UUID every existing row already names. The
+accounts migration gives it a deliberately unusable placeholder credential,
+backfills cards and sessions to it, and copies the singleton settings into its
+`user_prefs` row. A valid pre-account cookie remains accepted only while that
+player's revocation epoch is zero. Provisioning the owner bumps the epoch, so
+the compatibility door closes by itself instead of becoming a permanent second
+login system.
+
+New accounts copy the singleton as a template and own everything that can move:
+cards and their schedules, sessions and their blocks, the whole settings object,
+custom charts, runs and badges. Child tables keep learning ownership from their
+parent. That makes deletion structurally plausible now, but public M12 is not
+declared complete until a real cascade test, export/deletion UI, reset delivery
+and database-backed abuse limits exist.
+
 ### The record has to exist before the account can be sold
 
 The most useful thing this exercise turned up is not in the plan for either new
