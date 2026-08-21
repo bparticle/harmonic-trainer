@@ -345,7 +345,59 @@ reasoning in `DECISIONS.md` under _The gap between the two rooms_. It shipped
 unnumbered, in answer to being sent to a three-tonic cycle on the second rung of
 the first key.
 
-Four things it does not do, recorded here rather than left to be rediscovered.
+Five things it does not do, recorded here rather than left to be rediscovered.
+The first is the one to act on.
+
+### Two cliffs, and a long flat stretch — measured, not guessed
+
+Walking the ladder rung by rung and then the progression library level by level,
+counting how many of the twenty-three built-in tunes are open at each step:
+
+```
+ 0  rung: scale
+ 1  rung: tonic-triad          + linstead-market
+ 1  rung: primary-triads
+ 3  rung: all-triads           + four-chord-loop, doo-wop
+ 3  rung: tonic-seventh
+ 5  rung: all-sevenths         + st-james-infirmary, mango-walk
+ 5  rung: relative-minor
+ 5  L1 ×3, L2 ×2, L3 ×2        (nothing)
+16  L4: blues-basic            + eleven tunes at once
+16  L4: blues-quick
+16  L5: secondary-dominant
+16  L5: borrowed-four
+23  L5: tritone-sub            + seven tunes at once
+23  L5: backdoor
+```
+
+Three things are wrong with that shape and none of them is the gate's arithmetic.
+
+**The whole of the ladder plus levels one to three opens five tunes.** Seven
+rungs, twelve keys and seven progressions — months of material — and the
+play-along library barely moves. Everything the ladder teaches is `in_key` by
+construction, so the four fifths of the book that leave the key are all waiting
+on one thing.
+
+**`blues-basic` opens eleven tunes in one step and `tritone-sub` opens seven.**
+Two progressions carry eighteen of the twenty-three. That is not a curriculum, it
+is a lock with two keys, and the second is the last item in the library.
+
+**Seven library items and one rung unlock nothing at all.** The level 1–3
+progressions are diatonic, so they add no shape the rungs have not; the relative
+minor teaches the minor triad `all-triads` already gave.
+
+The fix is in the material rather than in `vocabulary.ts`, and the shape of it is
+to spread the `coloured` and `off_key` steps out. Concretely: the secondary
+dominant is a gentler first step outside the key than the blues is and sits at
+level 5 today; the borrowed iv is gentler still. Moving those two down and
+letting each open two or three tunes rather than none would turn the eleven-tune
+jump into three smaller ones. Nothing about the gate changes; the library gets
+re-levelled, and the walk above is the test of whether it worked.
+
+Worth being honest that this was true before the gate existed and invisible — a
+mission could be set on any of the twenty-three from day one, so the library's
+levelling never had to mean anything. Making readiness real is what turned the
+levels into a curriculum, and the curriculum is lumpy.
 
 ### The curriculum above the early rungs is unproven by playing
 
@@ -392,14 +444,6 @@ The thing to be careful about is tone. This must not become a locked list with
 padlocks on it: every chart stays openable by hand, and the mark says _wants a
 dominant seventh_, not _not available_. The gate steers what is **offered**; it
 has never gated what you may **play**, and it must not start.
-
-### The step from `in_key` to `coloured` rests on one progression
-
-`blues-basic` and `blues-quick` are the only level-4 material, and between them
-they are the whole of the `coloured` step — which opens the twelve-bar blues and
-most of the standards in one move. That may be a cliff rather than a step. If it
-reads as one, the fix is more level-4 material rather than a change to the gate:
-the secondary dominant is the obvious missing one, and it sits at level 5 today.
 
 ### A note on stored verdicts
 
