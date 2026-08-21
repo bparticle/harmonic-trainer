@@ -3589,7 +3589,7 @@ off and `prefers-reduced-motion` silences it.
 
 And the score is not behind it. The bands and the ladder's line live on the
 shelf, which has been part of the game layer since it was built and goes away
-with the switch — but the two places the tempo grade actually *does* anything are
+with the switch — but the two places the tempo grade actually _does_ anything are
 not on the shelf at all. A mission's floor comes from the ladder whether or not
 the fireworks were ever on, and the profile's tempo panel and month figure read
 the same rows on a page that has no fireworks switch. Turning the noise off costs
