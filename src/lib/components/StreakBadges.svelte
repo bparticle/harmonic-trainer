@@ -231,7 +231,9 @@
 
 	{#if held && heldBand}
 		<p class="shelf-tempo">
-			Held on {chartName} at <strong>{heldBand.name}</strong> — {held.bpm}, {held.percent}% of the
+			Held on {chartName}
+			{heldBand.name.startsWith('at ') ? '' : 'at '}<strong>{heldBand.name}</strong> — {held.bpm}, {held.percent}%
+			of the
 			{held.target} it goes at. {heldBand.says}
 		</p>
 	{/if}
@@ -260,7 +262,9 @@
 				/>
 				<circle class="ladder-next" cx={at(nextBand.from)} cy="8" r="1.9" />
 			</svg>
-			Held clean at <strong>{bandById(suggesting.held!)?.name}</strong>. Next band up is
+			Held clean {bandById(suggesting.held!)?.name.startsWith('at ') ? '' : 'at '}<strong
+				>{bandById(suggesting.held!)?.name}</strong
+			>. Next band up is
 			<strong>{nextBand.name}</strong>, from {suggesting.nextBpm}. A suggestion — every tempo stays
 			playable.
 		</p>
