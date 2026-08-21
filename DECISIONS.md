@@ -3280,3 +3280,74 @@ rows unreadable. That distinction — a vocabulary closed, a record kept — is 
 one thing about this deletion worth remembering, and it is the reason
 `LegacyBlockType` exists as its own type rather than as six strings quietly left
 in a union.
+
+### The home page was grey because the rule says it may be
+
+The complaint was that the daily page is bland and uninspiring, and that some of
+the profile's progress elements would look good on it — as long as none of it is
+fluff. The first half of that is true and the cause is not taste. **Hue means
+pitch**, and almost everything the page said had no pitch in it: a task, a rung,
+a count of reviews due. Every obvious fix — a green bar for progress, an amber
+pill for the due pile, a tint for "ready to move on" — is a colour standing for
+nothing, and the house rule says out loud that a screen which can only be fixed
+that way stays grey.
+
+What the rule licenses is the thing the page was barely using. A **key** has a
+tonic, so it may wear that tonic's swatch, and this page is mostly about twelve
+of them. So the keys are drawn at the size the subject deserves: a banner that
+is one whole panel of the key about to be played, and twelve swatches below it
+big enough to read across a room. Twelve saturated colours is a strong image and
+every one of them is information. Everything else — the task list, the ticks,
+the rung marks, the ladder controls — stayed in weight, and the page is not grey
+any more without a single colour having been invented.
+
+The audit found one colour already standing for nothing: the "ready for the next
+rung" button was outlined in `--pc-5`, which is F. Being ready is not a pitch.
+It is ink now.
+
+### A key you have never played is the most interesting thing on the page
+
+The swatches fill with what the record actually holds — the same `GROUP BY` over
+`chord_attempts` the profile's twelve keys are drawn from, deliberately, because
+two pages drawing one fact from two questions is how they come to disagree about
+it. On the record this was designed against that means two keys with something
+in them and ten with nothing, which is the shape this layout has to be good at
+rather than the shape it tolerates.
+
+So an untouched key is drawn as a **full-strength coloured outline, dashed,
+waiting to be filled**, and labelled _new_ rather than 0. It is not dimmed, not
+faded and not marked absent: the ladder suggests an order and the strip refuses
+to make the other eleven look unavailable, because every one of them is one
+press from being today's workout. The words were chosen with the same care as
+the styling — "new ground", "not been here yet — somewhere to go", "the rest are
+open whenever you want them". Nothing on the page can fall while you are away
+from the piano.
+
+Two numbers were removed rather than restyled. **Reviews this week** can only go
+down while you are not practising, printed on the page you open when you have
+come to practise; there is no phrasing that rescues it. **Total cards** was
+never read by anything at all. Per-key accuracy was wanted and refused: a
+percentage beside ten keys, on the screen where you decide what to do today,
+is a verdict handed down before the day has started.
+
+One presentational liberty is taken and is worth writing down. A key with a
+single chord in it against another with five hundred would fill a third of a
+pixel, so a non-empty swatch gets a minimum sliver. The count printed beside it
+is exact; the fill is a picture of a proportion and says so in `warmth.ts`.
+
+### The state a returning player sees most often was the barest one
+
+With a workout in flight the page used to collapse to a title, one line and a
+button. It now shows the workout: its key in the banner, which task is next, and
+the whole task list with the finished ones ticked and dimmed. Every one of those
+facts comes from `session_blocks` — a mission's block is ended by the run that
+met its goal — so this is the record's answer to "where was I" and not the
+browser's. The twelve keys stay on screen underneath as a record rather than a
+picker, because a strip you cannot start anything from must not look like one
+you can.
+
+The picker's agency is untouched: every key, every rung and every progression is
+still visible and still startable, the ladder still marks its suggestion and
+still gates nothing, and choosing something still does not move it. What changed
+is that the picker is no longer folded away behind a summary that had to be
+clicked before the page showed you anything worth wanting.

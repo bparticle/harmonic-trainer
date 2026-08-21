@@ -198,11 +198,12 @@ export async function saveFlush(userId: string, flush: Flush): Promise<void> {
 }
 
 /*
- * Everything below is read by the profile, and by nothing else.
+ * Everything below is read by the pages that report the record: the profile,
+ * and the home page's twelve keys.
  *
  * Each is one query, and each answers a question the page states in words: how
  * long has been played, on what, and where the time went. Nothing here
- * estimates — a number the profile cannot trace to rows is a number it does not
+ * estimates — a number a page cannot trace to rows is a number it does not
  * show.
  */
 
@@ -400,6 +401,33 @@ export async function loadSpread(userId: string): Promise<{ byKey: Slice[]; byQu
 		.orderBy(desc(sql`count(*)`));
 
 	return { byKey, byQuality };
+}
+
+/**
+ * Chords heard per key, for the home page's twelve swatches.
+ *
+ * The left half of `loadSpread`'s `byKey` and deliberately so: the home page and
+ * the profile draw the same twelve keys, and drawing them from two different
+ * questions is how two pages come to disagree about one record. The *local* key
+ * again, so a blues in C fills F and G as well.
+ *
+ * Accuracy is not selected, and its absence is the point. A percentage per key
+ * on the page you open to decide what to practise would be a verdict on ten
+ * keys before the day has started, and this page never grades anybody. The
+ * count is what a swatch needs.
+ */
+export async function loadKeyChords(
+	userId: string
+): Promise<Array<{ key: string; chords: number }>> {
+	return db
+		.select({
+			key: chordAttempts.localKey,
+			chords: sql<number>`count(*)::int`
+		})
+		.from(chordAttempts)
+		.innerJoin(playRuns, eq(playRuns.id, chordAttempts.runId))
+		.where(eq(playRuns.userId, userId))
+		.groupBy(chordAttempts.localKey);
 }
 
 export type RecentRun = {
