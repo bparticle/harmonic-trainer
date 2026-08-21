@@ -3,7 +3,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { charts, sessionBlocks } from '$lib/server/db/schema';
 import { currentUserId } from '$lib/server/db/user';
-import { loadBests, loadRecord, saveFlush } from '$lib/server/db/play-log';
+import { loadBests, loadRecord, loadTempoGrades, saveFlush } from '$lib/server/db/play-log';
 import { BADGE_TIERS } from '$lib/effects/streak';
 import type { Goal, Verdict } from '$lib/practice/goal';
 import type {
@@ -97,11 +97,15 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	await saveFlush(userId, flush);
 
 	// Hand back what the record now says, so the page's cache is corrected by the
-	// answer rather than by its own optimism.
+	// answer rather than by its own optimism. The bands come back with it, because
+	// the run just written is the one that may have upgraded them — a tier
+	// re-earned faster changes its band on the shelf as soon as it is banked,
+	// without the date it was first won moving at all.
 	return json({
 		accepted: flush.runs.length,
 		record: await loadRecord(userId),
-		bests: await loadBests(userId)
+		bests: await loadBests(userId),
+		tempo: await loadTempoGrades(userId)
 	});
 };
 

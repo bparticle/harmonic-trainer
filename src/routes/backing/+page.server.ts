@@ -5,7 +5,7 @@ import type { Actions, PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
 import { charts } from '$lib/server/db/schema';
 import { currentUserId } from '$lib/server/db/user';
-import { loadBests, loadRecord } from '$lib/server/db/play-log';
+import { loadBests, loadRecord, loadTempoGrades } from '$lib/server/db/play-log';
 import { CHARTS, type ChartSeed } from '$lib/curriculum/charts';
 import { isGroove, type Groove } from '$lib/audio/groove';
 import { slugify, uniqueSlug } from '$lib/curriculum/import';
@@ -59,7 +59,15 @@ export const load: PageServerLoad = async ({ locals }) => {
 	// The shelf and the two bests, from the record rather than from the browser.
 	// A run played here shows up on the other machine, which is the whole point
 	// of M9 and was the one thing localStorage could never do.
-	return { mine, record: await loadRecord(userId), bests: await loadBests(userId) };
+	//
+	// The bands come the same way and are derived from the same runs, so there is
+	// nothing stored anywhere that could disagree with them.
+	return {
+		mine,
+		record: await loadRecord(userId),
+		bests: await loadBests(userId),
+		tempo: await loadTempoGrades(userId)
+	};
 };
 
 /**

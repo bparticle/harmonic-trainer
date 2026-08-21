@@ -5,6 +5,7 @@ import { FIRST_POSITION, positionOf, reachedSoFar, type RungId } from '$lib/curr
 import { cardsForRung } from '$lib/curriculum/cards';
 import { STAGES } from '$lib/curriculum/ladder';
 import { describeGoal } from '$lib/practice/goal';
+import { suggestLadder, type HeldRun } from '$lib/practice/tempo';
 import {
 	TASK_COUNT,
 	chooseNovelty,
@@ -15,6 +16,7 @@ import {
 	earQueue,
 	functionQueue,
 	noveltyId,
+	type MissionChart,
 	type Novelty,
 	type Task,
 	type Workout,
@@ -79,6 +81,25 @@ const input = (overrides: Partial<WorkoutInput> = {}): WorkoutInput => ({
 	now: NOW,
 	...overrides
 });
+
+/**
+ * One tune to set a mission on, so a tempo assertion is about the tempo.
+ *
+ * The record's rhythm changes: a bebop vehicle that goes at 160, which is the
+ * whole reason a band has to be a share rather than an absolute.
+ */
+const ONE_TUNE: MissionChart = {
+	slug: 'rhythm-changes',
+	name: 'Rhythm changes',
+	style: 'rhythm_changes',
+	category: 'standard',
+	mode: 'major',
+	defaultBpm: 160,
+	defaultGroove: 'swing'
+};
+
+/** A run that cleared the mission's bar at a given tempo. */
+const held = (bpm: number): HeldRun => ({ bpm, voiced: 20, landed: 20, bestStreak: 12 });
 
 const taskKinds = (workout: Workout) => workout.tasks.map((t) => t.kind);
 const earCards = (workout: Workout) =>
@@ -559,6 +580,77 @@ describe('the mission', () => {
 		const mission = missions(composeWorkout(input()))[0];
 		expect(mission.bpmFloor).toBeGreaterThan(0);
 		expect(describeGoal({ kind: 'guide_tones', percent: 70, choruses: 2 })).toContain('70%');
+	});
+
+	it('asks for the next band up on a tune the ladder has something to say about', () => {
+		// Rhythm changes from the record: held clean at 100 on a tune that goes at
+		// 160, so the work is at 128 and not at the tune's own tempo. Asking for
+		// 160 says the same thing to somebody at 63% and to somebody past tempo.
+		const workout = composeWorkout(
+			input({
+				charts: [ONE_TUNE],
+				ladders: { 'rhythm-changes': suggestLadder([held(100)], 160) }
+			})
+		);
+		const mission = missions(workout)[0];
+		expect(mission.bpmFloor).toBe(128);
+		expect(mission.band).toBe('nearly');
+	});
+
+	it('says why it is asking for a tempo the tune does not go at', () => {
+		const workout = composeWorkout(
+			input({
+				charts: [ONE_TUNE],
+				ladders: { 'rhythm-changes': suggestLadder([held(100)], 160) }
+			})
+		);
+		const task = workout.tasks.find((t) => t.kind === 'mission')!;
+		expect(task.instruction).toContain('128 or faster');
+		expect(task.instruction).toContain('one band up');
+	});
+
+	it('keeps the tune’s own tempo where the ladder has nothing to say', () => {
+		const nothing = composeWorkout(input({ charts: [ONE_TUNE] }));
+		expect(missions(nothing)[0].bpmFloor).toBe(ONE_TUNE.defaultBpm);
+		expect(missions(nothing)[0].band).toBeNull();
+
+		const unheld = composeWorkout(
+			input({ charts: [ONE_TUNE], ladders: { 'rhythm-changes': suggestLadder([], 160) } })
+		);
+		expect(missions(unheld)[0].bpmFloor).toBe(ONE_TUNE.defaultBpm);
+		expect(missions(unheld)[0].band).toBeNull();
+	});
+
+	it('has nothing above past tempo to send anybody to', () => {
+		// The open question, settled: `past` is shown and awards nothing, so there
+		// is no band beyond it for a mission to aim at either.
+		const workout = composeWorkout(
+			input({
+				charts: [ONE_TUNE],
+				ladders: { 'rhythm-changes': suggestLadder([held(200)], 160) }
+			})
+		);
+		expect(missions(workout)[0].band).toBeNull();
+		expect(missions(workout)[0].bpmFloor).toBe(ONE_TUNE.defaultBpm);
+	});
+
+	it('reads the ladder per tune, because tempo does not transfer', () => {
+		// A ladder filed under one slug says nothing about another, exactly as
+		// holding rhythm changes at 100 says nothing about a bossa.
+		const workout = composeWorkout(
+			input({ charts: [ONE_TUNE], ladders: { bossa: suggestLadder([held(100)], 160) } })
+		);
+		expect(missions(workout)[0].bpmFloor).toBe(ONE_TUNE.defaultBpm);
+	});
+
+	it('takes the grade as an input rather than going and asking for it', () => {
+		// The composer is pure and stays pure: the same inputs on the same day
+		// compose the identical workout, ladders included, with no database
+		// anywhere near the proof.
+		const ladders = { 'rhythm-changes': suggestLadder([held(100)], 160) };
+		const once = composeWorkout(input({ charts: [ONE_TUNE], ladders }));
+		const twice = composeWorkout(input({ charts: [ONE_TUNE], ladders }));
+		expect(once).toEqual(twice);
 	});
 
 	it('takes the roots away often enough to be a habit, not a rule', () => {

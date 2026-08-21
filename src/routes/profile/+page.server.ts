@@ -8,10 +8,13 @@ import {
 	loadRecentRuns,
 	loadRecord,
 	loadSpread,
+	loadTempoGrades,
+	loadTempoMovement,
 	loadTrends,
 	loadTunes,
 	type Slice
 } from '$lib/server/db/play-log';
+import { bestBand, describeMonth, readMovement } from '$lib/practice/tempo';
 import { practiceTotals } from '$lib/server/db/session-store';
 import { allBadges } from '$lib/effects/badges';
 import { CHARTS } from '$lib/curriculum/charts';
@@ -55,19 +58,22 @@ function keyLabel(stored: string): string {
 export const load: PageServerLoad = async ({ locals }) => {
 	const userId = currentUserId(locals.userId);
 
-	const [headline, tunes, trends, spread, recent, record, practice, mine] = await Promise.all([
-		loadHeadline(userId),
-		loadTunes(userId),
-		loadTrends(userId),
-		loadSpread(userId),
-		loadRecentRuns(userId),
-		loadRecord(userId),
-		practiceTotals(),
-		db
-			.select({ slug: charts.slug, name: charts.name })
-			.from(charts)
-			.where(eq(charts.userId, userId))
-	]);
+	const [headline, tunes, trends, spread, recent, record, practice, tempo, movement, mine] =
+		await Promise.all([
+			loadHeadline(userId),
+			loadTunes(userId),
+			loadTrends(userId),
+			loadSpread(userId),
+			loadRecentRuns(userId),
+			loadRecord(userId),
+			practiceTotals(),
+			loadTempoGrades(userId),
+			loadTempoMovement(userId),
+			db
+				.select({ slug: charts.slug, name: charts.name })
+				.from(charts)
+				.where(eq(charts.userId, userId))
+		]);
 
 	/*
 	 * A slug is what the log stores, because the built-in charts live in code and
@@ -125,6 +131,51 @@ export const load: PageServerLoad = async ({ locals }) => {
 			};
 		});
 
+	/*
+	 * Tempo, the record's second dimension.
+	 *
+	 * The twelve keys are breadth — which corners of the keyboard have been
+	 * visited — and this is depth: how fast each tune has actually been held.
+	 * Both are counts of things that happened, and neither is an average of
+	 * anything: there is no "your average band", because averaging five ordinal
+	 * words would be a number nothing in the record supports.
+	 *
+	 * Fastest band first, because the question the panel answers is "how fast has
+	 * this been held", and sorting by name would make the reader do the ranking.
+	 */
+	const bands = Object.entries(tempo.byChart)
+		.flatMap(([chartSlug, shelf]) => {
+			const held = bestBand(shelf);
+			return held ? [{ chartSlug, name: names.get(chartSlug) ?? chartSlug, ...held }] : [];
+		})
+		.sort((a, b) => b.percent - a.percent);
+
+	/*
+	 * Whether the last thirty days moved anything upward.
+	 *
+	 * The first figure on this page that measures improvement rather than volume,
+	 * and the one that has to be most careful about what it claims. It reports
+	 * three counts and nothing else, and the three are kept apart on purpose: a
+	 * tune that moved, a tune that held the band it already had, and a tune whose
+	 * whole history is inside the window and therefore has nothing to be compared
+	 * against. Only the first is movement; the third is not a tune standing still.
+	 *
+	 * Nothing here goes the other way. The band on a tune is the fastest it has
+	 * ever been held, so it cannot fall, and a quiet month is a quiet month.
+	 */
+	const reading = readMovement(movement);
+	const month = {
+		says: describeMonth(reading),
+		steady: reading.steady,
+		tooNew: reading.tooNew,
+		raised: reading.raised.map((row) => ({
+			chartSlug: row.chartSlug,
+			name: names.get(row.chartSlug) ?? row.chartSlug,
+			before: row.before,
+			now: row.now
+		}))
+	};
+
 	return {
 		headline: {
 			...headline,
@@ -135,6 +186,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			bestOnPc: headline.bestOn ? tonicOf(headline.bestOn.keyCenter) : null
 		},
 		keys,
+		tempo: { bands, month },
 		tunes: tunes.map((tune) => ({
 			...tune,
 			name: names.get(tune.chartSlug) ?? tune.chartSlug,

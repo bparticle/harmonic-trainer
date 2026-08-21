@@ -18,4 +18,5 @@
 	colorMap={data.settings.colorMap}
 	record={data.record}
 	bests={data.bests}
+	tempo={data.tempo}
 />
