@@ -3410,3 +3410,99 @@ still visible and still startable, the ladder still marks its suggestion and
 still gates nothing, and choosing something still does not move it. What changed
 is that the picker is no longer folded away behind a summary that had to be
 clicked before the page showed you anything worth wanting.
+
+## M16 — tempo, measured
+
+The first phase of it: the grade and the shelf. The profile's second dimension,
+the per-tune ladder and a mission that targets the next band up are still ahead,
+so `ROADMAP.md` keeps its section until they land.
+
+The complaint underneath the milestone is that a badge earned at half speed is
+not the badge earned at tempo, and until now the app could not tell them apart.
+That made the top of the ladder reachable by slowing down until it was easy,
+which is the one thing a practice tool must not reward — and it was blind in the
+other direction too, because somebody grinding a tune from 80 up to 130 saw six
+badges that stopped changing on day one.
+
+### A band is a share, and it does not get a colour
+
+The obvious design is fixed BPM bands, and the record says why that is wrong
+before any argument does: Three Little Birds is logged at 99 and rhythm changes
+at 100, and those two numbers mean opposite things. So a band is a share of the
+tune's own `default_bpm` — under 60% `learning`, 60–79 `working`, 80–99
+`nearly`, 100–119 `attempo`, 120 and over `past` — and the same five words stay
+honest on a ballad and on a burner.
+
+The thing most likely to have gone wrong here is colour, and it was refused.
+**Hue means pitch**, a tempo has no pitch in it, and bronze-silver-gold or a
+green-for-fast heat scale would have handed the palette a second meaning for the
+sake of one row of hexagons. A badge goes on wearing the pitch class of the
+chord that clinched it, and the band beside it is drawn entirely in weight: a
+mark on a short track with a notch where the tune's own tempo sits, the share
+printed underneath, and the mark thickening from muted ink to full ink at and
+above tempo. That is the whole visual vocabulary of the band, and it is the
+house rule's own uncomfortable test passed rather than dodged.
+
+It is a **mark on a road and not a meter filling up**, and that distinction is
+the non-punishment rule showing up in geometry. A five-segment bar with two of
+them filled says three are missing; a mark at 63% with a notch at 100% says
+where you are and that the road continues — which is also true past the notch,
+because taking a tune faster than it goes is a real practice device. The words
+follow the same rule: rhythm changes reads _"Held on Rhythm changes at working —
+100, 63% of the 160 it goes at. Real work at this tempo, with road above it."_
+Nothing there is red, nothing is called slow, and the fact comes before the
+invitation in every one of the five sentences.
+
+### The grade is a question, never a column
+
+The temptation was `badges.best_bpm`. M9 deleted a stored best for exactly this
+reason — it could drift from the runs justifying it — and a stored tempo grade
+is that same bug wearing a new name, so there is no new column and no migration
+in this phase at all. The badge answers _when did you first get there_ and the
+grade answers _how fast have you held it_, one row each, neither able to
+contradict the other.
+
+The roadmap writes the grade as `max(bpm) where best_streak >= tier.from`, six
+times over. It is asked once per streak length instead, grouped by chart and
+`best_streak`, and the ladder is applied in `gradeShelf` — same answer, a
+handful of rows rather than the whole log, and the six thresholds stay in
+`streak.ts` where they already live instead of being spelled out again in SQL.
+It also means the entire grade is a pure function with a test file and no
+database anywhere near it.
+
+Resolving the tune's own tempo is the wrinkle the query alone does not solve:
+`default_bpm` is in `charts.ts` for a built-in and in the `charts` row for one
+you typed in, and two of the three tunes in this record have no row at all. So
+targets resolve **code first, then the database**, the way the rest of the app
+resolves a chart. A tune that resolves to neither — a chart of your own since
+deleted — grades nothing rather than being measured against a guess.
+
+### `coalesce(best_streak_bpm, bpm)`, and why it is not a fudge
+
+`play_runs.best_streak_bpm` was captured during M15 precisely so this milestone
+would have something honest to grade, and it is null on every one of the
+nineteen runs recorded before it existed. It cannot be backfilled; those runs do
+not know. Grading strictly on it would therefore show nothing at all today, and
+grading on `bpm` alone would reintroduce the flattery it exists to prevent — a
+run started at 140 and slowed to 60 whose streak was clinched after the
+slowdown.
+
+So a run is graded on `coalesce(best_streak_bpm, bpm)`: a run recorded before
+the column existed is graded on the tempo it was logged at, because that is the
+only tempo it ever knew, and every run since is graded on where its best streak
+was actually reached. That is not an estimate — no number is invented, each run
+is graded on the best tempo it can honestly report — and the coalesce disappears
+by itself as the old runs age out of being the fastest.
+
+The share is rounded to whole percent **before** it is graded rather than after,
+so the band and the number printed beside it can never disagree: 95 of 160 is
+59% and `learning`, 96 is 60% and `working`, and nothing in between can print
+60% while being graded as the band below.
+
+### Checked against the record before it was believed
+
+Graded by the rule above, the three tunes in this record come out as rhythm
+changes `working` at 63% of 160, the jazz blues `attempo` dead on 140, and Three
+Little Birds `past` at 130% of 76 — the three the shelf could not tell apart.
+All three are fixtures in `tempo.test.ts` rather than a paragraph here, so the
+day the logic stops agreeing with them a test says so.
