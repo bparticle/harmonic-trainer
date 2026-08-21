@@ -6,6 +6,7 @@ import { progressionSkillCode, rungSkillCode } from '$lib/curriculum/cards';
 import { parseChord, type ChordQuality } from '$lib/music/chord';
 import { keyTonic } from '$lib/music/key';
 import { GUIDE_TONE_TARGET, type Goal } from '$lib/practice/goal';
+import { bandById, type BandId, type TempoLadder } from '$lib/practice/tempo';
 import type { CardDirection, ChartStyle } from '$lib/server/db/schema';
 import { isRetiredIntroduction, selectDue, type Schedulable } from '$lib/srs/scheduler';
 
@@ -112,6 +113,16 @@ export type Mission = {
 	rootless: boolean;
 	/** The cold spot this was aimed at, when it was aimed at one. */
 	coldSpot: ColdSpot | null;
+	/**
+	 * The band the floor aims at, when the ladder had one to suggest.
+	 *
+	 * Null on a tune nothing has been held clean on, where the floor is the
+	 * tune's own tempo exactly as it always was. This is where M16 and M15 meet:
+	 * a mission already carried a key, a tune and a tempo, so "hold the bar at
+	 * the next band up on this tune" needed a band on the mission and nothing
+	 * else — no new task kind, no second goal type.
+	 */
+	band: BandId | null;
 };
 
 /** A single unseen item: the next rung, the next progression, or a new groove. */
@@ -291,6 +302,16 @@ export type WorkoutInput = {
 	choice?: Choice | null;
 	/** Charts available to a mission. The built-ins when the caller says nothing. */
 	charts?: MissionChart[];
+	/**
+	 * What each tune's tempo ladder suggests, by chart slug.
+	 *
+	 * An input the way cold spots are an input, and for the same reason: this
+	 * module is pure and must stay that way, so the grade arrives already derived
+	 * from the runs rather than the composer reaching for a database to ask. A
+	 * tune missing from here is a tune the ladder has nothing to say about, which
+	 * is the honest answer on a first workout and harmless after.
+	 */
+	ladders?: Record<string, TempoLadder>;
 	/**
 	 * What the record already shows played, for the novelty slot.
 	 *
@@ -624,6 +645,7 @@ function composeMission(input: {
 	keyCenter: string;
 	coldKeys: string[];
 	coldSpots: ColdSpot[];
+	ladders: Record<string, TempoLadder>;
 	day: number;
 	nth: number;
 }): Mission | null {
@@ -657,11 +679,30 @@ function composeMission(input: {
 	const keys = input.coldKeys.length ? input.coldKeys : [input.keyCenter];
 	const keyCenter = input.nth === 0 ? input.keyCenter : rotate(keys, input.day + input.nth)[0];
 
+	/*
+	 * The tempo, from the ladder where there is one.
+	 *
+	 * The floor was always the tune's own tempo, which says the same thing to
+	 * somebody who has held it clean at 63% and to somebody who has held it clean
+	 * past tempo. Where the ladder has something to suggest, the mission asks for
+	 * the next band up instead — rhythm changes held at 63% of 160 is asked for at
+	 * 128 rather than at 160, which is the thing to practise rather than the thing
+	 * to bounce off.
+	 *
+	 * It stays a floor: playing it faster than asked was never cheating and still
+	 * is not, and a mission asking below the tune's own tempo is a suggestion
+	 * about where the work is, not a speed limit. A tune the ladder cannot speak
+	 * for keeps the tempo it goes at, exactly as before.
+	 */
+	const ladder = input.ladders[chart.slug];
+	const climbing = ladder?.next && ladder.nextBpm ? ladder : null;
+
 	return {
 		chartSlug: chart.slug,
 		chartName: chart.name,
 		keyCenter,
-		bpmFloor: chart.defaultBpm,
+		bpmFloor: climbing?.nextBpm ?? chart.defaultBpm,
+		band: climbing?.next ?? null,
 		groove: chart.defaultGroove,
 		choruses: MISSION_CHORUSES,
 		// Every third day the roots are taken away. Often enough to be a habit,
@@ -758,10 +799,22 @@ function missionTask(mission: Mission, chart: MissionChart | undefined): Mission
 	const constraint = mission.rootless
 		? ' Hands off the roots — chord tones only, thirds and sevenths doing the work.'
 		: '';
+	/*
+	 * Why that tempo, when it is the ladder's and not the tune's.
+	 *
+	 * Said out loud rather than left as a number that looks wrong: a mission that
+	 * asks for 128 on a tune the player knows goes at 160 has to explain itself,
+	 * or it reads as a bug. Named as a band and not as a threshold — the tempo is
+	 * a floor, and the sentence never claims anything is locked.
+	 */
+	const band = mission.band ? bandById(mission.band) : null;
+	const climbing = band
+		? ` That is ${band.name} on this tune — one band up from where you have held it.`
+		: '';
 	return {
 		kind: 'mission',
 		title: 'Mission',
-		instruction: `${mission.chartName} in ${mission.keyCenter}, ${mission.groove} at ${mission.bpmFloor} or faster.${constraint}`,
+		instruction: `${mission.chartName} in ${mission.keyCenter}, ${mission.groove} at ${mission.bpmFloor} or faster.${climbing}${constraint}`,
 		goal: missionGoal(chart, mission),
 		mission
 	};
@@ -897,6 +950,7 @@ export function composeWorkout(input: WorkoutInput): Workout {
 			keyCenter,
 			coldKeys,
 			coldSpots,
+			ladders: input.ladders ?? {},
 			day,
 			nth: missionsBuilt
 		});

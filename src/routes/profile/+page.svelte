@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { BADGE_TIERS } from '$lib/effects/streak';
+	import { bandById } from '$lib/practice/tempo';
 
 	/*
 	 * One page that says what has actually happened.
@@ -101,6 +102,25 @@
 	const HEX = `M ${W / 2} 1 L ${W - 1} ${H / 4} L ${W - 1} ${(H * 3) / 4} L ${W / 2} ${H - 1} L 1 ${(H * 3) / 4} L 1 ${H / 4} Z`;
 
 	const tierName = (id: string) => BADGE_TIERS.find((tier) => tier.id === id)?.name ?? id;
+
+	/*
+	 * The tempo track, in the shelf's own vocabulary.
+	 *
+	 * The same geometry the badges use under a chart: a mark where the tune has
+	 * been held, a notch where the tune's own tempo sits, and road either side of
+	 * it. Copied rather than shared because the two live at different sizes and a
+	 * component taking a width would be more machinery than four numbers deserve.
+	 *
+	 * **No band gets a colour.** Hue means pitch on this page as everywhere else,
+	 * and a tempo has no pitch in it — so a band is drawn in weight and position,
+	 * exactly like the chord-quality bars further down.
+	 */
+	const TRACK = { width: 96, left: 3, right: 93, top: 140 };
+	const at = (percent: number) =>
+		TRACK.left +
+		(Math.min(TRACK.top, Math.max(0, percent)) / TRACK.top) * (TRACK.right - TRACK.left);
+
+	const bandName = (id: string) => bandById(id)?.name ?? id;
 </script>
 
 <svelte:head><title>Profile · Harmonic</title></svelte:head>
@@ -200,6 +220,93 @@
 						</li>
 					{/each}
 				</ul>
+			</section>
+		{/if}
+
+		<!--
+			The other axis.
+
+			The twelve keys above are breadth; this is depth, and the two belong next
+			to each other because they are two readings of the same record. A band is
+			a share of the tune's own tempo, so the same five words stay honest on a
+			ballad and on a burner — and none of them is a colour, because hue means
+			pitch and a tempo has no pitch in it.
+
+			Hidden until a tune has a band, like every other panel here: an empty
+			tempo panel would be a list of things not done.
+		-->
+		{#if data.tempo.bands.length}
+			<section class="panel">
+				<h2 class="head">How fast it has been held</h2>
+				<p class="lede">
+					A share of the tune's own tempo rather than a number of beats, because 100 is the tune
+					itself on one chart and homework on another. The mark is where a streak has actually been
+					held; the notch is where the tune goes. Road past the notch, because taking a tune faster
+					than it goes is a real thing to do and the scale should not stop at correct.
+				</p>
+
+				<ul class="tempos">
+					{#each data.tempo.bands as band (band.chartSlug)}
+						<li class="tempo">
+							<a class="link tempo-name" href="/backing?chart={encodeURIComponent(band.chartSlug)}"
+								>{band.name}</a
+							>
+							<svg
+								class="road"
+								viewBox="0 0 {TRACK.width} 12"
+								role="img"
+								aria-label="{band.bpm} of the {band.target} this tune goes at, {band.percent} percent"
+							>
+								<line class="road-line" x1={TRACK.left} y1="8.5" x2={TRACK.right} y2="8.5" />
+								<line class="road-target" x1={at(100)} y1="4.5" x2={at(100)} y2="11.5" />
+								<line
+									class="road-mark"
+									class:is-at-tempo={band.percent >= 100}
+									x1={at(band.percent)}
+									y1="1.5"
+									x2={at(band.percent)}
+									y2="11.5"
+								/>
+							</svg>
+							<span class="tempo-band">{bandName(band.band)}</span>
+							<span class="tempo-num">{band.percent}%</span>
+							<span class="tempo-note">{band.bpm} of {band.target}</span>
+						</li>
+					{/each}
+				</ul>
+
+				<!--
+					The improvement figure, and the only one on this page.
+
+					It is allowed to say three things and no more: what moved, what held
+					the band it already had, and what has no history to be compared
+					against. A month in which nothing moved is reported as tunes holding
+					their band — never as a failure to improve, which is a sentence this
+					app does not write.
+				-->
+				{#if data.tempo.month.says}
+					<p class="note month">
+						{data.tempo.month.says}
+						{#if data.tempo.month.raised.length}
+							<span class="month-list">
+								{#each data.tempo.month.raised as moved (moved.chartSlug)}
+									<span
+										>{moved.name}: {moved.before?.percent}% → {moved.now
+											?.percent}%{#if moved.before && moved.now}
+											({bandName(moved.before.band)} → {bandName(moved.now.band)}){/if}</span
+									>
+								{/each}
+							</span>
+						{/if}
+						{#if data.tempo.month.tooNew > 0 && data.tempo.month.raised.length + data.tempo.month.steady > 0}
+							<span class="month-aside"
+								>{data.tempo.month.tooNew}
+								{data.tempo.month.tooNew === 1 ? 'tune has' : 'tunes have'} no history before the window,
+								so there is nothing to compare them against.</span
+							>
+						{/if}
+					</p>
+				{/if}
 			</section>
 		{/if}
 
@@ -664,6 +771,105 @@
 		font-family: var(--font-mono);
 		font-size: 0.6rem;
 		font-variant-numeric: tabular-nums;
+	}
+
+	/*
+	 * How fast it has been held.
+	 *
+	 * Ink and position only. A band has no pitch in it, so it gets no hue — the
+	 * same refusal the chord-quality bars make below, and the reason there is no
+	 * bronze, silver and gold anywhere near this list.
+	 */
+	.tempos {
+		display: flex;
+		flex-direction: column;
+		gap: 0.55rem;
+		margin-top: 0.9rem;
+	}
+
+	.tempo {
+		display: grid;
+		align-items: center;
+		gap: 0.2rem 0.75rem;
+		grid-template-columns: minmax(6rem, 12rem) minmax(6rem, 14rem) auto auto 1fr;
+	}
+
+	@media (max-width: 640px) {
+		.tempo {
+			grid-template-columns: 1fr auto auto;
+		}
+
+		.tempo .road {
+			grid-column: 1 / -1;
+			order: 3;
+		}
+
+		.tempo .tempo-note {
+			grid-column: 1 / -1;
+			order: 4;
+		}
+	}
+
+	.tempo-name {
+		font-size: 0.85rem;
+	}
+
+	.road {
+		display: block;
+		width: 100%;
+		height: auto;
+	}
+
+	.road-line {
+		stroke: var(--color-ground-line);
+		stroke-width: 1;
+	}
+
+	/* Where the tune's own tempo sits, so the mark is read against something. */
+	.road-target {
+		stroke: var(--color-ink-dim);
+		stroke-width: 1;
+	}
+
+	.road-mark {
+		stroke: var(--color-ink-muted);
+		stroke-width: 2;
+		stroke-linecap: round;
+	}
+
+	.road-mark.is-at-tempo {
+		stroke: var(--color-ink);
+		stroke-width: 3;
+	}
+
+	.tempo-band {
+		color: var(--color-ink-muted);
+		font-family: var(--font-mono);
+		font-size: 0.7rem;
+	}
+
+	.tempo-num,
+	.tempo-note {
+		color: var(--color-ink-dim);
+		font-family: var(--font-mono);
+		font-size: 0.7rem;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.month {
+		margin-top: 1rem;
+	}
+
+	.month-list {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.15rem 0.9rem;
+		margin-top: 0.25rem;
+	}
+
+	.month-aside {
+		display: block;
+		margin-top: 0.25rem;
 	}
 
 	/*

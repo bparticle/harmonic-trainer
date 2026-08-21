@@ -1,9 +1,30 @@
 import { randomUUID } from 'node:crypto';
-import { and, desc, eq, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, gte, inArray, isNull, sql } from 'drizzle-orm';
 import { db } from './index';
-import { badges, chordAttempts, playRuns, sessionBlocks } from './schema';
+import { badges, charts, chordAttempts, playRuns, sessionBlocks } from './schema';
 import { emptyRecord, type StreakRecord } from '$lib/effects/badges';
 import { noBests, type Bests, type Flush } from '$lib/practice/run';
+import {
+	grade,
+	gradeShelf,
+	MOVEMENT_DAYS,
+	noTempo,
+	suggestLadder,
+	type HeldRun,
+	type StreakTempo,
+	type TempoMovement,
+	type TempoRecord
+} from '$lib/practice/tempo';
+import { BADGE_TIERS } from '$lib/effects/streak';
+import { chartBySlug } from '$lib/curriculum/charts';
+
+/**
+ * The least a streak has to be before a run says anything about tempo.
+ *
+ * Referenced rather than restated: three in a row is the shelf's first rung and
+ * `streak.ts` is where that number is decided.
+ */
+const FIRST_RUNG = BADGE_TIERS[0].from;
 
 /**
  * The play-along record.
@@ -44,6 +65,199 @@ export async function loadBests(userId: string): Promise<Bests> {
 	}
 
 	return { best, byChart };
+}
+
+/**
+ * How fast each rung of the ladder has been held on each tune.
+ *
+ * Derived and never stored. There is no `best_bpm` column on `badges` and there
+ * must not be: M9 deleted a stored best because it could drift from the runs
+ * that justified it, and a stored tempo grade is the same bug wearing a new
+ * name. The badge answers *when did you first get there*; this answers *how fast
+ * have you held it*, and neither can contradict the other.
+ *
+ * The roadmap writes the grade as `max(bpm) where best_streak >= tier.from`, six
+ * times over. It is asked here once per streak length instead — the same answer,
+ * a handful of rows rather than the whole log, and the ladder applied in
+ * `gradeShelf` where the ladder lives and can be tested without a database.
+ *
+ * **`coalesce(best_streak_bpm, bpm)` is the tempo a run is graded on.** The
+ * column that knows where a streak was actually clinched shipped in M15 and is
+ * null on every run recorded before it, and cannot be backfilled — the runs do
+ * not know. Grading strictly on it would show nothing at all for the history
+ * that exists; grading on `bpm` alone would reintroduce the flattery it was
+ * added to prevent. So a run recorded before the column existed is graded on the
+ * tempo it was logged at, because that is the only tempo it ever knew, and every
+ * run since is graded on where its best streak was reached.
+ *
+ * Two answers come back from one call because they are two readings of the same
+ * runs: the **shelf's** bands, which say how fast each rung has been held, and
+ * the **ladder**, which says which band the tune has been held at cleanly and
+ * what the next one up would cost. Splitting them across two loaders would be
+ * two places for one record to come from, which is the mistake this whole
+ * milestone is written against.
+ */
+export async function loadTempoGrades(userId: string): Promise<TempoRecord> {
+	const rows = await db
+		.select({
+			chartSlug: playRuns.chartSlug,
+			bestStreak: playRuns.bestStreak,
+			bpm: sql<number>`max(coalesce(${playRuns.bestStreakBpm}, ${playRuns.bpm}))::int`
+		})
+		.from(playRuns)
+		.where(and(eq(playRuns.userId, userId), gt(playRuns.bestStreak, 0)))
+		.groupBy(playRuns.chartSlug, playRuns.bestStreak);
+
+	if (rows.length === 0) return noTempo();
+
+	const byChart = new Map<string, StreakTempo[]>();
+	for (const row of rows) {
+		const list = byChart.get(row.chartSlug) ?? [];
+		list.push({ bestStreak: row.bestStreak, bpm: row.bpm ?? 0 });
+		byChart.set(row.chartSlug, list);
+	}
+
+	const held = await heldRuns(userId);
+	const slugs = new Set([...byChart.keys(), ...held.keys()]);
+	const targets = await targetTempos(userId, [...slugs]);
+
+	const graded: TempoRecord = noTempo();
+	for (const slug of slugs) {
+		const target = targets[slug];
+		// A tune whose tempo nothing records grades nothing. That is a chart of
+		// your own that has since been deleted: the runs still happened, and there
+		// is no honest number to measure them against.
+		if (!target) continue;
+
+		const shelf = gradeShelf(byChart.get(slug) ?? [], target);
+		if (Object.keys(shelf).length > 0) graded.byChart[slug] = shelf;
+
+		graded.ladders[slug] = suggestLadder(held.get(slug) ?? [], target);
+	}
+
+	return graded;
+}
+
+/**
+ * Every run that might have held its tune, per tune.
+ *
+ * Four columns off `play_runs` and no arithmetic: whether a run cleared the
+ * mission's bar is decided by `heldCleanly`, which is where the bar lives and
+ * where it can be tested. Runs with nothing played over are left out because
+ * they cannot answer the question either way — an evening spent listening is
+ * neither holding a tune nor failing to.
+ *
+ * Graded on the same `coalesce(best_streak_bpm, bpm)` the shelf is graded on, so
+ * a tune's band and its ladder can never be reading two different tempos.
+ */
+async function heldRuns(userId: string): Promise<Map<string, HeldRun[]>> {
+	const rows = await db
+		.select({
+			chartSlug: playRuns.chartSlug,
+			bpm: sql<number>`coalesce(${playRuns.bestStreakBpm}, ${playRuns.bpm})::int`,
+			voiced: playRuns.voiced,
+			landed: playRuns.landed,
+			bestStreak: playRuns.bestStreak
+		})
+		.from(playRuns)
+		.where(and(eq(playRuns.userId, userId), gt(playRuns.voiced, 0)));
+
+	const byChart = new Map<string, HeldRun[]>();
+	for (const row of rows) {
+		const list = byChart.get(row.chartSlug) ?? [];
+		list.push({
+			bpm: row.bpm ?? 0,
+			voiced: row.voiced,
+			landed: row.landed,
+			bestStreak: row.bestStreak
+		});
+		byChart.set(row.chartSlug, list);
+	}
+	return byChart;
+}
+
+/**
+ * Whether the last thirty days took any tune to a faster band.
+ *
+ * The first figure in the app that measures improvement rather than volume, and
+ * the one most at risk of saying more than the rows do. Two facts per tune and
+ * nothing else: the fastest band held before the window opened, and the fastest
+ * held across the whole record. A tune with no runs at all before the window has
+ * `before: null` — its history is entirely inside the window, so there is
+ * nothing to compare it against, and `readMovement` counts it as such rather
+ * than reporting it as a tune that stood still. Those are different facts and
+ * this page has never conflated two of those.
+ *
+ * The band is read the shelf's way — the fastest tempo any real streak was held
+ * at — so the movement figure and the per-tune band cannot disagree.
+ */
+export async function loadTempoMovement(
+	userId: string,
+	now = new Date()
+): Promise<TempoMovement[]> {
+	const cutoff = new Date(now.getTime() - MOVEMENT_DAYS * 86_400_000);
+
+	const rows = await db
+		.select({
+			chartSlug: playRuns.chartSlug,
+			now: sql<number | null>`max(coalesce(${playRuns.bestStreakBpm}, ${playRuns.bpm}))::int`,
+			before: sql<
+				number | null
+			>`max(coalesce(${playRuns.bestStreakBpm}, ${playRuns.bpm})) filter (where ${playRuns.startedAt} < ${cutoff})::int`
+		})
+		.from(playRuns)
+		.where(and(eq(playRuns.userId, userId), gte(playRuns.bestStreak, FIRST_RUNG)))
+		.groupBy(playRuns.chartSlug);
+
+	if (rows.length === 0) return [];
+
+	const targets = await targetTempos(
+		userId,
+		rows.map((row) => row.chartSlug)
+	);
+
+	const movement: TempoMovement[] = [];
+	for (const row of rows) {
+		const target = targets[row.chartSlug];
+		if (!target) continue;
+		const graded = row.now === null ? null : grade(row.now, target);
+		if (!graded) continue;
+		movement.push({
+			chartSlug: row.chartSlug,
+			before: row.before === null ? null : grade(row.before, target),
+			now: graded
+		});
+	}
+
+	return movement;
+}
+
+/**
+ * The tempo each tune is meant to go at — code first, then the database.
+ *
+ * The same order the rest of the app resolves a chart in, and it is load-bearing
+ * here: a built-in lives in `charts.ts` and has no row of its own to read
+ * `default_bpm` from, so a query alone would leave most of the record ungraded.
+ */
+async function targetTempos(userId: string, slugs: string[]): Promise<Record<string, number>> {
+	const targets: Record<string, number> = {};
+	const unresolved: string[] = [];
+
+	for (const slug of slugs) {
+		const seed = chartBySlug(slug);
+		if (seed) targets[slug] = seed.defaultBpm;
+		else unresolved.push(slug);
+	}
+
+	if (unresolved.length === 0) return targets;
+
+	const rows = await db
+		.select({ slug: charts.slug, defaultBpm: charts.defaultBpm })
+		.from(charts)
+		.where(and(inArray(charts.slug, unresolved), eq(charts.userId, userId)));
+
+	for (const row of rows) targets[row.slug] = row.defaultBpm;
+	return targets;
 }
 
 /** Every badge won, in the shape the shelf and the page already speak. */

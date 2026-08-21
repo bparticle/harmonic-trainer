@@ -24,7 +24,8 @@ const MISSION: Mission = {
 	groove: 'swing',
 	choruses: 2,
 	rootless: false,
-	coldSpot: null
+	coldSpot: null,
+	band: null
 };
 
 const questions = (count: number): Goal => ({ kind: 'questions', count });
