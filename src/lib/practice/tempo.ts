@@ -493,14 +493,13 @@ export function describeMonth(reading: MonthReading): string {
 	const tunes = (count: number) => `${count} ${count === 1 ? 'tune' : 'tunes'}`;
 
 	if (reading.raised.length > 0) {
-		return `${tunes(reading.raised.length)} moved to a faster band in the last ${MOVEMENT_DAYS} days.`;
+		return `${tunes(reading.raised.length)} moved up in ${MOVEMENT_DAYS} days.`;
 	}
 	if (reading.steady > 0) {
-		const already = reading.steady === 1 ? 'it' : 'they';
-		return `${tunes(reading.steady)} held the band ${already} already had over the last ${MOVEMENT_DAYS} days.`;
+		return `${tunes(reading.steady)} held their band in ${MOVEMENT_DAYS} days.`;
 	}
 	if (reading.tooNew > 0) {
-		return `Not enough history to say yet: every run on record is inside the last ${MOVEMENT_DAYS} days, so there is nothing before them to compare against.`;
+		return 'Not enough history yet.';
 	}
 	return '';
 }

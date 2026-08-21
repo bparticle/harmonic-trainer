@@ -5,6 +5,7 @@
 	import { spell } from '$lib/music/spell';
 	import { distinctRings, radialInterval, spoke } from '$lib/wheel/geometry';
 	import type { WheelConfig } from '$lib/settings';
+	import InfoHint from '$lib/components/InfoHint.svelte';
 
 	/*
 	 * Wheel calibration.
@@ -95,11 +96,15 @@
 <svelte:head><title>Calibrate · Harmonic Trainer</title></svelte:head>
 
 <main class="mx-auto min-h-dvh max-w-[1300px] px-5 py-6">
-	<header class="mb-6 flex items-baseline gap-4">
-		<h1 class="font-display text-ink text-lg font-semibold tracking-tight">Calibrate the wheel</h1>
+	<header class="mb-6 flex items-center gap-3">
+		<h1 class="font-display text-ink text-lg font-semibold tracking-tight">Calibrate wheel</h1>
+		<InfoHint
+			label="About wheel calibration"
+			text="Match the on-screen layout to your physical wheel. Harmony stays the same."
+		/>
 		<a
 			href="/settings/colours"
-			class="text-ink-muted hover:text-ink font-mono text-xs transition-colors">colours →</a
+			class="text-ink-muted hover:text-ink ml-1 font-mono text-xs transition-colors">Colours →</a
 		>
 	</header>
 
@@ -109,11 +114,6 @@
 		</section>
 
 		<aside class="flex flex-col gap-7">
-			<p class="text-ink-muted text-sm leading-relaxed">
-				Hold your wheel next to the screen and adjust until they agree. Nothing here changes the
-				music — only how it is laid out.
-			</p>
-
 			<section>
 				<h2 class="text-ink-dim mb-2 font-mono text-[0.65rem] tracking-widest uppercase">
 					Note at twelve o’clock
@@ -133,10 +133,10 @@
 
 			<section>
 				<h2 class="text-ink-dim mb-2 font-mono text-[0.65rem] tracking-widest uppercase">
-					Which way the rings turn
+					Ring direction
 				</h2>
 				<div class="flex gap-1">
-					{#each [[1, 'clockwise inward'], [-1, 'anticlockwise inward']] as [value, label] (value)}
+					{#each [[1, '↻ clockwise'], [-1, '↺ anticlockwise']] as [value, label] (value)}
 						<button
 							class="border-ground-line hover:border-ink-dim flex-1 rounded border px-2 py-2 font-mono text-xs transition-colors"
 							class:is-selected={config.offsetDirection === value}
@@ -186,7 +186,7 @@
 			<!-- The consequence of the settings, stated as musical fact. -->
 			<section class="border-ground-line bg-ground-raised rounded-lg border p-4">
 				<h2 class="text-ink-dim mb-2 font-mono text-[0.65rem] tracking-widest uppercase">
-					What that gives you
+					Preview
 				</h2>
 				<dl class="flex flex-col gap-2 font-mono text-xs">
 					<div class="flex justify-between gap-4">
@@ -202,7 +202,7 @@
 						<dd class="text-ink-muted font-display text-sm">{spokeNotes.join(' ')}</dd>
 					</div>
 					<div class="flex justify-between gap-4">
-						<dt class="text-ink-dim">pattern repeats after</dt>
+						<dt class="text-ink-dim">repeats after</dt>
 						<dd class="text-ink-muted">
 							{distinct} ring{distinct === 1 ? '' : 's'}
 							{#if config.rings > distinct}· ring {distinct + 1} duplicates ring 1{/if}
@@ -222,7 +222,7 @@
 				{#if dirty}
 					<button
 						class="text-ink-dim hover:text-ink px-3 py-2.5 font-mono text-xs transition-colors"
-						onclick={reset}>revert</button
+						onclick={reset}>Revert</button
 					>
 				{/if}
 			</div>

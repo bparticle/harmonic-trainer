@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { pitchClass } from '$lib/music/note';
-	import { GROOVES, grooveSpec, isGroove, type Groove } from '$lib/audio/groove';
+	import { GROOVES, isGroove, type Groove } from '$lib/audio/groove';
 	import { playProgression, stopAll } from '$lib/audio/engine';
 	import {
 		BARS_PER_ROW,
@@ -14,6 +14,7 @@
 		type Grid
 	} from '$lib/curriculum/editor';
 	import { looksLikeChordSheet } from '$lib/curriculum/lyrics';
+	import InfoHint from './InfoHint.svelte';
 
 	/*
 	 * Writing a chart down.
@@ -186,17 +187,14 @@
 		<input type="hidden" name="id" value={editing.id} />
 	{/if}
 
-	<div class="flex flex-wrap items-baseline justify-between gap-2">
+	<div class="flex flex-wrap items-center gap-2">
 		<h2 class="panel-title">{editing ? `Edit ${editing.name}` : 'Add a chart'}</h2>
-		<p class="hint">
-			{#if editing}
-				The chords come back as they were written down. Its place in the record does not change, so
-				runs and badges on it survive a rename.
-			{:else}
-				Stored as numerals, so typing it in once gives you all twelve keys. Paste a chord sheet —
-				chords above the words — and the words land under the right bars.
-			{/if}
-		</p>
+		<InfoHint
+			label="About chart storage"
+			text={editing
+				? 'Runs and badges stay attached when you edit a chart.'
+				: 'Charts are stored as numerals, so one grid works in every key. You can paste a chord sheet.'}
+		/>
 	</div>
 
 	<div class="head">
@@ -232,15 +230,6 @@
 			</select>
 		</label>
 	</div>
-
-	<p class="hint">
-		The key you say it is written in decides every numeral below. Change it and watch them move — if
-		they stop making sense, the key is wrong.
-	</p>
-	<p class="hint">
-		{grooveSpec(groove).notes} The groove, the tempo and the key are saved with the chart, so it opens
-		the way you left it.
-	</p>
 
 	<div class="grid-wrap">
 		{#each grid as row, r (r)}
@@ -304,11 +293,6 @@
 			{singing ? '− words' : '+ words'}
 		</button>
 		<span class="count">{reading.bars} bars</span>
-		{#if singing}
-			<span class="count">
-				Words sit under the chord they are sung over, and light up with the bar.
-			</span>
-		{/if}
 	</div>
 
 	{#if reading.problems.length}
@@ -322,9 +306,7 @@
 		</div>
 	{:else if reading.drift.length}
 		<div role="alert" class="report is-bad">
-			<p class="report-title">
-				These bars come back as a different chord, so the app would play the one on the right:
-			</p>
+			<p class="report-title">Playback would change these chords:</p>
 			<ul>
 				{#each reading.drift as bar (bar.bar)}
 					<li>bar {bar.bar}: {bar.written} → {bar.playback}</li>
@@ -334,15 +316,13 @@
 		</div>
 	{:else if reading.bars > 0}
 		<p class="report is-good" role="status">
-			All {reading.bars} bars come back exactly as written.
+			✓ {reading.bars} bars readable
 		</p>
 	{/if}
 
 	<label class="field-wrap">
-		<span class="field-label"
-			>Notes <span class="text-ink-dim">— what it is for practising</span></span
-		>
-		<input bind:value={notes} name="notes" class="field w-full" placeholder="Yours." />
+		<span class="field-label">Notes</span>
+		<input bind:value={notes} name="notes" class="field w-full" placeholder="Optional" />
 	</label>
 
 	<!--
@@ -360,7 +340,7 @@
 			{editing ? 'Save changes' : 'Save chart'}
 		</button>
 		<button type="button" class="chip" onclick={hear} disabled={reading.bars === 0}>
-			{hearing ? 'Stop' : 'Hear it'}
+			{hearing ? 'Stop' : 'Preview'}
 		</button>
 		<button type="button" class="chip" onclick={onCancel}>Cancel</button>
 	</div>
@@ -383,12 +363,6 @@
 		font-size: 0.7rem;
 		letter-spacing: 0.08em;
 		text-transform: uppercase;
-		color: var(--color-ink-dim);
-	}
-
-	.hint {
-		font-size: 0.72rem;
-		line-height: 1.5;
 		color: var(--color-ink-dim);
 	}
 

@@ -504,7 +504,7 @@
 	{:else if !data.workout}
 		<div class="grid flex-1 place-items-center text-center">
 			<div>
-				<p class="text-ink-muted mb-4">No workout open.</p>
+				<p class="text-ink-muted mb-4">No workout.</p>
 				<a href="/" class="bg-ink text-ground rounded-lg px-5 py-3 font-semibold">Back</a>
 			</div>
 		</div>
@@ -522,6 +522,7 @@
 				<button
 					class="text-ink-dim hover:text-ink rounded-md px-2 py-2 font-mono text-xs transition-colors"
 					onclick={() => finishTask({ skipped: true })}
+					aria-label="Skip task"
 					disabled={busy}>skip</button
 				>
 				<!-- Two different exits, each named for what it actually does. One
@@ -530,12 +531,14 @@
 				     around all day. -->
 				<button
 					class="text-ink-dim hover:text-ink rounded-md px-2 py-2 font-mono text-xs transition-colors"
-					onclick={leave}>keep for later</button
+					onclick={leave}
+					aria-label="Keep workout for later">later</button
 				>
 				<button
 					class="text-ink-dim hover:text-ink rounded-md px-2 py-2 font-mono text-xs transition-colors"
 					onclick={endNow}
-					disabled={busy}>stop workout</button
+					aria-label="Stop workout"
+					disabled={busy}>stop</button
 				>
 			</div>
 		</header>
@@ -549,8 +552,7 @@
 					{task.mission.chartName}
 				</h2>
 				<p class="text-ink-muted font-mono text-sm">
-					{glyph(task.mission.keyCenter)} · {task.mission.groove} · {task.mission.bpmFloor}bpm or
-					faster
+					{glyph(task.mission.keyCenter)} · {task.mission.groove} · ≥{task.mission.bpmFloor} BPM
 				</p>
 
 				{#if verdict}
@@ -564,10 +566,6 @@
 				>
 					{busy ? 'opening…' : verdict ? 'Play it again' : 'Play it'}
 				</button>
-				<p class="text-ink-dim max-w-md font-mono text-[0.7rem] leading-relaxed">
-					The transport, the chart and the scoring are the ones you already use. The goal is judged
-					when you stop.
-				</p>
 			</section>
 
 			<!-- One new thing ---------------------------------------------------- -->
@@ -672,17 +670,17 @@
 					{#if prompt.answerWith === 'name' && !marksPlaying && !revealed}
 						<button
 							class="bg-ink text-ground rounded-lg px-5 py-2.5 text-sm font-semibold"
-							onclick={advanceHandsFree}>I have it</button
+							onclick={advanceHandsFree}>Got it</button
 						>
 					{/if}
 					<button
 						class="border-ground-line hover:border-ink-dim rounded-lg border px-4 py-2.5 font-mono text-xs transition-colors"
 						onclick={showAnswer}
-						disabled={showedAnswer}>show me</button
+						disabled={showedAnswer}>show</button
 					>
 					<button
 						class="text-ink-dim hover:text-ink px-4 py-2.5 font-mono text-xs transition-colors"
-						onclick={skipCard}>{showedAnswer ? 'next' : 'skip this one'}</button
+						onclick={skipCard}>{showedAnswer ? 'next' : 'skip'}</button
 					>
 				</div>
 			</section>
@@ -708,7 +706,7 @@
 			</footer>
 
 			<div class="mt-4 flex items-center justify-between">
-				<span class="text-ink-dim font-mono text-[0.7rem]">Pedal or spacebar moves you on.</span>
+				<span class="text-ink-dim font-mono text-[0.7rem]"><kbd>Space</kbd> / pedal · next</span>
 				<span class="text-ink-dim font-mono text-[0.7rem]">
 					{Math.min(cardIndex, asks)} of {asks} answered
 				</span>
@@ -721,7 +719,6 @@
 	{:else}
 		<div class="grid flex-1 place-items-center text-center">
 			<div>
-				<p class="text-ink-muted mb-4">Every task is done.</p>
 				<button
 					class="bg-ink text-ground rounded-lg px-5 py-3 font-semibold disabled:opacity-40"
 					onclick={endWorkout}
@@ -733,6 +730,15 @@
 </main>
 
 <style>
+	kbd {
+		padding: 0.1rem 0.35rem;
+		border: 1px solid var(--color-ground-line);
+		border-radius: 4px;
+		background: var(--color-ground-raised);
+		color: var(--color-ink-muted);
+		font: inherit;
+	}
+
 	/*
 	 * A mission's last word, drawn in weight rather than hue: a met goal in full
 	 * ink and a missed one dimmed. Nothing goes red — a mission short of its bar
