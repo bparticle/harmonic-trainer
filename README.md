@@ -299,6 +299,7 @@ local Postgres for development and tests.
 | **M11** | The chart editor                           | done   |
 | **M14** | The way in — the public demo               | done   |
 | **M15** | The practice room, rebuilt around the band | done   |
+| **M16** | Tempo as the other axis                    | done   |
 
 M5 built the session engine and M15 replaced it. The six timed blocks are gone —
 the rows they wrote are still counted, and the reasoning for taking them out is
@@ -313,7 +314,6 @@ with its degree. `DECISIONS.md` has the reasoning for each.
 
 | M       | Deliverable                                                     | Status  |
 | ------- | --------------------------------------------------------------- | ------- |
-| **M16** | Tempo as the other axis — badges that know how fast             | planned |
 | **M12** | Accounts — real credentials, and every owned row actually owned | planned |
 | **M13** | The subscription — a hosted instance somebody else can pay for  | planned |
 
