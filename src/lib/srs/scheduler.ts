@@ -163,9 +163,15 @@ export function isDue(state: SrsState, now = new Date()): boolean {
  * Play-to-name is weighted highest because it is the weakest
  * link, and it is the direction the whole app exists to fix — being able to
  * play a thing you cannot name is the problem statement.
+ *
+ * Degree-to-play sits just behind it, and for the same reason from the other
+ * end: knowing that the chord under the numeral IV in E♭ is A♭ is the half of
+ * the problem statement that the play-along page never asks, because a chart
+ * shows symbols and never numbers.
  */
 export const DIRECTION_WEIGHT: Record<CardDirection, number> = {
 	play_name: 1.6,
+	degree_play: 1.3,
 	hear_name: 1.15,
 	see_play: 1.0,
 	hear_play: 1.0
@@ -180,11 +186,44 @@ export type Schedulable = {
 	state: SrsState;
 };
 
+/**
+ * The direction that is an introduction rather than a review.
+ *
+ * `see_play` shows you the symbol and asks you to play it — which is exactly
+ * what a chart does, all day, with a rhythm section behind it. It earns its
+ * place the first few times, while the symbol is still new, and after that it
+ * is the one question the band already asks better.
+ */
+const INTRODUCTION: CardDirection = 'see_play';
+
+/**
+ * Has this card outgrown being shown its own symbol?
+ *
+ * Only a *graduated* introduction retires. `review` is FSRS saying the card is
+ * known, and a known symbol is one the chart will keep asking anyway.
+ * `relearning` is the opposite fact — the card graduated and was then failed,
+ * which for `see_play` means you were shown a symbol and could not play it. To
+ * retire that one would be the app noticing the gap and then declining to
+ * mention it. Failing hands the introduction back; passing is what gives it up.
+ */
+export function isRetiredIntroduction(card: Pick<Schedulable, 'direction' | 'state'>): boolean {
+	return card.direction === INTRODUCTION && card.state.state === 'review';
+}
+
 export type SelectionOptions = {
 	now?: Date;
 	/** Keys that have been neglected, which get a nudge to the front. */
 	coldKeys?: string[];
 	coldKeyBoost?: number;
+	/**
+	 * Drop graduated introductions from the pile.
+	 *
+	 * Opt-in, and off by default, because the six-block session still draws its
+	 * warm-up straight from `see_play` and would quietly empty out. What asks for
+	 * it is workout composition, where the same question has somewhere better to
+	 * be asked.
+	 */
+	retireIntroductions?: boolean;
 };
 
 /**
@@ -202,6 +241,7 @@ export function selectDue(cards: Schedulable[], options: SelectionOptions = {}):
 
 	return cards
 		.filter((c) => isDue(c.state, now))
+		.filter((c) => !options.retireIntroductions || !isRetiredIntroduction(c))
 		.map((c) => {
 			const overdueDays = Math.max(
 				0,

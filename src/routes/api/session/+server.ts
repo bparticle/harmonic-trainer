@@ -1,41 +1,41 @@
 import { error, json, type RequestHandler } from '@sveltejs/kit';
-import type { BlockType, ReviewRating } from '$lib/server/db/schema';
+import type { ReviewRating } from '$lib/server/db/schema';
 import {
-	finishBlock,
-	finishSession,
+	activeWorkout,
+	beginTask,
+	finishTask,
+	finishWorkout,
 	recordReviews,
-	startOrResume,
-	todaysSession,
+	startWorkout,
 	type ReviewInput
 } from '$lib/server/db/session-store';
-import type { SessionLength } from '$lib/session/plan';
+import { currentUserId } from '$lib/server/db/user';
+import { readChoice, readSize } from '$lib/session/progress';
 
 /**
- * The session's write endpoint.
+ * The workout's write endpoint.
  *
- * Everything is idempotent or additive. A block can be finished twice, a
- * session started twice, a review batch resent — because the practice device
- * may lose its connection mid-session, and the recovery has to be "send it
- * again" rather than "work out what already got through".
+ * Everything is idempotent or additive. A task can be finished twice, a workout
+ * started twice, a review batch resent — because the practice device may lose
+ * its connection mid-workout, and the recovery has to be "send it again" rather
+ * than "work out what already got through".
+ *
+ * A task is named by its position and never by its type. The store turns that
+ * into a block, because which task index a `mission_4` row belongs to is a fact
+ * about the stored plan, and the page has no business knowing how a block is
+ * named.
  */
 
-const BLOCK_TYPES: BlockType[] = [
-	'wheel_warmup',
-	'name_what_you_play',
-	'ear_drill',
-	'new_atom',
-	'apply',
-	'log'
-];
 const RATINGS: ReviewRating[] = ['again', 'hard', 'good', 'easy'];
 
 export const GET: RequestHandler = async ({ locals }) => {
 	if (!locals.authed) error(401, 'Not signed in');
-	return json(await todaysSession());
+	return json(await activeWorkout());
 };
 
 export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!locals.authed) error(401, 'Not signed in');
+	const userId = currentUserId(locals.userId);
 
 	let body: Record<string, unknown>;
 	try {
@@ -47,42 +47,55 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const action = body.action;
 
 	if (action === 'start') {
-		const length = Number(body.lengthMinutes ?? 20);
-		if (![10, 20, 35].includes(length)) error(400, 'Sessions are 10, 20 or 35 minutes');
-		return json(
-			await startOrResume({
-				lengthMinutes: length as SessionLength,
-				progressionId:
-					typeof body.progressionId === 'string' && body.progressionId ? body.progressionId : null,
-				progressionKey:
-					typeof body.progressionKey === 'string' && body.progressionKey
-						? body.progressionKey
-						: null
-			})
+		const size = readSize(body.size);
+		const choice = readChoice(
+			{
+				progressionId: text(body.progressionId),
+				progressionKey: text(body.progressionKey),
+				focusKey: text(body.focusKey),
+				focusRung: text(body.focusRung)
+			},
+			// The picker always sends a key with a progression; this only catches a
+			// request typed by hand, and C is where the ladder starts.
+			text(body.progressionKey) ?? 'C'
 		);
+		return json(await startWorkout(userId, { size, choice }));
 	}
 
 	const sessionId = typeof body.sessionId === 'string' ? body.sessionId : null;
-	if (!sessionId) error(400, 'Which session?');
+	if (!sessionId) error(400, 'Which workout?');
 
-	if (action === 'finish-block') {
-		const blockType = body.blockType as BlockType;
-		if (!BLOCK_TYPES.includes(blockType)) error(400, `Unknown block: ${String(blockType)}`);
+	if (action === 'begin-task') {
+		const blockId = await beginTask(sessionId, taskIndex(body.index));
+		if (!blockId) error(400, 'No such task');
+		return json({ blockId });
+	}
 
+	if (action === 'finish-task') {
 		const batch = parseReviews(body.reviews);
 		if (batch.length) await recordReviews(sessionId, batch);
-		await finishBlock(sessionId, blockType, body.result ?? null);
 
-		return json(await todaysSession());
+		const finished = await finishTask(sessionId, taskIndex(body.index), body.result ?? null);
+		if (!finished) error(400, 'No such task');
+
+		return json(await activeWorkout());
 	}
 
 	if (action === 'finish') {
-		await finishSession(sessionId, body.result ?? null);
-		return json({ finished: true });
+		return json(await finishWorkout(sessionId, userId));
 	}
 
 	error(400, `Unknown action: ${String(action)}`);
 };
+
+/** A task is a position in the stored plan, and the store checks it exists. */
+function taskIndex(raw: unknown): number {
+	const index = Number(raw);
+	if (!Number.isInteger(index) || index < 0) error(400, 'Which task?');
+	return index;
+}
+
+const text = (value: unknown): string | null => (typeof value === 'string' && value ? value : null);
 
 function parseReviews(input: unknown): ReviewInput[] {
 	if (!Array.isArray(input)) return [];

@@ -5,6 +5,7 @@ import {
 	gradeFromPerformance,
 	initialState,
 	isDue,
+	isRetiredIntroduction,
 	preview,
 	retrievability,
 	schedule,
@@ -177,6 +178,17 @@ describe('choosing what to ask next', () => {
 		expect(selectDue(cards, { now: at(0) })[0].cardId).toBe('name');
 	});
 
+	it('weights the numeral just behind the name, being the other half of it', () => {
+		expect(DIRECTION_WEIGHT.degree_play).toBeLessThan(DIRECTION_WEIGHT.play_name);
+		expect(DIRECTION_WEIGHT.degree_play).toBeGreaterThan(DIRECTION_WEIGHT.hear_name);
+
+		const cards = [
+			card('see', 'see_play', 'C', { dueAt: at(-2) }),
+			card('degree', 'degree_play', 'C', { dueAt: at(-2) })
+		];
+		expect(selectDue(cards, { now: at(0) })[0].cardId).toBe('degree');
+	});
+
 	it('pulls neglected keys forward', () => {
 		const cards = [
 			card('warm', 'see_play', 'C', { dueAt: at(-2) }),
@@ -199,6 +211,46 @@ describe('choosing what to ask next', () => {
 			card('overdue', 'see_play', 'C', { dueAt: at(-6) })
 		];
 		expect(selectDue(cards, { now: at(0) })[0].cardId).toBe('overdue');
+	});
+});
+
+describe('retiring the introduction', () => {
+	const shown = (id: string, state: SrsState['state']) =>
+		card(id, 'see_play', 'C', { state, reps: state === 'new' ? 0 : 3, dueAt: at(-1) });
+
+	it('keeps showing the symbol while the card is still being met', () => {
+		const cards = [shown('brand-new', 'new'), shown('learning', 'learning')];
+		const chosen = selectDue(cards, { now: at(0), retireIntroductions: true });
+		expect(new Set(chosen.map((c) => c.cardId))).toEqual(new Set(['brand-new', 'learning']));
+	});
+
+	it('stops asking once the card has graduated, because the chart asks it all day', () => {
+		const cards = [shown('known', 'review'), card('heard', 'hear_name', 'C', { dueAt: at(-1) })];
+		const chosen = selectDue(cards, { now: at(0), retireIntroductions: true });
+		expect(chosen.map((c) => c.cardId)).toEqual(['heard']);
+	});
+
+	it('hands the introduction back to a card that graduated and then failed', () => {
+		// `relearning` means you were shown a symbol you could not play. Retiring
+		// that one would be the app noticing the gap and declining to mention it.
+		const cards = [shown('lapsed', 'relearning')];
+		expect(selectDue(cards, { now: at(0), retireIntroductions: true })).toHaveLength(1);
+		expect(isRetiredIntroduction(cards[0])).toBe(false);
+	});
+
+	it('retires nothing at all unless it is asked to', () => {
+		// The six-block session still draws its warm-up from `see_play`, and it
+		// keeps every card it has until the page that replaces it exists.
+		const cards = [shown('known', 'review')];
+		expect(selectDue(cards, { now: at(0) })).toHaveLength(1);
+	});
+
+	it('retires only the direction the chart can ask instead', () => {
+		const graduated = ['hear_name', 'hear_play', 'play_name', 'degree_play'] as const;
+		for (const direction of graduated) {
+			const one = card(direction, direction, 'C', { dueAt: at(-1) });
+			expect(isRetiredIntroduction(one), direction).toBe(false);
+		}
 	});
 });
 

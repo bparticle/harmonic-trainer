@@ -1,5 +1,6 @@
 import type { CardDirection } from '$lib/server/db/schema';
 import type { CardPayload } from '$lib/curriculum/cards';
+import { formatKey, parseKey } from '$lib/music/key';
 
 /**
  * Posing a card and marking the answer.
@@ -21,8 +22,23 @@ export type Prompt = {
 	instruction: string;
 };
 
-/** Turn a card into a question. */
-export function pose(direction: CardDirection, payload: CardPayload, midiRoot = 60): Prompt {
+/**
+ * Turn a card into a question.
+ *
+ * `keyCenter` is the only thing a card row knows that its payload does not, and
+ * one direction needs it: a degree means nothing without the key it is a degree
+ * of. It is passed rather than folded into the payload because the card row
+ * already owns the key, and a fact stored twice is a fact that can disagree
+ * with itself — the one exception being an item whose numerals belong to some
+ * other key than the one it is filed under, which says so itself in `degreeOf`.
+ * Every other direction ignores all of this, which is why it comes last.
+ */
+export function pose(
+	direction: CardDirection,
+	payload: CardPayload,
+	midiRoot = 60,
+	keyCenter?: string
+): Prompt {
 	const voicing = payload.answerVoicing ?? toVoicing(payload.answerPitchClasses, midiRoot);
 
 	switch (direction) {
@@ -58,6 +74,35 @@ export function pose(direction: CardDirection, payload: CardPayload, midiRoot = 
 				answerWith: 'name',
 				instruction: 'Play it, then name what you played.'
 			};
+		/*
+		 * The number, and the key it is a number in.
+		 *
+		 * Two halves, both marked: `markPlayed` takes the notes as they arrive and
+		 * `markNamed` closes it. `answerWith` names the half that *ends* the
+		 * question, which is the naming — the same shape `play_name` already has,
+		 * and the half that closes the loop between a function and a symbol.
+		 *
+		 * The key is in the prompt rather than in the surroundings because a
+		 * workout's function task crosses keys by design. A block that never left
+		 * today's key could leave it unsaid; eight questions in eight keys cannot.
+		 */
+		case 'degree_play': {
+			const degree = payload.degree ?? payload.label;
+			// The item's own key wins where it has one: the relative minor's triads
+			// live on the C stage but their numerals are numerals of A minor, and
+			// "i — C" would be a wrong question with a right answer behind it.
+			// Spelled the way the rest of the app spells a key on screen, because
+			// `Eb` is how a database writes it and not how a musician reads it.
+			const home = payload.degreeOf ?? keyCenter;
+			const key = home ? formatKey(parseKey(home), true) : null;
+			return {
+				direction,
+				visible: key ? `${degree} — ${key}` : degree,
+				audible: null,
+				answerWith: 'name',
+				instruction: 'Play the chord that degree asks for, then name what you played.'
+			};
+		}
 	}
 }
 

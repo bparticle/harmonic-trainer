@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { db } from './index';
-import { badges, chordAttempts, playRuns } from './schema';
+import { badges, chordAttempts, playRuns, sessionBlocks } from './schema';
 import { emptyRecord, type StreakRecord } from '$lib/effects/badges';
 import { noBests, type Bests, type Flush } from '$lib/practice/run';
 
@@ -83,9 +83,13 @@ export async function loadRecord(userId: string): Promise<StreakRecord> {
  * arrive with no run at all, which is how a shelf that predates this milestone
  * is carried in from local storage: the unique constraint means doing that
  * every load costs nothing after the first.
+ *
+ * Mission verdicts come after the runs for the same reason, and are the one
+ * thing here that is an update rather than an insert — a block is a row a
+ * session already made. The rule is written below where it is applied.
  */
 export async function saveFlush(userId: string, flush: Flush): Promise<void> {
-	if (flush.runs.length === 0 && flush.badges.length === 0) return;
+	if (flush.runs.length === 0 && flush.badges.length === 0 && flush.blocks.length === 0) return;
 
 	await db.transaction(async (tx) => {
 		for (const run of flush.runs) {
@@ -96,6 +100,7 @@ export async function saveFlush(userId: string, flush: Flush): Promise<void> {
 					userId,
 					chartSlug: run.chartSlug,
 					chartId: run.chartId,
+					sessionBlockId: run.sessionBlockId,
 					keyCenter: run.keyCenter,
 					bpm: run.bpm,
 					groove: run.groove,
@@ -109,7 +114,8 @@ export async function saveFlush(userId: string, flush: Flush): Promise<void> {
 					notesChord: run.notesChord,
 					notesColour: run.notesColour,
 					notesOutside: run.notesOutside,
-					bestStreak: run.bestStreak
+					bestStreak: run.bestStreak,
+					bestStreakBpm: run.bestStreakBpm
 				})
 				.onConflictDoNothing({ target: playRuns.id })
 				.returning({ id: playRuns.id });
@@ -134,6 +140,33 @@ export async function saveFlush(userId: string, flush: Flush): Promise<void> {
 					atMs: attempt.atMs
 				}))
 			);
+		}
+
+		/*
+		 * A mission's verdict, on the block that set it.
+		 *
+		 * A block ends when its goal is met, and not before. Until then the latest
+		 * verdict stands in `result_json` with `ended_at` still null, so a session
+		 * can see how close the last attempt came and the mission stays open to be
+		 * played again — which is what "a goal that can be met rather than a clock
+		 * that runs out" has to mean in the row. A block already ended is left
+		 * exactly as it is, so a post retried after a timeout changes nothing and
+		 * neither does a later, worse run.
+		 *
+		 * Stamped with the end of the run that reached it rather than with now: a
+		 * mission played on a train and flushed the next morning was finished on
+		 * the train.
+		 */
+		for (const block of flush.blocks) {
+			const run = flush.runs.find((candidate) => candidate.id === block.runId);
+			const at = run?.endedAt ? new Date(run.endedAt) : new Date();
+			await tx
+				.update(sessionBlocks)
+				.set({
+					resultJson: block.verdict as never,
+					endedAt: block.verdict.met ? at : null
+				})
+				.where(and(eq(sessionBlocks.id, block.blockId), isNull(sessionBlocks.endedAt)));
 		}
 
 		if (flush.badges.length === 0) return;
@@ -165,11 +198,12 @@ export async function saveFlush(userId: string, flush: Flush): Promise<void> {
 }
 
 /*
- * Everything below is read by the profile, and by nothing else.
+ * Everything below is read by the pages that report the record: the profile,
+ * and the home page's twelve keys.
  *
  * Each is one query, and each answers a question the page states in words: how
  * long has been played, on what, and where the time went. Nothing here
- * estimates — a number the profile cannot trace to rows is a number it does not
+ * estimates — a number a page cannot trace to rows is a number it does not
  * show.
  */
 
@@ -367,6 +401,33 @@ export async function loadSpread(userId: string): Promise<{ byKey: Slice[]; byQu
 		.orderBy(desc(sql`count(*)`));
 
 	return { byKey, byQuality };
+}
+
+/**
+ * Chords heard per key, for the home page's twelve swatches.
+ *
+ * The left half of `loadSpread`'s `byKey` and deliberately so: the home page and
+ * the profile draw the same twelve keys, and drawing them from two different
+ * questions is how two pages come to disagree about one record. The *local* key
+ * again, so a blues in C fills F and G as well.
+ *
+ * Accuracy is not selected, and its absence is the point. A percentage per key
+ * on the page you open to decide what to practise would be a verdict on ten
+ * keys before the day has started, and this page never grades anybody. The
+ * count is what a swatch needs.
+ */
+export async function loadKeyChords(
+	userId: string
+): Promise<Array<{ key: string; chords: number }>> {
+	return db
+		.select({
+			key: chordAttempts.localKey,
+			chords: sql<number>`count(*)::int`
+		})
+		.from(chordAttempts)
+		.innerJoin(playRuns, eq(playRuns.id, chordAttempts.runId))
+		.where(eq(playRuns.userId, userId))
+		.groupBy(chordAttempts.localKey);
 }
 
 export type RecentRun = {

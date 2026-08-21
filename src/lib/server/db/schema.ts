@@ -17,6 +17,7 @@ import {
 import { sql } from 'drizzle-orm';
 import type { Landing } from '$lib/practice/match';
 import type { Groove } from '$lib/audio/groove';
+import type { TaskKind } from '$lib/session/workout';
 
 /*
  * Conventions
@@ -50,15 +51,23 @@ const bytea = customType<{ data: Uint8Array; driverData: Buffer }>({
 // ---------------------------------------------------------------------------
 
 /**
- * The four directions from section 8. Each is scheduled independently because
- * hearing, naming, playing and reading-off-the-wheel are genuinely different
- * skills — you can hear a chord you cannot name.
+ * The directions from section 8, each named `stimulus_response`. Each is
+ * scheduled independently because hearing, naming, playing and
+ * reading-off-the-wheel are genuinely different skills — you can hear a chord
+ * you cannot name.
+ *
+ * `degree_play` is the fifth and arrived last: the stimulus is a Roman numeral
+ * and a key rather than a symbol, because seeing "A♭" and producing A♭ is
+ * spelling while seeing "IV of E♭" and producing A♭ is harmony. It is appended
+ * rather than filed next to `play_name` on purpose — `ALTER TYPE ... ADD VALUE`
+ * only appends, so the order here has to be the order the type actually holds.
  */
 export const cardDirection = pgEnum('card_direction', [
 	'hear_name',
 	'hear_play',
 	'see_play',
-	'play_name'
+	'play_name',
+	'degree_play'
 ]);
 
 /** FSRS memory states. */
@@ -71,8 +80,44 @@ export const reviewRating = pgEnum('review_rating', ['again', 'hard', 'good', 'e
 // Narrowed text vocabularies
 // ---------------------------------------------------------------------------
 
-export type BlockType =
+/**
+ * A workout's task, as the row that records it names itself.
+ *
+ * The kind and the position, because neither alone identifies a task: a long
+ * workout holds two missions, and `session_blocks` is keyed by session and type.
+ * The position is what tells them apart; the kind is there so a row read on its
+ * own still says what happened. The plan in `plan_json` stays the authority on
+ * what task 2 actually was — this is how a block points at it.
+ */
+export type WorkoutBlockType = `${TaskKind}_${number}`;
+
+/**
+ * The six-block session's names for a block. **History, and not vocabulary.**
+ *
+ * Do not delete these, and do not write one. The distinction is the whole point
+ * of the type existing on its own: M15 removed the six-block session, so nothing
+ * in the app offers any of these any more — but `session_blocks` still holds the
+ * rows, `practiceTotals` still counts the hours in them, and a row whose
+ * `block_type` no type will admit is a row nobody can read back. The vocabulary
+ * stopped; the record did not.
+ *
+ * `block_type` is text narrowed by a union rather than an enum precisely so this
+ * could happen without a migration — the column was widened when workouts
+ * arrived and nothing had to be rewritten, and nothing has to be rewritten now
+ * that the older half is closed.
+ */
+export type LegacyBlockType =
 	'wheel_warmup' | 'name_what_you_play' | 'ear_drill' | 'new_atom' | 'apply' | 'log';
+
+/**
+ * What a block of practice was: what can be written today, plus what was.
+ *
+ * This is the *reading* type, and the column carries it. The writing side is
+ * narrower — `beginBlock` and `finishBlock` take a `WorkoutBlockType` and
+ * nothing else — so the old names can still come back out of the database and
+ * can no longer go into it.
+ */
+export type BlockType = WorkoutBlockType | LegacyBlockType;
 
 export type SkillCategory =
 	'inventory' | 'keys' | 'voicings' | 'progressions' | 'modes' | 'reharm' | 'application';
@@ -405,6 +450,19 @@ export const playRuns = pgTable(
 			.references(() => users.id, { onDelete: 'cascade' }),
 		chartSlug: text('chart_slug').notNull(),
 		chartId: uuid('chart_id').references(() => charts.id, { onDelete: 'set null' }),
+		/**
+		 * The mission block this run answered, or null for a free run — which stays
+		 * the common case, because playing along belongs to no session.
+		 *
+		 * It is what makes a goal's verdict traceable: the block holds the verdict,
+		 * this points at the run that earned it, and `chord_attempts` holds every
+		 * chord the run was judged on. `set null` rather than `cascade`, following
+		 * the same reasoning as `chart_id` above — deleting a session must not
+		 * delete an hour of playing.
+		 */
+		sessionBlockId: uuid('session_block_id').references(() => sessionBlocks.id, {
+			onDelete: 'set null'
+		}),
 		keyCenter: text('key_center').notNull(),
 		bpm: integer('bpm').notNull(),
 		/** The groove it was played over. Called `feel` until grooves existed, when
@@ -421,7 +479,26 @@ export const playRuns = pgTable(
 		notesChord: integer('notes_chord').notNull(),
 		notesColour: integer('notes_colour').notNull(),
 		notesOutside: integer('notes_outside').notNull(),
-		bestStreak: integer('best_streak').notNull()
+		bestStreak: integer('best_streak').notNull(),
+		/**
+		 * The tempo the best streak was clinched at, or null when it was not
+		 * witnessed.
+		 *
+		 * Tempo moves under a running transport by design, so `bpm` above is the
+		 * tempo the run *ended* at and says nothing about where a streak was
+		 * reached: a run started at 140 and slowed to 60 records one number, and if
+		 * the streak was clinched after the slowdown the record flatters. This is a
+		 * fact about the run rather than a copy of an aggregate — the tempo showing
+		 * at the moment `best` was last raised — so it does not reopen the argument
+		 * that deleted the stored best.
+		 *
+		 * **It cannot be backfilled.** The runs already logged do not know, and
+		 * inventing a number for them would be the first estimate in a record that
+		 * has never held one. Nothing reads it yet; it is captured now because every
+		 * day it does not exist is a day of history that can never be graded
+		 * honestly.
+		 */
+		bestStreakBpm: integer('best_streak_bpm')
 	},
 	(t) => [
 		index('play_runs_user_started_idx').on(t.userId, t.startedAt),

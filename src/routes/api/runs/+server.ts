@@ -1,18 +1,31 @@
 import { error, json, type RequestHandler } from '@sveltejs/kit';
 import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { charts } from '$lib/server/db/schema';
+import { charts, sessionBlocks } from '$lib/server/db/schema';
 import { currentUserId } from '$lib/server/db/user';
 import { loadBests, loadRecord, saveFlush } from '$lib/server/db/play-log';
 import { BADGE_TIERS } from '$lib/effects/streak';
-import type { AttemptPayload, BadgePayload, Flush, RunPayload } from '$lib/practice/run';
+import type { Goal, Verdict } from '$lib/practice/goal';
+import type {
+	AttemptPayload,
+	BadgePayload,
+	BlockResultPayload,
+	Flush,
+	RunPayload
+} from '$lib/practice/run';
 
 /**
  * Where a run of the transport is written down.
  *
- * One post per flush, carrying the runs, their chords and any badges earned, in
- * one transaction. Everything is keyed on ids the browser generated, so a
- * request that timed out can simply be sent again — see `saveFlush`.
+ * One post per flush, carrying the runs, their chords, any badges earned and any
+ * mission verdict reached, in one transaction. Everything is keyed on ids the
+ * browser generated, so a request that timed out can simply be sent again — see
+ * `saveFlush`.
+ *
+ * A mission's verdict travels with its run rather than through an endpoint of
+ * its own, which is what makes the offline story one story: a mission played
+ * with the network away waits in the same outbox as the run, and until that post
+ * lands the block is simply not finished yet.
  *
  * Nothing here trusts the body. It arrives from a page that is also a local
  * cache the player can edit, and the difference between "the client is on our
@@ -57,10 +70,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	const runs = Array.isArray(raw.runs) ? raw.runs.slice(0, MAX_RUNS) : [];
 	const badgeList = Array.isArray(raw.badges) ? raw.badges.slice(0, MAX_RUNS * 6) : [];
+	// One block result per run at the very most: a mission is one press of stop.
+	const blockList = Array.isArray(raw.blocks) ? raw.blocks.slice(0, MAX_RUNS) : [];
 
 	const flush: Flush = {
 		runs: runs.flatMap((run) => parseRun(run)),
-		badges: badgeList.flatMap((badge) => parseBadge(badge))
+		badges: badgeList.flatMap((badge) => parseBadge(badge)),
+		blocks: blockList.flatMap((block) => parseBlockResult(block))
 	};
 
 	// Spend the attempt budget oldest run first, and keep every run either way:
@@ -76,6 +92,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	// with an owner; the check is here because "it happens to be true" and "the
 	// database will not let it be otherwise" are different guarantees.
 	await keepOwnCharts(userId, flush);
+	await keepRealBlocks(flush);
 
 	await saveFlush(userId, flush);
 
@@ -103,6 +120,41 @@ async function keepOwnCharts(userId: string, flush: Flush): Promise<void> {
 	for (const run of flush.runs) {
 		if (run.chartId && !mine.has(run.chartId)) run.chartId = null;
 	}
+}
+
+/**
+ * A block id is only allowed to name a block that exists.
+ *
+ * Without this a mistyped id would take the whole post down: `session_block_id`
+ * is a foreign key, so one bad run would fail the transaction and cost somebody
+ * the evening's playing that arrived with it. Unknown ids are dropped instead,
+ * and the run is still written — it happened, whatever it thought it belonged
+ * to.
+ *
+ * Not scoped to an owner, because `sessions` has none yet. When M12 stamps that
+ * table this query gains a join and an owner check, exactly as `keepOwnCharts`
+ * already has one; the check lives here so that the day it is needed there is a
+ * place for it rather than a gap.
+ */
+async function keepRealBlocks(flush: Flush): Promise<void> {
+	const claimed = [
+		...new Set([
+			...flush.runs.map((run) => run.sessionBlockId).filter((id): id is string => !!id),
+			...flush.blocks.map((block) => block.blockId)
+		])
+	];
+	if (claimed.length === 0) return;
+
+	const rows = await db
+		.select({ id: sessionBlocks.id })
+		.from(sessionBlocks)
+		.where(inArray(sessionBlocks.id, claimed));
+
+	const real = new Set(rows.map((row) => row.id));
+	for (const run of flush.runs) {
+		if (run.sessionBlockId && !real.has(run.sessionBlockId)) run.sessionBlockId = null;
+	}
+	flush.blocks = flush.blocks.filter((block) => real.has(block.blockId));
 }
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
@@ -167,11 +219,23 @@ function parseRun(value: unknown): RunPayload[] {
 		: [];
 
 	const endedAt = when(value.endedAt);
+
+	// The one number on a run that is allowed to be absent: a run that never
+	// landed two in a row clinched nothing, so there is no tempo to name and a
+	// null says exactly that. Anything unreadable is treated the same way rather
+	// than dropping the run — losing a sitting over an optional field would be the
+	// wrong trade.
+	const bestStreakBpm = value.bestStreakBpm === null ? null : count(value.bestStreakBpm, 400);
+
 	return [
 		{
 			id,
 			chartSlug,
 			chartId: typeof value.chartId === 'string' && UUID.test(value.chartId) ? value.chartId : null,
+			sessionBlockId:
+				typeof value.sessionBlockId === 'string' && UUID.test(value.sessionBlockId)
+					? value.sessionBlockId
+					: null,
 			keyCenter,
 			groove,
 			startedAt: startedAt.toISOString(),
@@ -179,6 +243,7 @@ function parseRun(value: unknown): RunPayload[] {
 			// that wrote it thought.
 			endedAt: endedAt && endedAt >= startedAt ? endedAt.toISOString() : null,
 			...(numbers as Record<keyof typeof numbers, number>),
+			bestStreakBpm,
 			attempts
 		}
 	];
@@ -215,6 +280,117 @@ function parseAttempt(value: unknown): AttemptPayload[] {
 			...(numbers as Record<keyof typeof numbers, number>)
 		}
 	];
+}
+
+/**
+ * A mission's verdict, rebuilt field by field rather than taken as it arrived.
+ *
+ * It ends up in `session_blocks.result_json`, and a jsonb column will hold
+ * whatever it is handed — which is exactly why nothing here passes the body
+ * through. Every field is read, checked and copied, so what gets stored is a
+ * verdict this code recognises and not an arbitrary document that happened to
+ * have a `met` in it.
+ */
+function parseBlockResult(value: unknown): BlockResultPayload[] {
+	if (!isObject(value)) return [];
+
+	const blockId =
+		typeof value.blockId === 'string' && UUID.test(value.blockId) ? value.blockId : null;
+	const runId = typeof value.runId === 'string' && UUID.test(value.runId) ? value.runId : null;
+	if (!blockId || !runId) return [];
+
+	const verdict = parseVerdict(value.verdict);
+	return verdict ? [{ blockId, runId, verdict }] : [];
+}
+
+function parseGoal(value: unknown): Goal | null {
+	if (!isObject(value)) return null;
+
+	switch (value.kind) {
+		case 'questions': {
+			const asked = count(value.count, 1000);
+			return asked === null ? null : { kind: 'questions', count: asked };
+		}
+		case 'guide_tones': {
+			const percent = count(value.percent, 100);
+			const choruses = count(value.choruses, 1000);
+			return percent === null || choruses === null
+				? null
+				: { kind: 'guide_tones', percent, choruses };
+		}
+		case 'choruses': {
+			const round = count(value.count, 1000);
+			return round === null ? null : { kind: 'choruses', count: round };
+		}
+		case 'once':
+			return { kind: 'once' };
+		default:
+			return null;
+	}
+}
+
+/** A non-negative count that is allowed a fraction, kept to two decimals. */
+function fraction(value: unknown, max = 10_000): number | null {
+	const number = Number(value);
+	if (!Number.isFinite(number) || number < 0 || number > max) return null;
+	return Math.round(number * 100) / 100;
+}
+
+/** A percentage the run reported, or null — which is what "not played yet" is. */
+function share(value: unknown): number | null | undefined {
+	if (value === null) return null;
+	const number = count(value, 100);
+	return number === null ? undefined : number;
+}
+
+function parseVerdict(value: unknown): Verdict | null {
+	if (!isObject(value)) return null;
+
+	const goal = parseGoal(value.goal);
+	const context = isObject(value.context) ? value.context : null;
+	const measured = isObject(value.measured) ? value.measured : null;
+	const shortfall = isObject(value.shortfall) ? value.shortfall : null;
+	const says = text(value.says);
+	if (!goal || !context || !measured || !shortfall || !says) return null;
+
+	const chartSlug = text(context.chartSlug);
+	const keyCenter = text(context.keyCenter);
+	const bpm = count(context.bpm, 400);
+	const barsPerChorus = count(context.barsPerChorus, 10_000);
+	if (!chartSlug || !keyCenter || bpm === null || barsPerChorus === null) return null;
+
+	const percent = share(measured.percent);
+	const covered = share(measured.coverage);
+	const numbers = {
+		voiced: count(measured.voiced, MAX_ATTEMPTS),
+		landed: count(measured.landed, MAX_ATTEMPTS),
+		barsCovered: count(measured.barsCovered, MAX_ATTEMPTS),
+		shortPercent: count(shortfall.percent, 100),
+		// Choruses are the one measurement here that is not a whole number: a run
+		// stopped in the middle of the form got 1.92 times round, and rounding that
+		// down to 1 would file a near miss as half a job.
+		choruses: fraction(measured.choruses),
+		shortChoruses: fraction(shortfall.choruses)
+	};
+	if (percent === undefined || covered === undefined) return null;
+	if (Object.values(numbers).some((n) => n === null)) return null;
+	const n = numbers as Record<keyof typeof numbers, number>;
+
+	return {
+		met: value.met === true,
+		goal,
+		context: { chartSlug, keyCenter, bpm, barsPerChorus },
+		measured: {
+			voiced: n.voiced,
+			landed: n.landed,
+			percent,
+			coverage: covered,
+			barsCovered: n.barsCovered,
+			choruses: n.choruses
+		},
+		shortfall: { percent: n.shortPercent, choruses: n.shortChoruses },
+		says
+	};
 }
 
 function parseBadge(value: unknown): BadgePayload[] {

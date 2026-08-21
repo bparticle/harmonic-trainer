@@ -3,6 +3,7 @@ import {
 	FIRST_POSITION,
 	RUNGS,
 	STAGES,
+	directionsForItem,
 	directionsForRung,
 	itemsForRung,
 	ladderIdentity,
@@ -169,7 +170,34 @@ describe('directions', () => {
 	});
 
 	it('asks everything of a chord rung', () => {
-		expect(directionsForRung('all-sevenths')).toHaveLength(4);
+		expect(directionsForRung('all-sevenths')).toHaveLength(5);
+		expect(directionsForRung('all-sevenths')).toContain('degree_play');
+	});
+
+	it('never asks a scale which numeral it is', () => {
+		// The same refusal as naming one, for the same reason: a scale is seven
+		// notes and not a numbered chord.
+		expect(directionsForRung('scale')).not.toContain('degree_play');
+	});
+
+	it('asks the relative minor for its numerals even though it holds a scale', () => {
+		// The rung says yes and the scale inside it says no, which is the whole
+		// reason the item gets a say: i, iv and v are degrees like any other.
+		const [scale, tonic] = itemsForRung('relative-minor', STAGES[0]);
+		expect(directionsForItem('relative-minor', scale)).not.toContain('degree_play');
+		expect(directionsForItem('relative-minor', tonic)).toContain('degree_play');
+		expect(tonic.degree).toBe('i');
+	});
+
+	it('asks a numeral of every item that carries one, and of no other', () => {
+		for (const stage of STAGES) {
+			for (const rung of RUNGS) {
+				for (const item of itemsForRung(rung.id, stage)) {
+					const asked = directionsForItem(rung.id, item).includes('degree_play');
+					expect(asked, `${stage.key}/${rung.id}/${item.label}`).toBe(Boolean(item.degree));
+				}
+			}
+		}
 	});
 });
 
