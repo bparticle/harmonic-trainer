@@ -69,7 +69,8 @@ const workout = (tasks: Task[] = Object.values(TASKS)): Workout => ({
 	tasks,
 	choice: null,
 	coldSpots: [],
-	novelty: { kind: 'groove', groove: 'bossa' }
+	novelty: { kind: 'groove', groove: 'bossa' },
+	missionHeld: null
 });
 
 const stored = (plan: unknown = workout()) => ({

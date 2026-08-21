@@ -35,7 +35,8 @@ import {
 import { reportWorkout, type Asked, type WorkoutReport } from '$lib/session/report';
 import { loadTempoGrades } from './play-log';
 import type { Verdict } from '$lib/practice/goal';
-import { CHARTS } from '$lib/curriculum/charts';
+import { chartDemand, MISSION_CHARTS } from '$lib/curriculum/charts';
+import { vocabularyOf } from '$lib/curriculum/vocabulary';
 import { isGroove, type Groove } from '$lib/audio/groove';
 import { keyTonic } from '$lib/music/key';
 import {
@@ -232,13 +233,14 @@ export async function loadColdSpots(userId: string): Promise<ColdSpot[]> {
  * mission you cannot play.
  */
 async function missionCharts(userId: string): Promise<MissionChart[]> {
-	const built = new Set(CHARTS.map((chart) => chart.slug));
+	const built = new Set(MISSION_CHARTS.map((chart) => chart.slug));
 	const rows = await db
 		.select({
 			slug: charts.slug,
 			name: charts.name,
 			style: charts.style,
 			mode: charts.mode,
+			gridJson: charts.gridJson,
 			defaultBpm: charts.defaultBpm,
 			defaultGroove: charts.defaultGroove
 		})
@@ -256,10 +258,14 @@ async function missionCharts(userId: string): Promise<MissionChart[]> {
 			defaultBpm: row.defaultBpm,
 			// A row written before grooves existed says `swing`, which is what it
 			// played as — the same reading the play-along loader gives it.
-			defaultGroove: isGroove(row.defaultGroove) ? row.defaultGroove : 'swing'
+			defaultGroove: isGroove(row.defaultGroove) ? row.defaultGroove : 'swing',
+			// Read from the grid you typed in, on exactly the terms a built-in is
+			// read: your own tune is gated by what it asks for, not waved through
+			// for being yours.
+			demand: chartDemand({ grid: row.gridJson, mode: row.mode })
 		}));
 
-	return [...CHARTS, ...mine];
+	return [...MISSION_CHARTS, ...mine];
 }
 
 /** Progressions the bank has met, and grooves the record has been played over. */
@@ -350,10 +356,12 @@ async function gatherWorkoutInput(
 			loadTempoGrades(userId)
 		]);
 
+	const reached = reachedSoFar(position);
+
 	return {
 		size: request.size,
 		cards: cardBank,
-		reached: reachedSoFar(position),
+		reached,
 		coldSpots,
 		charts: chartList,
 		ladders: tempo.ladders,
@@ -361,6 +369,13 @@ async function gatherWorkoutInput(
 		yesterdaysNovelty,
 		choice: request.choice ?? null,
 		rungLooksSolid: progress.looksSolid,
+		// What the two halves of the drill room have between them taught. The rungs
+		// give the shapes, the progressions give the ground; the composer compares
+		// it against what each tune asks for and sets a mission only where it fits.
+		vocabulary: vocabularyOf({
+			rungs: reached.map((place) => place.rungId),
+			progressions: played.progressions
+		}),
 		now
 	};
 }

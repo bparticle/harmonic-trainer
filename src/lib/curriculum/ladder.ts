@@ -3,7 +3,8 @@ import {
 	closeVoicing,
 	diatonicSeventh,
 	diatonicTriad,
-	formatChord
+	formatChord,
+	type AbstractChord
 } from '$lib/music/chord';
 import { formatKey, key as makeKey, scale, type Key } from '$lib/music/key';
 import { formatNote, midi, pitchClass } from '$lib/music/note';
@@ -235,6 +236,18 @@ export type LadderItem = {
 	 */
 	degreeOf?: string;
 	detail?: string;
+	/**
+	 * The chord this item is, where it is one.
+	 *
+	 * Carried so that `vocabulary.ts` can ask a rung which *shapes* it teaches
+	 * without re-deriving which degrees each rung covers — that knowledge lives
+	 * in `itemsForRung` below and must not be written down twice. The scale items
+	 * have no chord and say so with an absence rather than a placeholder.
+	 *
+	 * Never copied into a card payload: `toPayload` names the fields it takes,
+	 * so this stays a fact about the rung rather than a fact about the question.
+	 */
+	chord?: AbstractChord;
 };
 
 const MAJOR_DEGREES = ['I', 'ii', 'iii', 'IV', 'V', 'vi', 'vii°'];
@@ -249,7 +262,8 @@ function triadItem(k: Key, degree: number, degrees: string[]): LadderItem {
 		label: formatChord(chord),
 		answerPitchClasses: chordPitchClasses(chord),
 		answerVoicing: voicingOf(chord),
-		degree: degrees[degree - 1]
+		degree: degrees[degree - 1],
+		chord
 	};
 }
 
@@ -260,7 +274,8 @@ function seventhItem(k: Key, degree: number, degrees: string[]): LadderItem {
 		label: formatChord(chord),
 		answerPitchClasses: chordPitchClasses(chord),
 		answerVoicing: voicingOf(chord),
-		degree: degrees[degree - 1]
+		degree: degrees[degree - 1],
+		chord
 	};
 }
 
