@@ -54,7 +54,7 @@
 
 		<div class="header-actions">
 			<a class="source-link" href={REPOSITORY} target="_blank" rel="noreferrer">GitHub ↗</a>
-			<a class="instance-link" href="/login">Open this instance</a>
+			<a class="instance-link" href="/login">Sign in</a>
 		</div>
 	</header>
 
@@ -67,12 +67,11 @@
 					<span>Learn to move with it.</span>
 				</h1>
 				<p class="hero-deck entrance entrance-3">
-					See chord progressions as shapes. Hear how they pull. Drill them in every key, then put
-					them under your hands with a generated rhythm section.
+					See progressions. Hear the pull. Drill every key. Play with a generated rhythm section.
 				</p>
 				<div class="hero-actions entrance entrance-4">
 					<a class="primary-action" href="/demo">
-						<span>Try it — no account</span><span aria-hidden="true">→</span>
+						<span>Try demo</span><span aria-hidden="true">→</span>
 					</a>
 					<a class="text-action" href={REPOSITORY} target="_blank" rel="noreferrer"
 						>Explore the source <span aria-hidden="true">↗</span></a
@@ -130,25 +129,14 @@
 			<div class="section-heading">
 				<p class="eyebrow">The whole loop</p>
 				<h2 id="tour-title">Theory becomes useful<br />when it reaches the instrument.</h2>
-				<p>
-					No staff notation and no passive course. Harmonic Trainer keeps the same musical idea
-					visible as you explore it, listen for it, practise it and improvise over it.
-				</p>
+				<p>One musical idea, from wheel to instrument. No staff. No passive course.</p>
 			</div>
 
 			<div class="preview-stage play-along-preview">
 				<div class="preview-copy">
 					<p class="step-number">01 / APPLY</p>
-					<h3>A rhythm section that explains the changes.</h3>
-					<p>
-						Loop any bar, change key or tempo while it plays, and select a chord to reveal its
-						function, compatible keys and scales for improvising.
-					</p>
-					<ul class="plain-list">
-						<li>Walking bass, drums and optional comping</li>
-						<li>Roman numerals and modulation markers</li>
-						<li>Forms, cycles, public-domain standards and your charts</li>
-					</ul>
+					<h3>Play the changes.</h3>
+					<p>Loop bars. Change key or tempo live. Inspect function and scales.</p>
 				</div>
 
 				<div class="product-window backing-window" aria-label="Play along interface preview">
@@ -242,32 +230,16 @@
 
 				<div class="preview-copy">
 					<p class="step-number">02 / SEE + HEAR</p>
-					<h3>Play a voicing. See what your hands found.</h3>
-					<p>
-						Connect a MIDI keyboard and the wheel names the harmony as you play—with the notes,
-						confidence and musical reasoning behind the answer.
-					</p>
-					<ul class="plain-list">
-						<li>Live, ranked chord recognition</li>
-						<li>Correct enharmonic spelling in every key</li>
-						<li>On-screen keyboard when no instrument is connected</li>
-					</ul>
+					<h3>Play it. Name it.</h3>
+					<p>MIDI and the wheel name voicings as you play.</p>
 				</div>
 			</div>
 
 			<div class="preview-stage session-preview">
 				<div class="preview-copy">
 					<p class="step-number">03 / DRILL</p>
-					<h3>Practice that stays out of the way.</h3>
-					<p>
-						Spaced repetition brings the right progression back. Large cues and pedal controls keep
-						attention on the keyboard, not the screen.
-					</p>
-					<ul class="plain-list">
-						<li>Progressive twelve-key practice ladder</li>
-						<li>Hands-free sustain-pedal and keyboard controls</li>
-						<li>No daily streaks, no guilt for a day off</li>
-					</ul>
+					<h3>Practise without looking away.</h3>
+					<p>Large cues. Pedal controls. No streak guilt.</p>
 				</div>
 
 				<div class="product-window session-window" aria-label="Practice session preview">
@@ -297,34 +269,22 @@
 				<article>
 					<span>01</span>
 					<h3>No staff notation. Anywhere.</h3>
-					<p>
-						Harmony appears as shapes, colour, chord symbols, Roman numerals, intervals and keys—the
-						language many working musicians already use.
-					</p>
+					<p>Shapes, colour, symbols, numerals, intervals and keys.</p>
 				</article>
 				<article>
 					<span>02</span>
 					<h3>Everything transposes.</h3>
-					<p>
-						Material is stored as relationships and resolved into a key at the last moment. One
-						progression is genuinely one progression in all twelve keys.
-					</p>
+					<p>Relationships are stored once, then resolved in every key.</p>
 				</article>
 				<article>
 					<span>03</span>
 					<h3>Your instrument stays central.</h3>
-					<p>
-						The app listens and explains; your keyboard makes the sound. Practice controls work from
-						a sustain pedal, Space, or one large tap target.
-					</p>
+					<p>Your keyboard makes the sound. Pedal, Space or one large tap keeps control close.</p>
 				</article>
 				<article>
 					<span>04</span>
 					<h3>Suggestion, never judgement.</h3>
-					<p>
-						Spaced repetition and a practice ladder suggest what to revisit. They never lock
-						material, manufacture urgency or turn music into a scoreboard.
-					</p>
+					<p>The ladder suggests. It never locks, nags or scores attendance.</p>
 				</article>
 			</div>
 		</section>
@@ -333,11 +293,7 @@
 			<div class="open-copy">
 				<p class="eyebrow">Free software, personal by design</p>
 				<h2 id="open-title">Your practice data<br />belongs on your machine.</h2>
-				<p>
-					Harmonic Trainer is a single-musician instance, not a platform. There are no user
-					accounts, analytics scripts, cloud audio libraries or service you have to trust. Run it on
-					a laptop, deploy your own copy, and change anything.
-				</p>
+				<p>One musician. No analytics. No cloud dependency. Self-host or change anything.</p>
 				<div class="open-actions">
 					<a
 						class="primary-action light"
@@ -366,9 +322,7 @@
 				<p class="eyebrow">Under the lid</p>
 				<h2 id="stack-title">Small enough to understand.<br />Serious enough to trust.</h2>
 				<p>
-					The music core is pure TypeScript and extensively fixture-tested. Audio is generated in
-					the browser. Pitch colour, note spelling and harmonic analysis are treated as system
-					architecture—not decoration.
+					Pure TypeScript music core. Generated browser audio. Tested spelling, colour and analysis.
 				</p>
 			</div>
 			<ul class="stack-list" aria-label="Technology stack">
@@ -384,11 +338,7 @@
 				<h2 id="contribute-title">Musical bugs are<br />the interesting ones.</h2>
 			</div>
 			<div class="contribute-copy">
-				<p>
-					If a chord is named incorrectly, a progression resolves oddly, or a bass line sounds
-					wrong, bring the exact notes and expected result. The project favours readable code,
-					tested musical logic and focused pull requests.
-				</p>
+				<p>Wrong chord, resolution or bass line? Bring the notes and expected result.</p>
 				<div class="contribute-links">
 					<a href={`${REPOSITORY}/blob/main/CONTRIBUTING.md`} target="_blank" rel="noreferrer"
 						>Contribution guide ↗</a
@@ -408,14 +358,11 @@
 			</div>
 			<p class="eyebrow">See · hear · drill · apply</p>
 			<h2 id="final-title">Take harmony off the page.</h2>
-			<p>Build it into something you can recognise, reach for and play.</p>
 			<div class="final-actions">
 				<a class="primary-action" href={REPOSITORY} target="_blank" rel="noreferrer"
 					>View on GitHub <span aria-hidden="true">↗</span></a
 				>
-				<a class="text-action" href="/login"
-					>Enter this private instance <span aria-hidden="true">→</span></a
-				>
+				<a class="text-action" href="/login">Sign in <span aria-hidden="true">→</span></a>
 			</div>
 		</section>
 	</main>
@@ -822,28 +769,6 @@
 		color: var(--color-ink-muted);
 		font-size: 0.94rem;
 		line-height: 1.7;
-	}
-	.plain-list {
-		display: grid;
-		gap: 0.75rem;
-		margin: 1.75rem 0 0;
-		padding: 0;
-		list-style: none;
-		color: var(--color-ink-muted);
-		font-size: 0.78rem;
-	}
-	.plain-list li {
-		display: grid;
-		grid-template-columns: 0.6rem 1fr;
-		align-items: baseline;
-		gap: 0.65rem;
-	}
-	.plain-list li::before {
-		content: '';
-		width: 0.32rem;
-		height: 0.32rem;
-		border-radius: 50%;
-		background: var(--pc-5);
 	}
 	.product-window {
 		position: relative;

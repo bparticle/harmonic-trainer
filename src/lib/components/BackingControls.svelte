@@ -132,7 +132,7 @@
 			{:else if playing}
 				{nowPlaying.join(' · ') || 'Playing'}
 			{:else}
-				Play along in {keyName.replace('b', '♭')}
+				Play · {keyName.replace('b', '♭')}
 			{/if}
 		</span>
 	</button>
@@ -151,7 +151,7 @@
 			</label>
 		{/each}
 
-		<a class="more" href="/backing">more, and the standards →</a>
+		<a class="more" href="/backing">Full setup →</a>
 	</div>
 </div>
 

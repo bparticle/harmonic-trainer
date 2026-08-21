@@ -19,7 +19,7 @@ export const actions: Actions = {
 		const password = form.get('password');
 
 		if (typeof password !== 'string' || !checkPassword(password)) {
-			return fail(401, { error: 'Not that one.' });
+			return fail(401, { error: 'Wrong password.' });
 		}
 
 		// One password mints one player's token. Which player that is stops being

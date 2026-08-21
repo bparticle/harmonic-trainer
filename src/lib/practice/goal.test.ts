@@ -76,12 +76,12 @@ describe('saying what a goal asks for', () => {
 	});
 
 	it('counts one chorus in the singular', () => {
-		expect(describeGoal({ kind: 'guide_tones', percent: 85, choruses: 1 })).toContain('1 chorus.');
-		expect(describeGoal({ kind: 'choruses', count: 1 })).toBe('All the way round, once.');
+		expect(describeGoal({ kind: 'guide_tones', percent: 85, choruses: 1 })).toContain('1 chorus');
+		expect(describeGoal({ kind: 'choruses', count: 1 })).toBe('1 full chorus');
 	});
 
 	it('says nothing is being counted when nothing is', () => {
-		expect(describeGoal({ kind: 'once' })).toContain('Nothing is being counted');
+		expect(describeGoal({ kind: 'once' })).toBe('Try once');
 	});
 });
 
@@ -107,7 +107,7 @@ describe('judging a guide-tone goal', () => {
 		expect(verdict.measured.percent).toBe(80);
 		expect(verdict.met).toBe(false);
 		expect(verdict.shortfall.percent).toBe(5);
-		expect(verdict.says).toContain('5 short of 85%');
+		expect(verdict.says).toContain('5 points short');
 	});
 
 	it('counts a chord as landed only when every guide tone was there', () => {
@@ -129,7 +129,7 @@ describe('judging a guide-tone goal', () => {
 		expect(verdict.measured.choruses).toBe(1.6);
 		expect(verdict.met).toBe(false);
 		expect(verdict.shortfall).toEqual({ percent: 0, choruses: 0.4 });
-		expect(verdict.says).toContain('the percentage is there');
+		expect(verdict.says).toContain('0.4 choruses left');
 	});
 
 	it('says both when both are short', () => {
@@ -140,7 +140,8 @@ describe('judging a guide-tone goal', () => {
 		);
 		expect(verdict.shortfall.percent).toBeGreaterThan(0);
 		expect(verdict.shortfall.choruses).toBeGreaterThan(0);
-		expect(verdict.says).toContain('still to play');
+		expect(verdict.says).toContain('points short');
+		expect(verdict.says).toContain('choruses left');
 	});
 });
 
@@ -150,7 +151,7 @@ describe('a run with nothing in it', () => {
 		expect(verdict.met).toBe(false);
 		expect(verdict.measured).toMatchObject({ voiced: 0, landed: 0, percent: null, coverage: null });
 		expect(verdict.shortfall.percent).toBe(85);
-		expect(verdict.says).toContain('nothing to judge');
+		expect(verdict.says).toBe('No chords judged.');
 	});
 
 	it('drops the chords nothing was played over rather than failing them', () => {
@@ -229,7 +230,7 @@ describe('judging a goal that only asks for the form', () => {
 	it('reports how far round it did get when it did not', () => {
 		const verdict = evaluateGoal(once, played(7), FORM);
 		expect(verdict.met).toBe(false);
-		expect(verdict.says).toBe('0.7 of 1 chorus round.');
+		expect(verdict.says).toBe('0.7/1 chorus');
 	});
 });
 
@@ -242,7 +243,7 @@ describe('the goals a run cannot answer', () => {
 	it('sends a count of questions back to where questions are asked', () => {
 		const verdict = evaluateGoal({ kind: 'questions', count: 10 }, played(40), FORM);
 		expect(verdict.met).toBe(false);
-		expect(verdict.says).toContain('counted where they are asked');
+		expect(verdict.says).toContain('counted in drill');
 	});
 });
 

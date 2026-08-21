@@ -204,21 +204,16 @@
 <div class="mx-auto flex max-w-[1500px] flex-col gap-6 px-3 py-6 sm:px-5">
 	<header class="flex flex-wrap items-end justify-between gap-3">
 		<div>
-			<p class="panel-title">Songbook</p>
-			<h1 class="font-display text-ink text-2xl font-semibold tracking-tight">
-				{entries.length} tunes
-			</h1>
-			<p class="lede mt-1 max-w-[60ch]">
-				Forms, cycles, public-domain standards, traditionals, and anything you have typed in.
-				<strong class="text-ink">{readyCount}</strong> of them use only chords the drill room has taught
-				you so far — the rest are open too, and say what they would ask.
+			<h1 class="font-display text-ink text-2xl font-semibold tracking-tight">Songbook</h1>
+			<p class="text-ink-dim mt-1 font-mono text-xs">
+				{entries.length} tunes · {readyCount} ready
 			</p>
 		</div>
 
 		{#if !open}
 			<button type="button" class="write" onclick={() => (writing = true)}>
-				<span class="write-verb">Write a chart down</span>
-				<span class="write-what">chords as you would say them, in any key</span>
+				<span class="write-plus" aria-hidden="true">＋</span>
+				<span class="write-verb">Chart</span>
 			</button>
 		{/if}
 	</header>
@@ -227,8 +222,7 @@
 		<!-- The editor, in a room of its own. See the note at the top of this file
 		     for why it is no longer standing where the chart should be. -->
 		<section class="border-ground-line bg-ground-raised rounded-xl border p-4">
-			<div class="mb-3 flex items-baseline justify-between gap-3">
-				<h2 class="panel-title">{editing ? `Editing ${editing.name}` : 'A new chart'}</h2>
+			<div class="mb-1 flex justify-end">
 				<button type="button" class="text-ink-dim text-xs underline" onclick={close}>close</button>
 			</div>
 
@@ -243,7 +237,7 @@
 
 			{#if refused?.problems?.length}
 				<div role="alert" class="border-ground-line mt-4 rounded-lg border p-3">
-					<p class="mb-1 text-sm font-semibold">The save was refused:</p>
+					<p class="mb-1 text-sm font-semibold">Couldn't save</p>
 					<ul class="flex flex-col gap-0.5">
 						{#each refused.problems as problem (problem)}
 							<li class="text-ink-muted font-mono text-xs">{problem}</li>
@@ -260,7 +254,7 @@
 			class="search"
 			type="search"
 			bind:value={search}
-			placeholder="Search by name or by what it is for"
+			placeholder="Search tunes"
 			aria-label="Search the songbook"
 		/>
 
@@ -303,7 +297,7 @@
 			class="chip"
 			class:is-on={readyOnly}
 			aria-pressed={readyOnly}
-			onclick={() => (readyOnly = !readyOnly)}>Only what I can play</button
+			onclick={() => (readyOnly = !readyOnly)}>Ready only</button
 		>
 
 		{#if filtered}
@@ -316,14 +310,13 @@
 	<!-- The list ------------------------------------------------------------ -->
 	{#if shown.length === 0}
 		<p class="lede">
-			Nothing matches that. <button type="button" class="underline" onclick={clearFilters}
-				>Clear the filters</button
+			No matches. <button type="button" class="underline" onclick={clearFilters}
+				>Clear filters</button
 			>
-			to see all {entries.length}.
 		</p>
 	{:else}
 		<p class="text-ink-dim font-mono text-xs">
-			{shown.length} of {entries.length}, plainest first
+			{shown.length} / {entries.length} · simplest first
 		</p>
 
 		<ul class="tunes">
@@ -337,7 +330,8 @@
 					</div>
 
 					<p class="tune-meta">
-						{entry.bars} bars · {homeKey(entry)} · {grooveName(entry.defaultGroove)} at {entry.defaultBpm}{#if entry.published}
+						{entry.bars} bars · {homeKey(entry)} · {grooveName(entry.defaultGroove)} · {entry.defaultBpm}
+						BPM{#if entry.published}
 							· {entry.published}{/if}
 					</p>
 
@@ -345,7 +339,7 @@
 
 					<div class="tune-foot">
 						{#if entry.ready}
-							<span class="ready">ready</span>
+							<span class="ready">✓ ready</span>
 						{:else}
 							<!-- Never "locked". It says what the tune would ask, which is the
 							     difference between a closed door and a next thing to learn. -->
@@ -367,9 +361,10 @@
 							{#if confirming === entry.id}
 								<form method="POST" action="?/remove" class="inline-flex items-center gap-2">
 									<input type="hidden" name="id" value={entry.id} />
-									<button class="action">yes, delete</button>
+									<span class="text-ink-dim text-xs">Delete?</span>
+									<button class="action">Delete</button>
 									<button type="button" class="action" onclick={() => (confirming = null)}
-										>cancel</button
+										>Keep</button
 									>
 								</form>
 							{:else}
@@ -397,10 +392,12 @@
 	 */
 
 	.write {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
 		border: 1px solid var(--color-ground-line);
 		border-radius: 0.75rem;
 		padding: 0.6rem 0.9rem;
-		text-align: left;
 		background: var(--color-ground-raised);
 	}
 
@@ -409,16 +406,15 @@
 	}
 
 	.write-verb {
-		display: block;
 		color: var(--color-ink);
 		font-size: 0.9rem;
 		font-weight: 600;
 	}
 
-	.write-what {
-		display: block;
-		color: var(--color-ink-dim);
-		font-size: 0.72rem;
+	.write-plus {
+		color: var(--color-ink-muted);
+		font-size: 1rem;
+		line-height: 1;
 	}
 
 	.filters {

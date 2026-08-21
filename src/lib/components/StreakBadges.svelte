@@ -164,7 +164,7 @@
 		<h2 class="shelf-title">Streaks</h2>
 		<dl class="shelf-bests">
 			<div>
-				<dt>best ever</dt>
+				<dt>best</dt>
 				<dd>{best || '—'}{best ? '×' : ''}</dd>
 			</div>
 			<div>
@@ -231,10 +231,7 @@
 
 	{#if held && heldBand}
 		<p class="shelf-tempo">
-			Held on {chartName}
-			{heldBand.name.startsWith('at ') ? '' : 'at '}<strong>{heldBand.name}</strong> — {held.bpm}, {held.percent}%
-			of the
-			{held.target} it goes at. {heldBand.says}
+			{held.bpm} BPM · <strong>{heldBand.name}</strong> · {held.percent}% of chart tempo
 		</p>
 	{/if}
 
@@ -262,23 +259,20 @@
 				/>
 				<circle class="ladder-next" cx={at(nextBand.from)} cy="8" r="1.9" />
 			</svg>
-			Held clean {bandById(suggesting.held!)?.name.startsWith('at ') ? '' : 'at '}<strong
-				>{bandById(suggesting.held!)?.name}</strong
-			>. Next band up is
-			<strong>{nextBand.name}</strong>, from {suggesting.nextBpm}. A suggestion — every tempo stays
-			playable.
+			<strong>{bandById(suggesting.held!)?.name}</strong> held · next
+			<strong>{nextBand.name}</strong> at {suggesting.nextBpm} BPM
 		</p>
 	{/if}
 
 	<p class="shelf-hint">
 		{#if climbing}
-			{climbing.from - streak.count} more in a row for <strong>{climbing.name}</strong>.
+			{climbing.from - streak.count} more for <strong>{climbing.name}</strong>
 		{:else if bestHere === 0}
-			Land chords back to back to start a streak. Three in a row is the first badge on this tune.
+			3 in a row earns the first badge
 		{:else if chasing}
-			<strong>{chasing.name}</strong> is next: {chasing.from} in a row.
+			Next: <strong>{chasing.name}</strong> · {chasing.from} in a row
 		{:else}
-			Every badge earned on {chartName}. There is nothing above legendary.
+			All badges earned on {chartName}
 		{/if}
 	</p>
 </section>

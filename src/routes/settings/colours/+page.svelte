@@ -19,6 +19,7 @@
 		SWATCH_INK_LIGHT,
 		derivePalette
 	} from '$lib/design/palette';
+	import InfoHint from '$lib/components/InfoHint.svelte';
 
 	/*
 	 * Colour editor.
@@ -109,11 +110,15 @@
 <svelte:head><title>Colours · Harmonic Trainer</title></svelte:head>
 
 <main class="mx-auto min-h-dvh max-w-[1300px] px-5 py-6">
-	<header class="mb-6 flex items-baseline gap-4">
+	<header class="mb-6 flex items-center gap-3">
 		<h1 class="font-display text-ink text-lg font-semibold tracking-tight">Pitch colours</h1>
+		<InfoHint
+			label="About pitch colours"
+			text="Match a physical wheel or coloured keys. The controls keep lightness, colour strength and hue independent."
+		/>
 		<a
 			href="/settings/wheel"
-			class="text-ink-muted hover:text-ink font-mono text-xs transition-colors">calibrate →</a
+			class="text-ink-muted hover:text-ink ml-1 font-mono text-xs transition-colors">Calibrate →</a
 		>
 	</header>
 
@@ -137,11 +142,6 @@
 		</section>
 
 		<aside class="flex flex-col gap-7">
-			<p class="text-ink-muted text-sm leading-relaxed">
-				Match these to a physical wheel or coloured keys, if you have them. Lightness, chroma and
-				hue move independently — nudging one will not drag the others.
-			</p>
-
 			<section>
 				<div class="mb-3 flex items-baseline justify-between">
 					<h2 class="font-display text-2xl font-semibold">{noteName(selected)}</h2>
@@ -208,26 +208,25 @@
 				</div>
 				<dl class="flex flex-col gap-1.5 font-mono text-xs">
 					<div class="flex justify-between">
-						<dt class="text-ink-dim">text on this swatch</dt>
+						<dt class="text-ink-dim">text / swatch</dt>
 						<dd class:is-poor={inkResult.ratio < 4.5} class="text-ink-muted">
 							{inkResult.ratio.toFixed(1)}:1
 						</dd>
 					</div>
 					<div class="flex justify-between">
-						<dt class="text-ink-dim">swatch on the ground</dt>
+						<dt class="text-ink-dim">swatch / ground</dt>
 						<dd class:is-poor={groundContrast < 3} class="text-ink-muted">
 							{groundContrast.toFixed(1)}:1
 						</dd>
 					</div>
 					<div class="flex justify-between">
-						<dt class="text-ink-dim">inside sRGB</dt>
+						<dt class="text-ink-dim">sRGB gamut</dt>
 						<dd class:is-poor={!inGamut} class="text-ink-muted">{inGamut ? 'yes' : 'clipped'}</dd>
 					</div>
 				</dl>
 				{#if inkResult.ratio < 4.5}
 					<p class="text-ink-dim mt-3 text-[0.7rem] leading-relaxed">
-						Below 4.5:1, a chord symbol sitting on this colour will be hard to read across a room.
-						Push the lightness further from the middle.
+						Low contrast. Move lightness away from the middle.
 					</p>
 				{/if}
 			</section>
@@ -243,12 +242,12 @@
 				{#if dirty}
 					<button
 						class="text-ink-dim hover:text-ink px-3 py-2.5 font-mono text-xs transition-colors"
-						onclick={revert}>revert</button
+						onclick={revert}>Revert</button
 					>
 				{/if}
 				<button
 					class="text-ink-dim hover:text-ink ml-auto px-3 py-2.5 font-mono text-xs transition-colors"
-					onclick={resetToDefaults}>reset to defaults</button
+					onclick={resetToDefaults}>Defaults</button
 				>
 			</div>
 

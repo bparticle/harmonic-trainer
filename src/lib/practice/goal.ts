@@ -55,15 +55,15 @@ export type Goal =
 export function describeGoal(goal: Goal): string {
 	switch (goal.kind) {
 		case 'questions':
-			return `${goal.count} questions.`;
+			return `${goal.count} questions`;
 		case 'guide_tones':
-			return `Land ${goal.percent}% of the guide tones over ${goal.choruses} ${
+			return `≥${goal.percent}% guide tones · ${goal.choruses} ${
 				goal.choruses === 1 ? 'chorus' : 'choruses'
-			}.`;
+			}`;
 		case 'choruses':
-			return goal.count === 1 ? 'All the way round, once.' : `${goal.count} times round.`;
+			return goal.count === 1 ? '1 full chorus' : `${goal.count} full choruses`;
 		case 'once':
-			return 'Once through. Nothing is being counted.';
+			return 'Try once';
 	}
 }
 
@@ -285,9 +285,9 @@ export function evaluateGoal(goal: Goal, chords: JudgedChord[], context: GoalCon
 				measured,
 				shortfall,
 				says: nothing
-					? 'Nothing played over yet, so there is nothing to judge.'
+					? 'No chords judged.'
 					: met
-						? `Met. ${percent}% landed over ${rounds(choruses)} ${chorusWord(choruses)}.`
+						? `Met · ${percent}% · ${rounds(choruses)} ${chorusWord(choruses)}`
 						: guideTonesShort(goal, percent ?? 0, choruses, shortfall)
 			};
 		}
@@ -305,10 +305,10 @@ export function evaluateGoal(goal: Goal, chords: JudgedChord[], context: GoalCon
 				measured,
 				shortfall,
 				says: nothing
-					? 'Nothing played over yet, so there is nothing to judge.'
+					? 'No chords judged.'
 					: met
-						? `Met. ${rounds(choruses)} ${chorusWord(choruses)} round the form.`
-						: `${rounds(choruses)} of ${goal.count} ${chorusWord(goal.count)} round.`
+						? `Met · ${rounds(choruses)} ${chorusWord(choruses)}`
+						: `${rounds(choruses)}/${goal.count} ${chorusWord(goal.count)}`
 			};
 		}
 
@@ -321,7 +321,7 @@ export function evaluateGoal(goal: Goal, chords: JudgedChord[], context: GoalCon
 				context,
 				measured,
 				shortfall: { percent: 0, choruses: 0 },
-				says: nothing ? 'Not tried yet.' : 'Tried. That was the whole of it.'
+				says: nothing ? 'Not tried.' : 'Tried.'
 			};
 
 		case 'questions':
@@ -334,7 +334,7 @@ export function evaluateGoal(goal: Goal, chords: JudgedChord[], context: GoalCon
 				context,
 				measured,
 				shortfall: { percent: 0, choruses: 0 },
-				says: `${goal.count} questions, counted where they are asked rather than from a run.`
+				says: `${goal.count} questions · counted in drill`
 			};
 	}
 }
@@ -347,12 +347,12 @@ function guideTonesShort(
 ): string {
 	const landed = `${percent}% landed over ${rounds(choruses)} ${chorusWord(choruses)}`;
 	if (shortfall.percent > 0 && shortfall.choruses > 0) {
-		return `${landed} — ${shortfall.percent} short of ${goal.percent}%, and ${rounds(shortfall.choruses)} ${chorusWord(shortfall.choruses)} still to play.`;
+		return `${landed} · ${shortfall.percent} points short · ${rounds(shortfall.choruses)} ${chorusWord(shortfall.choruses)} left`;
 	}
 	if (shortfall.percent > 0) {
-		return `${landed} — ${shortfall.percent} short of ${goal.percent}%.`;
+		return `${landed} · ${shortfall.percent} points short`;
 	}
-	return `${landed} — the percentage is there, ${rounds(shortfall.choruses)} ${chorusWord(shortfall.choruses)} still to play.`;
+	return `${landed} · ${rounds(shortfall.choruses)} ${chorusWord(shortfall.choruses)} left`;
 }
 
 // ---------------------------------------------------------------------------

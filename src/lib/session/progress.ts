@@ -201,13 +201,13 @@ export function previewTasks(workout: Workout): TaskPreview[] {
 function previewLine(task: Task): string {
 	switch (task.kind) {
 		case 'ear':
-			return `${task.cardIds.length} heard, played back or named.`;
+			return `${task.cardIds.length} ear questions`;
 		case 'function':
-			return `${task.cardIds.length} degrees, and the key moves under you.`;
+			return `${task.cardIds.length} degrees across keys`;
 		case 'mission':
 			return `${task.mission.chartName}. ${describeGoal(task.goal)}`;
 		case 'new_thing':
-			return task.instruction;
+			return task.instruction.split('. ')[0];
 	}
 }
 

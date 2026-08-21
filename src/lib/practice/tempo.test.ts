@@ -414,7 +414,7 @@ describe('whether the last month moved anything, and what it refuses to claim', 
 	});
 
 	it('reads a record with nothing comparable as not enough history to say', () => {
-		expect(describeMonth(readMovement([fresh]))).toContain('Not enough history to say yet');
+		expect(describeMonth(readMovement([fresh]))).toBe('Not enough history yet.');
 	});
 
 	it('says nothing whatever when there is nothing graded', () => {
@@ -424,9 +424,9 @@ describe('whether the last month moved anything, and what it refuses to claim', 
 
 	it('reports a month that moved nothing as tunes holding the band they had', () => {
 		const says = describeMonth(readMovement([stood]));
-		expect(says).toBe('1 tune held the band it already had over the last 30 days.');
+		expect(says).toBe('1 tune held their band in 30 days.');
 		expect(describeMonth(readMovement([stood, { ...stood, chartSlug: 'other' }]))).toBe(
-			'2 tunes held the band they already had over the last 30 days.'
+			'2 tunes held their band in 30 days.'
 		);
 		expect(says).not.toMatch(/nothing|failed|should|no movement/i);
 	});
@@ -441,8 +441,6 @@ describe('whether the last month moved anything, and what it refuses to claim', 
 	});
 
 	it('leads with what moved when anything did', () => {
-		expect(describeMonth(readMovement([moved, stood, fresh]))).toBe(
-			'1 tune moved to a faster band in the last 30 days.'
-		);
+		expect(describeMonth(readMovement([moved, stood, fresh]))).toBe('1 tune moved up in 30 days.');
 	});
 });
