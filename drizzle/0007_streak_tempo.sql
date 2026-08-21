@@ -1,0 +1,28 @@
+-- The tempo a streak was clinched at.
+--
+-- `play_runs.bpm` is one integer, and the transport's tempo moves while it runs.
+-- A run started at 140 and slowed to 60 therefore records one of those numbers,
+-- and if the best streak was reached after the slowdown the record flatters — in
+-- exactly the direction a tempo grade would later need to be right about. This
+-- column is the moment rather than the summary: what the tempo was showing when
+-- the run's best streak was last raised.
+--
+-- A fact about the run, not a second copy of an aggregate. That is the
+-- difference between this and the stored best that M9 deleted: the best streak
+-- itself is still `max(best_streak)` over these rows and has no duplicate to
+-- disagree with, while the tempo it happened at is something only the run was
+-- present for.
+--
+-- **It cannot be backfilled, and nothing here tries.** The nineteen runs already
+-- logged do not know when their streak was clinched, and inventing a number for
+-- them would be the first estimate in a record that has never held one. Null
+-- means "not witnessed", which is the truth about every row that existed before
+-- this migration and about any run whose streak never got off the ground.
+--
+-- Nothing already recorded breaks and nothing yet reads it. The column is added
+-- nullable with no default, so no existing row is rewritten and every query the
+-- profile and the shelf run reads columns this does not touch. It is written now
+-- because tempo at the moment a streak was clinched can only ever be recorded
+-- forwards: every day the column does not exist is a day of playing that can
+-- never be graded honestly.
+ALTER TABLE "play_runs" ADD COLUMN "best_streak_bpm" integer;

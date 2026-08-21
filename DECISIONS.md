@@ -3003,3 +3003,351 @@ It writes the local player now. The same edit gave it the two things it had also
 fallen behind on — a groove and a home key — and taught the check script to
 print the words under the bars they are sung over, because a split in the wrong
 place is not an error and nothing downstream will ever complain about one.
+
+## M15 — the practice room, rebuilt around the band
+
+The plan is deleted from `ROADMAP.md`, per that file's own rule, and the status
+is in the README table. What follows is what building it taught over five
+phases — including the three places the plan was wrong, one of which the record
+had already answered, and one musical bug that was caught in review rather than
+by a test.
+
+The milestone started as four complaints about daily use, stated plainly: the
+session orbits one subject, it ends too easily, tomorrow looks like today, and
+half of it is a worse version of a page that already exists. All four were true,
+and the useful thing about them is that every one of them turned out to have a
+cause in the code rather than in taste.
+
+### Four complaints, and a cause in the code for each
+
+**One subject.** `startOrResume` narrowed every drill to a single skill code on
+every path, _including the default_. `focusSkills` was always exactly one entry,
+so twenty minutes orbited a rung holding between one and seven facts, asked four
+ways. The narrowing had been written as a courtesy — a chosen focus narrows the
+drills — and nobody noticed it also applied to the day nobody chose anything. A
+courtesy applied to a choice not made is a cage.
+
+**Ends too easily.** Blocks were sized by a timer and filled from the FSRS due
+pile, and FSRS exists to make that pile small. A well-run deck has almost
+nothing due, so "Nothing due for this block today" was the _normal_ sight and a
+twenty-minute session could be clicked through in three. Worse, the timer
+measured nothing: no block ever ended because of one. The scheduler was doing
+its job; the session had been built as though the scheduler's leftovers were a
+syllabus.
+
+**The same thing tomorrow.** Composition was static — six blocks, same order,
+same copy, forever — and the only input that varied was the due pile, which
+varies towards _less_. The one block named for novelty showed the same rung text
+every day until the ladder was advanced by hand on the home page, which made it
+the most repetitive thing in the app.
+
+**Already practised elsewhere.** The warm-up asked `see_play`, and a chart on
+the play-along page _is_ `see_play` with a rhythm section behind it and
+chord-by-chord judging in front. "Name what you play" was `/play` with a timer
+on it. "Apply it" embedded `BackingControls`: `/backing` with fewer knobs, no
+scoring, no streaks, no badges and no record. A player who drifts to the better
+page and skips the section is not lazy, they are correct, and a practice feature
+that is rational to skip is a bug in the feature.
+
+### If the band can ask it, the band asks it
+
+That is the whole principle, and everything else in this milestone is a
+consequence of it. The drill room keeps only the questions the band cannot pose:
+**the ear**, because the transport never plays you a chord and waits; **the
+name**, because the chart names everything for you and never asks you to;
+**the function**, because a chart shows symbols and never numbers; and
+**coverage**, because total freedom is how twelve keys become four.
+
+Everything else stopped being a block beside the band and became a **mission on
+the transport** — the real play-along page, under a constraint, with a goal that
+can be missed. That also ends the two-currency problem the app had grown without
+naming it: practice used to mint review rows nothing celebrated, while playing
+deposited into the record, the streaks and the badges. Now both go to the same
+place.
+
+### The session was founded before the band existed
+
+The root mistake is historical rather than anybody's judgement, and it is worth
+writing down because it is the shape of mistake this project will make again.
+The session engine was designed at M5 as the centre of the app. The rhythm
+section did not exist yet. M7 and everything after it — scoring, streaks,
+badges, the record, grooves — made `/backing` the centre, and the session was
+never re-founded on it. It kept being extended, correctly, on foundations that
+had quietly stopped being true.
+
+The lesson is not "rewrite more often". It is that when the centre of an app
+moves, the things built around the old centre do not become wrong loudly. They
+become wrong by still working.
+
+### The 70% bar was wrong, and the record said so before a mission was played
+
+The plan proposed _land 70% of guide tones over two choruses_ and said to tune
+it once missions produced rows. The record could answer sooner, and it did:
+**813 chord attempts across 19 runs were already there, and 92% of them landed
+every guide tone.** Across the seven runs long enough to mean anything — twelve
+attempts or more — the median run landed 93%, the lower quartile 81%, and
+exactly one run in the whole record fell below 70%.
+
+So a 70% bar was not a goal. It was a thing that happens anyway, and a goal that
+cannot be missed teaches nothing and celebrates nothing. The bar is 85%, which
+sits above the lower quartile of comfortable playing and below its median: a run
+in a key you know at a tempo you like clears it, and a mission — which is by
+construction neither — has to reach for it.
+
+Two things about those figures argue against ever calling this settled, and both
+are written beside the constant rather than left here. **All 813 attempts come
+from two keys**, C and A; the other ten hold none at all, so the high percentage
+is what a familiar tune in a comfortable key sounds like. And **tempo has moved
+the rate further than key has** — the blues at 140 lands 69–81% while rhythm
+changes at 100 lands 92–94%, in the same key. If the first month of mission rows
+clusters under the bar, 80 is the number the record already argues for, being
+the top of the only uncomfortable-conditions band it holds. That is one edit, in
+one place.
+
+Two smaller things are worth noticing about this having happened at all. The
+figures came out of a `GROUP BY` over `chord_attempts` — which is the blind-spot
+report from M6, doing its job a phase before it was scheduled to exist. And the
+coverage number is the milestone's own premise, quantified: two keys out of
+twelve, 19 runs against 8 reviews. The exercises were not being skipped because
+practice is unwelcome. They were being skipped because the band is better
+company.
+
+### A single percentage is the wrong shape, so a verdict carries its context
+
+Given that tempo moves the rate further than key does, no single global
+percentage is the right shape for this goal whatever number is chosen. That is
+an argument for a bar _per context_, and a bar per context cannot be fitted to a
+bare boolean after the fact — so every `Verdict` carries the key, the tune and
+the tempo it was reached in, from the first one written. The constant is a
+placeholder that knows it is one, and the rows being collected around it are the
+ones a later pass will need.
+
+### Scales stayed in the ear pool, against the plan's recommendation
+
+The plan left open whether the ear task should ever play sequences and
+recommended chords only. It was overruled — by another line of the same plan.
+The done-when says _a brand-new account's first workout is playable start to
+finish with C major material only_, and a brand-new account owns exactly one
+rung: the C major scale. Chords-only ear material would have left that account
+with nothing to hear at all, on the very first morning, which is a worse failure
+than an inelegant question.
+
+It costs less than it looks. `directionsForRung` already refuses to ask a scale
+to be _named_, so the only thing that can be posed is "listen, then play it
+back", and being asked to play a scale back is a fair question. Where a plan
+contains a recommendation and a constraint that contradict each other, the
+constraint is the one that was reasoned about hardest.
+
+### `play_name` was already asking the degree question
+
+The plan justified the new `degree_play` direction on the grounds that "seeing
+A♭ and producing A♭ is spelling, while seeing IV of E♭ and producing A♭ is
+harmony", and treated the question as one the app had never asked. It had. A
+triad or seventh card carries no `detail`, so `pose` fell through to
+`payload.degree` — and `play_name` on a numbered chord had been showing a bare
+`IV` and asking you to play it and name it, for as long as the ladder has
+existed.
+
+`degree_play` still earns its place, on narrower and more honest grounds than
+the plan claimed:
+
+- **The key travels with the question.** A workout's function task crosses keys
+  by design, so `IV` on its own is not a question. `IV — E♭` is.
+- **It is generated only where a degree exists**, item by item rather than rung
+  by rung, so nothing gets asked a numeral it does not have.
+- **It is weighted differently.** `play_name` sits at 1.6 as the weakest link;
+  `degree_play` at 1.3, just behind it. They are two questions with different
+  answers about the same chord, and the scheduler now knows that.
+
+Being wrong about the novelty is not the same as being wrong about the feature.
+It is worth recording because the plan's argument would have been quoted later
+as though it had been checked.
+
+### A degree prompt that routes around the scheduler answers to nobody
+
+The composer's first version built degree prompts by walking `itemsForRung` over
+everywhere the ladder had reached. It was quick, it worked, and it was wrong:
+a prompt invented at composition time is never due, never graded and never
+recorded. The same plan that asked for `degree_play` asked for its entry in
+`DIRECTION_WEIGHT` in the next breath — and a weight means nothing to something
+that never passes through `selectDue`. Making a card direction and then routing
+around the scheduler is two decisions contradicting each other.
+
+So degrees are generated in `cards.ts` like every other question and the
+function task is a queue of card ids exactly as the ear task is. What survived
+from the first version is the round-robin: the queue spreads across keys,
+because a numeral is the one thing in this app that means the same in all twelve
+of them, and eight `IV`s in one key is a spelling drill wearing a numeral. A key
+holds twenty-two numbered chords once its sevenths are up, so taking the first
+eight of a flat list would have rebuilt the milestone's opening complaint inside
+the task meant to answer it.
+
+### "i — C" would have been a wrong question with the right answer behind it
+
+Caught in review, not by a test, and it is the most musical bug in the
+milestone. The relative-minor rung holds a scale and three triads. The triads
+are filed under the C stage, because that is where the rung lives — but their
+numerals are numerals of **A minor**. Posing them against the card's own key
+would have asked for "the i chord of C", accepted A minor as the answer, and
+recorded a correct review against a question that was false.
+
+The fix is `degreeOf` on the item: the key a degree is counted from, when that
+is not the stage's own. The prompt uses it where it exists and the card's key
+otherwise. The general shape is worth keeping in mind — a rung is not
+necessarily uniform, so the _item_ gets a say about what can honestly be asked
+of it as well as the rung, which is also what stopped the A minor scale being
+asked which numeral it is.
+
+### `Goal` lives beside the evaluator, not beside the composer
+
+A departure from the plan's letter, and a forced one. `Goal` and `describeGoal`
+were written in Phase 1 in `session/workout.ts`. The page that has to _show_ a
+goal is `/backing`, and no route may import the workout composer — a route
+pulling in composition before the pages were rebuilt would have wired up half a
+milestone and made Phase 3 unshippable on its own.
+
+They moved to `practice/goal.ts`, beside the evaluator that answers them, and
+the dependency now runs one way: `workout.ts` → `goal.ts` → `match.ts`. The
+evaluator itself judges no notes; every landing it reads was decided by `judge`
+and every percentage it quotes comes out of `add`, `accuracy` and `coverage`. A
+second opinion about what counts as a landed chord is the one thing that file
+must never grow.
+
+### Completion replaced the clock, and a short pool cycles rather than ending early
+
+Timers may still bound a task from above; nothing ends because of one. The
+harder half of that promise is the queue: "the task ends at the count, never at
+pile-empty" is only true if there is always something to ask, so the ear task
+falls through due, then near-due, then anything already reached. Fresh material
+sits at the _back_ rather than in the due pile, because a card met this morning
+has no business outranking review work that is actually owed.
+
+Even that runs out. An account three days old owns four ear questions in total,
+so the pool cycles — at most three passes over it. Ten questions from four cards
+is ear training; ten from one is a punishment, and four and a shrug is the bug
+being fixed.
+
+### A block names its task by kind and position, and the six old names are history
+
+`session_blocks` is keyed by session and type, and a long workout holds two
+missions, so the kind alone cannot say which one finished. The position can, and
+the kind stays in the name so a row read on its own still says what it was:
+`mission_2`, `ear_0`.
+
+`block_type` is text narrowed by a union rather than an enum, which is what made
+this free — and it is also what makes the deletion safe. The six original names
+are still readable and no longer writable, and the code says which is which:
+`LegacyBlockType` holds them with a comment explaining that they are rows and
+not vocabulary, `BlockType` is the union the column carries, and `beginBlock` and
+`finishBlock` take a `WorkoutBlockType` and nothing else. The hours those blocks
+hold are still counted by the profile, unconditionally, because they happened and
+no rebuild gets to revise them. Anyone who finds `LegacyBlockType` and reads it
+as dead code will fail a test named for exactly that mistake.
+
+### The day stopped having a maximum
+
+What is in flight is the latest unfinished workout, not today's session.
+Finishing one used to end the day, because the query that found a session asked
+for one started since midnight and the page had nothing else to offer. A day has
+no maximum, so the question is now "is there one open", and the answer to "I
+have finished" is a fresh workout rather than a sentence telling you that you
+have practised enough. This app has never told anyone off, and it does not start
+by congratulating someone into stopping.
+
+There is still no daily streak, and that was never reopened.
+
+### What the deletion removed, and the one thing it could not
+
+`plan.ts` and its tests are gone, and with them the proportional `SHAPE` timer
+model, `SECONDS_PER_CARD`, and the four block types the app used to offer as
+vocabulary. `Timer.svelte` went too — the last thing that rendered a countdown,
+dead the moment `/session` became a task list. Nothing imported any of it;
+`chooseKey` and `coldestKeys` had already been rewritten inside `workout.ts`
+against different inputs, so the old copies were not shared code, they were a
+second answer to a question that now has one.
+
+The self-rating on the log block turns out to have been an even weaker thing
+than the plan said. The plan recorded it as "written and never read"; in fact it
+was never written either. `logRatings` was component state, set by four buttons,
+and the block's own "Done" posted `{ answered: pending.length }` — so the rating
+never left the browser and no row in the database has ever held one. Nothing had
+to be migrated because nothing was ever stored. The grade already comes from
+performance, which is the right place for it: a self-rating typed at the end of
+a sitting grades the sitting's mood.
+
+What could not be deleted, and must not be, is anything that makes those old
+rows unreadable. That distinction — a vocabulary closed, a record kept — is the
+one thing about this deletion worth remembering, and it is the reason
+`LegacyBlockType` exists as its own type rather than as six strings quietly left
+in a union.
+
+### The home page was grey because the rule says it may be
+
+The complaint was that the daily page is bland and uninspiring, and that some of
+the profile's progress elements would look good on it — as long as none of it is
+fluff. The first half of that is true and the cause is not taste. **Hue means
+pitch**, and almost everything the page said had no pitch in it: a task, a rung,
+a count of reviews due. Every obvious fix — a green bar for progress, an amber
+pill for the due pile, a tint for "ready to move on" — is a colour standing for
+nothing, and the house rule says out loud that a screen which can only be fixed
+that way stays grey.
+
+What the rule licenses is the thing the page was barely using. A **key** has a
+tonic, so it may wear that tonic's swatch, and this page is mostly about twelve
+of them. So the keys are drawn at the size the subject deserves: a banner that
+is one whole panel of the key about to be played, and twelve swatches below it
+big enough to read across a room. Twelve saturated colours is a strong image and
+every one of them is information. Everything else — the task list, the ticks,
+the rung marks, the ladder controls — stayed in weight, and the page is not grey
+any more without a single colour having been invented.
+
+The audit found one colour already standing for nothing: the "ready for the next
+rung" button was outlined in `--pc-5`, which is F. Being ready is not a pitch.
+It is ink now.
+
+### A key you have never played is the most interesting thing on the page
+
+The swatches fill with what the record actually holds — the same `GROUP BY` over
+`chord_attempts` the profile's twelve keys are drawn from, deliberately, because
+two pages drawing one fact from two questions is how they come to disagree about
+it. On the record this was designed against that means two keys with something
+in them and ten with nothing, which is the shape this layout has to be good at
+rather than the shape it tolerates.
+
+So an untouched key is drawn as a **full-strength coloured outline, dashed,
+waiting to be filled**, and labelled _new_ rather than 0. It is not dimmed, not
+faded and not marked absent: the ladder suggests an order and the strip refuses
+to make the other eleven look unavailable, because every one of them is one
+press from being today's workout. The words were chosen with the same care as
+the styling — "new ground", "not been here yet — somewhere to go", "the rest are
+open whenever you want them". Nothing on the page can fall while you are away
+from the piano.
+
+Two numbers were removed rather than restyled. **Reviews this week** can only go
+down while you are not practising, printed on the page you open when you have
+come to practise; there is no phrasing that rescues it. **Total cards** was
+never read by anything at all. Per-key accuracy was wanted and refused: a
+percentage beside ten keys, on the screen where you decide what to do today,
+is a verdict handed down before the day has started.
+
+One presentational liberty is taken and is worth writing down. A key with a
+single chord in it against another with five hundred would fill a third of a
+pixel, so a non-empty swatch gets a minimum sliver. The count printed beside it
+is exact; the fill is a picture of a proportion and says so in `warmth.ts`.
+
+### The state a returning player sees most often was the barest one
+
+With a workout in flight the page used to collapse to a title, one line and a
+button. It now shows the workout: its key in the banner, which task is next, and
+the whole task list with the finished ones ticked and dimmed. Every one of those
+facts comes from `session_blocks` — a mission's block is ended by the run that
+met its goal — so this is the record's answer to "where was I" and not the
+browser's. The twelve keys stay on screen underneath as a record rather than a
+picker, because a strip you cannot start anything from must not look like one
+you can.
+
+The picker's agency is untouched: every key, every rung and every progression is
+still visible and still startable, the ladder still marks its suggestion and
+still gates nothing, and choosing something still does not move it. What changed
+is that the picker is no longer folded away behind a summary that had to be
+clicked before the page showed you anything worth wanting.

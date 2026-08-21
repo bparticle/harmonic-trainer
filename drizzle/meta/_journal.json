@@ -36,6 +36,27 @@
       "when": 1787229274453,
       "tag": "0004_lyrics",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1787237661174,
+      "tag": "0005_degrees",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787242996312,
+      "tag": "0006_missions",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787244065365,
+      "tag": "0007_streak_tempo",
+      "breakpoints": true
     }
   ]
 }

@@ -6,6 +6,7 @@ import {
 	formatKey,
 	key,
 	keySignature,
+	keyTonic,
 	parseKey,
 	relativeKey,
 	scale
@@ -146,5 +147,22 @@ describe('key naming', () => {
 	it('reads modal key names', () => {
 		expect(parseKey('D dorian')).toEqual(key('D', 'dorian'));
 		expect(parseKey('Eb lydian')).toEqual(key('Eb', 'lydian'));
+	});
+});
+
+describe('the tonic behind a stored key label', () => {
+	it('reads every spelling the record writes as the same key', () => {
+		for (const label of ['Eb', 'Ebm', 'Eb dorian', ' Eb ']) {
+			expect(keyTonic(label)).toBe('Eb');
+		}
+	});
+
+	it('keeps the spelling rather than the pitch, because G♭ and F♯ are different keys', () => {
+		expect(keyTonic('Gb')).toBe('Gb');
+		expect(keyTonic('F# mixolydian')).toBe('F#');
+	});
+
+	it('hands back anything it cannot read, rather than refusing to answer', () => {
+		expect(keyTonic('not a key')).toBe('not a key');
 	});
 });

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CardPayload } from '$lib/curriculum/cards';
+import { STAGES, itemsForRung } from '$lib/curriculum/ladder';
 import { choicesFor, markGathered, markNamed, markPlayed, pose, toVoicing } from './drill';
 
 const cmaj7: CardPayload = {
@@ -32,9 +33,46 @@ describe('posing a question', () => {
 	});
 
 	it('never leaves you without an instruction', () => {
-		for (const direction of ['hear_name', 'hear_play', 'see_play', 'play_name'] as const) {
+		for (const direction of [
+			'hear_name',
+			'hear_play',
+			'see_play',
+			'play_name',
+			'degree_play'
+		] as const) {
 			expect(pose(direction, cmaj7).instruction.length, direction).toBeGreaterThan(5);
 		}
+	});
+
+	it('asks for a degree by its numeral rather than by its symbol', () => {
+		const prompt = pose('degree_play', cmaj7, 60, 'C');
+		expect(prompt.visible).toBe('I — C');
+		expect(prompt.visible).not.toContain('Cmaj7');
+		expect(prompt.audible).toBeNull();
+	});
+
+	it('carries the key in the degree question, because a numeral alone is not one', () => {
+		const four: CardPayload = {
+			kind: 'triad',
+			label: 'Ab',
+			answerPitchClasses: [8, 0, 3],
+			degree: 'IV'
+		};
+		expect(pose('degree_play', four, 60, 'Eb').visible).toBe('IV — E♭');
+	});
+
+	it('counts a relative minor’s numerals from the minor, not from the stage it is filed under', () => {
+		// The A minor triads are stored on the C stage, so the card's own key says
+		// C and the numeral means A minor. "i — C" would be a wrong question with
+		// the right answer sitting behind it.
+		const [, tonic] = itemsForRung('relative-minor', STAGES[0]);
+		const prompt = pose('degree_play', { ...tonic, degree: tonic.degree! }, 60, 'C');
+		expect(prompt.visible).toBe('i — Am');
+	});
+
+	it('ends the degree question on the name, the way play-then-name always has', () => {
+		expect(pose('degree_play', cmaj7, 60, 'C').answerWith).toBe('name');
+		expect(pose('degree_play', cmaj7, 60, 'C').instruction).toContain('name');
 	});
 
 	it('builds a voicing when the card does not carry one', () => {

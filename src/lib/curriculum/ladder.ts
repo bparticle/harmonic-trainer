@@ -225,6 +225,15 @@ export type LadderItem = {
 	answerPitchClasses: number[];
 	answerVoicing?: number[];
 	degree?: string;
+	/**
+	 * The key the degree is counted from, when that is not the stage's own key.
+	 *
+	 * Only the relative minor needs it, and it needs it badly: its triads are
+	 * stored on the C stage but their numerals are numerals of A minor. Asking
+	 * for "the i chord of C" would be a wrong question with a right answer
+	 * recorded against it, which is the worst shape a drill can take.
+	 */
+	degreeOf?: string;
 	detail?: string;
 };
 
@@ -285,7 +294,13 @@ export function itemsForRung(rungId: RungId, stage: Stage): LadderItem[] {
 		case 'all-sevenths':
 			return [1, 2, 3, 4, 5, 6, 7].map((d) => seventhItem(major, d, MAJOR_DEGREES));
 		case 'relative-minor':
-			return [scaleItem(minor), ...[1, 4, 5].map((d) => triadItem(minor, d, MINOR_DEGREES))];
+			return [
+				scaleItem(minor),
+				...[1, 4, 5].map((d) => ({
+					...triadItem(minor, d, MINOR_DEGREES),
+					degreeOf: stage.relativeMinor
+				}))
+			];
 	}
 }
 
@@ -295,11 +310,31 @@ export function itemsForRung(rungId: RungId, stage: Stage): LadderItem[] {
  * A scale has no chord shape to name, so asking you to name one would be a
  * question with no answer — and a wrong answer to an impossible question still
  * counts against you.
+ *
+ * `degree_play` joins every rung built on numbered chords, which is every rung
+ * except the scale. It is on the relative minor too: `i`, `iv` and `v` are
+ * degrees like any other, and the minor numerals are the ones least likely to
+ * be met anywhere else.
  */
 export function directionsForRung(rungId: RungId): CardDirection[] {
 	if (rungId === 'scale') return ['see_play', 'hear_play'];
-	if (rungId === 'relative-minor') return ['see_play', 'hear_play', 'hear_name'];
-	return ['see_play', 'hear_play', 'hear_name', 'play_name'];
+	if (rungId === 'relative-minor') return ['see_play', 'hear_play', 'hear_name', 'degree_play'];
+	return ['see_play', 'hear_play', 'hear_name', 'play_name', 'degree_play'];
+}
+
+/**
+ * Which directions *this item* can honestly answer.
+ *
+ * The same refusal one level down, because a rung is not always uniform. The
+ * relative minor holds a scale and three triads in one rung, and only the
+ * triads carry a degree — so asking the A minor scale which numeral it is would
+ * be exactly the unanswerable question `directionsForRung` exists to prevent,
+ * smuggled in by the rung next door.
+ */
+export function directionsForItem(rungId: RungId, item: LadderItem): CardDirection[] {
+	return directionsForRung(rungId).filter(
+		(direction) => direction !== 'degree_play' || Boolean(item.degree)
+	);
 }
 
 /** Stable identity, so re-generating a rung matches its existing cards. */

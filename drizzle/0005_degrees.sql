@@ -1,0 +1,25 @@
+-- A fifth direction: the number, not the symbol.
+--
+-- Seeing "A♭" and playing A♭ is spelling; seeing "IV of E♭" and playing A♭ is
+-- harmony, and the play-along page can only ever ask the first. `degree_play`
+-- is the card direction that asks the second. It appends to the type rather
+-- than slotting in beside `play_name`, because `ALTER TYPE ... ADD VALUE` only
+-- appends — so the order in `schema.ts` is written to match what the type
+-- actually holds.
+--
+-- Nothing already recorded changes. Every existing card keeps the direction it
+-- was created with, every review still points at the same card, and no row is
+-- rewritten: the type gains a value that nothing yet uses. The new cards come
+-- from `ensureLadderCards`, which creates whatever the ladder reaches and has
+-- always skipped what already exists, so an account halfway up the ladder grows
+-- its degree cards on its next session and keeps the review history of every
+-- other card untouched.
+--
+-- One statement, and deliberately alone. Postgres 15 allows `ADD VALUE` inside
+-- a transaction block, but the value it adds cannot be *used* until that
+-- transaction commits — and Drizzle runs every pending migration inside one
+-- transaction, not one each. So a default, a backfill or a check constraint
+-- mentioning 'degree_play' would fail here, and would fail only on a database
+-- that had not already migrated. Anything that wants to write the new value
+-- belongs in a later migration or, as here, in the application.
+ALTER TYPE "public"."card_direction" ADD VALUE 'degree_play';

@@ -375,17 +375,38 @@
 		pointer-events: none;
 	}
 
+	/*
+	 * A shape you are meant to remember has to be a shape you can see.
+	 *
+	 * Both of these were multiplied straight by strength, and the practice
+	 * pages draw the key's scale at 0.4 — which arrived as a stroke at 0.22
+	 * opacity over a 2.4% fill. Technically present, and invisible in a lit
+	 * room. Even a chord at full strength only ever tinted its cells by six
+	 * percent.
+	 *
+	 * The contour carries the emphasis now and the fill deliberately does not.
+	 * The cells underneath are wearing the twelve pitch colours, and hue means
+	 * pitch everywhere in this app, so ink laid thickly over them would grey
+	 * out the one thing they are there to say. An outline costs the palette
+	 * nothing and is what the eye actually remembers a shape by.
+	 *
+	 * A base plus a scaled term rather than a bare multiply, so the quiet end
+	 * rises far enough to read while the loud end stays clearly louder. The
+	 * scale at 0.4 and a chord at 0.9 are a context and a subject, and they
+	 * have to remain tellable apart — that separation is the reason the
+	 * strengths exist at all.
+	 */
 	.highlight-sector {
 		fill: var(--color-ink);
-		opacity: calc(0.06 * var(--strength, 1));
+		opacity: calc(0.04 + 0.08 * var(--strength, 1));
 	}
 
 	.highlight-outline {
 		fill: var(--color-ink);
-		fill-opacity: calc(0.05 * var(--strength, 1));
+		fill-opacity: calc(0.03 + 0.05 * var(--strength, 1));
 		stroke: var(--color-ink);
-		stroke-opacity: calc(0.55 * var(--strength, 1));
-		stroke-width: 2;
+		stroke-opacity: calc(0.3 + 0.62 * var(--strength, 1));
+		stroke-width: calc(2 + 1.1 * var(--strength, 1));
 		stroke-linejoin: round;
 		transition: d 320ms var(--ease-wheel);
 	}
