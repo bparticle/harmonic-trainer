@@ -1,9 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import { and, desc, eq, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, isNull, sql } from 'drizzle-orm';
 import { db } from './index';
-import { badges, chordAttempts, playRuns, sessionBlocks } from './schema';
+import { badges, charts, chordAttempts, playRuns, sessionBlocks } from './schema';
 import { emptyRecord, type StreakRecord } from '$lib/effects/badges';
 import { noBests, type Bests, type Flush } from '$lib/practice/run';
+import { gradeShelf, noTempo, type StreakTempo, type TempoRecord } from '$lib/practice/tempo';
+import { chartBySlug } from '$lib/curriculum/charts';
 
 /**
  * The play-along record.
@@ -44,6 +46,93 @@ export async function loadBests(userId: string): Promise<Bests> {
 	}
 
 	return { best, byChart };
+}
+
+/**
+ * How fast each rung of the ladder has been held on each tune.
+ *
+ * Derived and never stored. There is no `best_bpm` column on `badges` and there
+ * must not be: M9 deleted a stored best because it could drift from the runs
+ * that justified it, and a stored tempo grade is the same bug wearing a new
+ * name. The badge answers *when did you first get there*; this answers *how fast
+ * have you held it*, and neither can contradict the other.
+ *
+ * The roadmap writes the grade as `max(bpm) where best_streak >= tier.from`, six
+ * times over. It is asked here once per streak length instead — the same answer,
+ * a handful of rows rather than the whole log, and the ladder applied in
+ * `gradeShelf` where the ladder lives and can be tested without a database.
+ *
+ * **`coalesce(best_streak_bpm, bpm)` is the tempo a run is graded on.** The
+ * column that knows where a streak was actually clinched shipped in M15 and is
+ * null on every run recorded before it, and cannot be backfilled — the runs do
+ * not know. Grading strictly on it would show nothing at all for the history
+ * that exists; grading on `bpm` alone would reintroduce the flattery it was
+ * added to prevent. So a run recorded before the column existed is graded on the
+ * tempo it was logged at, because that is the only tempo it ever knew, and every
+ * run since is graded on where its best streak was reached.
+ */
+export async function loadTempoGrades(userId: string): Promise<TempoRecord> {
+	const rows = await db
+		.select({
+			chartSlug: playRuns.chartSlug,
+			bestStreak: playRuns.bestStreak,
+			bpm: sql<number>`max(coalesce(${playRuns.bestStreakBpm}, ${playRuns.bpm}))::int`
+		})
+		.from(playRuns)
+		.where(and(eq(playRuns.userId, userId), gt(playRuns.bestStreak, 0)))
+		.groupBy(playRuns.chartSlug, playRuns.bestStreak);
+
+	if (rows.length === 0) return noTempo();
+
+	const byChart = new Map<string, StreakTempo[]>();
+	for (const row of rows) {
+		const list = byChart.get(row.chartSlug) ?? [];
+		list.push({ bestStreak: row.bestStreak, bpm: row.bpm ?? 0 });
+		byChart.set(row.chartSlug, list);
+	}
+
+	const targets = await targetTempos(userId, [...byChart.keys()]);
+
+	const graded: TempoRecord = noTempo();
+	for (const [slug, runs] of byChart) {
+		const target = targets[slug];
+		// A tune whose tempo nothing records grades nothing. That is a chart of
+		// your own that has since been deleted: the runs still happened, and there
+		// is no honest number to measure them against.
+		if (!target) continue;
+		const shelf = gradeShelf(runs, target);
+		if (Object.keys(shelf).length > 0) graded.byChart[slug] = shelf;
+	}
+
+	return graded;
+}
+
+/**
+ * The tempo each tune is meant to go at — code first, then the database.
+ *
+ * The same order the rest of the app resolves a chart in, and it is load-bearing
+ * here: a built-in lives in `charts.ts` and has no row of its own to read
+ * `default_bpm` from, so a query alone would leave most of the record ungraded.
+ */
+async function targetTempos(userId: string, slugs: string[]): Promise<Record<string, number>> {
+	const targets: Record<string, number> = {};
+	const unresolved: string[] = [];
+
+	for (const slug of slugs) {
+		const seed = chartBySlug(slug);
+		if (seed) targets[slug] = seed.defaultBpm;
+		else unresolved.push(slug);
+	}
+
+	if (unresolved.length === 0) return targets;
+
+	const rows = await db
+		.select({ slug: charts.slug, defaultBpm: charts.defaultBpm })
+		.from(charts)
+		.where(and(inArray(charts.slug, unresolved), eq(charts.userId, userId)));
+
+	for (const row of rows) targets[row.slug] = row.defaultBpm;
+	return targets;
 }
 
 /** Every badge won, in the shape the shelf and the page already speak. */

@@ -74,6 +74,7 @@
 		type MissionParams,
 		type Verdict
 	} from '$lib/practice/goal';
+	import { bandsOn, noTempo, parseTempoRecord, type TempoRecord } from '$lib/practice/tempo';
 	import { chordSymbolLabel } from '$lib/music/symbol';
 	import StreakBadges from '$lib/components/StreakBadges.svelte';
 	import ChartEditor from '$lib/components/ChartEditor.svelte';
@@ -119,7 +120,13 @@
 		demo = false,
 		/** The shelf and the two bests, as the record has them. Empty for the demo. */
 		record: fromServer = emptyRecord() as StreakRecord,
-		bests: bestsFromServer = noBests() as Bests
+		bests: bestsFromServer = noBests() as Bests,
+		/**
+		 * How fast each badge has been held, graded against the tune's own tempo.
+		 * Derived from the runs, so the demo — which writes none — grades nothing
+		 * and the shelf looks exactly as it did before bands existed.
+		 */
+		tempo: tempoFromServer = noTempo() as TempoRecord
 	} = $props();
 
 	const KEYS = ['C', 'G', 'D', 'A', 'E', 'B', 'Gb', 'Db', 'Ab', 'Eb', 'Bb', 'F'];
@@ -277,9 +284,20 @@
 	let record = $state<StreakRecord>(fromServer);
 	// svelte-ignore state_referenced_locally
 	let bests = $state<Bests>(bestsFromServer);
+	// svelte-ignore state_referenced_locally
+	let tempo = $state<TempoRecord>(tempoFromServer);
 	let recordReady = $state(false);
 
 	const shelf = $derived(badgesOn(record, slug));
+	/*
+	 * The bands, from the rows and not from the browser.
+	 *
+	 * Unlike the badges these are never cached locally, and deliberately: a band
+	 * is a question asked of every run on the tune, so the only place it can be
+	 * answered is where the runs are. A run played offline upgrades its band when
+	 * the outbox lands, which is the same moment the record hears about it.
+	 */
+	const bands = $derived(bandsOn(tempo, slug));
 	/*
 	 * The run under way counts towards both bests before it has been written
 	 * down. Waiting for the flush would mean landing a new personal best and
@@ -356,6 +374,7 @@
 			settle(localStorage, pending);
 			record = parseRecord(answer.record);
 			bests = parseBests(answer.bests);
+			tempo = parseTempoRecord(answer.tempo);
 		} catch {
 			// No network. It waits, which is what an outbox is for.
 		}
@@ -1739,7 +1758,7 @@
 				you are on it would be no use for deciding to get on it.
 			-->
 			{#if fireworks}
-				<StreakBadges {shelf} {streak} chartName={seed.name} best={bestEver} {bestHere} />
+				<StreakBadges {shelf} {bands} {streak} chartName={seed.name} best={bestEver} {bestHere} />
 			{/if}
 
 			<!--

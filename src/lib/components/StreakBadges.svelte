@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Badge } from '$lib/effects/badges';
 	import { BADGE_TIERS, nextTier, type Streak } from '$lib/effects/streak';
+	import { bandById, bestBand, type TempoShelf } from '$lib/practice/tempo';
 
 	/*
 	 * The shelf.
@@ -21,6 +22,18 @@
 	 * The badge you are climbing towards fills its outline as you go, which is
 	 * the only moving part.
 	 *
+	 * Since M16 a badge also says **how fast it has been held**, as a share of
+	 * the tempo the tune goes at. That is drawn entirely in weight and position:
+	 * a mark on a short track, with a notch where the tune's own tempo sits, and
+	 * the number underneath. No band gets a colour of its own — hue means pitch,
+	 * a tempo has no pitch in it, and inventing bronze-silver-gold here would
+	 * break the one colour language the app has. The badge goes on wearing the
+	 * chord that clinched it.
+	 *
+	 * The band never contradicts the badge, either. It says how fast the tier has
+	 * been held, and the badge goes on saying when it was first reached — so a
+	 * slow band is a fact and an invitation, and never a badge that failed.
+	 *
 	 * Since M9 the six sockets are **this tune's**. Six empty ones under a chart
 	 * you have not played yet is the point: the shelf is a ladder here, and it
 	 * says that twenty is next and that fifty exists. The profile inverts that
@@ -30,6 +43,7 @@
 
 	let {
 		shelf,
+		bands = {},
 		streak,
 		chartName,
 		best,
@@ -37,6 +51,12 @@
 	}: {
 		/** This tune's badges, by tier. */
 		shelf: Record<string, Badge>;
+		/**
+		 * The band each tier has been held at, by tier, derived from the runs. A
+		 * tier with nothing to say is simply absent — the demo grades nothing, and
+		 * so does a badge carried in from a browser with no run behind it.
+		 */
+		bands?: TempoShelf;
 		/** The run under way, for the progress ring. */
 		streak: Streak;
 		chartName: string;
@@ -84,8 +104,32 @@
 		if (!badge) return `${name} — not yet earned. Land ${from} chords in a row on this tune.`;
 		const day = when(badge.at);
 		const key = badge.key ? ` in ${badge.key.replace('b', '♭')}` : '';
-		return `${name} — ${badge.count} in a row${key}${day ? ` on ${day}` : ''}.`;
+		const won = `${name} — ${badge.count} in a row${key}${day ? ` on ${day}` : ''}.`;
+
+		const held = bands[id];
+		if (!held) return won;
+		const band = bandById(held.band);
+		return `${won} Held at ${held.bpm}, ${held.percent}% of the ${held.target} this tune goes at${band ? ` — ${band.name}. ${band.says}` : '.'}`;
 	}
+
+	/*
+	 * The band's mark, as a position rather than as a fill.
+	 *
+	 * A meter filling towards a maximum would read as three-fifths of something
+	 * and two-fifths missing, which is a scolding drawn as a rectangle. This is a
+	 * mark on a road: where you have held the tier, with a notch at the tempo the
+	 * tune goes at, and the road carrying on past it because taking a tune faster
+	 * than it goes is a real thing to do.
+	 */
+	const TRACK = { width: 44, left: 3, right: 41, top: 140 };
+
+	const at = (percent: number) =>
+		TRACK.left +
+		(Math.min(TRACK.top, Math.max(0, percent)) / TRACK.top) * (TRACK.right - TRACK.left);
+
+	/** The fastest band anything on this tune has been held at, for the line underneath. */
+	const held = $derived(bestBand(bands));
+	const heldBand = $derived(held ? bandById(held.band) : null);
 </script>
 
 <section class="shelf" aria-label="Streak badges">
@@ -106,6 +150,7 @@
 	<ul class="badges">
 		{#each BADGE_TIERS as tier (tier.id)}
 			{@const badge = shelf[tier.id]}
+			{@const band = bands[tier.id]}
 			{@const isNext = chasing?.id === tier.id}
 			{@const isClimbing = climbing?.id === tier.id}
 			<li
@@ -132,9 +177,37 @@
 					<text class="badge-count" x={W / 2} y={H / 2 + 6} text-anchor="middle">{tier.from}</text>
 				</svg>
 				<span class="badge-name">{tier.name}</span>
+				{#if badge && band}
+					<!--
+						The band, in weight only: a mark where it has been held, a notch
+						where the tune's own tempo sits, and the share underneath. The
+						mark thickens at and above tempo, which is the whole of the
+						difference between the bands as drawn.
+					-->
+					<svg class="band" viewBox="0 0 {TRACK.width} 11" aria-hidden="true">
+						<line class="band-road" x1={TRACK.left} y1="8" x2={TRACK.right} y2="8" />
+						<line class="band-target" x1={at(100)} y1="4.5" x2={at(100)} y2="10.5" />
+						<line
+							class="band-mark"
+							class:is-at-tempo={band.percent >= 100}
+							x1={at(band.percent)}
+							y1="1.5"
+							x2={at(band.percent)}
+							y2="10.5"
+						/>
+					</svg>
+					<span class="band-share" class:is-at-tempo={band.percent >= 100}>{band.percent}%</span>
+				{/if}
 			</li>
 		{/each}
 	</ul>
+
+	{#if held && heldBand}
+		<p class="shelf-tempo">
+			Held on {chartName} at <strong>{heldBand.name}</strong> — {held.bpm}, {held.percent}% of the
+			{held.target} it goes at. {heldBand.says}
+		</p>
+	{/if}
 
 	<p class="shelf-hint">
 		{#if climbing}
@@ -275,6 +348,65 @@
 
 	.badge.is-next .badge-name {
 		color: var(--color-ink);
+	}
+
+	/*
+	 * Everything about a band is ink and position. No fill, no tint, no second
+	 * colour language: the hue on this row belongs to the chord that clinched the
+	 * badge and to nothing else.
+	 */
+	.band {
+		display: block;
+		width: 100%;
+		height: auto;
+		margin-top: 0.15rem;
+	}
+
+	.band-road {
+		stroke: var(--color-ground-line);
+		stroke-width: 1;
+	}
+
+	/* Where the tune's own tempo sits on the road, so a mark can be read against
+	   something rather than floating on a scale nobody was told about. */
+	.band-target {
+		stroke: var(--color-ink-dim);
+		stroke-width: 1;
+	}
+
+	.band-mark {
+		stroke: var(--color-ink-muted);
+		stroke-width: 2;
+		stroke-linecap: round;
+	}
+
+	.band-mark.is-at-tempo {
+		stroke: var(--color-ink);
+		stroke-width: 3;
+	}
+
+	.band-share {
+		color: var(--color-ink-dim);
+		font-family: var(--font-mono);
+		font-size: 0.55rem;
+		font-variant-numeric: tabular-nums;
+		line-height: 1.1;
+	}
+
+	.band-share.is-at-tempo {
+		color: var(--color-ink-muted);
+	}
+
+	.shelf-tempo {
+		margin-top: 0.7rem;
+		color: var(--color-ink-dim);
+		font-size: 0.76rem;
+		line-height: 1.45;
+	}
+
+	.shelf-tempo strong {
+		color: var(--color-ink-muted);
+		font-family: var(--font-mono);
 	}
 
 	.shelf-hint {
