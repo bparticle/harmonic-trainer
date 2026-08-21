@@ -36,7 +36,7 @@ import { reportWorkout, type Asked, type WorkoutReport } from '$lib/session/repo
 import { loadTempoGrades } from './play-log';
 import type { Verdict } from '$lib/practice/goal';
 import { chartDemand, MISSION_CHARTS } from '$lib/curriculum/charts';
-import { vocabularyOf } from '$lib/curriculum/vocabulary';
+import { vocabularyOf, type Vocabulary } from '$lib/curriculum/vocabulary';
 import { isGroove, type Groove } from '$lib/audio/groove';
 import { keyTonic } from '$lib/music/key';
 import {
@@ -209,6 +209,24 @@ async function schedulableCards(): Promise<Schedulable[]> {
  * fold into qualities happens in `coldSpotsFrom`, which is pure and where
  * `parseChord` already lives.
  */
+/**
+ * What the drill room has taught, as the songbook and the composer both read it.
+ *
+ * One derivation, two callers. The workout composer needs it to decide where a
+ * mission may be set; the songbook needs it to mark which tunes are within
+ * reach. Two copies of this would be two answers to the same question, and the
+ * one thing worse than a locked tune is a tune the list calls ready and the
+ * workout will not set.
+ */
+export async function currentVocabulary(userId: string): Promise<Vocabulary> {
+	const position = await currentPosition();
+	const played = await alreadyPlayed(userId);
+	return vocabularyOf({
+		rungs: reachedSoFar(position).map((place) => place.rungId),
+		progressions: played.progressions
+	});
+}
+
 export async function loadColdSpots(userId: string): Promise<ColdSpot[]> {
 	const rows = await db
 		.select({
