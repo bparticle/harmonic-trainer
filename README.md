@@ -42,13 +42,17 @@ remain planned in `ROADMAP.md`.
 - **Play along** — a rhythm section generated from a chord chart. Walking bass,
   drums, optional comping, any key, any tempo, loop any bars. Blues, rhythm
   changes, cycles and public-domain standards, plus anything you type in.
-- **Explore** — the wheel, chord neighbours, voice leading.
+- **Explore** — the wheel, chord neighbours, voice leading, with the notes under
+  your hands lighting up as you play them.
 - **Profile** — what has actually happened: hours played, chords judged, badges
   won, and the twelve keys as swatches so the ones you never play are visible at
   a glance. Every number traces to a row; none is an estimate, and there is no
   daily streak.
 
-No MIDI keyboard? Everything works with the on-screen one.
+Signing in for the first time opens a short tour that sets the instrument up
+before it explains anything, and hands you the sustain pedal as the way through
+the rest of it. No MIDI keyboard? Everything works with the on-screen one, and
+the tour takes that route instead.
 
 ---
 
@@ -154,9 +158,48 @@ password. A new account receives a fresh copy of the default palette, wheel and
 practice preferences, starts at C major, and sees none of another account's
 custom charts or progress.
 
+Each account wears a **chromatic portrait** in the top-right menu — four of the
+twelve pitch colours and one geometric shape, derived from the name. Nothing is
+uploaded and nothing is stored: the same name always draws the same portrait, so
+two people sharing a laptop can see whose progress is on screen at a glance.
+
 This is intentionally an operator-managed family beta. There is no public
 registration or email-based recovery yet; the remaining public-account work is
 tracked under M12 in `ROADMAP.md`.
+
+---
+
+## The first run
+
+A new account lands on **Today** with the tour already open. It runs once per
+person per browser, and the profile menu replays it at any time.
+
+It starts at the instrument rather than at a feature list. The first card asks
+whether you have played before, then offers to connect MIDI — and then asks for
+**three different notes** before it will call the connection good, because a
+stuck key pressed twice looks exactly like a working piano to everything except
+a count of distinct notes. Choosing the on-screen keyboard instead is a first-
+class answer, not a fallback: the tour continues on that route and says so.
+
+The answer about experience changes two settings and nothing else — how long a
+workout is aimed to be, and how long you get before a chord is revealed. **It
+does not move the ladder.** One answer on a welcome screen should not turn into
+durable learning progress, and every key and rung is startable from Today
+anyway.
+
+Then it walks the five pages — Today, Play, Play along, Songbook, Explore —
+lighting the part of each one it is talking about.
+
+### The pedal is the way through
+
+The second card asks for a press of the damper pedal, and that press is the
+lesson: from there the pedal advances the tour, and everywhere else in the app it
+means the same thing as the primary button. Next question on a workout task, open
+the play-along on a mission, play and pause the band. The spacebar and the large
+on-screen button do the same job for anyone without a pedal.
+
+While the tour is open it takes the pedal from the page underneath, so an early
+press cannot start the band or answer a card through the overlay it was aimed at.
 
 ---
 
@@ -189,6 +232,7 @@ src/
     design/        Colour science and design tokens
       color.ts       OKLCH <-> sRGB, gamut clamping, WCAG contrast
       palette.ts     12 pitch-class colours, ground, ink
+      avatar.ts      A chromatic portrait derived from a name; no upload, no row
     music/         Music core
       note.ts        Note as letter + alter + octave; midi and pitch class derived
       interval.ts    Intervals as (diatonic steps, semitones); transposition
@@ -259,6 +303,9 @@ src/
       ChordSymbol.svelte Composed chord symbols with spoken labels
       Keyboard.svelte    On-screen keyboard; the no-MIDI fallback
       ChartEditor.svelte A grid of bars, checked as you type
+      OnboardingTour.svelte  The first run: set the instrument up, learn the
+                     pedal, then walk the five pages
+      UserAvatar.svelte  The chromatic portrait, drawn
       PlayAlong.svelte   The play-along page, shared by /backing and /demo
       StreakBadges.svelte  This tune's six sockets
       Fireworks.svelte   Sparks, bursts and callouts
@@ -269,10 +316,12 @@ src/
         schema.ts    All 17 tables
         index.ts     Drizzle client
         user.ts      currentUserId() - the whole multi-user seam
+        accounts.ts  Provisioning an invite-only account, and resetting one
         settings.ts  Per-account settings, cloned from defaults
         session-store.ts  Workouts, blocks, reviews, and card creation
         play-log.ts  The play-along record: runs, chords judged, badges
     settings.ts    Shared setting types and defaults
+    onboarding.ts  What the first run asks, and what its answers may change
   routes/
     layout.css     Design tokens as Tailwind theme
     +layout.*      Injects the database-owned palette during SSR
@@ -283,6 +332,7 @@ src/
     explore/       The wheel with every overlay
     profile/       What has actually happened
     session/       Today's workout, task by task
+    songbook/      Finding a tune, and writing one down
     settings/
       wheel/       Calibration against your physical wheel
       colours/     OKLCH palette editor with live contrast
@@ -291,6 +341,7 @@ src/
     api/session/   The workout's write endpoint
     api/runs/      Where a run of the transport is written down
     login/         Email and password sign-in
+    logout/        Drops the cookie
   hooks.server.ts  Redirects unauthenticated requests to /login, and puts
                    what the cookie claims on event.locals
 ```
@@ -357,6 +408,13 @@ gate**, so a mission is only ever set on a tune whose chords have been taught; a
 songbook** — a room of its own for finding a tune and writing one down, which
 used to be a sidebar and an editor standing in the practice area. What is still
 open is in `ROADMAP.md` under _What the readiness gate left open_.
+
+Since the family beta, and all of it about arriving: **the first run**, a tour
+that sets the instrument up before it explains anything; **the pedal as
+navigation**, which the tour teaches by taking a press and which now means _next_
+on every page; a **chromatic portrait** per account, derived from the name; and
+the **wheel following your hands** on Explore, so the study bench never looks
+disconnected from the piano.
 
 ### In progress and planned
 
