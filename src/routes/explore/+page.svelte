@@ -2,6 +2,7 @@
 	import ChordSymbol from '$lib/components/ChordSymbol.svelte';
 	import InfoHint from '$lib/components/InfoHint.svelte';
 	import Wheel from '$lib/wheel/Wheel.svelte';
+	import { midi as session } from '$lib/midi/shared.svelte';
 	import { formatKey, key as makeKey, type Mode } from '$lib/music/key';
 	import { formatNote, pitchClass } from '$lib/music/note';
 	import { spell } from '$lib/music/spell';
@@ -35,6 +36,13 @@
 	let targetTonic = $state(7);
 	let targetMode = $state<Mode>('ionian');
 	let litPitchClasses = $state<number[]>([]);
+
+	// Explore is a study bench, but the instrument should never feel detached
+	// from it. Keep manually pinned notes and the notes sounding under the hands
+	// in the same wheel layer; session.live already follows note-off and sustain.
+	const wheelLitPitchClasses = $derived([
+		...new Set([...litPitchClasses, ...session.live.map((note) => ((note % 12) + 12) % 12)])
+	]);
 
 	// Tonics are chosen as pitch classes but must be *spelled* before they become
 	// a key, or Eb major would arrive as D# major and drag the wrong scale with it.
@@ -135,7 +143,7 @@
 				degrees={wheelDegrees}
 				{highlights}
 				{arcs}
-				lit={litPitchClasses}
+				lit={wheelLitPitchClasses}
 				size={660}
 				onselect={(_cell, pc) =>
 					(litPitchClasses = litPitchClasses.includes(pc)
