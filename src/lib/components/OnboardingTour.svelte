@@ -4,7 +4,7 @@
 	import { onMount, tick } from 'svelte';
 	import type { MidiEvent } from '$lib/midi/cluster';
 	import { connectMidi, midi } from '$lib/midi/shared.svelte';
-	import { prefsForExperience, type ExperienceLevel } from '$lib/onboarding';
+	import { hasConfirmedInput, prefsForExperience, type ExperienceLevel } from '$lib/onboarding';
 	import type { Prefs } from '$lib/settings';
 	import Keyboard from './Keyboard.svelte';
 
@@ -24,9 +24,9 @@
 	};
 
 	const STEPS: TourStep[] = [
+		{ path: '/', target: null },
+		{ path: '/', target: null },
 		{ path: '/', target: 'today' },
-		{ path: '/', target: null },
-		{ path: '/', target: null },
 		{ path: '/play', target: 'play' },
 		{ path: '/backing', target: 'backing' },
 		{ path: '/songbook', target: 'songbook' },
@@ -43,11 +43,16 @@
 
 	let open = $state(false);
 	let step = $state(0);
+	type SetupStage = 'experience' | 'connect' | 'confirm';
+	type InputMode = 'midi' | 'screen';
+	let setupStage = $state<SetupStage>('experience');
+	let inputMode = $state<InputMode>('midi');
 	let experience = $state<ExperienceLevel>('beginner');
 	let firstRun = $state(false);
 	let settingsApplied = $state(false);
 	let moving = $state(false);
 	let settingsProblem = $state<string | null>(null);
+	let connecting = $state(false);
 	let pedalRecognised = $state(false);
 	let seenRequest = $state(0);
 	let card = $state<HTMLElement>();
@@ -56,6 +61,7 @@
 	type NoteHit = { id: number; note: number; pc: number; label: string };
 	let hits = $state<NoteHit[]>([]);
 	const uniqueNotes = $derived(new Set(hits.map((hit) => hit.note)).size);
+	const inputConfirmed = $derived(hasConfirmedInput(hits.map((hit) => hit.note)));
 
 	type Spotlight = { left: number; top: number; width: number; height: number };
 	let spotlight = $state<Spotlight | null>(null);
@@ -64,8 +70,25 @@
 	const current = $derived(STEPS[step]);
 	const progressLabel = $derived(`${step + 1} of ${STEPS.length}`);
 	const device = $derived(midi.devices.find((entry) => entry.id === midi.selectedId));
+	const midiCanTest = $derived(midi.status === 'ready' && Boolean(device));
 
 	const copy = $derived.by((): PageCopy | null => {
+		if (step === 2) {
+			return {
+				eyebrow: 'Today',
+				title: 'Choose today’s work',
+				body:
+					experience === 'beginner'
+						? 'Your first suggestion starts gently in C, but every key and exercise remains available.'
+						: 'Start from the suggestion or jump straight to any key, rung or progression.',
+				points: [
+					'Choose a key, a skill or a progression to shape the workout.',
+					'Short, standard and long describe how many tasks you will play.',
+					'The ladder suggests a next step; it never locks the rest.'
+				],
+				next: 'Hear your hands'
+			};
+		}
 		if (step === 3) {
 			return {
 				eyebrow: 'Play',
@@ -151,6 +174,7 @@
 	$effect(() => {
 		if (!open) return;
 		return midi.onNote((note) => {
+			if (step !== 0 || setupStage !== 'confirm') return;
 			const pc = ((note % 12) + 12) % 12;
 			hits = [
 				...hits.slice(-11),
@@ -166,13 +190,13 @@
 				if (!down) return false;
 				// The tour owns the pedal while it is open. Early presses are consumed
 				// rather than leaking through to the real page behind it.
-				if (step < 2 || moving) return true;
-				if (step === 2) {
+				if (step < 1 || moving) return true;
+				if (step === 1) {
 					pedalRecognised = true;
 					moving = true;
 					setTimeout(() => {
 						moving = false;
-						void jumpTo(3);
+						void jumpTo(2);
 					}, 360);
 				} else {
 					void jumpTo(step + 1);
@@ -195,6 +219,9 @@
 		settingsApplied = false;
 		settingsProblem = null;
 		pedalRecognised = false;
+		setupStage = 'experience';
+		inputMode = 'midi';
+		connecting = false;
 		hits = [];
 		step = 0;
 		open = true;
@@ -222,6 +249,42 @@
 		}
 	}
 
+	async function beginConnection() {
+		if (moving) return;
+		moving = true;
+		try {
+			await applyExperience();
+			setupStage = 'connect';
+			await focusCard();
+		} finally {
+			moving = false;
+		}
+	}
+
+	async function requestMidi() {
+		if (connecting || midi.status === 'requesting') return;
+		connecting = true;
+		try {
+			await connectMidi();
+			await focusCard();
+		} finally {
+			connecting = false;
+		}
+	}
+
+	async function beginConfirmation(mode: InputMode) {
+		inputMode = mode;
+		hits = [];
+		setupStage = 'confirm';
+		await focusCard();
+	}
+
+	async function backToConnection() {
+		hits = [];
+		setupStage = 'connect';
+		await focusCard();
+	}
+
 	async function jumpTo(next: number) {
 		if (moving || !open) return;
 		if (next >= STEPS.length) {
@@ -232,6 +295,11 @@
 		moving = true;
 		try {
 			if (step === 0) await applyExperience();
+			if (next === 0 && step !== 0) {
+				setupStage = 'experience';
+				inputMode = 'midi';
+				hits = [];
+			}
 			step = Math.max(0, next);
 			const path = STEPS[step].path;
 			if (page.url.pathname !== path) await goto(path);
@@ -245,7 +313,7 @@
 		if (typeof localStorage !== 'undefined') {
 			localStorage.setItem(
 				storageKey(),
-				JSON.stringify({ status, experience, version: 1, at: new Date().toISOString() })
+				JSON.stringify({ status, experience, inputMode, version: 1, at: new Date().toISOString() })
 			);
 		}
 		open = false;
@@ -318,8 +386,8 @@
 
 		<div
 			class="tour-card"
-			class:is-page={step >= 3}
-			class:is-wide={step === 1}
+			class:is-page={step >= 2}
+			class:is-wide={step === 0 && setupStage === 'confirm'}
 			role="dialog"
 			aria-modal="false"
 			aria-labelledby="tour-title"
@@ -334,97 +402,162 @@
 			</header>
 
 			{#if step === 0}
-				<div class="intro-copy">
-					<p class="eyebrow">Today</p>
-					<h2 id="tour-title">Start at the piano</h2>
-					<p>
-						Today suggests a useful next workout, but never locks the rest. Pick any key, rung or
-						progression, choose a workout size, then practise.
-					</p>
-				</div>
-
-				<fieldset class="experience">
-					<legend>How should we set your starting pace?</legend>
-					<button
-						type="button"
-						class:is-selected={experience === 'beginner'}
-						onclick={() => (experience = 'beginner')}
-						aria-pressed={experience === 'beginner'}
-					>
-						<strong>Beginner</strong>
-						<span>Start in C · short workouts · 3-second chord reveal</span>
-					</button>
-					<button
-						type="button"
-						class:is-selected={experience === 'experienced'}
-						onclick={() => (experience = 'experienced')}
-						aria-pressed={experience === 'experienced'}
-					>
-						<strong>Experienced</strong>
-						<span>Jump anywhere · standard workouts · 1.5-second reveal</span>
-					</button>
-				</fieldset>
-
-				{#if settingsProblem}<p class="problem" role="status">{settingsProblem}</p>{/if}
-			{:else if step === 1}
-				<div class="intro-copy">
-					<p class="eyebrow">The aha moment</p>
-					<h2 id="tour-title">Play any three notes</h2>
-					<p>
-						Your piano is the input. Notes appear the instant they land—no exercise or theory test
-						required.
-					</p>
-				</div>
-
-				<div class="midi-status" aria-live="polite">
-					{#if midi.status === 'idle'}
-						<button type="button" class="connect" onclick={connectMidi}>Connect my piano</button>
-						<span>or use the keyboard below</span>
-					{:else if midi.status === 'requesting'}
-						<span>Waiting for MIDI permission…</span>
-					{:else if midi.status === 'ready' && device}
-						<span class="listening"><i></i>Listening to {device.name}</span>
-					{:else if midi.status === 'ready'}
-						<span>MIDI is ready. Switch on your piano, or use the keyboard below.</span>
-					{:else}
-						<span>{midi.unavailableReason} The keyboard below still works.</span>
-					{/if}
-				</div>
-
-				<div
-					class="piano-roll"
-					role="status"
-					aria-live="polite"
-					aria-label={`${uniqueNotes} different notes played`}
-				>
-					<div class="roll-labels" aria-hidden="true">
-						{#each NAMES as name (name)}<span>{name}</span>{/each}
+				{#if setupStage === 'experience'}
+					<div class="intro-copy">
+						<p class="eyebrow">Setup · 1 of 3</p>
+						<h2 id="tour-title">Where are you starting?</h2>
+						<p>
+							This sets the pace of your first workouts. It does not lock keys, exercises or tunes.
+						</p>
 					</div>
-					<div class="now-line"><span>now</span></div>
-					{#each hits as hit, i (hit.id)}
-						<span
-							class="note-hit"
-							aria-hidden="true"
-							style:left={`${hit.pc * (100 / 12) + 0.45}%`}
-							style:bottom={`${0.8 + (hits.length - 1 - i) * 0.54}rem`}
-							style:--note-color={`var(--pc-${hit.pc})`}
-							style:--note-ink={`var(--pc-${hit.pc}-ink)`}>{hit.label}</span
-						>
-					{/each}
-					<p class="roll-count">{Math.min(uniqueNotes, 3)} / 3</p>
-				</div>
 
-				<div class="tour-keyboard">
-					<Keyboard
-						from={48}
-						count={17}
-						lit={midi.live}
-						showLabels={false}
-						onnoteon={(note) => virtual('noteon', note)}
-						onnoteoff={(note) => virtual('noteoff', note)}
-					/>
-				</div>
-			{:else if step === 2}
+					<fieldset class="experience">
+						<legend>Choose a starting pace</legend>
+						<button
+							type="button"
+							class:is-selected={experience === 'beginner'}
+							onclick={() => (experience = 'beginner')}
+							aria-pressed={experience === 'beginner'}
+						>
+							<strong>Beginner</strong>
+							<span>Start in C · short workouts · 3-second chord reveal</span>
+						</button>
+						<button
+							type="button"
+							class:is-selected={experience === 'experienced'}
+							onclick={() => (experience = 'experienced')}
+							aria-pressed={experience === 'experienced'}
+						>
+							<strong>Experienced</strong>
+							<span>Jump anywhere · standard workouts · 1.5-second reveal</span>
+						</button>
+					</fieldset>
+				{:else if setupStage === 'connect'}
+					<div class="intro-copy">
+						<p class="eyebrow">Setup · 2 of 3</p>
+						<h2 id="tour-title">Connect your piano</h2>
+						<p>
+							Switch it on first, then let this browser use MIDI. Harmonic never sends notes out.
+						</p>
+					</div>
+
+					<section class="connection-panel" aria-live="polite" aria-label="MIDI connection">
+						{#if midi.status === 'idle'}
+							<div class="connection-state">
+								<i class="status-mark" aria-hidden="true"></i>
+								<span>
+									<strong>Not connected yet</strong>
+									<small>Press Connect, then allow MIDI when your browser asks.</small>
+								</span>
+							</div>
+						{:else if midi.status === 'requesting'}
+							<div class="connection-state">
+								<i class="status-mark is-waiting" aria-hidden="true"></i>
+								<span>
+									<strong>Waiting for permission</strong>
+									<small>Choose Allow in the browser prompt.</small>
+								</span>
+							</div>
+						{:else if midi.status === 'ready' && device}
+							<div class="connection-state is-ready">
+								<i class="status-mark is-ready" aria-hidden="true"></i>
+								<span>
+									<strong>{device.name}</strong>
+									<small>Connected. We will test the notes next.</small>
+								</span>
+							</div>
+							{#if midi.devices.length > 1}
+								<label class="device-choice">
+									<span>MIDI input</span>
+									<select
+										value={midi.selectedId}
+										onchange={(event) => midi.select(event.currentTarget.value)}
+									>
+										{#each midi.devices as option (option.id)}
+											<option value={option.id}>{option.name}</option>
+										{/each}
+									</select>
+								</label>
+							{/if}
+						{:else if midi.status === 'ready'}
+							<div class="connection-state">
+								<i class="status-mark is-waiting" aria-hidden="true"></i>
+								<span>
+									<strong>MIDI is allowed, but no piano is visible</strong>
+									<small>Switch it on or reconnect its cable. This updates automatically.</small>
+								</span>
+							</div>
+						{:else}
+							<div class="connection-state">
+								<i class="status-mark" aria-hidden="true"></i>
+								<span>
+									<strong>MIDI is unavailable</strong>
+									<small>{midi.unavailableReason}</small>
+								</span>
+							</div>
+						{/if}
+					</section>
+
+					{#if settingsProblem}<p class="problem" role="status">{settingsProblem}</p>{/if}
+				{:else}
+					<div class="intro-copy">
+						<p class="eyebrow">Setup · 3 of 3</p>
+						<h2 id="tour-title">
+							{inputMode === 'midi' ? 'Play any three notes' : 'Try the on-screen keyboard'}
+						</h2>
+						<p>
+							{inputMode === 'midi'
+								? 'Watch each note appear below. Three different notes confirms that the full MIDI signal is reaching Harmonic.'
+								: 'Click or tap three different keys. You can practise without MIDI and connect a piano later from Settings.'}
+						</p>
+					</div>
+
+					<div class="midi-status" aria-live="polite">
+						{#if inputMode === 'midi'}
+							<span class="listening"
+								><i></i>Listening only to {device?.name ?? 'your MIDI input'}</span
+							>
+						{:else}
+							<span>On-screen input · computer keys A through semicolon also work</span>
+						{/if}
+					</div>
+
+					<div
+						class="piano-roll"
+						role="status"
+						aria-live="polite"
+						aria-label={`${uniqueNotes} different notes played`}
+					>
+						<div class="roll-labels" aria-hidden="true">
+							{#each NAMES as name (name)}<span>{name}</span>{/each}
+						</div>
+						<div class="now-line"><span>now</span></div>
+						{#each hits as hit, i (hit.id)}
+							<span
+								class="note-hit"
+								aria-hidden="true"
+								style:left={`${hit.pc * (100 / 12) + 0.45}%`}
+								style:bottom={`${0.8 + (hits.length - 1 - i) * 0.54}rem`}
+								style:--note-color={`var(--pc-${hit.pc})`}
+								style:--note-ink={`var(--pc-${hit.pc}-ink)`}>{hit.label}</span
+							>
+						{/each}
+						<p class="roll-count">{Math.min(uniqueNotes, 3)} / 3</p>
+					</div>
+
+					<div class="tour-keyboard" class:is-passive={inputMode === 'midi'}>
+						<Keyboard
+							from={48}
+							count={17}
+							lit={midi.live}
+							interactive={inputMode === 'screen'}
+							showLabels={false}
+							onnoteon={inputMode === 'screen' ? (note) => virtual('noteon', note) : undefined}
+							onnoteoff={inputMode === 'screen' ? (note) => virtual('noteoff', note) : undefined}
+						/>
+					</div>
+				{/if}
+			{:else if step === 1}
 				<div class="pedal-step">
 					<div class="pedal" class:is-down={midi.pedalDown || pedalRecognised} aria-hidden="true">
 						<span class="pedal-arm"></span>
@@ -433,11 +566,16 @@
 					<div class="intro-copy">
 						<p class="eyebrow">Hands-free next</p>
 						<h2 id="tour-title">
-							{pedalRecognised ? 'That’s it.' : 'Press the damper pedal'}
+							{pedalRecognised
+								? 'That’s it.'
+								: inputMode === 'midi'
+									? 'Press the damper pedal'
+									: 'Keep moving without a mouse'}
 						</h2>
 						<p>
-							From here on, the pedal means the same thing as the primary button: next question,
-							open the play-along, or play and pause the band.
+							{inputMode === 'midi'
+								? 'From here on, the pedal means the same thing as the primary button: next question, open the play-along, or play and pause the band.'
+								: 'Use the large primary button or plain Space for next, play and pause. A damper pedal joins the same path whenever you connect MIDI.'}
 						</p>
 					</div>
 				</div>
@@ -449,7 +587,11 @@
 					<ul>
 						{#each copy.points as point (point)}<li>{point}</li>{/each}
 					</ul>
-					<p class="pedal-reminder"><span></span>Pedal works as Next during this tour.</p>
+					<p class="pedal-reminder">
+						<span></span>{inputMode === 'midi'
+							? 'Pedal works as Next during this tour.'
+							: 'Space works as Next during this tour.'}
+					</p>
 				</div>
 			{/if}
 
@@ -467,26 +609,60 @@
 				</nav>
 
 				<div class="footer-actions">
-					{#if step === 1 && uniqueNotes < 3}
-						<button type="button" class="quiet" onclick={() => jumpTo(2)}>No keyboard now</button>
-					{/if}
-					<button
-						type="button"
-						class="next"
-						disabled={moving || (step === 1 && uniqueNotes < 3)}
-						onclick={() => jumpTo(step + 1)}
-					>
-						{#if step === 0}
-							Meet your keyboard
-						{:else if step === 1}
-							I played three notes
-						{:else if step === 2}
-							Use Next instead
-						{:else}
-							{copy?.next}
+					{#if step === 0 && setupStage === 'experience'}
+						<button type="button" class="next" disabled={moving} onclick={beginConnection}>
+							Set my pace <span aria-hidden="true">→</span>
+						</button>
+					{:else if step === 0 && setupStage === 'connect'}
+						{#if midi.status !== 'unsupported' && midi.status !== 'insecure'}
+							<button type="button" class="quiet" onclick={() => beginConfirmation('screen')}>
+								No MIDI keyboard
+							</button>
 						{/if}
-						<span aria-hidden="true">→</span>
-					</button>
+
+						{#if midiCanTest}
+							<button type="button" class="next" onclick={() => beginConfirmation('midi')}>
+								Test the connection <span aria-hidden="true">→</span>
+							</button>
+						{:else if midi.status === 'idle' || midi.status === 'denied'}
+							<button type="button" class="next" disabled={connecting} onclick={requestMidi}>
+								{connecting
+									? 'Connecting…'
+									: midi.status === 'denied'
+										? 'Try MIDI again'
+										: 'Connect my piano'}
+								<span aria-hidden="true">→</span>
+							</button>
+						{:else if midi.status === 'unsupported' || midi.status === 'insecure'}
+							<button type="button" class="next" onclick={() => beginConfirmation('screen')}>
+								Use on-screen keyboard <span aria-hidden="true">→</span>
+							</button>
+						{:else}
+							<button type="button" class="next" disabled>
+								{midi.status === 'requesting'
+									? 'Waiting for permission…'
+									: 'Waiting for your piano…'}
+							</button>
+						{/if}
+					{:else if step === 0}
+						<button type="button" class="quiet" onclick={backToConnection}
+							>Back to connection</button
+						>
+						<button
+							type="button"
+							class="next"
+							disabled={moving || !inputConfirmed}
+							onclick={() => jumpTo(1)}
+						>
+							{inputMode === 'midi' ? 'MIDI confirmed' : 'Keyboard works'}
+							<span aria-hidden="true">→</span>
+						</button>
+					{:else}
+						<button type="button" class="next" disabled={moving} onclick={() => jumpTo(step + 1)}>
+							{step === 1 ? 'Use Next instead' : copy?.next}
+							<span aria-hidden="true">→</span>
+						</button>
+					{/if}
 				</div>
 			</footer>
 		</div>
@@ -668,6 +844,85 @@
 		font-size: 0.7rem;
 	}
 
+	.connection-panel {
+		display: grid;
+		gap: 0.9rem;
+		margin: 0 1.5rem 1.5rem;
+		padding: 1rem 0;
+		border-top: 1px solid var(--color-ground-line);
+		border-bottom: 1px solid var(--color-ground-line);
+	}
+
+	.connection-state {
+		display: flex;
+		min-height: 48px;
+		align-items: center;
+		gap: 0.8rem;
+		padding: 0 0.25rem;
+	}
+
+	.connection-state span {
+		display: flex;
+		min-width: 0;
+		flex-direction: column;
+		gap: 0.18rem;
+	}
+
+	.connection-state strong {
+		color: var(--color-ink);
+		font-size: 0.86rem;
+		font-weight: 600;
+	}
+
+	.connection-state small {
+		color: var(--color-ink-dim);
+		font-family: var(--font-mono);
+		font-size: 0.66rem;
+		line-height: 1.45;
+	}
+
+	.status-mark {
+		width: 10px;
+		height: 10px;
+		flex: none;
+		border: 1px solid var(--color-ink-dim);
+		border-radius: 50%;
+	}
+
+	.status-mark.is-waiting {
+		background: var(--color-ink-dim);
+		animation: breathe 1.2s ease-in-out infinite alternate;
+	}
+
+	.status-mark.is-ready {
+		border: 3px solid var(--color-ground-raised);
+		background: var(--color-ink);
+		box-shadow: 0 0 0 1px var(--color-ink-muted);
+	}
+
+	.device-choice {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr);
+		align-items: center;
+		gap: 0.8rem;
+		padding-top: 0.9rem;
+		border-top: 1px solid var(--color-ground-line);
+		color: var(--color-ink-dim);
+		font-family: var(--font-mono);
+		font-size: 0.65rem;
+	}
+
+	.device-choice select {
+		min-width: 0;
+		min-height: 38px;
+		padding: 0 0.65rem;
+		border: 1px solid var(--color-ground-line);
+		border-radius: 7px;
+		background: var(--color-ground);
+		color: var(--color-ink-muted);
+		font: inherit;
+	}
+
 	.midi-status {
 		display: flex;
 		min-height: 38px;
@@ -677,14 +932,6 @@
 		color: var(--color-ink-dim);
 		font-family: var(--font-mono);
 		font-size: 0.68rem;
-	}
-
-	.connect {
-		min-height: 38px;
-		padding: 0 0.8rem;
-		border: 1px solid var(--color-ink-dim);
-		border-radius: 7px;
-		color: var(--color-ink);
 	}
 
 	.listening {
@@ -777,6 +1024,10 @@
 		max-width: 38rem;
 		margin: 0.85rem auto 0;
 		padding: 0 1.5rem;
+	}
+
+	.tour-keyboard.is-passive {
+		cursor: default;
 	}
 
 	.pedal-step {
@@ -936,14 +1187,22 @@
 		}
 	}
 
+	@keyframes breathe {
+		from {
+			opacity: 0.35;
+		}
+		to {
+			opacity: 1;
+		}
+	}
+
 	@media (hover: hover) {
 		.tour-head button:hover,
 		.quiet:hover {
 			color: var(--color-ink);
 		}
 
-		.experience button:hover,
-		.connect:hover {
+		.experience button:hover {
 			border-color: var(--color-ink-muted);
 		}
 	}
@@ -969,6 +1228,11 @@
 		.experience {
 			grid-template-columns: 1fr;
 			padding: 0 1rem 1rem;
+		}
+
+		.connection-panel {
+			margin-right: 1rem;
+			margin-left: 1rem;
 		}
 
 		.experience button {
@@ -1022,6 +1286,10 @@
 		}
 
 		.note-hit {
+			animation: none;
+		}
+
+		.status-mark.is-waiting {
 			animation: none;
 		}
 	}
