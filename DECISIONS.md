@@ -4021,3 +4021,134 @@ The play-along sidebar carries the same mark as a single quiet `· not yet`, and
 the entry stays clickable. The gate steers what is **offered**; it has never
 gated what you may **play**, and this was the change most able to break that
 promise by accident.
+
+---
+
+## The first run, and the pedal that carries it
+
+Two things arrived in the same week and only make sense together: an account
+that is now genuinely one person's, and a way in that assumes nothing about who
+that person is. Until the family beta there was exactly one player, and he wrote
+the app — the first thing anyone saw could be a practice screen, because the
+only person who ever saw it already knew what every control did.
+
+### It opens at the instrument, and that was the second attempt
+
+The tour first explained the app and offered to set MIDI up somewhere in the
+middle of it. That was the wrong order and it showed immediately: every screen it
+describes afterwards is about hands on a keyboard, so a tour that talks for four
+cards before finding out whether there _is_ a keyboard is describing somebody
+else's setup.
+
+So step zero is setup, in three stages — have you played before, connect, then
+prove it works — and nothing else is explained until it has an answer. The five
+page cards come after, and they are the shorter half.
+
+### Three notes, and they have to be different
+
+A connection is only tested by playing it, and playing it is only tested by
+counting. `hasConfirmedInput` wants **three distinct notes** before it calls MIDI
+good, because a key held down, a stuck key, or one key tapped three times all
+produce a confident stream of messages from an instrument nobody could practise
+on. Distinct pitches are the cheapest question that can tell those apart, and it
+is asked of the on-screen keyboard on exactly the same terms.
+
+The on-screen route is a first answer rather than a failure branch. It is offered
+beside MIDI, the tour continues along it, and the copy changes with it — the
+pedal card says `Space` to somebody who has no pedal instead of describing a
+piece of hardware they were just told they do not need.
+
+### Two answers, and a ladder they are not allowed to touch
+
+`prefsForExperience` changes exactly two values: how long a workout aims to be,
+and how long you get before a chord is revealed. Ten minutes and three seconds
+for a beginner, twenty and one and a half for somebody returning.
+
+It deliberately does not move the ladder, and the temptation was real — an
+experienced player starting on the C major scale looks like a bad first
+impression. But the ladder is a record of what has been done, and one answer on a
+welcome screen is a guess about yourself. Writing the guess into the record makes
+it indistinguishable afterwards from practice that happened. Nothing is gained by
+it either, because Today already starts any key, any rung and any progression on
+request: the experienced player is one click from where they wanted to be, and
+the record still says the truth about how they got there.
+
+If the settings write fails, the tour says so in one line and carries on. A
+first-run screen that dead-ends on a failed `PATCH` is worse than one that
+starts you on defaults.
+
+### The pedal is the lesson, so the tour takes a press
+
+The second card asks for a press of the damper pedal, and the press is the
+content. It is the one control that still works with both hands busy, it already
+meant _next_ on the practice screens, and now it means the same on every one of
+them — next question, open the play-along, play and pause the band.
+
+Teaching it needed a change underneath. `onPedal` was a single slot, set by
+whichever page was showing and cleared on the way out, which is right for pages
+and impossible for a layer that sits above one: the tour would have had to
+disconnect the page to hear anything, then hand it back intact. So handlers
+became a set with priorities, and **a handler that returns `true` claims the
+press**. The tour subscribes at priority 100 and consumes every press while its
+setup cards are up, so a press aimed at the overlay cannot start the band behind
+it.
+
+`onChord` and `onNote` became sets in the same pass and now return their own
+cleanup rather than being nulled. The single slot had been a latent bug for as
+long as it existed — two pages briefly mounted during a transition would have
+silently stolen each other's chords, and the fix costs one closure.
+
+### Seen is a fact about a browser, for now
+
+Whether the tour has run is a `localStorage` record keyed by the player's name,
+holding how it ended, which answers were given and a version. It is not in the
+database, and that is a decision rather than an oversight: it is presentation
+state, it is wanted before the first render, and the family beta's operator knows
+everyone who could possibly be affected by it being wrong.
+
+What it costs is honest and small. A second machine runs the tour again, a
+cleared browser runs it again, and nobody can reset it on somebody else's behalf.
+All three are survivable precisely because the profile menu replays the tour on
+demand — the menu item forces the tour to be re-runnable, which means _seen_ was
+never load-bearing in the first place. It moves to a column on `user_prefs` when
+registration opens to people the operator has never met, and `ROADMAP.md` lists
+it under what M12 still owes.
+
+Keyed by name rather than globally, because the case this beta exists to serve is
+two family members and one laptop.
+
+### A portrait made of the same twelve colours
+
+Every account carries a chromatic avatar derived from its name: a hash, a small
+xorshift generator, four **distinct** pitch classes and one geometric variant.
+The same name always draws the same portrait, so there is no upload, no file to
+serve, no column to keep in sync, and nothing to moderate.
+
+Four distinct pitch classes rather than four random ones, because a portrait can
+otherwise come out as one colour on itself. The name is normalised for case and
+surrounding space first, so somebody who is `Bruno` on one screen and `bruno` on
+another is not two people.
+
+It is `aria-hidden` and decorative. The name sits next to it in text, and text
+says who somebody is far better than an abstract shape can — the portrait is
+there to be recognised at a glance across a room, not to carry the identity.
+
+### The wheel follows the hands
+
+Explore was the last page where playing the piano did nothing. It is a study
+bench — the wheel is driven by clicking cells — and that made it the one screen
+where a connected instrument looked disconnected.
+
+The notes sounding under your hands now join the notes you pinned, in the same
+lit layer rather than in a second one. That is the whole design decision: a note
+you clicked and a note you are holding are making the same claim about the
+wheel, and giving them separate treatments would ask the reader to learn which
+kind of light means which. `session.live` already follows note-off and the
+sustain pedal, so nothing new tracks state.
+
+A lit cell now takes its own pitch colour's ink rather than the muted ink, which
+is what keeps the label readable when the ring lights up underneath it, and the
+ring arrives with a 140ms grow from 0.975 — short enough to read as the attack of
+the note rather than as an animation of a user interface. Under
+`prefers-reduced-motion` it does not animate at all, like everything else on that
+page.

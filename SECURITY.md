@@ -36,6 +36,12 @@ is not sufficient for opening registration to strangers or taking payment.
 
 **Web MIDI needs a secure context.** Deploy over HTTPS or MIDI silently fails.
 
+**A little of it lives in the browser too.** A run played with the network away
+waits in `localStorage` until the next load, and whether the first-run tour has
+been seen is kept there as well, keyed by the player's name. Neither is a
+credential, but on a shared machine both survive signing out — the browser
+profile is the boundary there, not the account.
+
 **The database holds practice data.** Chord charts, review history, settings,
 and since M9 a log of every run of the play-along transport and every chord it
 judged — nothing sensitive by design, but it is still yours, and there is more of

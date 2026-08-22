@@ -16,11 +16,17 @@ cp .env.example .env       # the defaults match docker-compose
 npm run db:up              # starts Postgres
 npm run db:migrate
 npm run db:seed
+npm run account:create -- owner "Your name" "you@example.com"
 npm run dev
 ```
 
+The account command prints a temporary password; there is no shared
+`APP_PASSWORD` any more, and no sign-up page, so an instance with no account
+provisioned has no way in.
+
 A MIDI keyboard is optional. The on-screen keyboard feeds exactly the same
-pipeline, so every feature can be exercised without hardware.
+pipeline, so every feature can be exercised without hardware — including the
+first-run tour, which offers it beside MIDI rather than as a fallback.
 
 ## Before you open a pull request
 
@@ -46,6 +52,11 @@ people who read chord symbols fluently and staves not at all.
 typing or precise mouse work. Advancing happens by MIDI auto-advance, the
 sustain pedal, the spacebar, or one large tap target. Type sizes assume a
 screen most of a metre away. Setup screens are exempt; sessions are not.
+
+The pedal now means _next_ on every page, so a new screen with a primary action
+should subscribe to it. `midi.onPedal` returns its own cleanup and takes a
+priority; return `true` from the handler to claim a press so no layer underneath
+also acts on it.
 
 **Everything transposes.** Musical material is stored as Roman numerals or
 intervals and resolved into a key at the last moment. If you find yourself

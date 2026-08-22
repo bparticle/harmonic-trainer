@@ -189,6 +189,13 @@ carrying the user, not a boolean.
   `users`, designed in from the first migration rather than discovered later,
   and a test counts rows before and after. Exporting everything you own is the
   same requirement wearing a different hat, and the profile is where it goes.
+- **The first run has to become a fact about the account, not about the
+  browser.** Whether the tour has been seen lives in `localStorage`, keyed by
+  name, which is the right size for a family beta and the wrong one for
+  strangers: a second machine re-runs it, a cleared browser re-runs it, and
+  nobody can reset it for somebody who asks. It is one boolean on `user_prefs`
+  when registration opens, and it is listed here rather than fixed early because
+  the local version is genuinely better while the operator knows everyone.
 
 ### Done when
 
