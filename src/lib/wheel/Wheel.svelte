@@ -250,7 +250,7 @@
 			{@const isActive = activeSet.has(cell.pc)}
 			{@const isLit = litSet.has(cell.pc)}
 			{@const degree = isActive ? degrees?.get(cell.pc) : undefined}
-			{@const ink = isActive ? `var(--pc-${cell.pc}-ink)` : 'var(--color-ink-muted)'}
+			{@const ink = isActive || isLit ? `var(--pc-${cell.pc}-ink)` : 'var(--color-ink-muted)'}
 			<g class="cell" class:is-duplicate={cell.duplicate}>
 				<path
 					d={cellSectorPath(cell, geometry)}
@@ -269,7 +269,11 @@
 						y={centre.y + (degree ? -7 : 0)}
 						class="cell-label"
 						fill={ink}
-						opacity={hasFigure && !isActive ? 0.5 : cell.duplicate && !isActive ? 0.45 : 1}
+						opacity={hasFigure && !isActive && !isLit
+							? 0.5
+							: cell.duplicate && !isActive && !isLit
+								? 0.45
+								: 1}
 						text-anchor="middle"
 						dominant-baseline="central">{cell.name}</text
 					>
@@ -348,8 +352,22 @@
 	.cell-lit {
 		fill: none;
 		stroke: var(--color-ink);
-		stroke-width: 2.5;
+		stroke-width: 3;
 		pointer-events: none;
+		transform-box: fill-box;
+		transform-origin: center;
+		animation: note-on 140ms var(--ease-wheel) both;
+	}
+
+	@keyframes note-on {
+		from {
+			opacity: 0.35;
+			transform: scale(0.975);
+		}
+		to {
+			opacity: 1;
+			transform: scale(1);
+		}
 	}
 
 	.cell-label {
@@ -428,6 +446,10 @@
 		.cell-label,
 		.highlight-outline {
 			transition: none;
+		}
+
+		.cell-lit {
+			animation: none;
 		}
 	}
 </style>
