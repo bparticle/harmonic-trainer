@@ -13,7 +13,11 @@
 	 * on mid-session should not mean navigating to a specific page to be noticed.
 	 */
 
-	let { prefs, user }: { prefs: Prefs; user?: { name: string } | null } = $props();
+	let {
+		prefs,
+		user,
+		ontour
+	}: { prefs: Prefs; user?: { name: string } | null; ontour?: () => void } = $props();
 	const accountName = $derived(user?.name.trim() || 'Account');
 
 	let open = $state(false);
@@ -135,6 +139,21 @@
 						<path d="M3 8h9M9 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.4" />
 					</svg>
 				</a>
+				<button
+					type="button"
+					onclick={() => {
+						open = false;
+						ontour?.();
+					}}
+				>
+					<span>
+						<strong>Show me around</strong>
+						<small>Replay the interactive tour</small>
+					</span>
+					<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+						<path d="M3 8h9M9 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.4" />
+					</svg>
+				</button>
 			</nav>
 
 			<hr class="border-ground-line my-4" />
@@ -387,7 +406,8 @@
 		gap: 0.35rem;
 	}
 
-	.account-routes a {
+	.account-routes a,
+	.account-routes button {
 		display: flex;
 		min-height: 52px;
 		align-items: center;
@@ -396,6 +416,7 @@
 		padding: 0.55rem 0.65rem;
 		border-radius: 7px;
 		color: var(--color-ink-muted);
+		text-align: left;
 		transition:
 			background 140ms ease,
 			color 140ms ease;
@@ -461,7 +482,8 @@
 			color: var(--color-ink);
 		}
 
-		.account-routes a:hover {
+		.account-routes a:hover,
+		.account-routes button:hover {
 			background: var(--color-ground-overlay);
 			color: var(--color-ink);
 		}

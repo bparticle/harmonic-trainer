@@ -240,7 +240,7 @@
 {#if data.public}
 	<LandingPage />
 {:else}
-	<main class="mx-auto flex max-w-4xl flex-col gap-8 px-6 py-8">
+	<main class="mx-auto flex max-w-4xl flex-col gap-8 px-6 py-8" data-tour="today">
 		<!--
 			The banner: the one thing on this page worth looking at first, which is
 			the thing about to be played. A whole panel of a single pitch colour,

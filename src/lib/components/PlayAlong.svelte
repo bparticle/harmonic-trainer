@@ -967,8 +967,7 @@
 	}
 
 	$effect(() => {
-		session.onNote((note) => recordNote(note));
-		return () => session.onNote(null);
+		return session.onNote((note) => recordNote(note));
 	});
 
 	/*
@@ -1560,8 +1559,11 @@
 
 	// The pedal is the other hands-free control, exactly as it is on /play.
 	$effect(() => {
-		session.onPedal((down) => down && void toggle());
-		return () => session.onPedal(null);
+		return session.onPedal((down) => {
+			if (!down) return false;
+			void toggle();
+			return true;
+		});
 	});
 
 	onDestroy(() => {
@@ -1578,7 +1580,7 @@
 
 <svelte:head><title>Play along · Harmonic</title></svelte:head>
 
-<main class="mx-auto max-w-[1500px] px-5 py-7">
+<main class="mx-auto max-w-[1500px] px-5 py-7" data-tour="backing">
 	<header class="mb-5 flex flex-wrap items-start justify-between gap-3">
 		<div class="flex items-center gap-2">
 			<h1

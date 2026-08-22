@@ -6,6 +6,7 @@
 	import { untrack } from 'svelte';
 	import { page } from '$app/state';
 	import AppNav from '$lib/components/AppNav.svelte';
+	import OnboardingTour from '$lib/components/OnboardingTour.svelte';
 	import { paletteToCssText } from '$lib/design/palette';
 	import { midi, restoreMidi } from '$lib/midi/shared.svelte';
 
@@ -78,6 +79,7 @@
 
 	// Public pages do not initialise or display the private practice shell.
 	const bare = $derived(!data.authed || page.url.pathname.startsWith('/login'));
+	let tourRequest = $state(0);
 </script>
 
 <svelte:head>
@@ -89,6 +91,11 @@
 {#if bare}
 	{@render children()}
 {:else}
-	<AppNav prefs={data.settings.prefs} user={data.user} />
+	<AppNav prefs={data.settings.prefs} user={data.user} ontour={() => (tourRequest += 1)} />
 	{@render children()}
+	<OnboardingTour
+		prefs={data.settings.prefs}
+		userName={data.user?.name ?? 'player'}
+		request={tourRequest}
+	/>
 {/if}

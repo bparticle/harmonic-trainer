@@ -201,7 +201,7 @@
 	<title>Songbook · Harmonic</title>
 </svelte:head>
 
-<div class="mx-auto flex max-w-[1500px] flex-col gap-6 px-3 py-6 sm:px-5">
+<div class="mx-auto flex max-w-[1500px] flex-col gap-6 px-3 py-6 sm:px-5" data-tour="songbook">
 	<header class="flex flex-wrap items-end justify-between gap-3">
 		<div>
 			<h1 class="font-display text-ink text-2xl font-semibold tracking-tight">Songbook</h1>

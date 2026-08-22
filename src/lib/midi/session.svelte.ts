@@ -31,6 +31,9 @@ export type MidiStatus =
 
 export type MidiDevice = { id: string; name: string; manufacturer: string };
 
+type PedalHandler = (down: boolean) => boolean | void;
+type Subscription<T> = { handler: T; priority: number };
+
 export class MidiSession {
 	status = $state<MidiStatus>('idle');
 	devices = $state<MidiDevice[]>([]);
@@ -50,9 +53,9 @@ export class MidiSession {
 	#access: MIDIAccess | null = null;
 	#cluster: ClusterState = emptyCluster();
 	#timer: ReturnType<typeof setTimeout> | null = null;
-	#onChord: ((chord: ChordEvent) => void) | null = null;
-	#onPedal: ((down: boolean) => void) | null = null;
-	#onNote: ((note: number, time: number) => void) | null = null;
+	#chordHandlers = new Set<(chord: ChordEvent) => void>();
+	#pedalHandlers = new Set<Subscription<PedalHandler>>();
+	#noteHandlers = new Set<(note: number, time: number) => void>();
 
 	/** Recording */
 	recording = $state(false);
@@ -197,27 +200,44 @@ export class MidiSession {
 		 * same rule has to be applied here or a release counts as a press.
 		 */
 		if (event.type === 'noteon' && event.velocity > 0) {
-			this.#onNote?.(event.note, event.time);
+			for (const handler of [...this.#noteHandlers]) handler(event.note, event.time);
 		}
 
 		if (event.type === 'sustain') {
 			this.pedalDown = event.down;
-			if (event.down) this.#onPedal?.(true);
+			if (event.down) {
+				const subscriptions = [...this.#pedalHandlers].sort((a, b) => b.priority - a.priority);
+				for (const { handler } of subscriptions) {
+					// A high-priority layer such as onboarding can claim the press so the
+					// page underneath does not start music or answer a card as well.
+					if (handler(true) === true) break;
+				}
+			}
 		}
 	}
 
 	/**
-	 * Handlers are set by whichever page is showing, and cleared on the way out.
-	 * The session outlives every page, so a stale handler would have a screen
-	 * nobody is looking at marking chords played somewhere else.
+	 * Pages and temporary layers subscribe while they are showing, then use the
+	 * returned cleanup on the way out. The session outlives every page, so a stale
+	 * handler would have a screen nobody is looking at marking chords played
+	 * somewhere else.
 	 */
-	onChord(handler: ((chord: ChordEvent) => void) | null) {
-		this.#onChord = handler;
+	onChord(handler: (chord: ChordEvent) => void): () => void {
+		this.#chordHandlers.add(handler);
+		return () => this.#chordHandlers.delete(handler);
 	}
 
-	/** Sustain pedal as navigation: CC64 advances when both hands are busy. */
-	onPedal(handler: ((down: boolean) => void) | null) {
-		this.#onPedal = handler;
+	/**
+	 * Sustain pedal as navigation: CC64 advances when both hands are busy.
+	 *
+	 * Several layers may need to listen at once. Returning `true` claims the
+	 * press, and priority lets a temporary layer such as the first-run tour sit
+	 * above the page without disconnecting it.
+	 */
+	onPedal(handler: PedalHandler, options: { priority?: number } = {}): () => void {
+		const subscription = { handler, priority: options.priority ?? 0 };
+		this.#pedalHandlers.add(subscription);
+		return () => this.#pedalHandlers.delete(subscription);
 	}
 
 	/**
@@ -228,8 +248,9 @@ export class MidiSession {
 	 * moving underneath you — by the time a gesture has settled, the chord it was
 	 * played over may have changed.
 	 */
-	onNote(handler: ((note: number, time: number) => void) | null) {
-		this.#onNote = handler;
+	onNote(handler: (note: number, time: number) => void): () => void {
+		this.#noteHandlers.add(handler);
+		return () => this.#noteHandlers.delete(handler);
 	}
 
 	/**
@@ -261,7 +282,7 @@ export class MidiSession {
 		this.#cluster = result.state;
 		if (result.chord) {
 			this.lastChord = result.chord;
-			this.#onChord?.(result.chord);
+			for (const handler of [...this.#chordHandlers]) handler(result.chord);
 		}
 	}
 
@@ -292,5 +313,8 @@ export class MidiSession {
 			this.#access.onstatechange = null;
 			this.#access.inputs.forEach((input) => (input.onmidimessage = null));
 		}
+		this.#chordHandlers.clear();
+		this.#pedalHandlers.clear();
+		this.#noteHandlers.clear();
 	}
 }

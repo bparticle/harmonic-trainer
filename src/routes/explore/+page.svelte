@@ -125,7 +125,7 @@
 
 <svelte:head><title>Explore · Harmonic Trainer</title></svelte:head>
 
-<main class="mx-auto min-h-dvh max-w-[1500px] px-5 py-6">
+<main class="mx-auto min-h-dvh max-w-[1500px] px-5 py-6" data-tour="explore">
 	<div class="grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
 		<!-- The wheel is the hero. -->
 		<section class="flex flex-col items-center gap-5">

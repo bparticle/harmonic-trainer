@@ -18,8 +18,17 @@
 	 * in the app.
 	 */
 
-	let { prefs, context, user }: { prefs: Prefs; context?: Key; user?: { name: string } | null } =
-		$props();
+	let {
+		prefs,
+		context,
+		user,
+		ontour
+	}: {
+		prefs: Prefs;
+		context?: Key;
+		user?: { name: string } | null;
+		ontour?: () => void;
+	} = $props();
 
 	const LINKS = [
 		{ href: '/', label: 'Today' },
@@ -41,7 +50,11 @@
 
 		<!-- The links scroll rather than push: a fourth destination was enough to
 		     make the whole page slide sideways on a narrow screen. -->
-		<nav class="no-scrollbar flex min-w-0 items-center gap-1 overflow-x-auto" aria-label="Main">
+		<nav
+			class="no-scrollbar flex min-w-0 items-center gap-1 overflow-x-auto"
+			aria-label="Main"
+			data-tour="navigation"
+		>
 			{#each LINKS as link (link.href)}
 				<a
 					href={link.href}
@@ -54,7 +67,7 @@
 
 		<div class="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
 			<div class="hidden sm:block"><LiveNotes {context} /></div>
-			<SettingsMenu {prefs} {user} />
+			<SettingsMenu {prefs} {user} {ontour} />
 		</div>
 	</div>
 </header>

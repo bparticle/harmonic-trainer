@@ -83,13 +83,17 @@
 	 * looking at.
 	 */
 	$effect(() => {
-		session.onChord(onChord);
+		const stopChord = session.onChord(onChord);
 		// Sustain pedal is navigation: it claims the current chord so both hands
 		// can stay on the keys.
-		session.onPedal((down) => down && claim());
+		const stopPedal = session.onPedal((down) => {
+			if (!down) return false;
+			claim();
+			return true;
+		});
 		return () => {
-			session.onChord(null);
-			session.onPedal(null);
+			stopChord();
+			stopPedal();
 		};
 	});
 
@@ -159,7 +163,7 @@
 <svelte:head><title>Play · Harmonic Trainer</title></svelte:head>
 <svelte:window onkeydown={onKeydown} />
 
-<main class="mx-auto flex min-h-dvh max-w-[1400px] flex-col px-5 py-6">
+<main class="mx-auto flex min-h-dvh max-w-[1400px] flex-col px-5 py-6" data-tour="play">
 	<!-- Device management lives in the header's cog, on every page. -->
 	<section class="mb-5 flex items-center gap-3">
 		{#if session.unavailableReason}
