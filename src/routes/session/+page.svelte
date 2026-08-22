@@ -132,11 +132,15 @@
 	 * not still being marked here.
 	 */
 	$effect(() => {
-		session.onPedal((down) => down && advanceHandsFree());
-		session.onChord(handleChord);
+		const stopPedal = session.onPedal((down) => {
+			if (!down) return false;
+			advanceHandsFree();
+			return true;
+		});
+		const stopChord = session.onChord(handleChord);
 		return () => {
-			session.onPedal(null);
-			session.onChord(null);
+			stopPedal();
+			stopChord();
 		};
 	});
 
@@ -296,7 +300,15 @@
 
 	/** Pedal or spacebar: whatever "next" means for the task showing. */
 	function advanceHandsFree() {
-		if (!task) return;
+		if (!task || busy || finished) return;
+		if (task.kind === 'mission') {
+			void playMission(task.mission);
+			return;
+		}
+		if (task.kind === 'new_thing') {
+			void finishTask({ tried: true });
+			return;
+		}
 		if (prompt && !answered) {
 			if (prompt.answerWith === 'name' && !marksPlaying && !revealed) {
 				revealed = true;
@@ -563,9 +575,13 @@
 					class="bg-ink text-ground rounded-2xl px-8 py-4 text-lg font-semibold disabled:opacity-40"
 					onclick={() => task.kind === 'mission' && playMission(task.mission)}
 					disabled={busy}
+					aria-describedby="mission-hands-free"
 				>
 					{busy ? 'opening…' : verdict ? 'Play it again' : 'Play it'}
 				</button>
+				<span id="mission-hands-free" class="text-ink-dim font-mono text-[0.7rem]">
+					<kbd>Space</kbd> / pedal · open play along
+				</span>
 			</section>
 
 			<!-- One new thing ---------------------------------------------------- -->
@@ -585,7 +601,8 @@
 					<button
 						class="bg-ink text-ground rounded-2xl px-8 py-4 text-lg font-semibold disabled:opacity-40"
 						onclick={() => finishTask({ tried: true })}
-						disabled={busy}>Tried it</button
+						disabled={busy}
+						aria-describedby="new-thing-hands-free">Tried it</button
 					>
 
 					<!-- The one place "ready to move on" is said out loud. A form post
@@ -604,6 +621,9 @@
 						</form>
 					{/if}
 				</div>
+				<span id="new-thing-hands-free" class="text-ink-dim font-mono text-[0.7rem]">
+					<kbd>Space</kbd> / pedal · next
+				</span>
 			</section>
 
 			<!-- The questions the band cannot ask -------------------------------- -->
