@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_PREFS } from './settings';
-import { prefsForExperience } from './onboarding';
+import { hasConfirmedInput, prefsForExperience } from './onboarding';
+
+describe('first-run input confirmation', () => {
+	it('requires three different notes', () => {
+		expect(hasConfirmedInput([60, 60, 64])).toBe(false);
+		expect(hasConfirmedInput([60, 64, 67])).toBe(true);
+	});
+
+	it('accepts any iterable and a different threshold', () => {
+		expect(hasConfirmedInput(new Set([48, 52]), 2)).toBe(true);
+	});
+});
 
 describe('first-run experience presets', () => {
 	it('gives a beginner a short first workout and more time to name a chord', () => {

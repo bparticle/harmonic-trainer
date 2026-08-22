@@ -3,6 +3,14 @@ import type { Prefs } from './settings';
 export type ExperienceLevel = 'beginner' | 'experienced';
 
 /**
+ * Require distinct notes so a stuck or repeatedly tapped key cannot make an
+ * untested MIDI connection look healthy.
+ */
+export function hasConfirmedInput(notes: Iterable<number>, requiredNotes = 3): boolean {
+	return new Set(notes).size >= requiredNotes;
+}
+
+/**
  * A small first-run calibration, using settings the app already owns.
  *
  * It deliberately does not move the curriculum ladder. An experienced player
