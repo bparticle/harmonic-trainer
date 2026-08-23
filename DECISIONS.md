@@ -4096,7 +4096,7 @@ page.
 
 ---
 
-### A separator that only looks safe
+## A separator that only looks safe
 
 `badgeKey` joined a chart slug to a tier id with `\0`. As a Set/Map key that
 works: the lookup is exactly as correct as any other separator would make it.
@@ -4117,3 +4117,198 @@ person reading the source can see it. Changing it was free because the key
 never leaves memory: what the outbox writes is the badge, and the server
 settles duplicates on `badges_user_chart_tier` rather than on any string built
 here.
+
+---
+
+## What M12 was still owing
+
+The family beta shipped the seam — accounts, cookies, the epoch, every table
+that generates practice data getting an owner. What it left standing was
+everything that turns "an account exists" into "an account is safe to
+depend on": nobody had proven two accounts could not read each other's rows,
+deleting one did not work at all, nothing exported, a wrong password could
+be tried forever, and a lost one had no way back in but the operator's own
+terminal. Five gaps, closed in one slice, in the order their dependencies
+actually run: isolation first, because everything after benefits from the
+harness it builds and needs no schema change to start; deletion next,
+because export benefits from two tables it finally gives an owner; rate
+limiting before reset, because reset needs it; first-run last, because
+ROADMAP.md had already said it could wait and it still could — it went in
+anyway because there was no reason left not to.
+
+### A test that is not allowed to reach production, even by accident
+
+None of this is testable by the rule `CONTRIBUTING.md` states — "if your
+change needs a database to be tested, that is usually a sign the logic
+wants extracting from the query" — because the logic under test **is** the
+query. Isolation and deletion are properties of what SQL actually runs, not
+of anything that can be pulled out and proven on plain arrays. So this is
+the one exception to that rule the project has needed, and it is treated as
+an exception rather than a quiet erosion of it: a second Vitest project,
+named `integration`, matched only by `*.integration.test.ts`, and excluded
+from the project everything else runs under. `npm test` and `npm run
+verify` still run exactly what they ran before — the promise holds for
+every file that was already keeping it.
+
+The sharper problem surfaced before a line of test code did: the developer
+machine's own `DATABASE_URL` points at the live production database, and a
+deletion test is destructive by design — it proves nothing survives by
+creating rows and then cascade-deleting them. Pointed at the wrong
+database, the test that proves deletion is safe becomes the thing that
+makes deletion unsafe. The fix is in `src/lib/server/db/index.ts`, one
+guard in `connect()`: under Vitest — `process.env.VITEST`, set
+unconditionally by the runner itself, never by this app — `DATABASE_URL` is
+never read, full stop. Only `TEST_DATABASE_URL` is consulted, and its
+absence throws rather than falling back to anything. This is stronger than
+routing the integration suite through its own connection and hoping nobody
+imports the wrong one: every module the tests exercise — `session-store.ts`,
+`play-log.ts`, `settings.ts`, `accounts.ts` — already imports the one `db`
+from `index.ts`, so the guard protects all of them by construction, not by
+discipline. `test-helpers.ts` accordingly does not open a second
+connection; it reuses the same `db`, which is the point.
+
+`TEST_DATABASE_URL` itself is a disposable Neon branch — copy-on-write off
+production, nothing written to it ever reaches the parent, gone on its own
+in about a day. The repeatable pattern is a fresh one per working session
+rather than a standing local Postgres, which is why `.env.example` documents
+both: `npm run db:up`'s docker-compose instance for anyone who wants a fixed
+one, a throwaway branch for anyone whose provider already offers branching.
+CI gets a third option again — its own ephemeral `postgres:17-alpine`
+service container, migrated and seeded fresh on every run, because a
+workflow should not depend on a branch somebody remembered to create by
+hand.
+
+### Two tables that were never actually owned
+
+`takes` and `repertoire` predate accounts entirely and were never revisited
+when `user_id` went onto everything else, because both are parked — the
+record-take feature that would have written to them was built and then
+removed, and nothing in the app writes to either today. That made the gap
+easy to miss and, once looked for, easy to find: `takes.session_id` is
+nullable and `set null`, and `repertoire.source_take_id` is nullable and
+`set null` and lands on `takes` — so neither table had a _reliable_ path
+back to a user, only an optional one that a real row could easily lack.
+Deleting an account was never going to reach either.
+
+The fix is the one M9 already wrote down as the rule and this milestone
+applies literally: a row that cannot exist without its parent does not
+repeat the parent's owner, but a row whose relationship to its parent is
+optional is not that case — it needs its own `user_id`, direct, the same
+shape `cards` and `sessions` already carry. Both tables took the migration
+with the nullable-column-then-backfill-then-tighten shape `0008` used for
+the original accounts migration, purely as a safety net: with nothing
+writing to either table, no real installation should have a row to
+backfill, and the migration says so in its own comment rather than assuming
+silently.
+
+### Deleting an account is now one statement
+
+With the graph actually complete, `deleteAccount` is `DELETE FROM users
+WHERE id = $1` and Postgres does the rest in the same transaction — no
+hand-written list of tables to keep in sync with the schema. The
+integration test that proves it seeds one row in every owned table,
+including `takes` and `repertoire`, and checks each by the id it created
+rather than by a table-wide count, so a stray row left behind by another
+test running against the same shared database cannot make this test lie.
+
+Nothing in the app had ever asked for confirmation this size before. The
+nearest precedent — removing a chart in the songbook — is a two-step inline
+toggle, "Delete? · Delete · Keep," which is right-sized for one row you can
+retype in a minute and clearly not right-sized for an account and
+everything it has ever recorded. The account page now asks you to type the
+account's own email address before the button un-disables, which is a
+courtesy the server re-checks independently rather than trusts — the
+enabled button decides nothing; `?/delete`'s own comparison does. Nothing
+about it goes red. It is the same plain border and muted text every other
+panel on that page already uses, because the rule was never "make
+destructive things alarming," it was "make destructive things confirmable,"
+and those are not the same rule.
+
+### Exporting the rows, not a reading of them
+
+"Exporting everything you own is the same requirement wearing a different
+hat" as deletion, ROADMAP.md said, and placed it on the profile — but the
+profile's own load function computes aggregates, not a record, and
+"everything you own" is a claim about rows, not about a page. `exportAccount`
+reads every owned table directly instead: two passes, first the tables with
+a direct `user_id`, then their children by `inArray` on the ids just
+collected, which stays a handful of cheap queries rather than one query
+trying to join fourteen tables into a shape nothing else needs. The one
+column with no honest JSON representation, `takes.midi_blob`, goes out as
+base64 — a decision that will matter the day something actually writes to
+that table again, and costs nothing while it does not.
+
+### One table, two kinds of attempt
+
+Sign-in failures and reset requests share `rate_limit_events` rather than
+each getting a table, because they are the same shape — a key, a kind, a
+timestamp — and ROADMAP.md's own reasoning for wanting one at all applies
+equally to both: no shared memory across serverless instances, and Postgres
+is already the one thing every instance can already reach. The `kind`
+column keeps failing one from ever locking the other; a family member
+mistyping a password does not cost anyone a reset link.
+
+The one piece of this worth unit-testing on its own is `windowStart` — the
+arithmetic that turns "fifteen minutes" into a cutoff timestamp — because it
+is genuinely pure and everything downstream of it is not. `isRateLimited`
+and `recordEvent` stay in the shape `accounts.ts` already established for
+`authenticate` and `resolveSessionUser`: thin, DB-backed, proven by the
+integration suite rather than the fast one. Verified live rather than only
+by assertion — eight failed sign-ins pass, the ninth is refused with the
+same plain, un-red message the login form already uses for a wrong
+password, and the tenth still is.
+
+### Reset, over a provider chosen for its SMTP relay
+
+Maileroo was already set up with SMTP credentials before this milestone
+reached it, so the mail layer is Nodemailer against `smtp.maileroo.com:587`
+with STARTTLS rather than a provider-specific SDK — one more reason this
+stays swappable if the provider ever changes, since the only thing that
+would need to move is `src/lib/server/email.ts`. The token itself is
+stored hashed, never in the clear, the same discipline the session cookie's
+signature already keeps: a leaked table row should not be a leaked
+credential. `createResetToken` is deliberately its own function, separate
+from `requestPasswordReset`, purely so the integration suite could prove
+the whole token lifecycle — issue, spend, replay, expire — against the real
+database without the tests ever touching Maileroo or the network. They
+still don't.
+
+Two things surfaced only by actually sending a real email, which is exactly
+why that was worth doing rather than trusting the code review: Maileroo
+rejected the first attempt outright, `550 5.7.1 This app does not allow
+emails to be sent from this domain`, because the from-address's domain
+was not yet on that Maileroo app's allow-list — a dashboard setting, not a
+bug, fixed once the domain was added and confirmed on retry. The second was
+a real bug: the unhandled rejection from a failed send crashed the whole
+form action into a raw 500, which is a poor thing to show someone who is
+already locked out of their account and already anxious. `requestPasswordReset`
+now catches its own mail failure, logs it server-side for the operator to
+notice, and still returns the same generic "if that email has an account…"
+result either way — matching the discipline `authenticate` already keeps
+for a missing user, extended to cover the provider itself having a bad
+morning.
+
+### The first run stops being a fact about the browser
+
+`tourSeen` is one boolean on `user_prefs`, exactly the shape ROADMAP.md
+already specified for it — which meant deliberately not carrying over the
+`experience`/`inputMode` values the old `localStorage` record also kept,
+since a boolean has nowhere to put them. Replaying the tour now always
+starts from the same defaults rather than remembering last time's choice,
+which is a real but minor loss and the one the roadmap's own wording asked
+for. The `userName` prop existed for exactly one purpose — building the
+`localStorage` key — and once that key was gone the prop was simply unused;
+it left with the code that needed it rather than staying as an argument
+nothing reads. The "replay the tour" menu item needed no change at all: it
+already worked by bumping a `request` counter the component watches
+independently of whatever `tourSeen` says, so replaying and having already
+been seen were never the same question.
+
+### What is left
+
+ROADMAP.md's status section has the detail; the shape of it is that
+everything closeable from a keyboard now is closed. What remains is an
+acceptance pass with two real family accounts on one real evening,
+confirming by eye what the integration test already proves in code —
+and that is the one item on this list that was never going to be finished
+by writing more of it.

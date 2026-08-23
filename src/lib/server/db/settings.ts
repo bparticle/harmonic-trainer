@@ -80,6 +80,7 @@ export async function saveSettings(
 	if (patch.wheelConfig) update.wheelConfigJson = patch.wheelConfig;
 	if (patch.prefs) update.prefsJson = patch.prefs;
 	if (patch.midiDevice !== undefined) update.midiDevice = patch.midiDevice;
+	if (patch.tourSeen !== undefined) update.tourSeen = patch.tourSeen;
 
 	const [row] = await db
 		.update(userPrefs)
@@ -96,6 +97,10 @@ function toAppSettings(
 		colorMap: row.colorMapJson as ColorMap,
 		wheelConfig: row.wheelConfigJson as WheelConfig,
 		prefs: row.prefsJson as Prefs,
-		midiDevice: row.midiDevice
+		midiDevice: row.midiDevice,
+		// The singleton template has no opinion on this — it is not personal
+		// data, and a new account has always seen nothing regardless of what
+		// the operator's own row says.
+		tourSeen: 'tourSeen' in row ? row.tourSeen : false
 	};
 }

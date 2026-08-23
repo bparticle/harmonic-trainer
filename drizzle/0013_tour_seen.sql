@@ -1,0 +1,1 @@
+ALTER TABLE "user_prefs" ADD COLUMN "tour_seen" boolean DEFAULT false NOT NULL;

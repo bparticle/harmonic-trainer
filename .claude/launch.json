@@ -6,6 +6,14 @@
 			"runtimeExecutable": "npm",
 			"runtimeArgs": ["run", "dev"],
 			"port": 5173
+		},
+		{
+			"name": "dev-test-db",
+			"runtimeExecutable": "node",
+			"runtimeArgs": [
+				"C:\\Users\\bruno\\AppData\\Local\\Temp\\claude\\C--Users-bruno-dev-siriuspiano\\a2b93e05-d146-401e-8784-68013906d2d8\\scratchpad\\dev-test-db.mjs"
+			],
+			"port": 5174
 		}
 	]
 }

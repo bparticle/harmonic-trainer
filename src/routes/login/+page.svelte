@@ -71,5 +71,12 @@
 		>
 			{pending ? 'Checking…' : 'Sign in'}
 		</button>
+
+		<a
+			href="/forgot-password"
+			class="text-ink-dim hover:text-ink mt-6 block font-mono text-xs tracking-widest uppercase"
+		>
+			Forgot password?
+		</a>
 	</form>
 </main>

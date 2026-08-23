@@ -71,6 +71,34 @@
       "when": 1787330844048,
       "tag": "0009_windy_mojo",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1787389346154,
+      "tag": "0010_owned_takes_repertoire",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1787392322399,
+      "tag": "0011_rate_limit_events",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1787392659233,
+      "tag": "0012_password_reset_tokens",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1787399040559,
+      "tag": "0013_tour_seen",
+      "breakpoints": true
     }
   ]
 }

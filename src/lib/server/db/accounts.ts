@@ -1,8 +1,18 @@
+import { createHash, randomBytes } from 'node:crypto';
 import { and, eq, sql } from 'drizzle-orm';
 import { hashPassword, verifyPassword, type SessionClaim } from '$lib/server/auth';
+import { sendMail } from '$lib/server/email';
 import { db } from './index';
-import { users } from './schema';
+import { passwordResetTokens, users } from './schema';
 import { LOCAL_PLAYER_ID } from './user';
+
+/** One hour: long enough to find the email, short enough that a link left
+ *  open in an old tab is not a standing risk. */
+const RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
+
+function hashToken(token: string): string {
+	return createHash('sha256').update(token).digest('base64url');
+}
 
 export type SessionUser = {
 	id: string;
@@ -84,4 +94,120 @@ export async function revokeSessions(userId: string): Promise<void> {
 		.update(users)
 		.set({ sessionEpoch: sql`${users.sessionEpoch} + 1` })
 		.where(eq(users.id, userId));
+}
+
+/**
+ * Delete an account and everything it owns.
+ *
+ * One statement, on purpose: every owned table's foreign key cascades from
+ * `users` (see `schema.ts`'s own comment on that table), so Postgres does the
+ * rest in the same transaction as this delete. Nothing here loops over tables
+ * — a hand-written list is a list that goes stale the next time a table is
+ * added and somebody forgets to extend it.
+ */
+export async function deleteAccount(userId: string): Promise<boolean> {
+	const deleted = await db.delete(users).where(eq(users.id, userId)).returning({ id: users.id });
+	return deleted.length === 1;
+}
+
+/** Create a reset token for a user and return the raw value. Never sends
+ *  mail itself — `requestPasswordReset` decides that, so this stays testable
+ *  against the database alone. */
+export async function createResetToken(userId: string, now = new Date()): Promise<string> {
+	const token = randomBytes(32).toString('base64url');
+	await db.insert(passwordResetTokens).values({
+		userId,
+		tokenHash: hashToken(token),
+		expiresAt: new Date(now.getTime() + RESET_TOKEN_TTL_MS)
+	});
+	return token;
+}
+
+/**
+ * Request a reset link by email.
+ *
+ * Resolves the same way whether or not the address is registered, and the
+ * same way even if the mail provider itself fails — the caller shows one
+ * generic message regardless, the same discipline `authenticate` already
+ * keeps for a missing user. A visitor who is already locked out is the wrong
+ * audience for a stack trace, and a raw error would tell them slightly more
+ * than "maybe try again" ever should: that mail sending was attempted at
+ * all. The failure is not silent, though — it is logged, because the
+ * operator reading logs is exactly who needs to know Maileroo rejected a
+ * send.
+ */
+export async function requestPasswordReset(
+	email: string,
+	resetUrl: (token: string) => string
+): Promise<void> {
+	const normalized = normalizeEmail(email);
+	const [row] = await db
+		.select({ id: users.id })
+		.from(users)
+		.where(eq(users.email, normalized))
+		.limit(1);
+	if (!row) return;
+
+	try {
+		const token = await createResetToken(row.id);
+		await sendMail(
+			normalized,
+			'Reset your Harmonic Trainer password',
+			`Follow this link to choose a new password. It expires in an hour and works once.\n\n` +
+				`${resetUrl(token)}\n\n` +
+				`If you did not ask for this, ignore this email — nothing changes until the link is used.`
+		);
+	} catch (error) {
+		console.error('Password reset email failed to send:', error);
+	}
+}
+
+/** Whether a reset token, by its raw value, still names something spendable. */
+export async function resetTokenIsValid(token: string, now = new Date()): Promise<boolean> {
+	const [row] = await db
+		.select({ expiresAt: passwordResetTokens.expiresAt, usedAt: passwordResetTokens.usedAt })
+		.from(passwordResetTokens)
+		.where(eq(passwordResetTokens.tokenHash, hashToken(token)))
+		.limit(1);
+	return Boolean(row && !row.usedAt && row.expiresAt >= now);
+}
+
+export type ResetOutcome = 'ok' | 'invalid';
+
+/**
+ * Spend a reset token: verify it, set the new password, revoke every
+ * existing cookie the same way `changePassword` does, and burn every other
+ * outstanding token for the account in the same statement — a second link
+ * requested and never used should not go on quietly working forever.
+ */
+export async function resetPassword(
+	token: string,
+	newPassword: string,
+	now = new Date()
+): Promise<ResetOutcome> {
+	const [row] = await db
+		.select({
+			userId: passwordResetTokens.userId,
+			expiresAt: passwordResetTokens.expiresAt,
+			usedAt: passwordResetTokens.usedAt
+		})
+		.from(passwordResetTokens)
+		.where(eq(passwordResetTokens.tokenHash, hashToken(token)))
+		.limit(1);
+
+	if (!row || row.usedAt || row.expiresAt < now) return 'invalid';
+
+	const passwordHash = await hashPassword(newPassword);
+	await db.transaction(async (tx) => {
+		await tx
+			.update(users)
+			.set({ passwordHash, sessionEpoch: sql`${users.sessionEpoch} + 1` })
+			.where(eq(users.id, row.userId));
+		await tx
+			.update(passwordResetTokens)
+			.set({ usedAt: now })
+			.where(eq(passwordResetTokens.userId, row.userId));
+	});
+
+	return 'ok';
 }

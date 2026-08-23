@@ -95,7 +95,7 @@
 	{@render children()}
 	<OnboardingTour
 		prefs={data.settings.prefs}
-		userName={data.user?.name ?? 'player'}
+		tourSeen={data.settings.tourSeen}
 		request={tourRequest}
 	/>
 {/if}

@@ -75,7 +75,39 @@ landed in August 2026:
 
 This is deliberately **not M12 complete**. The operator can now add a few known
 people and compare genuinely separate progress states. Opening registration to
-strangers still requires the reset, abuse, deletion and export work below.
+strangers still requires the reset, abuse, deletion and export work below —
+all of which has since landed; see the status update after it.
+
+### Status: the safety work has landed too
+
+Rate limiting, password reset, account deletion and data export all shipped
+in the same slice, in that dependency order — reset needs rate limiting on
+the requests it accepts, and deletion needed two real schema gaps fixed
+first (`takes` and `repertoire` had no reliable owner to cascade from). The
+reasoning for each is in `DECISIONS.md`.
+
+- [x] Cross-account isolation, proven by an integration test that calls the
+      real query functions the routes call — `loadHeadline`, `practiceTotals`,
+      `loadSettings` and the rest — rather than asserting the schema merely
+      could be scoped correctly.
+- [x] Deleting an account leaves no row behind, in any owned table, proven by
+      an integration test that seeds every table and counts rows before and
+      after.
+- [x] Exporting everything you own — raw rows, not the profile's aggregates —
+      downloadable from `/profile`.
+- [x] Sign-in and password-reset-request rate limiting, database-backed.
+- [x] Self-service password reset over Maileroo: single-use token, one-hour
+      expiry, every other outstanding token for the account burned when one
+      is spent.
+- [x] First-run "tour seen" moved from `localStorage` to `user_prefs` — a
+      fact about the account, not the browser, as this file already said it
+      should become.
+
+One item is left, and it is the only one that cannot be closed from a
+keyboard: an acceptance pass with two real family accounts, practising the
+same evening, the operator confirming by eye that neither can see the
+other's anything. The integration test proves the same claim in code; this
+is that claim holding in the room the app is actually used in.
 
 ### This, not billing, is the hosting problem
 
@@ -182,20 +214,19 @@ carrying the user, not a boolean.
 
 ### What remains before accounts can open to strangers
 
-- **Rate limiting** on sign-in and on reset requests. A small table, because
-  serverless instances share no memory and Postgres is already there.
-- **Password reset**: single-use token, short expiry, its own table.
-- **Deleting an account has to actually work.** Every owned row cascades from
-  `users`, designed in from the first migration rather than discovered later,
-  and a test counts rows before and after. Exporting everything you own is the
-  same requirement wearing a different hat, and the profile is where it goes.
-- **The first run has to become a fact about the account, not about the
-  browser.** Whether the tour has been seen lives in `localStorage`, keyed by
-  name, which is the right size for a family beta and the wrong one for
-  strangers: a second machine re-runs it, a cleared browser re-runs it, and
-  nobody can reset it for somebody who asks. It is one boolean on `user_prefs`
-  when registration opens, and it is listed here rather than fixed early because
-  the local version is genuinely better while the operator knows everyone.
+Everything that could be built without a second real account now exists.
+What is left is not a feature:
+
+- **The acceptance pass itself** — two provisioned family accounts, practising
+  the same evening, somebody actually looking to confirm neither can see the
+  other's anything. Nobody has done this yet, because until this milestone
+  there was only ever one real account to test it with.
+- **Public self-registration**, which this milestone never attempted. Every
+  account still exists because the operator ran `npm run account:create`.
+  Opening that up is M13's problem as much as this one's — a sign-up form in
+  front of nothing to pay for is a spam magnet, not a business.
+- **The non-code half of M13** — a registered business, VAT, terms, a backup
+  restore that has actually been run once. None of it is touched here.
 
 ### Done when
 
@@ -203,8 +234,8 @@ carrying the user, not a boolean.
       and an acceptance pass confirms neither can see the other's cards, charts,
       runs, badges or colours.
 - [x] Signing out everywhere kills the cookie on the other machine by epoch.
-- [ ] Deleting an account leaves no row behind, proven by an integration test.
-- [ ] Sign-in/reset rate limits, reset email, export and deletion UI exist.
+- [x] Deleting an account leaves no row behind, proven by an integration test.
+- [x] Sign-in/reset rate limits, reset email, export and deletion UI exist.
 - [x] `npm run verify` passes for the family-beta slice.
 
 ---

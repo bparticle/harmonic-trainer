@@ -92,6 +92,11 @@ export function parseDeviceName(input: unknown): string | null {
 	return name;
 }
 
+export function parseTourSeen(input: unknown): boolean {
+	if (typeof input !== 'boolean') throw new Error('tourSeen must be a boolean');
+	return input;
+}
+
 export function parseColorMap(input: unknown): ColorMap {
 	if (!Array.isArray(input) || input.length !== 12) {
 		throw new Error('Colour map must be twelve colours');

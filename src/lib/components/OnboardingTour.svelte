@@ -10,11 +10,11 @@
 
 	let {
 		prefs,
-		userName,
+		tourSeen,
 		request = 0
 	}: {
 		prefs: Prefs;
-		userName: string;
+		tourSeen: boolean;
 		request?: number;
 	} = $props();
 
@@ -147,21 +147,8 @@
 		return null;
 	});
 
-	const storageKey = () => `harmonic:onboarding:v1:${encodeURIComponent(userName)}`;
-
 	onMount(() => {
-		const stored = localStorage.getItem(storageKey());
-		if (stored) {
-			try {
-				const record = JSON.parse(stored) as { experience?: ExperienceLevel };
-				if (record.experience === 'beginner' || record.experience === 'experienced') {
-					experience = record.experience;
-				}
-			} catch {
-				// An old or hand-edited value still means the tour was seen.
-			}
-			return;
-		}
+		if (tourSeen) return;
 		void start(true);
 	});
 
@@ -288,7 +275,7 @@
 	async function jumpTo(next: number) {
 		if (moving || !open) return;
 		if (next >= STEPS.length) {
-			finish('completed');
+			finish();
 			return;
 		}
 
@@ -309,16 +296,18 @@
 		}
 	}
 
-	function finish(status: 'completed' | 'skipped') {
-		if (typeof localStorage !== 'undefined') {
-			localStorage.setItem(
-				storageKey(),
-				JSON.stringify({ status, experience, inputMode, version: 1, at: new Date().toISOString() })
-			);
-		}
+	function finish() {
 		open = false;
 		spotlight = null;
 		firstRun = false;
+		// Fire-and-forget: closing the tour is instant either way, and a failed
+		// write costs no more than the tour offering to run once more next time
+		// — not a locked-out user, not lost data.
+		void fetch('/api/settings', {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ tourSeen: true })
+		});
 	}
 
 	async function focusCard() {
@@ -364,7 +353,7 @@
 	function onWindowKeydown(event: KeyboardEvent) {
 		if (!open || event.key !== 'Escape') return;
 		event.preventDefault();
-		finish('skipped');
+		finish();
 	}
 </script>
 
@@ -396,9 +385,7 @@
 		>
 			<header class="tour-head">
 				<p>First-time tour · {progressLabel}</p>
-				<button type="button" onclick={() => finish('skipped')} aria-label="Skip the tour">
-					Skip
-				</button>
+				<button type="button" onclick={finish} aria-label="Skip the tour"> Skip </button>
 			</header>
 
 			{#if step === 0}

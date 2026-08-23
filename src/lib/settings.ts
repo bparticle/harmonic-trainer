@@ -70,11 +70,13 @@ export type AppSettings = {
 	wheelConfig: WheelConfig;
 	prefs: Prefs;
 	midiDevice: string | null;
+	tourSeen: boolean;
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
 	colorMap: DEFAULT_COLOR_MAP,
 	wheelConfig: DEFAULT_WHEEL_CONFIG,
 	prefs: DEFAULT_PREFS,
-	midiDevice: null
+	midiDevice: null,
+	tourSeen: false
 };

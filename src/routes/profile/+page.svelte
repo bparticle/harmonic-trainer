@@ -137,6 +137,12 @@
 				{data.user?.name ?? 'Profile'}
 			</h1>
 		</div>
+		<a
+			href="/profile/export"
+			class="text-ink-dim hover:text-ink ml-auto shrink-0 font-mono text-xs tracking-widest uppercase"
+		>
+			Download your data
+		</a>
 	</header>
 
 	{#if nothingYet}

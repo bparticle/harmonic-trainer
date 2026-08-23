@@ -37,3 +37,44 @@ jobs:
       # database anywhere near it.
       - name: Build
         run: npm run build
+
+  # A throwaway Postgres, never the one anyone practises on. src/lib/server/db/index.ts
+  # refuses to read DATABASE_URL under Vitest at all, so this job's env only
+  # ever points at the service container below.
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: harmonic
+          POSTGRES_PASSWORD: harmonic
+          POSTGRES_DB: harmonic
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U harmonic -d harmonic"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://harmonic:harmonic@localhost:5432/harmonic
+      TEST_DATABASE_URL: postgres://harmonic:harmonic@localhost:5432/harmonic
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Migrate the disposable database
+        run: npm run db:migrate
+
+      - name: Seed the curriculum
+        run: npm run db:seed
+
+      - name: Integration tests
+        run: npm run test:integration

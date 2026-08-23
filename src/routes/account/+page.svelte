@@ -2,6 +2,15 @@
 	import UserAvatar from '$lib/components/UserAvatar.svelte';
 
 	let { data, form } = $props();
+	let deleteConfirmation = $state('');
+
+	function normalized(value: string) {
+		return value.trim().toLowerCase();
+	}
+
+	let deleteReady = $derived(
+		data.user !== null && normalized(deleteConfirmation) === normalized(data.user.email)
+	);
 </script>
 
 <svelte:head><title>Account · Harmonic Trainer</title></svelte:head>
@@ -74,6 +83,40 @@
 		</form>
 		<form method="POST" action="/logout">
 			<button class="text-ink-muted hover:text-ink px-4 py-2.5 text-sm">Sign out here</button>
+		</form>
+	</section>
+
+	<section class="border-ground-line mt-5 rounded-xl border p-5 sm:p-6">
+		<h2 class="text-ink text-xl font-semibold">Delete account</h2>
+		<p class="text-ink-muted mt-1 text-sm leading-relaxed">
+			Everything you own — cards, sessions, charts, the playing record, badges — goes with it. There
+			is no undo.
+		</p>
+
+		<form method="POST" action="?/delete" class="mt-5 grid max-w-sm gap-4">
+			<label>
+				<span class="text-ink-dim font-mono text-xs">
+					Type <span class="text-ink">{data.user?.email}</span> to confirm
+				</span>
+				<input
+					name="email"
+					type="text"
+					autocomplete="off"
+					autocapitalize="none"
+					bind:value={deleteConfirmation}
+					class="border-ground-line bg-ground-raised text-ink mt-1.5 w-full rounded-lg border px-3 py-2.5"
+				/>
+			</label>
+			{#if form?.deleteError}
+				<p class="font-mono text-sm" style="color: var(--pc-0)">{form.deleteError}</p>
+			{/if}
+			<button
+				disabled={!deleteReady}
+				class="border-ground-line hover:border-ink-dim justify-self-start rounded-lg border
+				       px-4 py-2.5 text-sm transition-opacity disabled:opacity-40"
+			>
+				Delete my account
+			</button>
 		</form>
 	</section>
 </main>

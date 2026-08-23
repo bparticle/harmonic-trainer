@@ -4,6 +4,7 @@ import {
 	parseColorMap,
 	parseDeviceName,
 	parsePrefs,
+	parseTourSeen,
 	parseWheelConfig
 } from '$lib/settings-validate';
 import { currentUserId } from '$lib/server/db/user';
@@ -35,7 +36,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				: {}),
 			...(patch.colorMap !== undefined ? { colorMap: parseColorMap(patch.colorMap) } : {}),
 			...(patch.prefs !== undefined ? { prefs: parsePrefs(patch.prefs) } : {}),
-			...(patch.midiDevice !== undefined ? { midiDevice: parseDeviceName(patch.midiDevice) } : {})
+			...(patch.midiDevice !== undefined ? { midiDevice: parseDeviceName(patch.midiDevice) } : {}),
+			...(patch.tourSeen !== undefined ? { tourSeen: parseTourSeen(patch.tourSeen) } : {})
 		});
 		return json(saved);
 	} catch (e) {

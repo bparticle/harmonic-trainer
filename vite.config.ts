@@ -54,7 +54,19 @@ export default defineConfig({
 					name: 'server',
 					environment: 'node',
 					include: ['src/**/*.{test,spec}.{js,ts}'],
-					exclude: ['src/**/*.svelte.{test,spec}.{js,ts}']
+					exclude: ['src/**/*.svelte.{test,spec}.{js,ts}', 'src/**/*.integration.test.ts']
+				}
+			},
+			{
+				// A database, unlike the rest of the suite — see
+				// src/lib/server/db/index.ts, which refuses to run these anywhere
+				// but TEST_DATABASE_URL. Not part of `npm test`/`verify`, so the
+				// default suite stays exactly as fast and DB-free as it always was.
+				extends: './vite.config.ts',
+				test: {
+					name: 'integration',
+					environment: 'node',
+					include: ['src/**/*.integration.test.ts']
 				}
 			}
 		]

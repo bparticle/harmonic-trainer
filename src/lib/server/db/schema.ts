@@ -136,6 +136,10 @@ export type FactType =
 
 export type ChartStyle = 'blues' | 'minor_blues' | 'rhythm_changes' | 'modal_vamp' | 'custom';
 
+/** What a rate-limited event was. Sign-in and reset requests share the table
+ *  and are counted separately, so failing one never locks out the other. */
+export type RateLimitKind = 'sign_in_failed' | 'reset_request';
+
 // ---------------------------------------------------------------------------
 // Tables
 // ---------------------------------------------------------------------------
@@ -155,6 +159,52 @@ export const users = pgTable('users', {
 	sessionEpoch: integer('session_epoch').notNull().default(0),
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });
+
+/**
+ * A record of one failed sign-in or one reset request, kept only long enough
+ * to be counted. No `user_id`: a failed sign-in has no account to blame it
+ * on — the whole reason it needs limiting is that it might be aimed at
+ * somebody else's — so the key is the normalised email being tried against,
+ * the same value `authenticate` and `requestPasswordReset` already look up
+ * by.
+ *
+ * One small table for both kinds, per ROADMAP.md's own reasoning: serverless
+ * instances share no memory and Postgres is already there.
+ */
+export const rateLimitEvents = pgTable(
+	'rate_limit_events',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		key: text('key').notNull(),
+		kind: text('kind').$type<RateLimitKind>().notNull(),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(t) => [index('rate_limit_events_key_kind_created_idx').on(t.key, t.kind, t.createdAt)]
+);
+
+/**
+ * A single-use password reset link, spent by `resetPassword`.
+ *
+ * `tokenHash` rather than the token itself — the raw value only ever exists
+ * in the emailed link, the same discipline a session cookie's signature
+ * already keeps: a leaked database row should not be a leaked credential.
+ * `usedAt` rather than deleting the row on use, so a replayed link reads as
+ * "already used" instead of "we have no idea what this was."
+ */
+export const passwordResetTokens = pgTable(
+	'password_reset_tokens',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		tokenHash: text('token_hash').notNull().unique(),
+		expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+		usedAt: timestamp('used_at', { withTimezone: true }),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(t) => [index('password_reset_tokens_user_idx').on(t.userId)]
+);
 
 /**
  * Single row, id pinned to 1. This is the template copied into `user_prefs`
@@ -189,6 +239,14 @@ export const userPrefs = pgTable('user_prefs', {
 	wheelConfigJson: jsonb('wheel_config_json').notNull(),
 	midiDevice: text('midi_device'),
 	prefsJson: jsonb('prefs_json').notNull(),
+	/**
+	 * Whether the first-run tour has been seen. A fact about the account, not
+	 * the browser — it was `localStorage`, keyed by name, until M12 gave every
+	 * account somewhere of its own to keep it. No default from the singleton
+	 * template: a new account has always seen nothing, whatever the operator's
+	 * own row says.
+	 */
+	tourSeen: boolean('tour_seen').notNull().default(false),
 	updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 });
 
@@ -312,11 +370,22 @@ export const reviews = pgTable(
  * Raw captured MIDI kept forever and re-analysable later: the analysis engine
  * will improve, and old takes should benefit retroactively. That is why the
  * blob is stored alongside `analysisJson` rather than instead of it.
+ *
+ * `userId` is direct rather than reached through `sessionId`, and that is the
+ * fix M12 made to this table rather than the shape it shipped in: a take's
+ * session link is nullable and `set null`, which is right for a take outliving
+ * a deleted session but meant a take had no *reliable* path back to a user at
+ * all — the one thing an owned table cannot be missing once deleting an
+ * account has to actually work. Still parked, still nothing writes to it; the
+ * column is here so that when something does, it is owned from the first row.
  */
 export const takes = pgTable(
 	'takes',
 	{
 		id: uuid('id').primaryKey().defaultRandom(),
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
 		sessionId: uuid('session_id').references(() => sessions.id, { onDelete: 'set null' }),
 		ts: timestamp('ts', { withTimezone: true }).notNull().defaultNow(),
 		midiBlob: bytea('midi_blob').notNull(),
@@ -328,20 +397,38 @@ export const takes = pgTable(
 			.notNull()
 			.default(sql`ARRAY[]::text[]`)
 	},
-	(t) => [index('takes_session_idx').on(t.sessionId), index('takes_ts_idx').on(t.ts)]
+	(t) => [
+		index('takes_user_idx').on(t.userId),
+		index('takes_session_idx').on(t.sessionId),
+		index('takes_ts_idx').on(t.ts)
+	]
 );
 
-/** Named progressions, whether captured from playing or imported as a chart. */
-export const repertoire = pgTable('repertoire', {
-	id: uuid('id').primaryKey().defaultRandom(),
-	name: text('name').notNull(),
-	sourceTakeId: uuid('source_take_id').references(() => takes.id, { onDelete: 'set null' }),
-	chartJson: jsonb('chart_json'),
-	keyCenter: text('key_center').notNull(),
-	romanJson: jsonb('roman_json'),
-	notes: text('notes'),
-	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
-});
+/**
+ * Named progressions, whether captured from playing or imported as a chart.
+ *
+ * `userId` direct, for the same reason `takes` now carries one: `sourceTakeId`
+ * is nullable and `set null`, so a repertoire entry had no owner a cascading
+ * delete could find even after `takes` was fixed — the gap doubled rather than
+ * moved. Still parked, still nothing writes to it.
+ */
+export const repertoire = pgTable(
+	'repertoire',
+	{
+		id: uuid('id').primaryKey().defaultRandom(),
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		name: text('name').notNull(),
+		sourceTakeId: uuid('source_take_id').references(() => takes.id, { onDelete: 'set null' }),
+		chartJson: jsonb('chart_json'),
+		keyCenter: text('key_center').notNull(),
+		romanJson: jsonb('roman_json'),
+		notes: text('notes'),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(t) => [index('repertoire_user_idx').on(t.userId)]
+);
 
 /**
  * Flattened facts extracted from a take, one row per observation. Kept narrow
@@ -636,6 +723,8 @@ export type User = typeof users.$inferSelect;
 export type PlayRun = typeof playRuns.$inferSelect;
 export type ChordAttempt = typeof chordAttempts.$inferSelect;
 export type BadgeRow = typeof badges.$inferSelect;
+export type RateLimitEvent = typeof rateLimitEvents.$inferSelect;
+export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
 
 export type CardDirection = (typeof cardDirection.enumValues)[number];
 export type SrsStateKind = (typeof srsStateKind.enumValues)[number];

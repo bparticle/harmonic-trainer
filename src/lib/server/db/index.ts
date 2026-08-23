@@ -36,9 +36,23 @@ let instance: Db | null = null;
  */
 function connect(): Db {
 	if (!instance) {
-		if (!env.DATABASE_URL) throw new Error('DATABASE_URL is not set');
+		/*
+		 * Under Vitest — `process.env.VITEST`, set unconditionally by the runner
+		 * itself, never by us — `DATABASE_URL` is never read, full stop. An
+		 * integration test proves deletion by cascade-deleting rows it made, so
+		 * the one thing worse than that test failing is that test succeeding
+		 * against a database somebody actually practises on.
+		 */
+		const url = process.env.VITEST ? env.TEST_DATABASE_URL : env.DATABASE_URL;
+		if (!url) {
+			throw new Error(
+				process.env.VITEST
+					? 'TEST_DATABASE_URL is not set. Point it at a disposable Postgres — never production.'
+					: 'DATABASE_URL is not set'
+			);
+		}
 		const pool = new pg.Pool({
-			connectionString: env.DATABASE_URL,
+			connectionString: url,
 			max: 1,
 			idleTimeoutMillis: 10_000
 		});

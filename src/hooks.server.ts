@@ -2,7 +2,7 @@ import { redirect, type Handle } from '@sveltejs/kit';
 import { SESSION_COOKIE, verifyToken } from '$lib/server/auth';
 import { resolveSessionUser } from '$lib/server/db/accounts';
 
-const PUBLIC_PATHS = ['/login'];
+const PUBLIC_PATHS = ['/login', '/forgot-password', '/reset-password'];
 
 /**
  * Readable by anyone: the project page at the root, and the demo.
