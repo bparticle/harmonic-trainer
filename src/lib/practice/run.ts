@@ -222,7 +222,14 @@ export function settle(store: StorageLike, sent: Flush): Flush {
 	return left;
 }
 
-const badgeKey = (badge: BadgePayload) => `${badge.chartSlug}\0${badge.tier}`;
+/**
+ * A badge is one per tune per tier, so that pair is its identity while it sits
+ * in the outbox. The bar is safe to join them with because a slug is
+ * `[a-z0-9-]+` and a tier id is one of a closed set — neither can contain one.
+ * Nothing outside this module sees the key: what gets written is the badge
+ * itself, and the server settles duplicates on a unique constraint instead.
+ */
+const badgeKey = (badge: BadgePayload) => `${badge.chartSlug}|${badge.tier}`;
 
 /**
  * A block result is identified by the run that reached it, not by the block.

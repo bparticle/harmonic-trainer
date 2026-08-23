@@ -4093,3 +4093,27 @@ ring arrives with a 140ms grow from 0.975 — short enough to read as the attack
 the note rather than as an animation of a user interface. Under
 `prefers-reduced-motion` it does not animate at all, like everything else on that
 page.
+
+---
+
+### A separator that only looks safe
+
+`badgeKey` joined a chart slug to a tier id with `\0`. As a Set/Map key that
+works: the lookup is exactly as correct as any other separator would make it.
+
+The risk is everything downstream that assumes a string is text. Git decides a
+file is binary by finding a NUL byte inside it, so a `\0` pasted instead of
+typed — indistinguishable in most editors from the escaped form that behaves —
+turns `git diff` into `Bin X -> Y bytes`, turns `grep -r` into "the file
+matched, somewhere", and turns an exact-string edit near that line into one
+that silently does nothing. The escape avoids the byte only for as long as
+nobody ever reaches for the byte directly, which is a thin guarantee for a
+character with no visible representation.
+
+The key is a bar now. It is unambiguous for the same reason the NUL was — a
+slug is `[a-z0-9-]+` and a tier id comes from a closed set, so neither half can
+contain one — and it has the property the NUL lacked even written safely: a
+person reading the source can see it. Changing it was free because the key
+never leaves memory: what the outbox writes is the badge, and the server
+settles duplicates on `badges_user_chart_tier` rather than on any string built
+here.
