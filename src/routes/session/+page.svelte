@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { goto, invalidateAll } from '$app/navigation';
 	import Keyboard from '$lib/components/Keyboard.svelte';
 	import Wheel from '$lib/wheel/Wheel.svelte';
@@ -6,6 +7,7 @@
 	import type { MidiEvent } from '$lib/midi/cluster';
 	import { playChord, playSequence, startAudio, stopAll } from '$lib/audio/engine';
 	import { markGathered, markPlayed, pose, toVoicing } from '$lib/session/drill';
+	import { guidanceFor, guidanceKey, isChordShape, type LessonCard } from '$lib/session/lesson';
 	import { gradeFromPerformance } from '$lib/srs/scheduler';
 	import { parseKey } from '$lib/music/key';
 	import { formatNote } from '$lib/music/note';
@@ -41,6 +43,35 @@
 	 */
 
 	let { data } = $props();
+
+	/**
+	 * Guidance follows a musical shape across the whole workout, even when the
+	 * ear and function tasks ask for it through different card rows.
+	 */
+	function guidanceAt(taskPosition: number, at: number) {
+		const keys: string[] = [];
+		let current = -1;
+		for (let position = 0; position < (data.workout?.tasks.length ?? 0); position++) {
+			const workoutEntry = data.workout?.tasks[position];
+			if (!workoutEntry) continue;
+			const cards = data.cards[workoutEntry.index] ?? [];
+			for (let cardAt = 0; cardAt < cards.length; cardAt++) {
+				if (position === taskPosition && cardAt === at) current = keys.length;
+				keys.push(guidanceKey(cards[cardAt] as LessonCard));
+			}
+		}
+		return guidanceFor(keys, current);
+	}
+
+	function openingPhase(taskPosition: number, at: number): 'watch' | 'play' {
+		const workoutEntry = data.workout?.tasks[taskPosition];
+		const card = workoutEntry ? (data.cards[workoutEntry.index] ?? [])[at] : null;
+		if (!card) return 'play';
+		const kind = (card.payload as { kind?: string }).kind;
+		const canDemonstrate =
+			(kind === 'scale' && card.direction === 'hear_play') || isChordShape(card as LessonCard);
+		return guidanceAt(taskPosition, at).mode === 'guided' && canDemonstrate ? 'watch' : 'play';
+	}
 
 	const GEOMETRY: WheelGeometry = { outerRadius: 330, ringWidth: 52 };
 	const config = $derived(data.settings.wheelConfig);
@@ -80,10 +111,18 @@
 	/** Pitch classes played since this card was posed, for the ones built up over time. */
 	let gathered = $state<number[]>([]);
 	let showedAnswer = $state(false);
+	let cardRecorded = $state(false);
 	let audioUnlocked = $state(false);
-	let playedPromptId = $state<string | null>(null);
+	let playedPromptKey = $state<string | null>(null);
 	let playingQuestion = $state(false);
 	let audioProblem = $state<string | null>(null);
+	// Seeded from the loaded card; later card transitions own it.
+	// svelte-ignore state_referenced_locally
+	let lessonPhase = $state<'watch' | 'play'>(openingPhase(data.workout?.resumeAt ?? 0, 0));
+	let demoNotes = $state<number[]>([]);
+	let demoRun = 0;
+	let cardRun = 0;
+	let reviewSequence = 0;
 
 	/** Answers gathered during this task, flushed when it finishes. */
 	let pending = $state<
@@ -98,6 +137,8 @@
 
 	const taskCards = $derived(entry ? (data.cards[entry.index] ?? []) : []);
 	const currentCard = $derived(taskCards[cardIndex] ?? null);
+	const promptKey = $derived(currentCard ? `${index}:${cardIndex}:${currentCard.id}` : null);
+	const lessonGuidance = $derived(guidanceAt(index, cardIndex));
 	const prompt = $derived(
 		currentCard
 			? pose(currentCard.direction, currentCard.payload as never, 60, currentCard.keyCenter)
@@ -138,32 +179,40 @@
 			return true;
 		});
 		const stopChord = session.onChord(handleChord);
+		const stopNote = session.onNote(handleNote);
 		return () => {
 			stopPedal();
 			stopChord();
+			stopNote();
+		};
+	});
+
+	$effect(() => {
+		return () => {
+			demoRun++;
+			cardRun++;
 		};
 	});
 
 	// Reset the per-task state whenever the task changes.
 	$effect(() => {
-		void index;
-		cardIndex = 0;
-		answered = false;
-		revealed = false;
-		lastMarking = null;
-		gathered = [];
-		showedAnswer = false;
-		pending = [];
-		askedAt = performance.now();
-		audioProblem = null;
-	});
-
-	/** Once audio has been unlocked by a tap, later questions can play automatically. */
-	$effect(() => {
-		const promptId = currentCard?.id;
-		if (!audioUnlocked || !prompt?.audible || answered || !promptId || playedPromptId === promptId)
-			return;
-		void playQuestion();
+		const taskIndex = index;
+		untrack(() => {
+			cardIndex = 0;
+			answered = false;
+			revealed = false;
+			lastMarking = null;
+			gathered = [];
+			showedAnswer = false;
+			cardRecorded = false;
+			pending = [];
+			askedAt = performance.now();
+			audioProblem = null;
+			demoRun++;
+			cardRun++;
+			demoNotes = [];
+			lessonPhase = openingPhase(taskIndex, 0);
+		});
 	});
 
 	/** True for the things played one note after another rather than together. */
@@ -182,11 +231,46 @@
 	const marksPlaying = $derived(
 		prompt !== null && (prompt.answerWith === 'play' || prompt.direction === 'degree_play')
 	);
+	const isChordLesson = $derived(
+		marksPlaying && isChordShape(currentCard ? (currentCard as LessonCard) : null)
+	);
+	const chordTarget = $derived.by(() => {
+		if (!isChordLesson || !currentCard) return [];
+		const payload = currentCard.payload as {
+			answerPitchClasses: number[];
+			answerVoicing?: number[];
+		};
+		return payload.answerVoicing ?? toVoicing(payload.answerPitchClasses);
+	});
+	const questionAudio = $derived(
+		prompt?.audible ?? (isChordLesson && lessonGuidance.mode === 'guided' ? chordTarget : null)
+	);
+
+	/** Once audio has been unlocked by a tap, later questions can play automatically. */
+	$effect(() => {
+		if (!audioUnlocked || !questionAudio || answered || !promptKey || playedPromptKey === promptKey)
+			return;
+		void playQuestion();
+	});
+
+	const wait = (milliseconds: number) =>
+		new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
+
+	async function animateScale(notes: number[], noteMilliseconds: number) {
+		const run = ++demoRun;
+		for (const note of notes) {
+			if (run !== demoRun) return;
+			demoNotes = [note];
+			await wait(noteMilliseconds);
+		}
+		if (run === demoRun) demoNotes = [];
+	}
 
 	async function playQuestion() {
-		if (!prompt?.audible || !currentCard || playingQuestion) return;
-		const promptId = currentCard.id;
-		playedPromptId = promptId;
+		if (!questionAudio || !currentCard || !promptKey || playingQuestion) return;
+		const thisPromptKey = promptKey;
+		const audible = questionAudio;
+		playedPromptKey = thisPromptKey;
 		playingQuestion = true;
 		audioProblem = null;
 		try {
@@ -197,11 +281,28 @@
 			 * cluster nobody could identify, and then demanded all seven back
 			 * simultaneously, which is not playable.
 			 */
-			if (isSequential) await playSequence(prompt.audible, 0.4);
-			else await playChord(prompt.audible, 1.9);
+			if (isSequential) {
+				const sequence = playSequence(audible, 0.4);
+				const demonstration =
+					lessonGuidance.mode === 'guided'
+						? animateScale(audible, 400)
+						: wait(audible.length * 400);
+				await Promise.all([sequence, demonstration]);
+				if (lessonPhase === 'watch') lessonPhase = 'play';
+			} else if (isChordLesson && lessonGuidance.mode === 'guided') {
+				const run = ++demoRun;
+				demoNotes = audible;
+				await playChord(audible, 1.9);
+				await wait(1900);
+				if (run === demoRun) demoNotes = [];
+				if (lessonPhase === 'watch') lessonPhase = 'play';
+			} else {
+				await playChord(audible, 1.9);
+				await wait(1900);
+			}
 			askedAt = performance.now();
 		} catch (error) {
-			if (playedPromptId === promptId) playedPromptId = null;
+			if (playedPromptKey === thisPromptKey) playedPromptKey = null;
 			audioProblem = error instanceof Error ? error.message : 'Audio could not start.';
 		} finally {
 			playingQuestion = false;
@@ -210,39 +311,66 @@
 
 	// ---- answering ----------------------------------------------------------
 
-	function handleChord(chord: { notes: number[] }) {
-		if (!marksPlaying || answered || !currentCard) return;
+	function handleNote(note: number) {
+		if (
+			!isSequential ||
+			!marksPlaying ||
+			answered ||
+			playingQuestion ||
+			lessonPhase !== 'play' ||
+			!currentCard
+		)
+			return;
 
 		const expected = (currentCard.payload as { answerPitchClasses: number[] }).answerPitchClasses;
-
-		let marking;
-		if (isSequential) {
-			// Built up over time: the notes arrive one at a time, so they are gathered
-			// rather than compared as a single handful.
-			gathered = [...new Set([...gathered, ...chord.notes.map((n) => ((n % 12) + 12) % 12)])];
-			marking = markGathered(expected, gathered);
-		} else {
-			marking = markPlayed(toVoicing(expected), chord.notes);
-		}
+		const pc = ((note % 12) + 12) % 12;
+		gathered = [...new Set([...gathered, pc])];
+		const marking = markGathered(expected, gathered);
 		lastMarking = marking;
+		if (marking.correct) completeAnswer();
+	}
 
-		if (marking.correct) {
-			answered = true;
-			// The symbol, once the chord is right: a degree question is only closed by
-			// naming what was played, and being shown it is how that gets checked
-			// without anybody taking a hand off the keys to type.
-			revealed = true;
-			record(gradeFromPerformance(true, Math.round(performance.now() - askedAt)), true);
-			setTimeout(nextCard, 650);
-		}
+	function handleChord(chord: { notes: number[] }) {
+		if (
+			!marksPlaying ||
+			answered ||
+			!currentCard ||
+			isSequential ||
+			playingQuestion ||
+			lessonPhase !== 'play'
+		)
+			return;
+
+		const expected = (currentCard.payload as { answerPitchClasses: number[] }).answerPitchClasses;
+		const marking = markPlayed(toVoicing(expected), chord.notes);
+		lastMarking = marking;
+		if (marking.correct) completeAnswer();
+	}
+
+	function completeAnswer() {
+		answered = true;
+		revealed = true;
+		record(gradeFromPerformance(true, Math.round(performance.now() - askedAt)), true);
+		const run = cardRun;
+		setTimeout(
+			() => {
+				if (run === cardRun) nextCard();
+			},
+			isSequential ? 1150 : isChordLesson ? 950 : 650
+		);
 	}
 
 	function record(rating: ReviewRating, correct: boolean) {
-		if (!currentCard) return;
+		if (!currentCard || cardRecorded) return;
+		cardRecorded = true;
+		const reviewId =
+			typeof globalThis.crypto?.randomUUID === 'function'
+				? globalThis.crypto.randomUUID()
+				: `local-${Date.now()}-${++reviewSequence}`;
 		pending = [
 			...pending,
 			{
-				id: crypto.randomUUID(),
+				id: reviewId,
 				cardId: currentCard.id,
 				rating,
 				correct,
@@ -252,14 +380,19 @@
 	}
 
 	function nextCard() {
+		cardRun++;
 		const next = cardIndex + 1;
 		answered = false;
 		revealed = false;
 		lastMarking = null;
 		gathered = [];
 		showedAnswer = false;
+		cardRecorded = false;
 		askedAt = performance.now();
+		demoRun++;
+		demoNotes = [];
 		cardIndex = next;
+		lessonPhase = openingPhase(index, next);
 
 		// Done when done: the goal is a count of questions, and the last answer is
 		// what meets it. Nothing here waits for a timer or for a button.
@@ -276,22 +409,129 @@
 	function showAnswer() {
 		if (!currentCard || showedAnswer) return;
 		showedAnswer = true;
+		revealed = true;
+		lessonPhase = 'play';
 		record('again', false);
 	}
 
-	/** Note names for the current answer, in the key you are in. */
+	const cardContext = $derived(parseKey(currentCard?.keyCenter ?? workout?.keyCenter ?? 'C'));
+	const answerPitchClasses = $derived(
+		(currentCard?.payload as { answerPitchClasses?: number[] } | undefined)?.answerPitchClasses ??
+			[]
+	);
+
+	/** Note names for the current answer, spelled in the card's own key. */
 	const answerNotes = $derived.by(() => {
-		const payload = currentCard?.payload as { answerPitchClasses?: number[] } | undefined;
-		if (!payload?.answerPitchClasses) return [];
-		return payload.answerPitchClasses.map((pc) =>
-			formatNote(spell(pc, context), { unicode: true })
-		);
+		return answerPitchClasses.map((pc) => formatNote(spell(pc, cardContext), { unicode: true }));
 	});
+	const liveChordMarking = $derived.by(() => {
+		if (!isChordLesson || session.live.length === 0) return null;
+		return markPlayed(chordTarget, session.live);
+	});
+	const activeMarking = $derived(liveChordMarking ?? lastMarking);
 
 	/** What is still missing, as note names rather than a bare count. */
 	const missingNotes = $derived(
-		(lastMarking?.missing ?? []).map((pc) => formatNote(spell(pc, context), { unicode: true }))
+		(activeMarking?.missing ?? []).map((pc) =>
+			formatNote(spell(pc, cardContext), { unicode: true })
+		)
 	);
+	const extraNotes = $derived(
+		(activeMarking?.extra ?? []).map((pc) => formatNote(spell(pc, cardContext), { unicode: true }))
+	);
+
+	const scaleTarget = $derived(isSequential ? (prompt?.audible ?? []) : []);
+	const targetNotes = $derived.by(() => {
+		if (isSequential && (lessonGuidance.showTarget || showedAnswer || answered)) return scaleTarget;
+		if (
+			isChordLesson &&
+			(lessonPhase === 'watch' || lessonGuidance.showTarget || showedAnswer || answered)
+		)
+			return chordTarget;
+		if (!isSequential && showedAnswer && currentCard) {
+			const expected = (currentCard.payload as { answerPitchClasses: number[] }).answerPitchClasses;
+			return toVoicing(expected);
+		}
+		return [];
+	});
+	const foundTargetNotes = $derived.by(() => {
+		if (isSequential)
+			return scaleTarget.filter((note) => gathered.includes(((note % 12) + 12) % 12));
+		if (!isChordLesson || (!activeMarking && !answered)) return [];
+		const missing = new Set(answered ? [] : (activeMarking?.missing ?? []));
+		return chordTarget.filter((note) => !missing.has(((note % 12) + 12) % 12));
+	});
+	const questionProgress = $derived(
+		asks ? Math.min(1, (cardIndex + (answered ? 1 : 0)) / asks) : 0
+	);
+	const chordPromptName = $derived.by(() => {
+		if (!isChordLesson || !currentCard) return '';
+		const label = (currentCard.payload as { label: string }).label;
+		if (lessonPhase === 'watch' || lessonGuidance.mode !== 'recall' || showedAnswer || answered)
+			return label;
+		return prompt?.visible ?? 'Listen, then play';
+	});
+	const chordPromptContext = $derived.by(() => {
+		if (!isChordLesson || !prompt?.visible || prompt.visible === chordPromptName) return null;
+		return prompt.visible;
+	});
+	const chordRoles = ['root', 'third', 'fifth', 'seventh'];
+	const guidanceTitle = $derived.by(() => {
+		if (isSequential) {
+			if (lessonPhase === 'watch') return 'Watch the scale move';
+			if (lessonGuidance.mode === 'guided') return 'Your turn — follow the lights';
+			if (lessonGuidance.mode === 'supported') return 'Again — with fewer hints';
+			return 'Now play it from memory';
+		}
+		if (isChordLesson) {
+			if (lessonPhase === 'watch') return 'Watch the chord land';
+			if (lessonGuidance.mode === 'guided') return 'Your turn — copy the shape';
+			if (lessonGuidance.mode === 'supported') return 'Again — keep the shape';
+			return 'Now build it from memory';
+		}
+		return prompt?.instruction ?? '';
+	});
+	const selectedDevice = $derived(
+		session.devices.find((device) => device.id === session.selectedId)
+	);
+	const listeningLine = $derived.by(() => {
+		if (session.status === 'requesting') return 'Connecting to your piano…';
+		if (session.status === 'ready' && selectedDevice) return `Listening to ${selectedDevice.name}`;
+		if (session.status === 'ready') return 'Listening — play your piano or the screen keys';
+		if (session.unavailableReason) return 'Screen keys are listening';
+		return 'Listening — screen keys work now';
+	});
+	const feedbackLine = $derived.by(() => {
+		if (answered && currentCard) {
+			const label = (currentCard.payload as { label: string }).label;
+			return isChordLesson ? `${label} — chord complete` : `${label} — every note found`;
+		}
+		if (playingQuestion) {
+			if (isChordLesson && lessonGuidance.mode === 'guided')
+				return 'Watch every note land together';
+			if (isSequential && lessonGuidance.mode === 'guided') return 'Follow the moving key';
+			return 'Listen first';
+		}
+		if (lessonPhase === 'watch') return 'Start with a demonstration';
+		if (isSequential && gathered.length) {
+			return `${gathered.length} of ${answerNotes.length} notes found${missingNotes[0] ? ` · next, find ${missingNotes[0]}` : ''}`;
+		}
+		if (isChordLesson && activeMarking) {
+			const found = answerNotes.length - missingNotes.length;
+			if (extraNotes.length)
+				return `${found} of ${answerNotes.length} notes fit · lift ${extraNotes.join(' ')}`;
+			if (missingNotes.length)
+				return `${found} of ${answerNotes.length} notes held · add ${missingNotes.join(' ')}`;
+		}
+		if (lastMarking && !lastMarking.correct) {
+			return missingNotes.length
+				? `Still find ${missingNotes.join(' ')}`
+				: 'Try that shape once more';
+		}
+		return isChordLesson
+			? `Play all ${answerNotes.length} notes together`
+			: 'Play when you are ready';
+	});
 
 	function skipCard() {
 		if (currentCard && !answered) record('again', false);
@@ -521,11 +761,11 @@
 			</div>
 		</div>
 	{:else if task}
-		<header class="mb-5 flex flex-wrap items-center justify-between gap-3">
+		<header class="mb-4 flex flex-wrap items-center justify-between gap-3">
 			<div class="flex min-w-0 flex-wrap items-baseline gap-2 sm:gap-3">
 				<h1 class="font-display text-ink text-lg font-semibold tracking-tight">{task.title}</h1>
-				<span class="text-ink-muted font-mono text-[0.7rem]">
-					{progress} · {glyph(workout?.keyCenter ?? '')}
+				<span class="text-ink-muted font-mono text-xs">
+					Task {progress} · {glyph(workout?.keyCenter ?? '')}
 				</span>
 			</div>
 			<div class="flex items-center gap-2 sm:gap-4">
@@ -555,7 +795,23 @@
 			</div>
 		</header>
 
-		<p class="text-ink-muted mb-6 text-sm leading-relaxed">{task.instruction}</p>
+		<nav class="workout-rail" aria-label="Workout progress">
+			<ol>
+				{#each data.workout.tasks as item, taskIndex (taskIndex)}
+					<li
+						class:is-current={taskIndex === index}
+						class:is-done={item.finished || taskIndex < index}
+					>
+						<span class="task-marker" aria-hidden="true"
+							>{item.finished || taskIndex < index ? '✓' : taskIndex + 1}</span
+						>
+						<span>{item.task.title}</span>
+					</li>
+				{/each}
+			</ol>
+		</nav>
+
+		<p class="task-instruction">{task.instruction}</p>
 
 		<!-- The mission: the real page, under a constraint --------------------- -->
 		{#if task.kind === 'mission'}
@@ -628,80 +884,170 @@
 
 			<!-- The questions the band cannot ask -------------------------------- -->
 		{:else if currentCard && prompt}
-			<section class="flex flex-1 flex-col items-center justify-center gap-6">
-				<span class="text-ink-dim font-mono text-xs">
-					{cardIndex + 1} / {asks} · {prompt.instruction}
-				</span>
+			<section class="question-stage" class:is-success={answered}>
+				<div class="question-heading">
+					<div>
+						<p class="phase-label">{guidanceTitle}</p>
+						<h2>Question {Math.min(cardIndex + 1, asks)} of {asks}</h2>
+					</div>
+					{#if (isSequential || isChordLesson) && lessonGuidance.rounds > 1}
+						<span class="round-label">round {lessonGuidance.round} of {lessonGuidance.rounds}</span>
+					{/if}
+				</div>
 
-				<div class="grid min-h-[9rem] place-items-center">
-					{#if prompt.visible}
-						<span class="font-display text-ink text-6xl font-semibold">{prompt.visible}</span>
-					{:else if revealed}
-						<span class="font-display text-ink text-6xl font-semibold"
-							>{(currentCard.payload as { label: string }).label}</span
-						>
+				<div
+					class="question-progress"
+					role="progressbar"
+					aria-label="Questions answered"
+					aria-valuemin="0"
+					aria-valuemax={asks}
+					aria-valuenow={Math.min(cardIndex + (answered ? 1 : 0), asks)}
+				>
+					<span style:transform={`scaleX(${questionProgress})`}></span>
+				</div>
+
+				<div class="question-core">
+					<div class="prompt-panel">
+						{#if isSequential}
+							<p class="prompt-kicker">
+								{lessonPhase === 'watch' ? 'See it. Hear it.' : 'Play it.'}
+							</p>
+							<p class="prompt-name">{(currentCard.payload as { label: string }).label}</p>
+							<p class="prompt-copy">
+								{lessonPhase === 'watch'
+									? 'Watch each note cross the piano. Then the keyboard becomes yours.'
+									: lessonGuidance.mode === 'recall'
+										? 'The lights are gone. Build the same shape from memory.'
+										: 'Play one note at a time. Every correct key stays lit.'}
+							</p>
+							{#if prompt.audible}
+								<button class="hear-button" onclick={playQuestion} disabled={playingQuestion}>
+									{playingQuestion
+										? 'Playing the scale…'
+										: lessonPhase === 'watch'
+											? 'Watch and listen'
+											: 'Hear it again'}
+								</button>
+							{/if}
+						{:else if isChordLesson}
+							<p class="prompt-kicker">
+								{lessonPhase === 'watch'
+									? 'See it. Hear it.'
+									: lessonGuidance.mode === 'recall'
+										? 'Remember it. Build it.'
+										: 'Hold it together.'}
+							</p>
+							<p class="prompt-name">{chordPromptName}</p>
+							{#if chordPromptContext}
+								<p class="chord-context">{chordPromptContext}</p>
+							{/if}
+							<p class="prompt-copy">
+								{lessonPhase === 'watch'
+									? 'Watch the notes arrive together. Then copy that shape on your piano.'
+									: lessonGuidance.mode === 'guided'
+										? 'The note names and keys stay visible while your hand learns the chord.'
+										: lessonGuidance.mode === 'supported'
+											? 'The shape stays on the keyboard, but the note names are gone.'
+											: 'No keys are marked this time. Build the same chord from memory.'}
+							</p>
+							{#if questionAudio}
+								<button class="hear-button" onclick={playQuestion} disabled={playingQuestion}>
+									{playingQuestion
+										? 'Playing the chord…'
+										: lessonPhase === 'watch'
+											? 'Watch and listen'
+											: 'Hear the chord again'}
+								</button>
+							{/if}
+						{:else if prompt.visible}
+							<p class="prompt-name">{prompt.visible}</p>
+						{:else if revealed}
+							<p class="prompt-name">{(currentCard.payload as { label: string }).label}</p>
+						{:else}
+							<p class="prompt-copy">{prompt.instruction}</p>
+							<button class="hear-button" onclick={playQuestion} disabled={playingQuestion}>
+								{playingQuestion ? 'Playing…' : audioUnlocked ? 'Hear it again' : 'Hear question'}
+							</button>
+						{/if}
+					</div>
+
+					{#if isSequential}
+						<ol class="note-route" aria-label="Scale notes">
+							{#each answerNotes as note, noteIndex (noteIndex)}
+								<li
+									class:is-found={gathered.includes(
+										(((scaleTarget[noteIndex] ?? -1) % 12) + 12) % 12
+									)}
+									class:is-demo={demoNotes.includes(scaleTarget[noteIndex])}
+									style:--note-color={`var(--pc-${(((scaleTarget[noteIndex] ?? 0) % 12) + 12) % 12})`}
+								>
+									<span
+										>{lessonGuidance.showTargetLabels || showedAnswer ? note : noteIndex + 1}</span
+									>
+								</li>
+							{/each}
+						</ol>
+					{:else if isChordLesson}
+						{#if lessonGuidance.mode !== 'recall' || showedAnswer || answered}
+							<ol class="chord-shape" aria-label="Chord tones">
+								{#each answerNotes as note, noteIndex (noteIndex)}
+									{@const pc = answerPitchClasses[noteIndex] ?? 0}
+									<li
+										class:is-found={foundTargetNotes.some(
+											(target) => ((target % 12) + 12) % 12 === pc
+										)}
+										class:is-demo={demoNotes.some((target) => ((target % 12) + 12) % 12 === pc)}
+										style:--note-color={`var(--pc-${pc})`}
+									>
+										<span class="chord-note">
+											{lessonGuidance.showTargetLabels || showedAnswer || answered
+												? note
+												: [1, 3, 5, 7][noteIndex]}
+										</span>
+										<span class="chord-role">{chordRoles[noteIndex]}</span>
+									</li>
+								{/each}
+							</ol>
+						{:else}
+							<div class="memory-cue">
+								<span aria-hidden="true">· · ·</span>
+								<p>Listen to the shape in your head, then put it under your hand.</p>
+							</div>
+						{/if}
 					{:else}
-						<button
-							class="border-ground-line hover:border-ink-dim rounded-lg border px-5 py-3 font-mono text-sm transition-colors disabled:opacity-50"
-							onclick={playQuestion}
-							disabled={playingQuestion}
-						>
-							{playingQuestion ? 'playing…' : audioUnlocked ? 'play it again' : 'hear question'}
-						</button>
+						<Wheel
+							{config}
+							active={keyView.pitchClasses}
+							degrees={keyView.degrees}
+							{highlights}
+							lit={session.live.map((n) => n % 12)}
+							size={280}
+							interactive={false}
+						/>
 					{/if}
 				</div>
 
 				{#if audioProblem}
-					<p class="font-mono text-xs" style="color: var(--pc-0)">{audioProblem}</p>
+					<p class="audio-problem">{audioProblem}</p>
 				{/if}
 
-				{#if revealed && answered}
-					<!-- The naming half, closed: what you played, spelled. -->
-					<p class="font-mono text-xs" style="color: var(--pc-5)">
-						{(currentCard.payload as { label: string }).label}
-					</p>
-				{:else if showedAnswer}
-					<p class="text-ink-muted font-display text-xl">{answerNotes.join('  ')}</p>
-				{:else if lastMarking && !lastMarking.correct}
-					<!-- Names, not counts: "missing 4" tells you nothing you can act on. -->
-					<p class="text-ink-dim font-mono text-xs">
-						{missingNotes.length ? `still need ${missingNotes.join(' ')}` : ''}
-						{lastMarking.extra.length ? ` · ${lastMarking.extra.length} not in it` : ''}
-					</p>
-				{/if}
-
-				{#if isSequential && gathered.length && !answered}
-					<p class="text-ink-dim font-mono text-[0.7rem]">
-						{gathered.length} of {answerNotes.length} so far
-					</p>
-				{/if}
-
-				<Wheel
-					{config}
-					active={keyView.pitchClasses}
-					degrees={keyView.degrees}
-					{highlights}
-					lit={session.live.map((n) => n % 12)}
-					size={320}
-					interactive={false}
-				/>
-
-				<div class="flex gap-3">
+				<div class="question-actions">
 					{#if prompt.answerWith === 'name' && !marksPlaying && !revealed}
-						<button
-							class="bg-ink text-ground rounded-lg px-5 py-2.5 text-sm font-semibold"
-							onclick={advanceHandsFree}>Got it</button
-						>
+						<button class="primary-action" onclick={advanceHandsFree}>Reveal the name</button>
 					{/if}
 					<button
-						class="border-ground-line hover:border-ink-dim rounded-lg border px-4 py-2.5 font-mono text-xs transition-colors"
+						class="secondary-action"
 						onclick={showAnswer}
-						disabled={showedAnswer}>show</button
+						disabled={showedAnswer ||
+							((isSequential || isChordLesson) && lessonGuidance.showTargetLabels)}
 					>
-					<button
-						class="text-ink-dim hover:text-ink px-4 py-2.5 font-mono text-xs transition-colors"
-						onclick={skipCard}>{showedAnswer ? 'next' : 'skip'}</button
-					>
+						{(isSequential || isChordLesson) && lessonGuidance.showTargetLabels
+							? 'Notes are shown'
+							: 'Show the notes'}
+					</button>
+					<button class="quiet-action" onclick={skipCard}>
+						{showedAnswer ? 'Next question' : 'Skip this question'}
+					</button>
 				</div>
 			</section>
 		{:else}
@@ -713,11 +1059,19 @@
 		{/if}
 
 		{#if task.kind === 'ear' || task.kind === 'function'}
-			<footer class="mt-6 flex items-center justify-between gap-4">
+			<footer class="keyboard-stage" class:is-success={answered}>
+				<div class="keyboard-status">
+					<p><span class="listening-dot"></span>{listeningLine}</p>
+					<p class="keyboard-feedback" aria-live="polite" aria-atomic="true">{feedbackLine}</p>
+				</div>
 				<!-- Wide enough to play a scale in one hand without running out of
 				     keyboard, which 25 keys was not. -->
 				<Keyboard
 					lit={session.live}
+					target={targetNotes}
+					found={foundTargetNotes}
+					demo={demoNotes}
+					labelTargets={(isSequential || isChordLesson) && lessonGuidance.showTargetLabels}
 					onnoteon={(n) => virtual('noteon', n)}
 					onnoteoff={(n) => virtual('noteoff', n)}
 					from={48}
@@ -725,11 +1079,9 @@
 				/>
 			</footer>
 
-			<div class="mt-4 flex items-center justify-between">
-				<span class="text-ink-dim font-mono text-[0.7rem]"><kbd>Space</kbd> / pedal · next</span>
-				<span class="text-ink-dim font-mono text-[0.7rem]">
-					{Math.min(cardIndex, asks)} of {asks} answered
-				</span>
+			<div class="hands-free-line">
+				<span><kbd>Space</kbd> / pedal · next</span>
+				<span>{answered ? 'Moving on…' : 'Keep both hands on the piano'}</span>
 			</div>
 		{/if}
 
@@ -775,5 +1127,516 @@
 
 	.verdict.is-met {
 		color: var(--color-ink);
+	}
+
+	.workout-rail {
+		margin-bottom: 1rem;
+		border-block: 1px solid var(--color-ground-line);
+		padding-block: 0.65rem;
+	}
+
+	.workout-rail ol {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+		gap: 0.5rem;
+	}
+
+	.workout-rail li {
+		display: flex;
+		min-width: 0;
+		align-items: center;
+		gap: 0.5rem;
+		color: var(--color-ink-dim);
+		font-family: var(--font-mono);
+		font-size: 0.72rem;
+		line-height: 1.25;
+	}
+
+	.workout-rail li.is-current {
+		color: var(--color-ink);
+		font-weight: 600;
+	}
+
+	.workout-rail li.is-done {
+		color: var(--color-ink-muted);
+	}
+
+	.task-marker {
+		display: grid;
+		width: 1.55rem;
+		height: 1.55rem;
+		flex: none;
+		place-items: center;
+		border: 1px solid var(--color-ground-line);
+		border-radius: 999px;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.is-current .task-marker {
+		border-color: var(--color-ink);
+		background: var(--color-ink);
+		color: var(--color-ground);
+	}
+
+	.task-instruction {
+		max-width: 62ch;
+		margin-bottom: 1.25rem;
+		color: var(--color-ink-muted);
+		font-size: 1rem;
+		line-height: 1.55;
+	}
+
+	.question-stage {
+		display: flex;
+		flex: 1;
+		flex-direction: column;
+		justify-content: center;
+		gap: 1rem;
+		min-height: 20rem;
+		padding-block: 0.5rem 1rem;
+	}
+
+	.question-heading {
+		display: flex;
+		align-items: end;
+		justify-content: space-between;
+		gap: 1rem;
+	}
+
+	.phase-label,
+	.round-label,
+	.prompt-kicker {
+		font-family: var(--font-mono);
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+	}
+
+	.phase-label {
+		margin-bottom: 0.2rem;
+		color: var(--color-ink-muted);
+		font-size: 0.76rem;
+	}
+
+	.question-heading h2 {
+		font-family: var(--font-display);
+		font-size: 1.45rem;
+		font-weight: 600;
+		letter-spacing: -0.02em;
+		line-height: 1.1;
+		color: var(--color-ink);
+		font-variant-numeric: tabular-nums;
+	}
+
+	.round-label {
+		padding-bottom: 0.15rem;
+		color: var(--color-ink-dim);
+		font-size: 0.72rem;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.question-progress {
+		height: 0.4rem;
+		overflow: hidden;
+		border-radius: 999px;
+		background: var(--color-ground-raised);
+	}
+
+	.question-progress span {
+		display: block;
+		width: 100%;
+		height: 100%;
+		transform-origin: left center;
+		border-radius: inherit;
+		background: var(--color-ink);
+		transition: transform 300ms cubic-bezier(0.25, 1, 0.5, 1);
+	}
+
+	.question-core {
+		display: grid;
+		grid-template-columns: minmax(15rem, 0.9fr) minmax(18rem, 1.1fr);
+		align-items: center;
+		gap: 2rem;
+		min-height: 11rem;
+		padding-block: 0.75rem;
+	}
+
+	.prompt-panel {
+		display: flex;
+		min-width: 0;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 0.7rem;
+	}
+
+	.prompt-kicker {
+		color: var(--color-ink-dim);
+		font-size: 0.7rem;
+	}
+
+	.prompt-name {
+		color: var(--color-ink);
+		font-family: var(--font-display);
+		font-size: clamp(2.25rem, 7vw, 4rem);
+		font-weight: 600;
+		letter-spacing: -0.04em;
+		line-height: 0.95;
+	}
+
+	.prompt-copy {
+		max-width: 38ch;
+		color: var(--color-ink-muted);
+		font-size: 1rem;
+		line-height: 1.55;
+	}
+
+	.chord-context {
+		color: var(--color-ink-dim);
+		font-family: var(--font-mono);
+		font-size: 0.78rem;
+		letter-spacing: 0.04em;
+	}
+
+	.hear-button,
+	.primary-action,
+	.secondary-action,
+	.quiet-action {
+		min-height: 2.75rem;
+		border-radius: 10px;
+		padding: 0.65rem 1rem;
+		font-weight: 600;
+		transition:
+			transform 120ms cubic-bezier(0.25, 1, 0.5, 1),
+			border-color 120ms linear,
+			color 120ms linear;
+	}
+
+	.hear-button,
+	.secondary-action {
+		border: 1px solid var(--color-ground-line);
+		color: var(--color-ink);
+	}
+
+	.primary-action {
+		background: var(--color-ink);
+		color: var(--color-ground);
+	}
+
+	.quiet-action {
+		color: var(--color-ink-dim);
+	}
+
+	.hear-button:active,
+	.primary-action:active,
+	.secondary-action:active,
+	.quiet-action:active {
+		transform: scale(0.98);
+	}
+
+	.hear-button:focus-visible,
+	.primary-action:focus-visible,
+	.secondary-action:focus-visible,
+	.quiet-action:focus-visible {
+		outline: 2px solid var(--color-ink);
+		outline-offset: 3px;
+	}
+
+	.note-route {
+		position: relative;
+		display: grid;
+		grid-template-columns: repeat(7, minmax(2.5rem, 1fr));
+		gap: 0.5rem;
+		align-items: center;
+		width: 100%;
+	}
+
+	.note-route::before {
+		content: '';
+		position: absolute;
+		z-index: 0;
+		top: 50%;
+		left: 5%;
+		right: 5%;
+		height: 1px;
+		background: var(--color-ground-line);
+	}
+
+	.note-route li {
+		position: relative;
+		z-index: 1;
+		display: grid;
+		aspect-ratio: 1;
+		min-width: 2.75rem;
+		place-items: center;
+		border: 2px solid var(--color-ground-line);
+		border-radius: 999px;
+		background: var(--color-ground);
+		color: var(--color-ink-dim);
+		font-family: var(--font-mono);
+		font-size: 0.8rem;
+		font-weight: 600;
+		transition:
+			transform 150ms cubic-bezier(0.25, 1, 0.5, 1),
+			opacity 150ms linear;
+	}
+
+	.note-route li.is-found,
+	.note-route li.is-demo {
+		border-color: var(--note-color);
+		background: var(--note-color);
+		color: var(--color-ground);
+	}
+
+	.note-route li.is-demo {
+		transform: translateY(-0.4rem) scale(1.08);
+	}
+
+	.chord-shape {
+		position: relative;
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(3.75rem, 1fr));
+		gap: 0.6rem;
+		align-items: center;
+		width: 100%;
+		max-width: 28rem;
+		justify-self: center;
+	}
+
+	.chord-shape::before {
+		content: '';
+		position: absolute;
+		z-index: 0;
+		top: 2rem;
+		left: 7%;
+		right: 7%;
+		height: 1px;
+		background: var(--color-ground-line);
+	}
+
+	.chord-shape li {
+		position: relative;
+		z-index: 1;
+		display: flex;
+		min-width: 0;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.55rem;
+		transition:
+			transform 180ms cubic-bezier(0.25, 1, 0.5, 1),
+			opacity 120ms linear;
+	}
+
+	.chord-note {
+		display: grid;
+		width: 4rem;
+		max-width: 100%;
+		aspect-ratio: 1;
+		place-items: center;
+		border: 2px solid var(--note-color);
+		border-radius: 999px;
+		background: color-mix(in oklab, var(--note-color) 24%, var(--color-ground));
+		color: var(--color-ink);
+		font-family: var(--font-display);
+		font-size: 1.25rem;
+		font-weight: 600;
+		transition:
+			background 120ms linear,
+			color 120ms linear;
+	}
+
+	.chord-role {
+		color: var(--color-ink-dim);
+		font-family: var(--font-mono);
+		font-size: 0.65rem;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+	}
+
+	.chord-shape li.is-found .chord-note,
+	.chord-shape li.is-demo .chord-note {
+		background: var(--note-color);
+		color: var(--color-ground);
+	}
+
+	.chord-shape li.is-demo {
+		transform: translateY(-0.35rem);
+	}
+
+	.memory-cue {
+		display: flex;
+		max-width: 23rem;
+		justify-self: center;
+		flex-direction: column;
+		align-items: center;
+		gap: 1rem;
+		color: var(--color-ink-dim);
+		text-align: center;
+	}
+
+	.memory-cue span {
+		color: var(--color-ink-muted);
+		font-family: var(--font-display);
+		font-size: 3rem;
+		letter-spacing: 0.35em;
+		line-height: 0.8;
+	}
+
+	.memory-cue p {
+		font-size: 0.9rem;
+		line-height: 1.5;
+	}
+
+	.audio-problem {
+		color: var(--pc-0);
+		font-family: var(--font-mono);
+		font-size: 0.8rem;
+	}
+
+	.question-actions {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: center;
+		gap: 0.5rem;
+	}
+
+	.keyboard-stage {
+		position: relative;
+		margin-top: 0.75rem;
+		padding: 1rem 1rem 0.65rem;
+		border: 1px solid var(--color-ground-line);
+		border-radius: 16px;
+		background: var(--color-ground-raised);
+		transition:
+			transform 200ms cubic-bezier(0.25, 1, 0.5, 1),
+			border-color 150ms linear;
+	}
+
+	.keyboard-stage.is-success {
+		transform: translateY(-0.2rem);
+		border-color: var(--color-ink-muted);
+	}
+
+	.keyboard-status {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		margin-bottom: 0.75rem;
+		font-family: var(--font-mono);
+		font-size: 0.78rem;
+		line-height: 1.4;
+	}
+
+	.keyboard-status p:first-child {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		color: var(--color-ink-muted);
+	}
+
+	.listening-dot {
+		width: 0.55rem;
+		height: 0.55rem;
+		flex: none;
+		border: 2px solid var(--color-ink);
+		border-radius: 999px;
+		background: var(--color-ground);
+	}
+
+	.keyboard-feedback {
+		color: var(--color-ink);
+		font-weight: 600;
+		text-align: right;
+	}
+
+	.hands-free-line {
+		display: flex;
+		justify-content: space-between;
+		gap: 1rem;
+		margin-top: 0.65rem;
+		color: var(--color-ink-dim);
+		font-family: var(--font-mono);
+		font-size: 0.72rem;
+	}
+
+	@media (hover: hover) {
+		.hear-button:hover,
+		.secondary-action:hover {
+			border-color: var(--color-ink-muted);
+		}
+
+		.quiet-action:hover {
+			color: var(--color-ink);
+		}
+	}
+
+	@media (max-width: 720px) {
+		.workout-rail ol {
+			display: flex;
+			overflow-x: auto;
+			padding-bottom: 0.2rem;
+		}
+
+		.workout-rail li {
+			min-width: max-content;
+		}
+
+		.question-core {
+			grid-template-columns: minmax(0, 1fr);
+			gap: 1.25rem;
+		}
+
+		.prompt-panel {
+			align-items: center;
+			text-align: center;
+		}
+
+		.note-route {
+			gap: 0.3rem;
+		}
+
+		.note-route li {
+			min-width: 2.35rem;
+			font-size: 0.72rem;
+		}
+
+		.chord-shape {
+			grid-template-columns: repeat(auto-fit, minmax(3rem, 1fr));
+			gap: 0.35rem;
+		}
+
+		.chord-note {
+			width: 3.25rem;
+			font-size: 1rem;
+		}
+
+		.keyboard-status,
+		.hands-free-line {
+			align-items: flex-start;
+			flex-direction: column;
+		}
+
+		.keyboard-feedback {
+			text-align: left;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.question-progress span,
+		.note-route li,
+		.chord-shape li,
+		.chord-note,
+		.keyboard-stage,
+		.hear-button,
+		.primary-action,
+		.secondary-action,
+		.quiet-action {
+			transition: none;
+		}
+
+		.note-route li.is-demo,
+		.chord-shape li.is-demo,
+		.keyboard-stage.is-success {
+			transform: none;
+		}
 	}
 </style>

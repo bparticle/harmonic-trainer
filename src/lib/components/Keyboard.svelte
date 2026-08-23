@@ -18,16 +18,27 @@
 		count = 32,
 		/** Notes currently sounding. */
 		lit = [],
+		/** Notes the current exercise is inviting the player to find. */
+		target = [],
+		/** Target notes already found during a one-note-at-a-time exercise. */
+		found = [],
+		/** The note, or notes of a chord, currently being demonstrated. */
+		demo = null,
 		interactive = true,
 		showLabels = true,
+		labelTargets = false,
 		onnoteon,
 		onnoteoff
 	}: {
 		from?: number;
 		count?: number;
 		lit?: number[];
+		target?: number[];
+		found?: number[];
+		demo?: number | number[] | null;
 		interactive?: boolean;
 		showLabels?: boolean;
+		labelTargets?: boolean;
 		onnoteon?: (note: number) => void;
 		onnoteoff?: (note: number) => void;
 	} = $props();
@@ -39,6 +50,9 @@
 	const BLACK_HEIGHT = 118;
 
 	const litSet = $derived(new Set(lit));
+	const targetSet = $derived(new Set(target));
+	const foundSet = $derived(new Set(found));
+	const demoSet = $derived(new Set(demo === null ? [] : Array.isArray(demo) ? demo : [demo]));
 	let pressed = $state<Set<number>>(new Set());
 
 	type KeyInfo = { note: number; pc: number; black: boolean; x: number };
@@ -118,7 +132,7 @@
 	viewBox="0 0 {width} {WHITE_HEIGHT}"
 	role="group"
 	aria-label={interactive
-		? 'On-screen keyboard. Focus here, then use A through semicolon to play.'
+		? `${target.length ? 'Highlighted keys show the notes to find. ' : ''}On-screen keyboard. Focus here, then use A through semicolon to play.`
 		: 'Piano keyboard diagram'}
 	tabindex={interactive ? 0 : -1}
 	{onkeydown}
@@ -127,6 +141,9 @@
 >
 	{#each whites as key (key.note)}
 		{@const isLit = litSet.has(key.note) || pressed.has(key.note)}
+		{@const isTarget = targetSet.has(key.note)}
+		{@const isFound = foundSet.has(key.note)}
+		{@const isDemo = demoSet.has(key.note)}
 		<g>
 			<rect
 				x={key.x + 1}
@@ -136,6 +153,10 @@
 				rx="4"
 				class="key key-white"
 				class:is-lit={isLit}
+				class:is-target={isTarget}
+				class:is-found={isFound}
+				class:is-demo={isDemo}
+				style:--key-color={`var(--pc-${key.pc})`}
 				fill={isLit ? `var(--pc-${key.pc})` : 'var(--color-ink-muted)'}
 				onpointerdown={() => press(key.note)}
 				onpointerenter={(e) => e.buttons === 1 && press(key.note)}
@@ -143,13 +164,13 @@
 				onpointerleave={() => release(key.note)}
 				aria-hidden="true"
 			/>
-			{#if showLabels && key.pc === 0}
+			{#if showLabels && (key.pc === 0 || (labelTargets && isTarget))}
 				<text
 					x={key.x + WHITE_WIDTH / 2}
 					y={WHITE_HEIGHT - 12}
 					class="key-label"
-					fill={isLit ? `var(--pc-${key.pc}-ink)` : 'var(--color-ground)'}
-					text-anchor="middle">{labelFor(key.note)}</text
+					fill={isLit || isFound || isDemo ? `var(--pc-${key.pc}-ink)` : 'var(--color-ground)'}
+					text-anchor="middle">{labelTargets && isTarget ? NAMES[key.pc] : labelFor(key.note)}</text
 				>
 			{/if}
 		</g>
@@ -157,21 +178,39 @@
 
 	{#each blacks as key (key.note)}
 		{@const isLit = litSet.has(key.note) || pressed.has(key.note)}
-		<rect
-			x={key.x}
-			y="0"
-			width={BLACK_WIDTH}
-			height={BLACK_HEIGHT}
-			rx="3"
-			class="key key-black"
-			class:is-lit={isLit}
-			fill={isLit ? `var(--pc-${key.pc})` : 'var(--color-ground)'}
-			onpointerdown={() => press(key.note)}
-			onpointerenter={(e) => e.buttons === 1 && press(key.note)}
-			onpointerup={() => release(key.note)}
-			onpointerleave={() => release(key.note)}
-			aria-hidden="true"
-		/>
+		{@const isTarget = targetSet.has(key.note)}
+		{@const isFound = foundSet.has(key.note)}
+		{@const isDemo = demoSet.has(key.note)}
+		<g>
+			<rect
+				x={key.x}
+				y="0"
+				width={BLACK_WIDTH}
+				height={BLACK_HEIGHT}
+				rx="3"
+				class="key key-black"
+				class:is-lit={isLit}
+				class:is-target={isTarget}
+				class:is-found={isFound}
+				class:is-demo={isDemo}
+				style:--key-color={`var(--pc-${key.pc})`}
+				fill={isLit ? `var(--pc-${key.pc})` : 'var(--color-ground)'}
+				onpointerdown={() => press(key.note)}
+				onpointerenter={(e) => e.buttons === 1 && press(key.note)}
+				onpointerup={() => release(key.note)}
+				onpointerleave={() => release(key.note)}
+				aria-hidden="true"
+			/>
+			{#if showLabels && labelTargets && isTarget}
+				<text
+					x={key.x + BLACK_WIDTH / 2}
+					y={BLACK_HEIGHT - 10}
+					class="key-label key-label-black"
+					fill={isLit || isFound || isDemo ? `var(--pc-${key.pc}-ink)` : 'var(--color-ink-muted)'}
+					text-anchor="middle">{NAMES[key.pc]}</text
+				>
+			{/if}
+		</g>
 	{/each}
 </svg>
 
@@ -191,7 +230,29 @@
 	}
 
 	.key {
-		transition: fill 90ms linear;
+		transform-box: fill-box;
+		transform-origin: center top;
+		transition:
+			fill 90ms linear,
+			transform 120ms cubic-bezier(0.25, 1, 0.5, 1),
+			stroke 90ms linear;
+	}
+
+	.key.is-target:not(.is-found, .is-lit, .is-demo) {
+		fill: color-mix(in oklab, var(--key-color) 32%, var(--color-ground-raised));
+		stroke: var(--key-color);
+		stroke-width: 2;
+	}
+
+	.key.is-found,
+	.key.is-demo {
+		fill: var(--key-color);
+		stroke: var(--key-color);
+	}
+
+	.key.is-demo {
+		transform: translateY(4px);
+		stroke-width: 3;
 	}
 
 	.key-white {
@@ -208,6 +269,10 @@
 		font-family: var(--font-mono);
 		font-size: 11px;
 		pointer-events: none;
+	}
+
+	.key-label-black {
+		font-size: 9px;
 	}
 
 	@media (prefers-reduced-motion: reduce) {

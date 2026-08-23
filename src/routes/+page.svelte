@@ -13,11 +13,11 @@
 	 * a tab — which is fine on the day you agree with it and a dead end on the
 	 * day you want to spend twenty minutes on the thing that went badly.
 	 *
-	 * So it is a picker now. Every key, every rung, every progression, all
-	 * visible and all startable. The ladder is still here and still suggests the
-	 * next step — that is the one marked — but it has never gated anything and
-	 * now it does not hide anything either. Choosing something else does not
-	 * move it: exploring and advancing are different decisions.
+	 * The ladder is the default path now, while the complete picker remains one
+	 * deliberate step away. Every key, rung and progression is still startable;
+	 * it simply no longer competes with the recommended next lesson on first
+	 * view. Choosing something else does not move the ladder: exploring and
+	 * advancing are different decisions.
 	 *
 	 * **Why this page is colourful, and what the colour is allowed to mean.**
 	 * It was grey, and the honest reason was that most of what it says has no
@@ -186,7 +186,7 @@
 	const onLadder = $derived(choice.kind === 'rung' && isHere(choice.key, choice.rung));
 
 	const eyebrow = $derived(
-		resuming ? 'in progress' : onLadder ? 'today · ladder suggestion' : 'today · your pick'
+		resuming ? 'in progress' : onLadder ? 'today · next lesson' : 'today · your pick'
 	);
 
 	/** What a key has met of its seven, said as ground covered rather than as a mark. */
@@ -256,7 +256,8 @@
 					{#if data.resume}
 						task {resumeAt + 1} of {data.resume.tasks.length}
 					{:else}
-						{metLine(heroStanding)}
+						key {reachedIndex + 1} of {data.stages.length} · step {data.position.rungIndex + 1} of
+						{data.rungs.length}
 					{/if}
 				</p>
 			</div>
@@ -315,158 +316,177 @@
 			</div>
 		</section>
 
-		<!-- The twelve keys ----------------------------------------------------- -->
-		<section class="flex flex-col gap-3">
-			<div class="section-head">
-				<h2 class="panel-title">The twelve keys</h2>
-				<p
-					class="key-legend"
-					aria-label="Filled swatches show chords played; outlines are new keys"
-				>
-					<span><i class="legend-fill"></i>chords</span>
-					<span><i class="legend-outline"></i>new</span>
-				</p>
-			</div>
+		<details class="practice-library" open={resuming}>
+			<summary>
+				<span>
+					<strong>{resuming ? 'Your twelve-key journey' : 'Choose something else'}</strong>
+					<small>
+						{resuming
+							? `${metLine(heroStanding)} across the current key`
+							: 'All keys, topics and chord progressions'}
+					</small>
+				</span>
+				<span class="library-toggle" aria-hidden="true">+</span>
+			</summary>
 
-			{#if resuming}
-				<ul class="keys">
-					{#each data.keys as standing (standing.key)}
-						<li
-							class="key is-static"
-							class:is-fresh={standing.fresh}
-							class:is-here={standing.here}
-							style:--tint={tint(standing.key)}
-							style:--fill={percent(standing.fill)}
-							title={held(standing)}
+			<div class="library-content">
+				<!-- The twelve keys ----------------------------------------------------- -->
+				<section class="flex flex-col gap-3">
+					<div class="section-head">
+						<h2 class="panel-title">The twelve keys</h2>
+						<p
+							class="key-legend"
+							aria-label="Filled swatches show chords played; outlines are new keys"
 						>
-							{@render tile(standing)}
-						</li>
-					{/each}
-				</ul>
-			{:else}
-				<!-- Every key, always. Nothing here is gated; the ladder only suggests. -->
-				<ul class="keys">
-					{#each data.keys as standing (standing.key)}
-						<li>
-							<button
-								type="button"
-								class="key w-full"
-								class:is-open={standing.key === openKey}
-								class:is-fresh={standing.fresh}
-								class:is-here={standing.here}
-								style:--tint={tint(standing.key)}
-								style:--fill={percent(standing.fill)}
-								title={held(standing)}
-								onclick={() => (openKey = standing.key)}
-								aria-pressed={standing.key === openKey}
-							>
-								{@render tile(standing)}
-							</button>
-						</li>
-					{/each}
-				</ul>
+							<span><i class="legend-fill"></i>chords</span>
+							<span><i class="legend-outline"></i>new</span>
+						</p>
+					</div>
 
-				<p class="text-ink-dim text-[0.78rem] leading-relaxed">
-					<span class="text-ink-muted">{glyph(openStage.key)}:</span>
-					{openStage.note}
-					{#if data.stages.indexOf(openStage) > reachedIndex}
-						<span class="text-ink-muted">· beyond the suggestion</span>
-					{/if}
-				</p>
-
-				<!-- The rungs of whichever key is open ----------------------------- -->
-				<h3 class="panel-title mt-3">
-					Steps in {glyph(openKey)} · {openStanding.reached}/{openStanding.rungs}
-				</h3>
-				<ol class="grid gap-1.5 sm:grid-cols-2">
-					{#each data.rungs as rung, i (rung.id)}
-						{@const selected =
-							choice.kind === 'rung' && choice.key === openKey && choice.rung === rung.id}
-						{@const here = isHere(openKey, rung.id)}
-						<li>
-							<button
-								type="button"
-								class="rung w-full"
-								class:is-selected={selected}
-								class:is-met={i < openStanding.reached}
-								style:--tint={tint(openKey)}
-								onclick={() => (choice = { kind: 'rung', key: openKey, rung: rung.id })}
-								aria-pressed={selected}
-							>
-								<span class="rung-index">{i + 1}</span>
-								<span class="min-w-0 flex-1">
-									<span class="rung-label">{rung.label}</span>
-									<span class="rung-teaches">{rung.teaches}</span>
-								</span>
-								{#if here}
-									<span class="badge">you are here</span>
-								{/if}
-							</button>
-						</li>
-					{/each}
-				</ol>
-			{/if}
-		</section>
-
-		<!-- Progressions, as their own thing ------------------------------------ -->
-		{#if !resuming}
-			<section class="border-ground-line flex flex-col gap-3 border-t pt-6">
-				<h2 class="panel-title">Chord progressions</h2>
-
-				{#each byLevel as group (group.level)}
-					<div>
-						<h3 class="text-ink-dim mt-2 mb-1 font-mono text-[0.65rem] tracking-widest uppercase">
-							{group.name}
-						</h3>
-						<ul class="grid gap-1 sm:grid-cols-2">
-							{#each group.items as progression (progression.id)}
-								{@const chosen = choice.kind === 'progression' && choice.id === progression.id}
-								<li class="rounded-lg px-2.5 py-2" class:is-open-row={chosen}>
-									<div class="flex items-baseline justify-between gap-3">
-										<button
-											type="button"
-											class="text-left"
-											onclick={() =>
-												(choice = {
-													kind: 'progression',
-													id: progression.id,
-													key: keyFor(progression.mode, openKey)
-												})}
-										>
-											<span
-												class="font-display text-sm font-semibold"
-												style:color={chosen ? 'var(--color-ink)' : 'var(--color-ink-muted)'}
-												>{progression.name}</span
-											>
-											<span class="text-ink-dim block text-[0.72rem] leading-snug"
-												>{progression.describes}</span
-											>
-										</button>
-									</div>
-
-									{#if chosen}
-										<div class="mt-2 flex flex-wrap gap-1">
-											{#each progressionKeys as k (k.key)}
-												{@const value = keyFor(progression.mode, k.key)}
-												<button
-													type="button"
-													class="key-pill"
-													class:is-selected={choice.kind === 'progression' && choice.key === value}
-													style:--tint={tint(k.key)}
-													onclick={() =>
-														(choice = { kind: 'progression', id: progression.id, key: value })}
-													>{glyph(value)}</button
-												>
-											{/each}
-										</div>
-									{/if}
+					{#if resuming}
+						<ul class="keys">
+							{#each data.keys as standing (standing.key)}
+								<li
+									class="key is-static"
+									class:is-fresh={standing.fresh}
+									class:is-here={standing.here}
+									style:--tint={tint(standing.key)}
+									style:--fill={percent(standing.fill)}
+									title={held(standing)}
+								>
+									{@render tile(standing)}
 								</li>
 							{/each}
 						</ul>
-					</div>
-				{/each}
-			</section>
-		{/if}
+					{:else}
+						<!-- Every key, always. Nothing here is gated; the ladder only suggests. -->
+						<ul class="keys">
+							{#each data.keys as standing (standing.key)}
+								<li>
+									<button
+										type="button"
+										class="key w-full"
+										class:is-open={standing.key === openKey}
+										class:is-fresh={standing.fresh}
+										class:is-here={standing.here}
+										style:--tint={tint(standing.key)}
+										style:--fill={percent(standing.fill)}
+										title={held(standing)}
+										onclick={() => (openKey = standing.key)}
+										aria-pressed={standing.key === openKey}
+									>
+										{@render tile(standing)}
+									</button>
+								</li>
+							{/each}
+						</ul>
+
+						<p class="text-ink-dim text-[0.78rem] leading-relaxed">
+							<span class="text-ink-muted">{glyph(openStage.key)}:</span>
+							{openStage.note}
+							{#if data.stages.indexOf(openStage) > reachedIndex}
+								<span class="text-ink-muted">· beyond the suggestion</span>
+							{/if}
+						</p>
+
+						<!-- The rungs of whichever key is open ----------------------------- -->
+						<h3 class="panel-title mt-3">
+							Steps in {glyph(openKey)} · {openStanding.reached}/{openStanding.rungs}
+						</h3>
+						<ol class="grid gap-1.5 sm:grid-cols-2">
+							{#each data.rungs as rung, i (rung.id)}
+								{@const selected =
+									choice.kind === 'rung' && choice.key === openKey && choice.rung === rung.id}
+								{@const here = isHere(openKey, rung.id)}
+								<li>
+									<button
+										type="button"
+										class="rung w-full"
+										class:is-selected={selected}
+										class:is-met={i < openStanding.reached}
+										style:--tint={tint(openKey)}
+										onclick={() => (choice = { kind: 'rung', key: openKey, rung: rung.id })}
+										aria-pressed={selected}
+									>
+										<span class="rung-index">{i + 1}</span>
+										<span class="min-w-0 flex-1">
+											<span class="rung-label">{rung.label}</span>
+											<span class="rung-teaches">{rung.teaches}</span>
+										</span>
+										{#if here}
+											<span class="badge">you are here</span>
+										{/if}
+									</button>
+								</li>
+							{/each}
+						</ol>
+					{/if}
+				</section>
+
+				<!-- Progressions, as their own thing ------------------------------------ -->
+				{#if !resuming}
+					<section class="border-ground-line flex flex-col gap-3 border-t pt-6">
+						<h2 class="panel-title">Chord progressions</h2>
+
+						{#each byLevel as group (group.level)}
+							<div>
+								<h3
+									class="text-ink-dim mt-2 mb-1 font-mono text-[0.65rem] tracking-widest uppercase"
+								>
+									{group.name}
+								</h3>
+								<ul class="grid gap-1 sm:grid-cols-2">
+									{#each group.items as progression (progression.id)}
+										{@const chosen = choice.kind === 'progression' && choice.id === progression.id}
+										<li class="rounded-lg px-2.5 py-2" class:is-open-row={chosen}>
+											<div class="flex items-baseline justify-between gap-3">
+												<button
+													type="button"
+													class="text-left"
+													onclick={() =>
+														(choice = {
+															kind: 'progression',
+															id: progression.id,
+															key: keyFor(progression.mode, openKey)
+														})}
+												>
+													<span
+														class="font-display text-sm font-semibold"
+														style:color={chosen ? 'var(--color-ink)' : 'var(--color-ink-muted)'}
+														>{progression.name}</span
+													>
+													<span class="text-ink-dim block text-[0.72rem] leading-snug"
+														>{progression.describes}</span
+													>
+												</button>
+											</div>
+
+											{#if chosen}
+												<div class="mt-2 flex flex-wrap gap-1">
+													{#each progressionKeys as k (k.key)}
+														{@const value = keyFor(progression.mode, k.key)}
+														<button
+															type="button"
+															class="key-pill"
+															class:is-selected={choice.kind === 'progression' &&
+																choice.key === value}
+															style:--tint={tint(k.key)}
+															onclick={() =>
+																(choice = { kind: 'progression', id: progression.id, key: value })}
+															>{glyph(value)}</button
+														>
+													{/each}
+												</div>
+											{/if}
+										</li>
+									{/each}
+								</ul>
+							</div>
+						{/each}
+					</section>
+				{/if}
+			</div>
+		</details>
 
 		<!-- Do it --------------------------------------------------------------- -->
 		<section
@@ -488,7 +508,9 @@
 				<input type="hidden" name="focusRung" value={choice.kind === 'rung' ? choice.rung : ''} />
 
 				<button type="submit" class="start" style:--tint={tint(heroKey)}>
-					<span class="start-verb">{resuming ? 'Carry on' : 'Practise'}</span>
+					<span class="start-verb"
+						>{resuming ? 'Carry on' : onLadder ? 'Continue path' : 'Practise'}</span
+					>
 					<span class="start-what">
 						<span class="start-dot"></span>
 						{#if data.resume}
@@ -568,6 +590,74 @@
 		letter-spacing: 0.09em;
 		text-transform: uppercase;
 		color: var(--color-ink-dim);
+	}
+
+	.practice-library {
+		border-block: 1px solid var(--color-ground-line);
+	}
+
+	.practice-library > summary {
+		display: flex;
+		min-height: 4.5rem;
+		cursor: pointer;
+		list-style: none;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		padding: 0.85rem 0.25rem;
+		color: var(--color-ink);
+	}
+
+	.practice-library > summary::-webkit-details-marker {
+		display: none;
+	}
+
+	.practice-library > summary:focus-visible {
+		outline: 2px solid var(--color-ink);
+		outline-offset: 3px;
+		border-radius: 8px;
+	}
+
+	.practice-library > summary strong,
+	.practice-library > summary small {
+		display: block;
+	}
+
+	.practice-library > summary strong {
+		font-family: var(--font-display);
+		font-size: 1.05rem;
+		font-weight: 600;
+	}
+
+	.practice-library > summary small {
+		margin-top: 0.15rem;
+		color: var(--color-ink-dim);
+		font-size: 0.82rem;
+		line-height: 1.4;
+	}
+
+	.library-toggle {
+		display: grid;
+		width: 2.25rem;
+		height: 2.25rem;
+		flex: none;
+		place-items: center;
+		border: 1px solid var(--color-ground-line);
+		border-radius: 999px;
+		font-family: var(--font-mono);
+		font-size: 1.2rem;
+		transition: transform 200ms cubic-bezier(0.25, 1, 0.5, 1);
+	}
+
+	.practice-library[open] .library-toggle {
+		transform: rotate(45deg);
+	}
+
+	.library-content {
+		display: flex;
+		flex-direction: column;
+		gap: 2rem;
+		padding-block: 1rem 1.5rem;
 	}
 
 	.section-head,
@@ -1038,7 +1128,8 @@
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.key-fill {
+		.key-fill,
+		.library-toggle {
 			transition: none;
 		}
 	}
