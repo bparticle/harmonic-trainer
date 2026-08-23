@@ -119,8 +119,18 @@ async function renderCymbals(t: Tone): Promise<CymbalSamples> {
 		return samples;
 	};
 
-	const pending = Promise.all([
-		render(
+	/*
+	 * Tone.Offline temporarily replaces Tone's process-wide audio context while
+	 * it prepares a render. Starting two renders together can therefore leave
+	 * one of them waiting on a context the other render has replaced. Chromium
+	 * does not reject that state; both promises can simply stay pending, which
+	 * leaves the player saying "Counting in…" forever with no console error.
+	 *
+	 * Keep these serial. They are rendered only once per tab, and together hold
+	 * less than a second of mono audio, so parallelism buys nothing meaningful.
+	 */
+	const pending = (async () => {
+		const ride = await render(
 			{
 				envelope: { attack: 0.001, decay: 0.62, release: 0.16 },
 				harmonicity: 5.1,
@@ -130,8 +140,8 @@ async function renderCymbals(t: Tone): Promise<CymbalSamples> {
 			},
 			0.32,
 			0.82
-		),
-		render(
+		);
+		const hihat = await render(
 			{
 				envelope: { attack: 0.001, decay: 0.09, release: 0.02 },
 				harmonicity: 5.1,
@@ -141,8 +151,9 @@ async function renderCymbals(t: Tone): Promise<CymbalSamples> {
 			},
 			0.06,
 			0.14
-		)
-	]).then(([ride, hihat]) => ({ ride, hihat }));
+		);
+		return { ride, hihat };
+	})();
 	cymbalSamples = pending.catch((error) => {
 		// A transient OfflineAudioContext failure must not poison every later play
 		// attempt for the lifetime of the tab.
