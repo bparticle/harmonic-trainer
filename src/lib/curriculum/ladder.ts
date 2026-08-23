@@ -281,11 +281,15 @@ function seventhItem(k: Key, degree: number, degrees: string[]): LadderItem {
 
 function scaleItem(k: Key): LadderItem {
 	const notes = scale(k);
+	const ascending = notes.map(midi);
 	return {
 		kind: 'scale',
 		label: `${formatKey(k)} scale`,
 		answerPitchClasses: notes.map(pitchClass),
-		answerVoicing: notes.map((n) => midi({ ...n, octave: 4 })),
+		// Keep the octave carries computed by `scale`: forcing every note into one
+		// octave makes any scale whose tonic is above C fall partway through. The
+		// repeated tonic is the arrival that makes this a complete one-octave scale.
+		answerVoicing: [...ascending, ascending[0] + 12],
 		detail: notes.map((n) => formatNote(n, { unicode: true })).join(' ')
 	};
 }

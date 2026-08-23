@@ -441,6 +441,9 @@
 	);
 
 	const scaleTarget = $derived(isSequential ? (prompt?.audible ?? []) : []);
+	const scaleRouteNotes = $derived.by(() => {
+		return scaleTarget.map((note) => formatNote(spell(note, cardContext), { unicode: true }));
+	});
 	const targetNotes = $derived.by(() => {
 		if (isSequential && (lessonGuidance.showTarget || showedAnswer || answered)) return scaleTarget;
 		if (
@@ -995,7 +998,7 @@
 
 					{#if isSequential}
 						<ol class="note-route" aria-label="Scale notes">
-							{#each answerNotes as note, noteIndex (noteIndex)}
+							{#each scaleRouteNotes as note, noteIndex (noteIndex)}
 								<li
 									class:is-found={gathered.includes(
 										(((scaleTarget[noteIndex] ?? -1) % 12) + 12) % 12
@@ -1365,7 +1368,7 @@
 	.note-route {
 		position: relative;
 		display: grid;
-		grid-template-columns: repeat(7, minmax(2.5rem, 1fr));
+		grid-template-columns: repeat(8, minmax(2rem, 1fr));
 		gap: 0.5rem;
 		align-items: center;
 		width: 100%;
@@ -1387,7 +1390,7 @@
 		z-index: 1;
 		display: grid;
 		aspect-ratio: 1;
-		min-width: 2.75rem;
+		min-width: 2rem;
 		place-items: center;
 		border: 2px solid var(--color-ground-line);
 		border-radius: 999px;
@@ -1613,11 +1616,12 @@
 		}
 
 		.note-route {
-			gap: 0.3rem;
+			grid-template-columns: repeat(8, minmax(0, 1fr));
+			gap: 0.25rem;
 		}
 
 		.note-route li {
-			min-width: 2.35rem;
+			min-width: 0;
 			font-size: 0.72rem;
 		}
 

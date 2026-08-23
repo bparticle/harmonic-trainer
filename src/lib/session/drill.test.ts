@@ -81,6 +81,16 @@ describe('posing a question', () => {
 		expect(prompt.audible).toHaveLength(3);
 		expect(prompt.audible!.every((n) => n >= 60 && n < 84)).toBe(true);
 	});
+
+	it('plays a scale continuously through the tonic in the next octave', () => {
+		const scale: CardPayload = {
+			kind: 'scale',
+			label: 'D scale',
+			answerPitchClasses: [2, 4, 6, 7, 9, 11, 1],
+			answerVoicing: [62, 64, 66, 67, 69, 71, 61]
+		};
+		expect(pose('hear_play', scale).audible).toEqual([62, 64, 66, 67, 69, 71, 73, 74]);
+	});
 });
 
 describe('spreading pitch classes into a voicing', () => {

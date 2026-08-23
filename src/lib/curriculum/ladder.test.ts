@@ -101,7 +101,20 @@ describe('what a rung asks in a key', () => {
 	it('gives the right scale for C', () => {
 		const [item] = itemsForRung('scale', STAGES[0]);
 		expect(item.answerPitchClasses).toEqual([0, 2, 4, 5, 7, 9, 11]);
+		expect(item.answerVoicing).toEqual([60, 62, 64, 65, 67, 69, 71, 72]);
 		expect(item.detail).toBe('C D E F G A B');
+	});
+
+	it('plays every scale continuously from its tonic to the next octave', () => {
+		for (const stage of STAGES) {
+			for (const rung of ['scale', 'relative-minor'] as const) {
+				const item = itemsForRung(rung, stage)[0];
+				const voicing = item.answerVoicing ?? [];
+				expect(voicing, `${stage.key}/${rung}`).toHaveLength(8);
+				expect(voicing.every((note, index) => index === 0 || note > voicing[index - 1])).toBe(true);
+				expect(voicing.at(-1)! - voicing[0]).toBe(12);
+			}
+		}
 	});
 
 	it('gives the right scale for the flat keys too', () => {

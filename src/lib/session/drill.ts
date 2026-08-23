@@ -39,7 +39,10 @@ export function pose(
 	midiRoot = 60,
 	keyCenter?: string
 ): Prompt {
-	const voicing = payload.answerVoicing ?? toVoicing(payload.answerPitchClasses, midiRoot);
+	const voicing =
+		payload.kind === 'scale'
+			? scaleVoicing(payload.answerPitchClasses, payload.answerVoicing?.[0], midiRoot)
+			: (payload.answerVoicing ?? toVoicing(payload.answerPitchClasses, midiRoot));
 
 	switch (direction) {
 		case 'hear_name':
@@ -104,6 +107,22 @@ export function pose(
 			};
 		}
 	}
+}
+
+/**
+ * A scale is heard as one uninterrupted octave, including the tonic it arrives
+ * on. Rebuilding it here also repairs cards saved before scale voicings kept
+ * their octave carries; their first note is still the intended tonic and range.
+ */
+function scaleVoicing(
+	pitchClasses: number[],
+	storedRoot: number | undefined,
+	from: number
+): number[] {
+	if (pitchClasses.length === 0) return [];
+	const root = storedRoot ?? toVoicing([pitchClasses[0]], from)[0];
+	const degrees = toVoicing(pitchClasses, root);
+	return [...degrees, root + 12];
 }
 
 /** Spread pitch classes into a playable voicing above a root. */
