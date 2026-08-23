@@ -24,10 +24,10 @@
 	/*
 	 * The workout.
 	 *
-	 * Three to five tasks in order, each with a goal that can be met rather than a
-	 * clock that runs out. A task ends when its goal is met — ten questions
-	 * answered, a mission's bar cleared, one new thing tried — and nothing here
-	 * counts down at anything.
+	 * Three to five tasks in order, each with a goal rather than a clock that runs
+	 * out. Drills end when their count is met; after a mission attempt, the player
+	 * can keep reaching for its bar or carry the recorded verdict into the rest of
+	 * the workout. Nothing here counts down at anything.
 	 *
 	 * Two of the four kinds are asked here and two are not. The ear and the
 	 * function are the questions the play-along page cannot pose, so they are posed
@@ -542,7 +542,11 @@
 	function advanceHandsFree() {
 		if (!task || busy || finished) return;
 		if (task.kind === 'mission') {
-			void playMission(task.mission);
+			// Once the band has heard an attempt, Space and the pedal follow the
+			// primary action on screen: continue. Reopening Play Along here made an
+			// unmet mission an invisible loop with no hands-free way through it.
+			if (verdict) void finishTask(verdict);
+			else void playMission(task.mission);
 			return;
 		}
 		if (task.kind === 'new_thing') {
@@ -827,16 +831,34 @@
 					<p class="verdict" class:is-met={verdict.met} aria-live="polite">{verdict.says}</p>
 				{/if}
 
-				<button
-					class="bg-ink text-ground rounded-2xl px-8 py-4 text-lg font-semibold disabled:opacity-40"
-					onclick={() => task.kind === 'mission' && playMission(task.mission)}
-					disabled={busy}
-					aria-describedby="mission-hands-free"
-				>
-					{busy ? 'opening…' : verdict ? 'Play it again' : 'Play it'}
-				</button>
+				<div class="flex flex-wrap items-center justify-center gap-3">
+					{#if verdict}
+						<button
+							class="bg-ink text-ground rounded-2xl px-8 py-4 text-lg font-semibold disabled:opacity-40"
+							onclick={() => finishTask(verdict)}
+							disabled={busy}
+							aria-describedby="mission-hands-free"
+						>
+							{busy ? 'saving…' : 'Continue workout'}
+						</button>
+						<button
+							class="border-ground-line text-ink rounded-2xl border px-6 py-4 font-semibold disabled:opacity-40"
+							onclick={() => task.kind === 'mission' && playMission(task.mission)}
+							disabled={busy}>Play again</button
+						>
+					{:else}
+						<button
+							class="bg-ink text-ground rounded-2xl px-8 py-4 text-lg font-semibold disabled:opacity-40"
+							onclick={() => task.kind === 'mission' && playMission(task.mission)}
+							disabled={busy}
+							aria-describedby="mission-hands-free"
+						>
+							{busy ? 'opening…' : 'Play mission'}
+						</button>
+					{/if}
+				</div>
 				<span id="mission-hands-free" class="text-ink-dim font-mono text-[0.7rem]">
-					<kbd>Space</kbd> / pedal · open play along
+					<kbd>Space</kbd> / pedal · {verdict ? 'continue workout' : 'open play along'}
 				</span>
 			</section>
 
