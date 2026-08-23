@@ -3,6 +3,7 @@ import {
 	OUTBOX_KEY,
 	emptyFlush,
 	isEmpty,
+	nextOutboxBatch,
 	queue,
 	readOutbox,
 	settle,
@@ -119,6 +120,24 @@ describe('the outbox', () => {
 		const waiting = readOutbox(store);
 		expect(waiting.runs.map((r) => r.id)).toEqual(['run-a', 'run-b']);
 		expect(waiting.badges.map((b) => b.tier)).toEqual(['nice', 'cooking']);
+	});
+
+	it('drains long offline histories in endpoint-sized batches with their badges', () => {
+		const runs = Array.from({ length: 101 }, (_, index) => run(`run-${index}`));
+		const waiting = post({
+			runs,
+			badges: [{ ...badge('nice'), runId: 'run-100' }]
+		});
+		const first = nextOutboxBatch(waiting);
+		expect(first.runs).toHaveLength(100);
+		expect(first.badges).toHaveLength(0);
+
+		const second = nextOutboxBatch({
+			...waiting,
+			runs: waiting.runs.slice(100)
+		});
+		expect(second.runs.map((item) => item.id)).toEqual(['run-100']);
+		expect(second.badges).toHaveLength(1);
 	});
 
 	it('never queues the same run twice', () => {

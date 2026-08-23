@@ -174,6 +174,16 @@ export function tallyColumns(tally: Tally) {
 
 export const OUTBOX_KEY = 'backing:outbox-v1';
 
+/**
+ * Detailed attempts dominate the JSON size. Keep roughly 2–3MB of the newest
+ * detail while retaining older run summaries, which are the authoritative
+ * totals and only a few hundred bytes each. This stays below the smallest
+ * common localStorage quotas (notably Safari private contexts).
+ */
+export const MAX_OUTBOX_ATTEMPTS = 10_000;
+const MAX_OUTBOX_RUNS = 500;
+const MAX_POST_RUNS = 100;
+
 export type StorageLike = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
 export function readOutbox(store: StorageLike): Flush {
@@ -186,6 +196,24 @@ export function readOutbox(store: StorageLike): Flush {
 	}
 }
 
+/** One endpoint-sized batch, so an unusually long offline period drains safely. */
+export function nextOutboxBatch(flush: Flush): Flush {
+	const runs = flush.runs.slice(0, MAX_POST_RUNS);
+	const runIds = new Set(runs.map((run) => run.id));
+	const queuedRunIds = new Set(flush.runs.map((run) => run.id));
+	return {
+		runs,
+		badges: flush.badges
+			.filter(
+				(badge) => badge.runId === null || runIds.has(badge.runId) || !queuedRunIds.has(badge.runId)
+			)
+			.slice(0, MAX_POST_RUNS * 6),
+		blocks: flush.blocks
+			.filter((block) => runIds.has(block.runId) || !queuedRunIds.has(block.runId))
+			.slice(0, MAX_POST_RUNS)
+	};
+}
+
 /**
  * Add to whatever is already waiting.
  *
@@ -194,9 +222,8 @@ export function readOutbox(store: StorageLike): Flush {
  * there is nothing to gain by keeping the attempts apart.
  */
 export function queue(store: StorageLike, flush: Flush): Flush {
-	const merged = mergeFlush(readOutbox(store), flush);
-	write(store, merged);
-	return merged;
+	const merged = compactFlush(mergeFlush(readOutbox(store), flush));
+	return write(store, merged);
 }
 
 /**
@@ -218,8 +245,7 @@ export function settle(store: StorageLike, sent: Flush): Flush {
 		blocks: current.blocks.filter((block) => !sentBlocks.has(blockKey(block)))
 	};
 
-	write(store, left);
-	return left;
+	return write(store, left);
 }
 
 /**
@@ -240,9 +266,28 @@ const badgeKey = (badge: BadgePayload) => `${badge.chartSlug}|${badge.tier}`;
  */
 const blockKey = (block: BlockResultPayload) => `${block.blockId} ${block.runId}`;
 
-function write(store: StorageLike, flush: Flush): void {
-	if (isEmpty(flush)) store.removeItem(OUTBOX_KEY);
-	else store.setItem(OUTBOX_KEY, JSON.stringify(flush));
+function write(store: StorageLike, flush: Flush): Flush {
+	if (isEmpty(flush)) {
+		store.removeItem(OUTBOX_KEY);
+		return flush;
+	}
+
+	try {
+		store.setItem(OUTBOX_KEY, JSON.stringify(flush));
+		return flush;
+	} catch {
+		// Storage quotas vary by browser and mode. If the conservative detail
+		// budget still does not fit, preserve every run's totals and retry without
+		// the reconstructable per-chord rows instead of throwing out the sitting.
+		const summaries = { ...flush, runs: flush.runs.map((run) => ({ ...run, attempts: [] })) };
+		try {
+			store.setItem(OUTBOX_KEY, JSON.stringify(summaries));
+		} catch {
+			// An unavailable Storage (Safari private mode and hardened browsers) is
+			// allowed to refuse both writes. Playback must still be able to stop.
+		}
+		return summaries;
+	}
 }
 
 function mergeFlush(a: Flush, b: Flush): Flush {
@@ -260,6 +305,40 @@ function mergeFlush(a: Flush, b: Flush): Flush {
 	for (const block of b.blocks) if (!reached.has(blockKey(block))) blocks.push(block);
 
 	return { runs, badges, blocks };
+}
+
+/** Bound retained objects without losing the aggregate facts of a run. */
+function compactFlush(flush: Flush): Flush {
+	let budget = MAX_OUTBOX_ATTEMPTS;
+	const keptRuns = flush.runs.slice(-MAX_OUTBOX_RUNS);
+	const runs = new Array<RunPayload>(keptRuns.length);
+
+	// Spend the detail budget newest first. The old run summary stays even when
+	// its chord rows are compacted away.
+	for (let index = keptRuns.length - 1; index >= 0; index--) {
+		const run = keptRuns[index];
+		const keep = Math.min(run.attempts.length, budget);
+		const attempts =
+			keep === run.attempts.length
+				? run.attempts
+				: keep > 0
+					? run.attempts.slice(run.attempts.length - keep)
+					: [];
+		runs[index] = attempts === run.attempts ? run : { ...run, attempts };
+		budget -= keep;
+	}
+	const runIds = new Set(runs.map((run) => run.id));
+
+	return {
+		runs,
+		badges: flush.badges
+			.slice(-MAX_OUTBOX_RUNS * 6)
+			.map((badge) =>
+				badge.runId !== null && !runIds.has(badge.runId) ? { ...badge, runId: null } : badge
+			),
+		// A block can legitimately name a run already accepted in an earlier post.
+		blocks: flush.blocks.slice(-MAX_OUTBOX_RUNS)
+	};
 }
 
 /**

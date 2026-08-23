@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
 	emptyCluster,
 	flush,
+	midiEventBuffers,
 	parseMessage,
+	parseMessageInto,
 	reduce,
 	sounding,
 	type ChordEvent,
@@ -22,17 +24,15 @@ function play(events: MidiEvent[], pollAt: number[] = []): ChordEvent[] {
 		// Poll for every moment that has already passed *before* applying the
 		// event, or the poll would see a state from the future.
 		while (times.length && times[0] <= event.time) {
-			const result = flush(state, times.shift()!, WINDOW);
-			state = result.state;
-			if (result.chord) chords.push(result.chord);
+			const chord = flush(state, times.shift()!, WINDOW);
+			if (chord) chords.push(chord);
 		}
 		state = reduce(state, event);
 	}
 
 	for (const time of times) {
-		const result = flush(state, time, WINDOW);
-		state = result.state;
-		if (result.chord) chords.push(result.chord);
+		const chord = flush(state, time, WINDOW);
+		if (chord) chords.push(chord);
 	}
 
 	return chords;
@@ -91,6 +91,15 @@ describe('gathering notes into chords', () => {
 		expect(chords).toHaveLength(1);
 	});
 
+	it('does report the same chord when it is released and played again', () => {
+		const chords = play(
+			[on(50, 0), on(53, 10), off(50, 200), off(53, 210), on(50, 400), on(53, 410)],
+			[150, 600]
+		);
+		expect(chords).toHaveLength(2);
+		expect(chords[1].notes).toEqual([50, 53]);
+	});
+
 	it('says nothing when nothing is held', () => {
 		expect(play([on(50, 0), off(50, 20)], [200])).toHaveLength(0);
 	});
@@ -140,8 +149,8 @@ describe('the sustain pedal', () => {
 		for (const event of [pedal(true, 0), on(50, 10), off(50, 50), on(50, 60)]) {
 			state = reduce(state, event);
 		}
-		expect(state.sustained.has(50)).toBe(false);
-		expect(state.held.has(50)).toBe(true);
+		expect(state.sustained[50]).toBe(0);
+		expect(state.held[50]).toBe(80);
 	});
 });
 
@@ -184,5 +193,13 @@ describe('parsing raw messages', () => {
 		expect(parseMessage(new Uint8Array([0xb0, 1, 64]), 0)).toBeNull();
 		expect(parseMessage(new Uint8Array([0xf8]), 0)).toBeNull();
 		expect(parseMessage(new Uint8Array([0xe0, 0, 64]), 0)).toBeNull();
+	});
+
+	it('can decode dense input into caller-owned objects', () => {
+		const buffers = midiEventBuffers();
+		const first = parseMessageInto(new Uint8Array([0x90, 60, 100]), 5, buffers);
+		const second = parseMessageInto(new Uint8Array([0x91, 64, 90]), 8, buffers);
+		expect(first).toBe(second);
+		expect(second).toEqual({ type: 'noteon', note: 64, velocity: 90, time: 8 });
 	});
 });

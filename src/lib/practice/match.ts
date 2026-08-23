@@ -130,15 +130,35 @@ export type Attempt = {
  */
 export function judge(played: Iterable<number>, target: Target): Attempt {
 	const notes: Record<ToneKind, number> = { chord: 0, colour: 0, outside: 0 };
-	const heard = new Set<number>();
+	let heardMask = 0;
 
 	for (const note of played) {
 		const pc = ((note % 12) + 12) % 12;
-		heard.add(pc);
+		heardMask |= 1 << pc;
 		notes[classify(pc, target)]++;
 	}
+	return attemptFrom(heardMask, notes, target);
+}
 
-	const absent = target.essential.filter((pc) => !heard.has(pc));
+/**
+ * Judge an incrementally accumulated slot.
+ *
+ * The play-along records one bit and one counter when each note arrives, so a
+ * long arpeggio is never recopied or rescanned on every key press. The regular
+ * iterable API above remains useful for tests and non-realtime callers.
+ */
+export function judgeAccumulated(
+	heardMask: number,
+	chord: number,
+	colour: number,
+	outside: number,
+	target: Target
+): Attempt {
+	return attemptFrom(heardMask, { chord, colour, outside }, target);
+}
+
+function attemptFrom(heardMask: number, notes: Record<ToneKind, number>, target: Target): Attempt {
+	const absent = target.essential.filter((pc) => (heardMask & (1 << pc)) === 0);
 	const needed = target.essential.length;
 	const found = needed - absent.length;
 

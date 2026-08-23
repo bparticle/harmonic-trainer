@@ -16,6 +16,19 @@ export type MidiEvent =
 	| { type: 'noteoff'; note: number; time: number }
 	| { type: 'sustain'; down: boolean; time: number };
 
+export type MidiEventBuffers = {
+	noteon: Extract<MidiEvent, { type: 'noteon' }>;
+	noteoff: Extract<MidiEvent, { type: 'noteoff' }>;
+	sustain: Extract<MidiEvent, { type: 'sustain' }>;
+};
+
+/** Caller-owned decode targets for a zero-allocation Web MIDI listener. */
+export const midiEventBuffers = (): MidiEventBuffers => ({
+	noteon: { type: 'noteon', note: 0, velocity: 0, time: 0 },
+	noteoff: { type: 'noteoff', note: 0, time: 0 },
+	sustain: { type: 'sustain', down: false, time: 0 }
+});
+
 export type ChordEvent = {
 	/** Sounding notes, low to high. */
 	notes: number[];
@@ -26,10 +39,12 @@ export type ChordEvent = {
 };
 
 export type ClusterState = {
-	/** Notes physically held down, note number to velocity. */
-	held: Map<number, number>;
-	/** Notes released while the pedal was down, so still sounding. */
-	sustained: Set<number>;
+	/** 128 fixed MIDI slots; zero means up, otherwise the held velocity. */
+	held: Uint8Array;
+	/** Fixed flags for notes released while the pedal remains down. */
+	sustained: Uint8Array;
+	/** Number of active slots, maintained with each mutation. */
+	soundingCount: number;
 	pedalDown: boolean;
 	/** Timestamp of the most recent note-on. */
 	lastNoteOn: number;
@@ -37,100 +52,151 @@ export type ClusterState = {
 	dirty: boolean;
 	/** Peak velocity of the gesture being gathered. */
 	peakVelocity: number;
-	/** Last chord reported, so identical repeats are not re-emitted. */
-	lastEmitted: string | null;
+	/** Fixed flags for the last chord, avoiding a per-flush joined string. */
+	lastEmitted: Uint8Array;
+	hasLastEmitted: boolean;
 };
 
 export function emptyCluster(): ClusterState {
 	return {
-		held: new Map(),
-		sustained: new Set(),
+		held: new Uint8Array(128),
+		sustained: new Uint8Array(128),
+		soundingCount: 0,
 		pedalDown: false,
 		lastNoteOn: -Infinity,
 		dirty: false,
 		peakVelocity: 0,
-		lastEmitted: null
+		lastEmitted: new Uint8Array(128),
+		hasLastEmitted: false
 	};
 }
 
 /** Everything currently sounding: held plus pedal-sustained. */
 export function sounding(state: ClusterState): number[] {
-	return [...new Set([...state.held.keys(), ...state.sustained])].sort((a, b) => a - b);
+	const notes = new Array<number>(state.soundingCount);
+	for (let note = 0, index = 0; note < 128; note++) {
+		if (state.held[note] !== 0 || state.sustained[note] !== 0) notes[index++] = note;
+	}
+	return notes;
 }
 
+/**
+ * Mutate the fixed cluster storage in place.
+ *
+ * MIDI messages are an event stream, not application history. Copying two
+ * collections and a state object for every note makes garbage collection scale
+ * with playing speed; fixed 128-byte tables make the hot path allocation-free.
+ */
 export function reduce(state: ClusterState, event: MidiEvent): ClusterState {
-	const held = new Map(state.held);
-	const sustained = new Set(state.sustained);
-
+	if (
+		event.type !== 'sustain' &&
+		(!Number.isInteger(event.note) || event.note < 0 || event.note > 127)
+	) {
+		return state;
+	}
 	switch (event.type) {
 		case 'noteon': {
 			// A note-on with zero velocity is a note-off. Plenty of hardware sends
 			// them that way, including some Arturia firmware.
-			if (event.velocity === 0)
-				return reduce(state, { type: 'noteoff', note: event.note, time: event.time });
-			held.set(event.note, event.velocity);
-			sustained.delete(event.note);
-			return {
-				...state,
-				held,
-				sustained,
-				lastNoteOn: event.time,
-				dirty: true,
-				peakVelocity: Math.max(state.peakVelocity, event.velocity)
-			};
+			if (event.velocity === 0) {
+				const wasHeld = state.held[event.note] !== 0;
+				state.held[event.note] = 0;
+				if (wasHeld) {
+					if (state.pedalDown) state.sustained[event.note] = 1;
+					else state.soundingCount--;
+				}
+				if (state.soundingCount === 0) clearLastEmitted(state);
+				return state;
+			}
+			if (state.held[event.note] === 0 && state.sustained[event.note] === 0) {
+				state.soundingCount++;
+			}
+			state.held[event.note] = event.velocity;
+			state.sustained[event.note] = 0;
+			state.lastNoteOn = event.time;
+			state.dirty = true;
+			if (event.velocity > state.peakVelocity) state.peakVelocity = event.velocity;
+			return state;
 		}
 
 		case 'noteoff': {
-			held.delete(event.note);
-			if (state.pedalDown) sustained.add(event.note);
+			const wasHeld = state.held[event.note] !== 0;
+			state.held[event.note] = 0;
+			if (wasHeld) {
+				if (state.pedalDown) state.sustained[event.note] = 1;
+				else state.soundingCount--;
+			}
+			if (state.soundingCount === 0) clearLastEmitted(state);
 			// Releasing does not start a new chord — the gesture is over, and the
 			// next note-on will open the next one.
-			return { ...state, held, sustained };
+			return state;
 		}
 
 		case 'sustain': {
-			if (event.down) return { ...state, pedalDown: true };
+			if (event.down) {
+				state.pedalDown = true;
+				return state;
+			}
 			// Lifting the pedal drops everything not still under a finger, which
 			// changes what is sounding and so is worth re-reporting.
-			return {
-				...state,
-				pedalDown: false,
-				sustained: new Set(),
-				dirty: true,
-				lastNoteOn: event.time
-			};
+			state.pedalDown = false;
+			for (let note = 0; note < 128; note++) {
+				if (state.sustained[note] !== 0) state.soundingCount--;
+			}
+			state.sustained.fill(0);
+			if (state.soundingCount === 0) clearLastEmitted(state);
+			state.dirty = true;
+			state.lastNoteOn = event.time;
+			return state;
 		}
 	}
+}
+
+function clearLastEmitted(state: ClusterState): void {
+	if (!state.hasLastEmitted) return;
+	state.lastEmitted.fill(0);
+	state.hasLastEmitted = false;
 }
 
 /**
  * Report a chord if the gesture has settled.
  *
- * Returns the same state untouched when there is nothing to say, so a caller
- * can poll this on every animation frame without allocating.
+ * State is mutated in place and `null` is returned when there is nothing to
+ * say, so polling before the deadline creates no objects.
  */
-export function flush(
-	state: ClusterState,
-	now: number,
-	windowMs: number
-): { state: ClusterState; chord: ChordEvent | null } {
-	if (!state.dirty) return { state, chord: null };
-	if (now - state.lastNoteOn < windowMs) return { state, chord: null };
+export function flush(state: ClusterState, now: number, windowMs: number): ChordEvent | null {
+	if (!state.dirty || now - state.lastNoteOn < windowMs) return null;
 
-	const notes = sounding(state);
-	if (notes.length === 0) {
-		return { state: { ...state, dirty: false, peakVelocity: 0, lastEmitted: null }, chord: null };
+	const count = state.soundingCount;
+	if (count === 0) {
+		state.dirty = false;
+		state.peakVelocity = 0;
+		clearLastEmitted(state);
+		return null;
 	}
 
-	const signature = notes.join(',');
-	if (signature === state.lastEmitted) {
-		return { state: { ...state, dirty: false, peakVelocity: 0 }, chord: null };
+	let same = state.hasLastEmitted;
+	for (let note = 0; note < 128; note++) {
+		const active = state.held[note] !== 0 || state.sustained[note] !== 0;
+		if (active !== (state.lastEmitted[note] !== 0)) same = false;
 	}
 
-	return {
-		state: { ...state, dirty: false, peakVelocity: 0, lastEmitted: signature },
-		chord: { notes, time: state.lastNoteOn, velocity: state.peakVelocity || 64 }
-	};
+	const velocity = state.peakVelocity || 64;
+	state.dirty = false;
+	state.peakVelocity = 0;
+
+	if (same) return null;
+
+	const notes = new Array<number>(count);
+	state.lastEmitted.fill(0);
+	for (let note = 0, index = 0; note < 128; note++) {
+		if (state.held[note] !== 0 || state.sustained[note] !== 0) {
+			notes[index++] = note;
+			state.lastEmitted[note] = 1;
+		}
+	}
+	state.hasLastEmitted = true;
+	return { notes, time: state.lastNoteOn, velocity };
 }
 
 /** Decode a raw Web MIDI message into something the reducer understands. */
@@ -144,6 +210,40 @@ export function parseMessage(data: Uint8Array, time: number): MidiEvent | null {
 	// what half-pedalling hardware expects.
 	if (status === 0xb0 && data[1] === 64) {
 		return { type: 'sustain', down: (data[2] ?? 0) >= 64, time };
+	}
+	return null;
+}
+
+/**
+ * Decode into three reusable objects. The result is valid only until the next
+ * call with the same buffers, which is exactly the lifetime of MidiSession.push.
+ */
+export function parseMessageInto(
+	data: Uint8Array,
+	time: number,
+	buffers: MidiEventBuffers
+): MidiEvent | null {
+	if (data.length < 2) return null;
+	const status = data[0] & 0xf0;
+
+	if (status === 0x90) {
+		const event = buffers.noteon;
+		event.note = data[1];
+		event.velocity = data[2] ?? 0;
+		event.time = time;
+		return event;
+	}
+	if (status === 0x80) {
+		const event = buffers.noteoff;
+		event.note = data[1];
+		event.time = time;
+		return event;
+	}
+	if (status === 0xb0 && data[1] === 64) {
+		const event = buffers.sustain;
+		event.down = (data[2] ?? 0) >= 64;
+		event.time = time;
+		return event;
 	}
 	return null;
 }

@@ -33,6 +33,12 @@ export async function startAudio(): Promise<void> {
 	const t = await load();
 	if (!started) {
 		await t.start();
+		const context = t.getContext();
+		if (context.lookAhead < 0.12) context.lookAhead = 0.12;
+		if ('updateInterval' in context) {
+			const realtime = context as import('tone').Context;
+			if (realtime.updateInterval > 0.04) realtime.updateInterval = 0.04;
+		}
 		started = true;
 	}
 
@@ -116,6 +122,7 @@ export async function playProgression(chords: number[][], chordSeconds = 1.1): P
 }
 
 export async function stopAll(): Promise<void> {
+	cancelCountIn();
 	piano?.releaseAll();
 }
 
@@ -124,6 +131,23 @@ export async function stopAll(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 let metronomeId: number | null = null;
+const countInTimers = new Set<ReturnType<typeof setTimeout>>();
+const countInResolvers = new Set<() => void>();
+
+function later(callback: () => void, delayMs: number): void {
+	const timer = setTimeout(() => {
+		countInTimers.delete(timer);
+		callback();
+	}, delayMs);
+	countInTimers.add(timer);
+}
+
+function cancelCountIn(): void {
+	for (const timer of countInTimers) clearTimeout(timer);
+	countInTimers.clear();
+	for (const resolve of countInResolvers) resolve();
+	countInResolvers.clear();
+}
 
 /**
  * A plain click on every beat, accented on the downbeat.
@@ -161,19 +185,28 @@ export function stopMetronome(): void {
 export async function countIn(bpm: number, beats = 4): Promise<void> {
 	await startAudio();
 	if (!click) return;
+	cancelCountIn();
 
 	const secondsPerBeat = 60 / bpm;
 	for (let beat = 0; beat < beats; beat++) {
 		const at = beat * secondsPerBeat * 1000;
-		setTimeout(() => {
+		later(() => {
 			click?.triggerAttackRelease(beat === 0 ? 'C3' : 'C2', 0.05, undefined, 0.8);
 		}, at);
 	}
-	await new Promise((resolve) => setTimeout(resolve, beats * secondsPerBeat * 1000));
+	await new Promise<void>((resolve) => {
+		const finish = () => {
+			countInResolvers.delete(finish);
+			resolve();
+		};
+		countInResolvers.add(finish);
+		later(finish, beats * secondsPerBeat * 1000);
+	});
 }
 
 /** Release everything and drop the nodes. */
 export function dispose(): void {
+	cancelCountIn();
 	stopMetronome();
 	piano?.dispose();
 	click?.dispose();

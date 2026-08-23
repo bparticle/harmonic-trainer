@@ -1,7 +1,8 @@
 import {
 	emptyCluster,
 	flush,
-	parseMessage,
+	midiEventBuffers,
+	parseMessageInto,
 	reduce as reduceCluster,
 	sounding,
 	type ChordEvent,
@@ -34,6 +35,9 @@ export type MidiDevice = { id: string; name: string; manufacturer: string };
 type PedalHandler = (down: boolean) => boolean | void;
 type Subscription<T> = { handler: T; priority: number };
 
+/** About 70 minutes at a very dense 48 relevant MIDI messages per second. */
+const MAX_RECORDED_EVENTS = 200_000;
+
 export class MidiSession {
 	status = $state<MidiStatus>('idle');
 	devices = $state<MidiDevice[]>([]);
@@ -52,13 +56,17 @@ export class MidiSession {
 
 	#access: MIDIAccess | null = null;
 	#cluster: ClusterState = emptyCluster();
+	#incoming = midiEventBuffers();
 	#timer: ReturnType<typeof setTimeout> | null = null;
+	#liveFrame: number | null = null;
 	#chordHandlers = new Set<(chord: ChordEvent) => void>();
-	#pedalHandlers = new Set<Subscription<PedalHandler>>();
+	/** Kept sorted at subscription time, not copied and sorted on every press. */
+	#pedalHandlers: Subscription<PedalHandler>[] = [];
 	#noteHandlers = new Set<(note: number, time: number) => void>();
 
 	/** Recording */
 	recording = $state(false);
+	recordingTruncated = $state(false);
 	#recorded: MidiEvent[] = [];
 	#recordStart = 0;
 
@@ -170,8 +178,11 @@ export class MidiSession {
 
 	#receive(event: MIDIMessageEvent) {
 		if (!event.data) return;
-		const time = performance.now() + this.latencyOffsetMs;
-		const parsed = parseMessage(event.data, time);
+		// The browser stamps arrival before our callback runs. Using that stamp
+		// keeps a main-thread pause from making an already-received chord look late.
+		const receivedAt = event.timeStamp > 0 ? event.timeStamp : performance.now();
+		const time = receivedAt + this.latencyOffsetMs;
+		const parsed = parseMessageInto(event.data, time, this.#incoming);
 		if (parsed) this.push(parsed);
 	}
 
@@ -182,12 +193,23 @@ export class MidiSession {
 	 */
 	push(event: MidiEvent) {
 		if (this.recording) {
-			this.#recorded.push({ ...event, time: event.time - this.#recordStart });
+			if (this.#recorded.length < MAX_RECORDED_EVENTS) {
+				this.#recorded.push({ ...event, time: event.time - this.#recordStart });
+			} else {
+				this.recordingTruncated = true;
+			}
 		}
 
 		this.#cluster = reduceCluster(this.#cluster, event);
-		this.live = sounding(this.#cluster);
-		this.#scheduleFlush();
+		this.#scheduleLiveUpdate();
+		// Only these events move the clustering deadline. Releases used to clear
+		// and recreate the same timer, extending a chord window under dense input.
+		if (
+			(event.type === 'noteon' && event.velocity > 0) ||
+			(event.type === 'sustain' && !event.down)
+		) {
+			this.#scheduleFlush();
+		}
 
 		/*
 		 * Reported before clustering settles anything, and carrying the event's own
@@ -200,14 +222,13 @@ export class MidiSession {
 		 * same rule has to be applied here or a release counts as a press.
 		 */
 		if (event.type === 'noteon' && event.velocity > 0) {
-			for (const handler of [...this.#noteHandlers]) handler(event.note, event.time);
+			for (const handler of this.#noteHandlers) handler(event.note, event.time);
 		}
 
 		if (event.type === 'sustain') {
 			this.pedalDown = event.down;
 			if (event.down) {
-				const subscriptions = [...this.#pedalHandlers].sort((a, b) => b.priority - a.priority);
-				for (const { handler } of subscriptions) {
+				for (const { handler } of this.#pedalHandlers) {
 					// A high-priority layer such as onboarding can claim the press so the
 					// page underneath does not start music or answer a card as well.
 					if (handler(true) === true) break;
@@ -236,8 +257,18 @@ export class MidiSession {
 	 */
 	onPedal(handler: PedalHandler, options: { priority?: number } = {}): () => void {
 		const subscription = { handler, priority: options.priority ?? 0 };
-		this.#pedalHandlers.add(subscription);
-		return () => this.#pedalHandlers.delete(subscription);
+		let index = 0;
+		while (
+			index < this.#pedalHandlers.length &&
+			this.#pedalHandlers[index].priority >= subscription.priority
+		) {
+			index++;
+		}
+		this.#pedalHandlers.splice(index, 0, subscription);
+		return () => {
+			const found = this.#pedalHandlers.indexOf(subscription);
+			if (found !== -1) this.#pedalHandlers.splice(found, 1);
+		};
 	}
 
 	/**
@@ -265,7 +296,10 @@ export class MidiSession {
 	 */
 	#scheduleFlush() {
 		if (!this.#cluster.dirty) return;
-		if (this.#timer) clearTimeout(this.#timer);
+		// Keep one wake-up in flight. Every note used to cancel and allocate a new
+		// timer; under a dense run the original wake-up can simply check the newer
+		// deadline and schedule the remainder.
+		if (this.#timer) return;
 		const remaining = this.#cluster.lastNoteOn + this.windowMs - performance.now();
 		this.#timer = setTimeout(
 			() => {
@@ -277,29 +311,60 @@ export class MidiSession {
 		);
 	}
 
+	/**
+	 * The live keys are visual state, so one snapshot per paint is sufficient.
+	 * This avoids allocating and publishing a sorted array for every MIDI byte
+	 * burst while still showing the latest state on the very next frame.
+	 */
+	#scheduleLiveUpdate() {
+		if (this.#liveFrame !== null) return;
+		if (typeof requestAnimationFrame === 'undefined') {
+			this.live = sounding(this.#cluster);
+			return;
+		}
+		this.#liveFrame = requestAnimationFrame(() => {
+			this.#liveFrame = null;
+			this.live = sounding(this.#cluster);
+		});
+	}
+
 	#tick() {
-		const result = flush(this.#cluster, performance.now(), this.windowMs);
-		this.#cluster = result.state;
-		if (result.chord) {
-			this.lastChord = result.chord;
-			for (const handler of [...this.#chordHandlers]) handler(result.chord);
+		const chord = flush(this.#cluster, performance.now(), this.windowMs);
+		if (chord) {
+			this.lastChord = chord;
+			for (const handler of this.#chordHandlers) handler(chord);
 		}
 	}
 
 	startRecording(now = performance.now()) {
 		this.#recorded = [];
 		this.#recordStart = now;
+		this.recordingTruncated = false;
 		this.recording = true;
 	}
 
-	stopRecording(now = performance.now()): { events: MidiEvent[]; durationMs: number } {
+	stopRecording(now = performance.now()): {
+		events: MidiEvent[];
+		durationMs: number;
+		truncated: boolean;
+	} {
 		this.recording = false;
 		const events = this.#recorded;
 		this.#recorded = [];
-		return { events, durationMs: Math.max(0, now - this.#recordStart) };
+		return {
+			events,
+			durationMs: Math.max(0, now - this.#recordStart),
+			truncated: this.recordingTruncated
+		};
 	}
 
 	reset() {
+		if (this.#timer) clearTimeout(this.#timer);
+		this.#timer = null;
+		if (this.#liveFrame !== null && typeof cancelAnimationFrame !== 'undefined') {
+			cancelAnimationFrame(this.#liveFrame);
+		}
+		this.#liveFrame = null;
 		this.#cluster = emptyCluster();
 		this.live = [];
 		this.lastChord = null;
@@ -309,12 +374,19 @@ export class MidiSession {
 	destroy() {
 		if (this.#timer) clearTimeout(this.#timer);
 		this.#timer = null;
+		if (this.#liveFrame !== null && typeof cancelAnimationFrame !== 'undefined') {
+			cancelAnimationFrame(this.#liveFrame);
+		}
+		this.#liveFrame = null;
 		if (this.#access) {
 			this.#access.onstatechange = null;
 			this.#access.inputs.forEach((input) => (input.onmidimessage = null));
 		}
+		this.#access = null;
+		this.#onDeviceChosen = null;
 		this.#chordHandlers.clear();
-		this.#pedalHandlers.clear();
+		this.#pedalHandlers.length = 0;
 		this.#noteHandlers.clear();
+		this.#recorded.length = 0;
 	}
 }

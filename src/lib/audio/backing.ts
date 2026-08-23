@@ -53,6 +53,15 @@ const DEFAULT_BEATS_PER_BAR = 4;
  */
 const START_BUFFER = '+0.1';
 
+/**
+ * Tone normally schedules 100ms ahead. That is easy to overrun when a dense
+ * groove, MIDI scoring and canvas effects all land on the main thread together.
+ * Backing playback does not need instrument-monitoring latency, so another 50ms
+ * of headroom is a much better trade than a late audio event.
+ */
+const SCHEDULER_LOOK_AHEAD = 0.15;
+const SCHEDULER_UPDATE_INTERVAL = 0.04;
+
 let tone: Tone | null = null;
 
 async function load(): Promise<Tone> {
@@ -62,8 +71,10 @@ async function load(): Promise<Tone> {
 
 type Voices = {
 	bass: import('tone').MonoSynth;
-	ride: import('tone').MetalSynth;
-	hihat: import('tone').MetalSynth;
+	ride: import('tone').ToneAudioBuffer;
+	hihat: import('tone').ToneAudioBuffer;
+	/** Short-lived buffer sources, so stop and pause can silence their tails. */
+	cymbals: Set<import('tone').ToneBufferSource>;
 	kick: import('tone').MembraneSynth;
 	snare: import('tone').NoiseSynth;
 	comp: import('tone').PolySynth;
@@ -73,7 +84,90 @@ type Voices = {
 
 const midiToFrequency = (note: number) => 440 * Math.pow(2, (note - 69) / 12);
 
-function build(t: Tone): Voices {
+type CymbalSamples = { ride: Float32Array; hihat: Float32Array };
+
+let cymbalSamples: Promise<CymbalSamples> | null = null;
+
+/**
+ * Render the expensive six-voice FM cymbals once, then reuse their PCM.
+ *
+ * A MetalSynth attack creates six FM oscillators (twelve native oscillators).
+ * Rebuilding that graph for every ride or hi-hat hit is the dominant audio
+ * cost at high tempo. Offline rendering keeps the exact existing timbre while
+ * reducing every live hit to one AudioBufferSourceNode.
+ */
+async function renderCymbals(t: Tone): Promise<CymbalSamples> {
+	if (cymbalSamples) return cymbalSamples;
+
+	const sampleRate = t.getContext().sampleRate;
+	const render = async (
+		options: ConstructorParameters<typeof t.MetalSynth>[0],
+		duration: number,
+		renderFor: number
+	): Promise<Float32Array> => {
+		const rendered = await t.Offline(
+			() => {
+				const synth = new t.MetalSynth(options).toDestination();
+				synth.triggerAttackRelease('C6', duration, 0, 1);
+			},
+			renderFor,
+			1,
+			sampleRate
+		);
+		const samples = new Float32Array(rendered.toArray(0) as Float32Array);
+		rendered.dispose();
+		return samples;
+	};
+
+	const pending = Promise.all([
+		render(
+			{
+				envelope: { attack: 0.001, decay: 0.62, release: 0.16 },
+				harmonicity: 5.1,
+				modulationIndex: 32,
+				resonance: 5000,
+				octaves: 1.5
+			},
+			0.32,
+			0.82
+		),
+		render(
+			{
+				envelope: { attack: 0.001, decay: 0.09, release: 0.02 },
+				harmonicity: 5.1,
+				modulationIndex: 40,
+				resonance: 7000,
+				octaves: 1.2
+			},
+			0.06,
+			0.14
+		)
+	]).then(([ride, hihat]) => ({ ride, hihat }));
+	cymbalSamples = pending.catch((error) => {
+		// A transient OfflineAudioContext failure must not poison every later play
+		// attempt for the lifetime of the tab.
+		cymbalSamples = null;
+		throw error;
+	});
+
+	return cymbalSamples;
+}
+
+function configureScheduler(t: Tone): void {
+	const context = t.getContext();
+	if (context.lookAhead < SCHEDULER_LOOK_AHEAD) context.lookAhead = SCHEDULER_LOOK_AHEAD;
+	// OfflineContext deliberately has no ticker; start() always gives us the
+	// realtime Context, but Tone types the global getter as their common base.
+	if ('updateInterval' in context) {
+		const realtime = context as import('tone').Context;
+		if (realtime.updateInterval > SCHEDULER_UPDATE_INTERVAL) {
+			realtime.updateInterval = SCHEDULER_UPDATE_INTERVAL;
+		}
+	}
+}
+
+async function build(t: Tone): Promise<Voices> {
+	const samples = await renderCymbals(t);
 	const gains: Record<Part, import('tone').Gain> = {
 		bass: new t.Gain(1).toDestination(),
 		drums: new t.Gain(1).toDestination(),
@@ -101,36 +195,9 @@ function build(t: Tone): Voices {
 	}).connect(gains.bass);
 	bass.volume.value = -6;
 
-	/*
-	 * Cymbals.
-	 *
-	 * MetalSynth is a quiet instrument by nature — six detuned square waves
-	 * through a highpass — and the first pass trimmed it a further 30dB on top of
-	 * that. Against a bass at -6 the ride simply was not there, which is exactly
-	 * how it was reported.
-	 *
-	 * These numbers were set by metering each part alone at the destination
-	 * rather than by ear-guessing: the kit now peaks about 2dB under the bass.
-	 * Cymbals are transients, so peaking a little under a sustained bass note is
-	 * what "level with it" sounds like.
-	 */
-	const ride = new t.MetalSynth({
-		envelope: { attack: 0.001, decay: 0.62, release: 0.16 },
-		harmonicity: 5.1,
-		modulationIndex: 32,
-		resonance: 5000,
-		octaves: 1.5
-	}).connect(gains.drums);
-	ride.volume.value = -5;
-
-	const hihat = new t.MetalSynth({
-		envelope: { attack: 0.001, decay: 0.09, release: 0.02 },
-		harmonicity: 5.1,
-		modulationIndex: 40,
-		resonance: 7000,
-		octaves: 1.2
-	}).connect(gains.drums);
-	hihat.volume.value = -4;
+	const ride = t.ToneAudioBuffer.fromArray(samples.ride);
+	const hihat = t.ToneAudioBuffer.fromArray(samples.hihat);
+	const cymbals = new Set<import('tone').ToneBufferSource>();
 
 	const kick = new t.MembraneSynth({
 		pitchDecay: 0.04,
@@ -168,7 +235,7 @@ function build(t: Tone): Voices {
 	}).connect(gains.metronome);
 	click.volume.value = -12;
 
-	return { bass, ride, hihat, kick, snare, comp, click, gains };
+	return { bass, ride, hihat, cymbals, kick, snare, comp, click, gains };
 }
 
 /** Every event the track will play, positioned in beats from the top of the form. */
@@ -185,12 +252,61 @@ export type Event =
  * than seconds — and musical time is what rescales when the tempo slider moves
  * under a track that is already playing.
  */
-type Scheduled<T> = T & { time: Record<string, number> };
+type MusicalTime = { '4n': number };
 
-const at = <T extends { beat: number }>(event: T): Scheduled<T> => ({
-	...event,
-	time: { '4n': event.beat }
-});
+type ScheduledEvent =
+	| (Extract<Event, { kind: 'bass' }> & {
+			time: MusicalTime;
+			frequency: number;
+			durationTime: MusicalTime;
+	  })
+	| (Extract<Event, { kind: 'drum' }> & { time: MusicalTime })
+	| (Extract<Event, { kind: 'comp' }> & {
+			time: MusicalTime;
+			frequencies: number[];
+			durationTime: MusicalTime;
+	  })
+	| (Extract<Event, { kind: 'click' }> & {
+			time: MusicalTime;
+			note: 'C3' | 'C2';
+			velocity: number;
+	  });
+
+/** Precompute every conversion Tone would otherwise repeat in the audio callback. */
+function schedule(event: Event): ScheduledEvent {
+	const time = { '4n': event.beat };
+	switch (event.kind) {
+		case 'bass':
+			return {
+				...event,
+				time,
+				frequency: midiToFrequency(event.midi),
+				durationTime: { '4n': event.duration }
+			};
+		case 'drum':
+			return { ...event, time };
+		case 'comp':
+			return {
+				...event,
+				time,
+				frequencies: event.hit.notes.map(midiToFrequency),
+				durationTime: { '4n': event.hit.duration }
+			};
+		case 'click':
+			return {
+				...event,
+				time,
+				note: event.accent ? 'C3' : 'C2',
+				velocity: event.accent ? 0.9 : 0.5
+			};
+	}
+}
+
+function partFor(event: Event): Part {
+	if (event.kind === 'drum') return 'drums';
+	if (event.kind === 'click') return 'metronome';
+	return event.kind;
+}
 
 function score(config: BackingConfig): { events: Event[]; beats: number } {
 	const beatsPerBar = config.beatsPerBar ?? DEFAULT_BEATS_PER_BAR;
@@ -280,6 +396,8 @@ export type BackingState = {
 	bar: number;
 };
 
+export type BackingPosition = { beat: number; bar: number; pass: number };
+
 /**
  * A running backing track.
  *
@@ -288,9 +406,14 @@ export type BackingState = {
  */
 export class BackingTrack {
 	#voices: Voices | null = null;
+	#voicesPromise: Promise<Voices> | null = null;
+	#startGeneration = 0;
+	#disposed = false;
 	#part: import('tone').Part | null = null;
 	#countPart: import('tone').Part | null = null;
-	#reporter: number | null = null;
+	#reportFrame: number | null = null;
+	#lastReportedBeat: number | null = null;
+	#countInEndId: number | null = null;
 
 	#config: BackingConfig | null = null;
 	#playing = false;
@@ -331,33 +454,36 @@ export class BackingTrack {
 	/**
 	 * Where the music actually is, read straight off the audio clock.
 	 *
-	 * `onBeat` cannot answer this. It is delivered through `Draw`, which runs on
-	 * animation frames and therefore stops entirely when the tab is not
-	 * compositing — correct for a highlight, and quietly catastrophic for
-	 * anything being *recorded* against the position, which would simply stop
-	 * happening with no sign that it had.
+	 * `onBeat` cannot answer this. It is delivered from a coalescing animation
+	 * frame reporter, which correctly stops when the tab is not compositing.
+	 * Anything being recorded must keep reading the audio clock directly.
 	 *
 	 * So this is a pull rather than a push: whoever needs to know where the form
 	 * is asks at the moment they need it, on their own clock. `pass` counts
 	 * complete times round the loop, which is what makes the same bar on the
 	 * second time round a different event from the first.
 	 */
-	get position(): { beat: number; bar: number; pass: number } | null {
-		if (!tone || !this.#playing || this.#beats === 0) return null;
+	get position(): BackingPosition | null {
+		const position: BackingPosition = { beat: 0, bar: 0, pass: 0 };
+		return this.readPosition(position) ? position : null;
+	}
+
+	/** Fill caller-owned storage for the per-MIDI-event hot path. */
+	readPosition(position: BackingPosition): boolean {
+		if (!tone || !this.#playing || this.#beats === 0) return false;
 
 		const transport = tone.getTransport();
 		const beatsPerBar = this.#config?.beatsPerBar ?? DEFAULT_BEATS_PER_BAR;
 		const elapsed = transport.ticks / transport.PPQ - this.#countInBeats;
 		// Still counting in: the form has not started, so there is no position in
 		// it to report and nothing played yet belongs to any bar of it.
-		if (elapsed < 0) return null;
+		if (elapsed < 0) return false;
 
 		const beat = elapsed % this.#beats;
-		return {
-			beat,
-			bar: Math.floor(beat / beatsPerBar) + 1,
-			pass: Math.floor(elapsed / this.#beats)
-		};
+		position.beat = beat;
+		position.bar = Math.floor(beat / beatsPerBar) + 1;
+		position.pass = Math.floor(elapsed / this.#beats);
+		return true;
 	}
 
 	get beatsPerLoop(): number {
@@ -371,11 +497,27 @@ export class BackingTrack {
 	async start(config: BackingConfig): Promise<void> {
 		const t = await load();
 		await t.start();
+		configureScheduler(t);
 
 		this.stop();
+		this.#disposed = false;
+		const generation = this.#startGeneration;
 
 		this.#config = config;
-		if (!this.#voices) this.#voices = build(t);
+		if (!this.#voices) {
+			this.#voicesPromise ??= build(t)
+				.then((voices) => {
+					if (this.#disposed) disposeVoices(voices);
+					else this.#voices = voices;
+					return voices;
+				})
+				.finally(() => (this.#voicesPromise = null));
+			await this.#voicesPromise;
+		}
+		// Offline cymbal rendering yields. A newer start/stop owns the transport if
+		// it arrived while this one was waiting, so this invocation must not install
+		// another Part when it wakes up.
+		if (generation !== this.#startGeneration || !this.#voices) return;
 		const voices = this.#voices;
 		this.applyMutes();
 
@@ -390,18 +532,25 @@ export class BackingTrack {
 		transport.bpm.value = config.bpm;
 		transport.position = 0;
 
-		this.#part = new t.Part<Scheduled<Event>>((time, event) => {
-			play(voices, event, time);
-		}, events.map(at));
+		this.#part = new t.Part<ScheduledEvent>((time, event) => {
+			// A zero gain still leaves every oscillator and AudioBufferSource running.
+			// Muting at the callback boundary removes the expensive work while keeping
+			// the schedule live, so a part can still be unmuted without a rebuild.
+			const part = partFor(event);
+			if (this.#muted[part] || this.#level[part] === 0) return;
+			play(t, voices, event, time);
+		}, events.map(schedule));
 		this.#part.loop = true;
 		this.#part.loopStart = 0;
 		this.#part.loopEnd = { '4n': beats };
 		this.#part.start({ '4n': this.#countInBeats });
 
 		if (this.#countInBeats > 0) {
-			const clicks = Array.from({ length: this.#countInBeats }, (_, beat) =>
-				at({ beat, accent: beat % beatsPerBar === 0 })
-			);
+			const clicks = Array.from({ length: this.#countInBeats }, (_, beat) => ({
+				beat,
+				accent: beat % beatsPerBar === 0,
+				time: { '4n': beat }
+			}));
 			this.#countPart = new t.Part<(typeof clicks)[number]>((time, click) => {
 				voices.click.triggerAttackRelease(
 					click.accent ? 'C3' : 'C2',
@@ -418,13 +567,14 @@ export class BackingTrack {
 			/*
 			 * Hand the metronome back to whatever it was set to, on the audio clock.
 			 *
-			 * This used to happen inside the draw callback below, which meant that
+			 * This used to happen inside the visual beat callback, which meant that
 			 * with the tab in the background the click would carry on for as long as
 			 * you were away — rAF does not run there. Anything with a consequence
 			 * belongs on the transport; only drawing belongs in Draw.
 			 */
-			transport.scheduleOnce(
+			this.#countInEndId = transport.scheduleOnce(
 				() => {
+					this.#countInEndId = null;
 					this.applyMutes();
 					this.onStart?.();
 				},
@@ -432,20 +582,9 @@ export class BackingTrack {
 			);
 		}
 
-		this.#reporter = transport.scheduleRepeat((time) => {
-			const beat = transport.ticks / transport.PPQ - this.#countInBeats;
-			const position: BackingState = {
-				playing: true,
-				beat: beat < 0 ? beat : beat % beats,
-				bar: beat < 0 ? 0 : Math.floor((beat % beats) / beatsPerBar) + 1
-			};
-			// The chart highlight is the one thing here that is purely visual, so it
-			// is the one thing scheduled for the next frame rather than the next tick.
-			t.getDraw().schedule(() => this.onBeat?.(position), time);
-		}, '4n');
-
 		this.#playing = true;
 		transport.start(START_BUFFER);
+		this.startReporter();
 		// The count-in counts as playing for this purpose: dozing off during the
 		// four clicks before the tune starts would be a strange place to draw
 		// the line.
@@ -453,16 +592,18 @@ export class BackingTrack {
 	}
 
 	stop(): void {
+		this.#startGeneration++;
 		this.#playing = false;
 		this.#paused = false;
+		this.stopReporter();
 		this.#wakeLock.release();
 		if (!tone) return;
 		const transport = tone.getTransport();
 		transport.stop();
 		transport.position = 0;
-		if (this.#reporter !== null) {
-			transport.clear(this.#reporter);
-			this.#reporter = null;
+		if (this.#countInEndId !== null) {
+			transport.clear(this.#countInEndId);
+			this.#countInEndId = null;
 		}
 		this.#part?.dispose();
 		this.#countPart?.dispose();
@@ -470,6 +611,7 @@ export class BackingTrack {
 		this.#countPart = null;
 		this.#voices?.bass.triggerRelease();
 		this.#voices?.comp.releaseAll();
+		if (this.#voices) stopCymbals(this.#voices);
 		this.onBeat?.({ playing: false, beat: 0, bar: 0 });
 	}
 
@@ -486,12 +628,14 @@ export class BackingTrack {
 		if (!this.#playing) return;
 		this.#playing = false;
 		this.#paused = true;
+		this.stopReporter();
 		this.#wakeLock.release();
 		tone?.getTransport().pause();
 		// A note left ringing into the silence would be one more thing to listen
 		// past while trying to hear the shape just landed on.
 		this.#voices?.bass.triggerRelease();
 		this.#voices?.comp.releaseAll();
+		if (this.#voices) stopCymbals(this.#voices);
 	}
 
 	/**
@@ -510,6 +654,7 @@ export class BackingTrack {
 			this.#paused = false;
 			this.#playing = true;
 			tone?.getTransport().start(START_BUFFER);
+			this.startReporter();
 			void this.#wakeLock.request();
 			return true;
 		}
@@ -527,6 +672,11 @@ export class BackingTrack {
 	/** Mute or unmute a part. Instant, because it is a gain and not a reschedule. */
 	setMuted(part: Part, muted: boolean): void {
 		this.#muted[part] = muted;
+		if (muted && this.#voices) {
+			if (part === 'bass') this.#voices.bass.triggerRelease();
+			else if (part === 'comp') this.#voices.comp.releaseAll();
+			else if (part === 'drums') stopCymbals(this.#voices);
+		}
 		this.applyMutes();
 	}
 
@@ -551,6 +701,56 @@ export class BackingTrack {
 	}
 
 	/**
+	 * Report the audio-clock position at most once per paint frame.
+	 *
+	 * Tone.Draw stores scheduled callbacks on an unbounded timeline. A callback
+	 * for every beat therefore piles up while rendering is suspended in a hidden
+	 * tab, then has to be drained when rendering resumes. Pulling the current
+	 * position here keeps exactly one animation-frame handle alive instead.
+	 */
+	private startReporter(): void {
+		this.stopReporter();
+		if (typeof requestAnimationFrame === 'undefined') return;
+
+		const report = () => {
+			this.#reportFrame = null;
+			if (!tone || !this.#playing || this.#beats === 0) return;
+
+			const transport = tone.getTransport();
+			if (transport.state === 'started') {
+				const beatsPerBar = this.#config?.beatsPerBar ?? DEFAULT_BEATS_PER_BAR;
+				const elapsed = transport.ticks / transport.PPQ - this.#countInBeats;
+				const absoluteBeat = Math.floor(elapsed + 1e-6);
+
+				if (absoluteBeat !== this.#lastReportedBeat) {
+					this.#lastReportedBeat = absoluteBeat;
+					const beat =
+						absoluteBeat < 0
+							? absoluteBeat
+							: ((absoluteBeat % this.#beats) + this.#beats) % this.#beats;
+					this.onBeat?.({
+						playing: true,
+						beat,
+						bar: absoluteBeat < 0 ? 0 : Math.floor(beat / beatsPerBar) + 1
+					});
+				}
+			}
+
+			this.#reportFrame = requestAnimationFrame(report);
+		};
+
+		this.#reportFrame = requestAnimationFrame(report);
+	}
+
+	private stopReporter(): void {
+		if (this.#reportFrame !== null && typeof cancelAnimationFrame !== 'undefined') {
+			cancelAnimationFrame(this.#reportFrame);
+		}
+		this.#reportFrame = null;
+		this.#lastReportedBeat = null;
+	}
+
+	/**
 	 * Anything that changes the notes — the groove, loop points, the chart itself —
 	 * has to be rebuilt. Restarted from the top rather than spliced in, because
 	 * a loop that changes length underneath you is disorienting to play over.
@@ -563,21 +763,11 @@ export class BackingTrack {
 	}
 
 	dispose(): void {
+		this.#disposed = true;
 		this.stop();
 		this.#wakeLock.dispose();
 		if (this.#voices) {
-			for (const voice of [
-				this.#voices.bass,
-				this.#voices.ride,
-				this.#voices.hihat,
-				this.#voices.kick,
-				this.#voices.snare,
-				this.#voices.comp,
-				this.#voices.click
-			]) {
-				voice.dispose();
-			}
-			for (const gain of Object.values(this.#voices.gains)) gain.dispose();
+			disposeVoices(this.#voices);
 			this.#voices = null;
 		}
 	}
@@ -591,40 +781,74 @@ export class BackingTrack {
 	}
 }
 
-function play(voices: Voices, event: Event, time: number): void {
+function stopCymbals(voices: Voices): void {
+	for (const source of voices.cymbals) {
+		voices.cymbals.delete(source);
+		source.stop();
+		source.dispose();
+	}
+}
+
+function disposeVoices(voices: Voices): void {
+	stopCymbals(voices);
+	for (const voice of [
+		voices.bass,
+		voices.ride,
+		voices.hihat,
+		voices.kick,
+		voices.snare,
+		voices.comp,
+		voices.click
+	]) {
+		voice.dispose();
+	}
+	for (const gain of Object.values(voices.gains)) gain.dispose();
+}
+
+function playCymbal(
+	t: Tone,
+	voices: Voices,
+	buffer: import('tone').ToneAudioBuffer,
+	time: number,
+	velocity: number,
+	volumeDb: number
+): void {
+	let source: import('tone').ToneBufferSource;
+	source = new t.ToneBufferSource({
+		url: buffer,
+		onended: () => {
+			if (voices.cymbals.delete(source)) source.dispose();
+		}
+	}).connect(voices.gains.drums);
+	voices.cymbals.add(source);
+	// `start` applies the gain inside the source's existing envelope, avoiding a
+	// separate Gain node or automation object for every hit.
+	source.start(time, 0, undefined, velocity * Math.pow(10, volumeDb / 20));
+}
+
+function play(t: Tone, voices: Voices, event: ScheduledEvent, time: number): void {
 	switch (event.kind) {
 		case 'bass':
-			voices.bass.triggerAttackRelease(
-				midiToFrequency(event.midi),
-				{ '4n': event.duration },
-				time,
-				0.85
-			);
+			voices.bass.triggerAttackRelease(event.frequency, event.durationTime, time, 0.85);
 			break;
 		case 'drum': {
 			const { instrument, velocity } = event.hit;
-			if (instrument === 'ride') voices.ride.triggerAttackRelease('C6', 0.32, time, velocity);
-			else if (instrument === 'hihat')
-				voices.hihat.triggerAttackRelease('C6', 0.06, time, velocity);
+			if (instrument === 'ride') playCymbal(t, voices, voices.ride, time, velocity, -5);
+			else if (instrument === 'hihat') playCymbal(t, voices, voices.hihat, time, velocity, -4);
 			else if (instrument === 'kick') voices.kick.triggerAttackRelease('C1', 0.18, time, velocity);
 			else voices.snare.triggerAttackRelease(0.1, time, velocity);
 			break;
 		}
 		case 'comp':
 			voices.comp.triggerAttackRelease(
-				event.hit.notes.map(midiToFrequency),
-				{ '4n': event.hit.duration },
+				event.frequencies,
+				event.durationTime,
 				time,
 				event.hit.velocity
 			);
 			break;
 		case 'click':
-			voices.click.triggerAttackRelease(
-				event.accent ? 'C3' : 'C2',
-				0.05,
-				time,
-				event.accent ? 0.9 : 0.5
-			);
+			voices.click.triggerAttackRelease(event.note, 0.05, time, event.velocity);
 			break;
 	}
 }

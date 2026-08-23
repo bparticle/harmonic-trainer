@@ -39,8 +39,10 @@
 		confettiFall,
 		fade,
 		landBurst,
+		recycle,
 		sparkBurst,
 		step,
+		trimOldest,
 		type Particle
 	} from '$lib/effects/sparkle';
 
@@ -86,7 +88,7 @@
 	} = $props();
 
 	/** Past this the frame budget matters more than the extra sparks. */
-	const CEILING = 900;
+	const DEFAULT_CEILING = 480;
 
 	let canvas = $state<HTMLCanvasElement | null>(null);
 	let auraEl = $state<HTMLDivElement | null>(null);
@@ -101,12 +103,17 @@
 	let lastFrameAt = 0;
 	let width = 0;
 	let height = 0;
+	let ceiling = DEFAULT_CEILING;
+	let dprLimit = 1.75;
 
 	/** The palette as 8-bit sRGB, so a per-particle draw is a string join and no maths. */
 	const rgb = $derived(palette.map(oklchToRgb));
+	/** Stable CSS colours; opacity is Canvas globalAlpha in the frame hot path. */
+	const rgbCss = $derived(rgb.map(({ r, g, b }) => `rgb(${r} ${g} ${b})`));
 
 	let nextCalloutId = 0;
 	let callouts = $state<Array<{ id: number; text: string; pc: number; kind: CalloutKind }>>([]);
+	const calloutTimers = new Set<ReturnType<typeof setTimeout>>();
 
 	/*
 	 * How bright the edges glow.
@@ -117,6 +124,11 @@
 	const auraBase = $derived(live && pc !== null ? 0.34 + 0.62 * intensity : 0);
 
 	onMount(() => {
+		const cores = navigator.hardwareConcurrency || 4;
+		// Canvas fill-rate and particle count are both bounded more tightly on the
+		// dual/quad-core machines most likely to share a core with the audio thread.
+		ceiling = cores <= 4 ? 320 : DEFAULT_CEILING;
+		dprLimit = cores <= 4 ? 1.35 : 1.75;
 		const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 		motionOK = !reduced.matches;
 		const onPreference = () => {
@@ -133,8 +145,7 @@
 		return () => {
 			reduced.removeEventListener('change', onPreference);
 			window.removeEventListener('resize', resize);
-			if (frame) cancelAnimationFrame(frame);
-			frame = 0;
+			clear();
 		};
 	});
 
@@ -155,13 +166,48 @@
 		if (!live) clear();
 	});
 
+	let beatPulse: Animation | null = null;
+	let downbeatPulse: Animation | null = null;
+
+	// Build two reusable compositor animations once per aura element. High BPM
+	// used to allocate and discard a new Animation plus keyframes on every beat.
+	$effect(() => {
+		const element = auraEl;
+		if (!element) return;
+		const beat = element.animate(
+			[
+				{ opacity: 'var(--beat-peak)', transform: 'scale(1.01)' },
+				{ opacity: 'var(--aura-base)', transform: 'scale(1)' }
+			],
+			{ duration: 244, easing: 'cubic-bezier(0.15, 0.9, 0.3, 1)' }
+		);
+		const downbeat = element.animate(
+			[
+				{ opacity: 'var(--downbeat-peak)', transform: 'scale(1.025)' },
+				{ opacity: 'var(--aura-base)', transform: 'scale(1)' }
+			],
+			{ duration: 400, easing: 'cubic-bezier(0.15, 0.9, 0.3, 1)' }
+		);
+		beat.cancel();
+		downbeat.cancel();
+		beatPulse = beat;
+		downbeatPulse = downbeat;
+
+		return () => {
+			beat.cancel();
+			downbeat.cancel();
+			if (beatPulse === beat) beatPulse = null;
+			if (downbeatPulse === downbeat) downbeatPulse = null;
+		};
+	});
+
 	function resize() {
 		width = window.innerWidth;
 		height = window.innerHeight;
 		if (!canvas || !context) return;
 		// Two is as far as the extra pixels are worth paying for on a burst of
 		// soft-edged dots; a 3x phone would otherwise draw nine times the area.
-		const dpr = Math.min(window.devicePixelRatio || 1, 2);
+		const dpr = Math.min(window.devicePixelRatio || 1, dprLimit);
 		canvas.width = Math.floor(width * dpr);
 		canvas.height = Math.floor(height * dpr);
 		context.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -174,17 +220,17 @@
 		return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
 	}
 
-	function add(born: Particle[]) {
-		particles = particles.concat(born);
-		// Oldest first, since those are the ones already fading out.
-		if (particles.length > CEILING) particles = particles.slice(particles.length - CEILING);
+	function added() {
+		// Oldest first, since those are the ones already fading out. Compact in
+		// place and return discarded objects to the pool.
+		trimOldest(particles, ceiling);
 		if (!frame) frame = requestAnimationFrame(tick);
 	}
 
 	function tick(now: number) {
 		const dt = lastFrameAt ? (now - lastFrameAt) / 1000 : 1 / 60;
 		lastFrameAt = now;
-		particles = step(particles, dt);
+		step(particles, dt);
 		render();
 
 		if (particles.length > 0) {
@@ -199,39 +245,32 @@
 		if (!context) return;
 		context.clearRect(0, 0, width, height);
 
+		// Paper first, under normal compositing.
 		for (const particle of particles) {
-			const alpha = fade(particle);
-			const colour = rgb[particle.pc] ?? rgb[0];
-			if (!colour) continue;
-			const { r, g, b } = colour;
-
-			if (particle.kind === 'confetti') {
-				drawConfetti(context, particle, `rgba(${r},${g},${b},${alpha})`);
-				continue;
-			}
-
-			// Additive for anything meant to read as light. This is what makes two
-			// overlapping sparks brighter than one instead of merely denser.
-			context.globalCompositeOperation = 'lighter';
-
-			if (particle.kind === 'spark') drawSpark(context, particle, r, g, b, alpha);
-			else if (particle.kind === 'star') drawStar(context, particle, r, g, b, alpha);
-			else drawRing(context, particle, r, g, b, alpha);
-
-			context.globalCompositeOperation = 'source-over';
+			if (particle.kind !== 'confetti') continue;
+			const colour = rgbCss[particle.pc] ?? rgbCss[0];
+			if (colour) drawConfetti(context, particle, colour, fade(particle));
 		}
+
+		// Switch compositing once for the whole light batch, not twice per spark.
+		context.globalCompositeOperation = 'lighter';
+		for (const particle of particles) {
+			if (particle.kind === 'confetti') continue;
+			const colour = rgbCss[particle.pc] ?? rgbCss[0];
+			if (!colour) continue;
+			const alpha = fade(particle);
+			if (particle.kind === 'spark') drawSpark(context, particle, colour, alpha);
+			else if (particle.kind === 'star') drawStar(context, particle, colour, alpha);
+			else drawRing(context, particle, colour, alpha);
+		}
+		context.globalCompositeOperation = 'source-over';
+		context.globalAlpha = 1;
 	}
 
 	/** A trail in the note's colour with a hot core, which is what makes it read as a spark. */
-	function drawSpark(
-		ctx: CanvasRenderingContext2D,
-		p: Particle,
-		r: number,
-		g: number,
-		b: number,
-		alpha: number
-	) {
-		ctx.strokeStyle = `rgba(${r},${g},${b},${alpha * 0.7})`;
+	function drawSpark(ctx: CanvasRenderingContext2D, p: Particle, colour: string, alpha: number) {
+		ctx.globalAlpha = alpha * 0.7;
+		ctx.strokeStyle = colour;
 		ctx.lineWidth = p.size;
 		ctx.lineCap = 'round';
 		ctx.beginPath();
@@ -239,28 +278,23 @@
 		ctx.lineTo(p.x - p.vx * 0.022, p.y - p.vy * 0.022);
 		ctx.stroke();
 
-		ctx.fillStyle = `rgba(255,255,255,${alpha * alpha * 0.85})`;
+		ctx.globalAlpha = alpha * alpha * 0.85;
+		ctx.fillStyle = 'white';
 		ctx.beginPath();
 		ctx.arc(p.x, p.y, p.size * 0.5, 0, Math.PI * 2);
 		ctx.fill();
 	}
 
-	function drawStar(
-		ctx: CanvasRenderingContext2D,
-		p: Particle,
-		r: number,
-		g: number,
-		b: number,
-		alpha: number
-	) {
+	function drawStar(ctx: CanvasRenderingContext2D, p: Particle, colour: string, alpha: number) {
 		// A soft bloom under the shape, so a star carries light rather than just
 		// being a lit outline.
-		ctx.fillStyle = `rgba(${r},${g},${b},${alpha * 0.16})`;
+		ctx.globalAlpha = alpha * 0.16;
+		ctx.fillStyle = colour;
 		ctx.beginPath();
 		ctx.arc(p.x, p.y, p.size * 1.9, 0, Math.PI * 2);
 		ctx.fill();
 
-		ctx.fillStyle = `rgba(${r},${g},${b},${alpha})`;
+		ctx.globalAlpha = alpha;
 		ctx.beginPath();
 		for (let i = 0; i < 8; i++) {
 			const angle = p.spin + (i * Math.PI) / 4;
@@ -276,15 +310,9 @@
 		ctx.fill();
 	}
 
-	function drawRing(
-		ctx: CanvasRenderingContext2D,
-		p: Particle,
-		r: number,
-		g: number,
-		b: number,
-		alpha: number
-	) {
-		ctx.strokeStyle = `rgba(${r},${g},${b},${alpha * alpha * 0.75})`;
+	function drawRing(ctx: CanvasRenderingContext2D, p: Particle, colour: string, alpha: number) {
+		ctx.globalAlpha = alpha * alpha * 0.75;
+		ctx.strokeStyle = colour;
 		ctx.lineWidth = 1 + 4 * alpha;
 		ctx.beginPath();
 		ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
@@ -292,8 +320,9 @@
 	}
 
 	/** Paper, not light: flat colour, and tumbling by squashing rather than spinning. */
-	function drawConfetti(ctx: CanvasRenderingContext2D, p: Particle, fill: string) {
+	function drawConfetti(ctx: CanvasRenderingContext2D, p: Particle, fill: string, alpha: number) {
 		ctx.save();
+		ctx.globalAlpha = alpha;
 		ctx.translate(p.x, p.y);
 		ctx.rotate(p.spin * 0.35);
 		ctx.scale(1, Math.cos(p.spin));
@@ -302,33 +331,25 @@
 		ctx.restore();
 	}
 
-	let beat: Animation | null = null;
-
 	function pulse(strength: number) {
-		if (!live || !auraEl) return;
-		// Cancelled rather than layered: at 300bpm the beats arrive faster than a
-		// pulse decays, and stacked animations drift out of time with the music.
-		beat?.cancel();
-		const peak = Math.min(1, auraBase + 0.16 + 0.3 * strength);
-		beat = auraEl.animate(
-			[
-				{ opacity: String(peak), transform: `scale(${1 + 0.025 * strength})` },
-				{ opacity: String(auraBase), transform: 'scale(1)' }
-			],
-			{ duration: 140 + 260 * strength, easing: 'cubic-bezier(0.15, 0.9, 0.3, 1)' }
-		);
+		if (!live) return;
+		const animation = strength >= 0.75 ? downbeatPulse : beatPulse;
+		animation?.cancel();
+		animation?.play();
 	}
 
 	function spark(at: Element | null | undefined, note: number, power = 0.5) {
 		if (!live) return;
 		const { x, y } = centreOf(at);
-		add(sparkBurst({ x, y, pc: note, power }));
+		sparkBurst({ x, y, pc: note, power }, Math.random, particles);
+		added();
 	}
 
 	function land(at: Element | null | undefined, note: number, power = 1) {
 		if (!live) return;
 		const { x, y } = centreOf(at);
-		add(landBurst({ x, y, pc: note, power }));
+		landBurst({ x, y, pc: note, power }, Math.random, particles);
+		added();
 	}
 
 	function say(text: string, note: number, kind: CalloutKind = 'win') {
@@ -337,19 +358,27 @@
 		// Three at once is already a pile-up; the fourth would be covering the
 		// first, which is how a callout stops being readable.
 		callouts = [...callouts, { id, text, pc: note, kind }].slice(-3);
-		setTimeout(() => (callouts = callouts.filter((entry) => entry.id !== id)), 1300);
+		const timer = setTimeout(() => {
+			calloutTimers.delete(timer);
+			callouts = callouts.filter((entry) => entry.id !== id);
+		}, 1300);
+		calloutTimers.add(timer);
 	}
 
 	function finale(pitchClasses: number[], text: string) {
 		if (!live) return;
-		add(confettiFall(width, pitchClasses));
+		confettiFall(width, pitchClasses, 90, Math.random, particles);
+		added();
 		say(text, pitchClasses[0] ?? 0);
 	}
 
 	function clear() {
-		particles = [];
+		recycle(particles);
 		callouts = [];
-		beat?.cancel();
+		for (const timer of calloutTimers) clearTimeout(timer);
+		calloutTimers.clear();
+		beatPulse?.cancel();
+		downbeatPulse?.cancel();
 		if (frame) cancelAnimationFrame(frame);
 		frame = 0;
 		lastFrameAt = 0;
@@ -368,6 +397,9 @@
 		class="aura"
 		bind:this={auraEl}
 		style:--glow={pc === null ? 'transparent' : `var(--pc-${pc})`}
+		style:--aura-base={auraBase}
+		style:--beat-peak={Math.min(1, auraBase + 0.28)}
+		style:--downbeat-peak={Math.min(1, auraBase + 0.46)}
 		style:opacity={auraBase}
 		aria-hidden="true"
 	></div>

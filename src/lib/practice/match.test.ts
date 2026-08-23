@@ -9,6 +9,7 @@ import {
 	emptyTally,
 	essentialTones,
 	judge,
+	judgeAccumulated,
 	targetFor
 } from './match';
 
@@ -116,6 +117,13 @@ describe('judging one chord', () => {
 	it('counts every note played, including repeats', () => {
 		const attempt = judge([2, 2, 5, 4, 1], at('Dm7'));
 		expect(attempt.notes).toEqual({ chord: 3, colour: 1, outside: 1 });
+	});
+
+	it('judges the fixed accumulator exactly like the iterable path', () => {
+		const target = at('Dm7');
+		expect(judgeAccumulated((1 << 2) | (1 << 5) | (1 << 4) | (1 << 1), 3, 1, 1, target)).toEqual(
+			judge([2, 2, 5, 4, 1], target)
+		);
 	});
 
 	it('never penalises an outside note in the landing', () => {

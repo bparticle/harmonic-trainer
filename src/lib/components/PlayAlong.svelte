@@ -5,7 +5,7 @@
 	import InfoHint from '$lib/components/InfoHint.svelte';
 	import Keyboard from '$lib/components/Keyboard.svelte';
 	import ScaleKeys from '$lib/components/ScaleKeys.svelte';
-	import { BackingTrack, type Part } from '$lib/audio/backing';
+	import { BackingTrack, type BackingPosition, type Part } from '$lib/audio/backing';
 	import { GROOVES, grooveSpec, isGroove, type Groove } from '$lib/audio/groove';
 	import {
 		CHARTS,
@@ -30,9 +30,10 @@
 	import {
 		accuracy,
 		add as addAttempt,
+		classify,
 		coverage,
 		emptyTally,
-		judge,
+		judgeAccumulated,
 		targetFor,
 		type Attempt,
 		type Tally,
@@ -62,6 +63,7 @@
 	import { barsLeft, noPass, visitBar, wentRound, type FormPass } from '$lib/practice/form';
 	import {
 		isEmpty,
+		nextOutboxBatch,
 		noBests,
 		parseBests,
 		queue,
@@ -157,6 +159,8 @@
 	const KEYS = ['C', 'G', 'D', 'A', 'E', 'B', 'Gb', 'Db', 'Ab', 'Eb', 'Bb', 'F'];
 	const MIN_BPM = 40;
 	const MAX_BPM = 300;
+	/** Matches the endpoint's hard cap and bounds even an all-day transport run. */
+	const MAX_RECORDED_ATTEMPTS = 20_000;
 	const PARTS: Array<[Part, string]> = [
 		['bass', 'Bass'],
 		['drums', 'Drums'],
@@ -384,26 +388,33 @@
 	 * generated here, so sending the same thing twice is a no-op at the other end
 	 * — which is the entire reason the ids are generated here.
 	 */
+	let flushing = false;
 	async function flush() {
-		if (demo) return;
-		const pending = readOutbox(localStorage);
-		if (isEmpty(pending)) return;
+		if (demo || flushing) return;
+		flushing = true;
 
 		try {
-			const response = await fetch('/api/runs', {
-				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify(pending)
-			});
-			if (!response.ok) return;
+			// The bounded outbox needs at most five endpoint-sized batches.
+			for (let batch = 0; batch < 5; batch++) {
+				const pending = nextOutboxBatch(readOutbox(localStorage));
+				if (isEmpty(pending)) break;
+				const response = await fetch('/api/runs', {
+					method: 'POST',
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify(pending)
+				});
+				if (!response.ok) break;
 
-			const answer = await response.json();
-			settle(localStorage, pending);
-			record = parseRecord(answer.record);
-			bests = parseBests(answer.bests);
-			tempo = parseTempoRecord(answer.tempo);
+				const answer = await response.json();
+				settle(localStorage, pending);
+				record = parseRecord(answer.record);
+				bests = parseBests(answer.bests);
+				tempo = parseTempoRecord(answer.tempo);
+			}
 		} catch {
 			// No network. It waits, which is what an outbox is for.
+		} finally {
+			flushing = false;
 		}
 	}
 
@@ -604,6 +615,32 @@
 	}
 	let transportEl = $state<HTMLDivElement | null>(null);
 	let transportBeat: Animation | null = null;
+	let transportDownbeat: Animation | null = null;
+
+	/** Reuse compositor animations; high BPM must not allocate one on every beat. */
+	$effect(() => {
+		const element = transportEl;
+		if (!element) return;
+		const beat = element.animate([{ transform: 'scale(1.034)' }, { transform: 'scale(1)' }], {
+			duration: 208,
+			easing: 'cubic-bezier(0.15, 0.9, 0.3, 1)'
+		});
+		const downbeat = element.animate([{ transform: 'scale(1.085)' }, { transform: 'scale(1)' }], {
+			duration: 340,
+			easing: 'cubic-bezier(0.15, 0.9, 0.3, 1)'
+		});
+		beat.cancel();
+		downbeat.cancel();
+		transportBeat = beat;
+		transportDownbeat = downbeat;
+
+		return () => {
+			beat.cancel();
+			downbeat.cancel();
+			if (transportBeat === beat) transportBeat = null;
+			if (transportDownbeat === downbeat) transportDownbeat = null;
+		};
+	});
 
 	/*
 	 * The chart list, collapsible.
@@ -677,6 +714,48 @@
 	});
 	const studyAt = (barNumber: number, chordIndex: number) =>
 		studyByBar[barNumber - 1]?.[chordIndex] ?? null;
+	type SlotContext = {
+		bar: ChartBar;
+		index: number;
+		chord: ChartBar['chords'][number]['chord'];
+		study: HarmonicStudy;
+		target: Target;
+		where: string;
+		pc: number;
+		label: string;
+		localKey: string;
+	};
+	/** Every lookup and Set needed by the note callback, rebuilt only with the chart. */
+	const slotsByBar = $derived.by((): SlotContext[][] =>
+		bars.map((bar, barIndex) =>
+			bar.chords.flatMap((entry, index) => {
+				const study = studyByBar[barIndex]?.[index];
+				return study
+					? [
+							{
+								bar,
+								index,
+								chord: entry.chord,
+								study,
+								target: targetFor(entry.chord, study.key),
+								where: `${bar.number}:${index}`,
+								pc: pitchClass(entry.chord.root),
+								label: chordSymbolLabel(entry.chord),
+								localKey: formatKey(study.key)
+							}
+						]
+					: [];
+			})
+		)
+	);
+	const barAt = (barNumber: number) => {
+		const indexed = bars[barNumber - 1];
+		return indexed?.number === barNumber
+			? indexed
+			: (bars.find((entry) => entry.number === barNumber) ?? null);
+	};
+	const slotAt = (barNumber: number, chordIndex: number) =>
+		slotsByBar[barNumber - 1]?.[chordIndex] ?? null;
 	const barCount = $derived(bars.length);
 	const looping = $derived(loopFrom !== null && loopTo !== null);
 	const byCategory = $derived(
@@ -712,7 +791,7 @@
 
 	const followingPlayback = $derived(playing && followPlayback && liveBar > 0);
 	const focusedBar = $derived<ChartBar | null>(
-		bars.find((bar) => bar.number === (followingPlayback ? liveBar : pinnedBar)) ?? bars[0] ?? null
+		barAt(followingPlayback ? liveBar : pinnedBar) ?? bars[0] ?? null
 	);
 	const focusedChordIndex = $derived(
 		focusedBar
@@ -770,6 +849,8 @@
 	);
 
 	const track = new BackingTrack();
+	/** Reused by every MIDI note; BackingTrack fills it without creating an object. */
+	const notePosition: BackingPosition = { beat: 0, bar: 0, pass: 0 };
 
 	/*
 	 * Am I playing the chord that is sounding?
@@ -780,17 +861,18 @@
 	 * both hands are busy.
 	 *
 	 * Where the notes are attributed from is the part worth being careful about.
-	 * `liveBar` and `liveBeat` arrive through Tone's `Draw` queue, which runs on
-	 * animation frames and stops dead when the tab is not compositing — fine for
-	 * a highlight, and unusable for a score, which would silently stop counting
-	 * with nothing on screen to say so. So every note asks the transport where
-	 * the music is at the instant it lands: the MIDI clock reading the audio
-	 * clock, with no frame in between.
+	 * `liveBar` and `liveBeat` arrive through the coalesced animation-frame
+	 * reporter, which stops when the tab is not compositing — fine for a
+	 * highlight, and unusable for a score, which would silently stop counting.
+	 * So every note asks the transport where the music is at the instant it
+	 * lands: the MIDI clock reading the audio clock, with no frame in between.
 	 */
 
 	/** The chord occurrence notes are currently being gathered into. */
-	let openSlot: string | null = null;
-	let openTarget = $state<Target | null>(null);
+	let openPass = -1;
+	let openChordIndex = -1;
+	/** Reactive reference without deep-proxying the precomputed Sets. */
+	let openTarget = $state.raw<Target | null>(null);
 	/** Where that occurrence is, without the pass count, for the display to match on. */
 	let openWhere = $state<string | null>(null);
 	/** Its root's colour, held so a celebration fired after it closes is still its own. */
@@ -805,8 +887,14 @@
 	let openNumeral = '';
 	let openLocalKey = '';
 	let openAtMs = 0;
-	/** Pitch classes played over it so far. */
-	let heard = $state<number[]>([]);
+	/** Fixed-size incremental attempt state; one bit per pitch class, no note list. */
+	let heardMask = 0;
+	let heardChord = 0;
+	let heardColour = 0;
+	let heardOutside = 0;
+	let heardCount = 0;
+	/** The single reactive invalidation for the five mutable primitives above. */
+	let heardRevision = $state(0);
 	let tally = $state<Tally>(emptyTally());
 	/** Held after stopping, so the run does not vanish the moment it ends. */
 	let lastRun = $state<Tally | null>(null);
@@ -814,15 +902,13 @@
 	/** The chord sounding right now, as opposed to the one being studied. */
 	const liveEntry = $derived.by(() => {
 		if (!playing || liveBar <= 0) return null;
-		const bar = bars.find((entry) => entry.number === liveBar);
+		const bar = barAt(liveBar);
 		if (!bar) return null;
 		const index = chordIndexAtBeat(bar, liveBeat);
-		const study = studyAt(bar.number, index);
-		if (!study) return null;
-		return { bar, index, chord: bar.chords[index].chord, study };
+		return slotAt(bar.number, index);
 	});
 
-	const liveTarget = $derived(liveEntry ? targetFor(liveEntry.chord, liveEntry.study.key) : null);
+	const liveTarget = $derived(liveEntry?.target ?? null);
 
 	/*
 	 * Lend the target to the header.
@@ -838,17 +924,17 @@
 		return () => sharedTarget.clear();
 	});
 
-	const liveWhere = $derived(liveEntry ? `${liveEntry.bar.number}:${liveEntry.index}` : null);
+	const liveWhere = $derived(liveEntry?.where ?? null);
 
 	/** The colour the room is lit in: whatever chord is sounding, or nothing at all. */
-	const livePc = $derived(liveEntry ? pitchClass(liveEntry.chord.root) : null);
+	const livePc = $derived(liveEntry?.pc ?? null);
 
 	/** Chord tones actually played during the chord now sounding. */
-	const litTones = $derived(
-		openWhere !== null && openWhere === liveWhere
-			? new Set(heard.map((note) => ((note % 12) + 12) % 12))
-			: new Set<number>()
-	);
+	function toneIsLit(pc: number): boolean {
+		// Register the mutable bitmask with Svelte without proxying the hot data.
+		heardRevision;
+		return openWhere !== null && openWhere === liveWhere && (heardMask & (1 << pc)) !== 0;
+	}
 
 	/** Whether the inspector is describing the chord you are being marked against. */
 	const marking = $derived(playing && liveTarget !== null && followingPlayback);
@@ -856,40 +942,39 @@
 	function recordNote(note: number) {
 		// Null while stopped, paused, or still counting in — none of which is a
 		// moment when a note belongs to a bar of the form.
-		const position = track.position;
-		if (!position) return;
+		if (!track.readPosition(notePosition)) return;
 
-		const number = (loopFrom ?? 1) + position.bar - 1;
-		const bar = bars.find((entry) => entry.number === number);
+		const number = (loopFrom ?? 1) + notePosition.bar - 1;
+		const bar = barAt(number);
 		if (!bar) return;
-		const index = chordIndexAtBeat(bar, position.beat);
+		const index = chordIndexAtBeat(bar, notePosition.beat);
 		// The pass is what makes bar 1 the second time round a different chord to
 		// answer for than bar 1 the first time.
-		const slot = `${position.pass}:${number}:${index}`;
 
-		if (slot !== openSlot) {
+		if (notePosition.pass !== openPass || number !== openBar || index !== openChordIndex) {
 			// The chord that just ended is the only thing worth celebrating, and
 			// this is the one place a chord ends while the music carries on — the
 			// other callers of `closeSlot` are stopping, pausing or resetting.
 			celebrateChord(closeSlot());
-			const study = studyAt(number, index);
-			if (!study) return;
-			openSlot = slot;
-			openWhere = `${number}:${index}`;
-			openPc = pitchClass(bar.chords[index].chord.root);
-			openTarget = targetFor(bar.chords[index].chord, study.key);
+			const context = slotAt(number, index);
+			if (!context) return;
+			openPass = notePosition.pass;
+			openChordIndex = index;
+			openWhere = context.where;
+			openPc = context.pc;
+			openTarget = context.target;
 			openBar = number;
 			// The chord as it sounded and the numeral as the chart stores it: the
 			// first is what was played over, the second is what makes two runs in
 			// different keys comparable.
-			openChord = chordSymbolLabel(bar.chords[index].chord);
-			openNumeral = study.roman;
+			openChord = context.label;
+			openNumeral = context.study.roman;
 			// `formatKey`, not `formatStudyKey`: the record stores 'Bb' and 'F# dorian',
 			// never 'B♭ major'. The schema's convention is that a key survives a round
 			// trip through the database, and a display string with a ♭ in it does not —
 			// `parseKey` cannot read it back, so the profile could not tell which pitch
 			// class it was looking at.
-			openLocalKey = formatKey(study.key);
+			openLocalKey = context.localKey;
 			openAtMs = elapsedMs();
 		}
 
@@ -898,9 +983,15 @@
 		// A tone is sparked the first time it turns up under this chord, not on
 		// every repeat of it: holding a voicing down should not fountain.
 		const pc = ((note % 12) + 12) % 12;
-		const isNew = !heard.some((played) => ((played % 12) + 12) % 12 === pc);
+		const isNew = (heardMask & (1 << pc)) === 0;
 		const isChordTone = openTarget.chord.has(pc);
-		heard = [...heard, note];
+		heardMask |= 1 << pc;
+		const kind = classify(pc, openTarget);
+		if (kind === 'chord') heardChord++;
+		else if (kind === 'colour') heardColour++;
+		else heardOutside++;
+		heardCount++;
+		heardRevision++;
 		if (isNew && isChordTone) sparkTone(pc);
 	}
 
@@ -915,15 +1006,21 @@
 	function closeSlot(): { attempt: Attempt; where: string | null; pc: number } | null {
 		let finished: { attempt: Attempt; where: string | null; pc: number } | null = null;
 
-		if (openTarget && heard.length > 0) {
-			const attempt = judge(heard, openTarget);
+		if (openTarget && heardCount > 0) {
+			const attempt = judgeAccumulated(
+				heardMask,
+				heardChord,
+				heardColour,
+				heardOutside,
+				openTarget
+			);
 			tally = addAttempt(tally, attempt);
 			finished = { attempt, where: openWhere, pc: openPc };
 
 			// One row per judged chord. This is the grain the blind-spot report
 			// needs and the one thing that cannot be reconstructed afterwards from
 			// the totals it rolls up into.
-			if (runId) {
+			if (runId && runAttempts.length < MAX_RECORDED_ATTEMPTS) {
 				runAttempts.push({
 					id: crypto.randomUUID(),
 					bar: openBar,
@@ -941,10 +1038,16 @@
 			}
 		}
 
-		openSlot = null;
+		openPass = -1;
+		openChordIndex = -1;
 		openTarget = null;
 		openWhere = null;
-		heard = [];
+		heardMask = 0;
+		heardChord = 0;
+		heardColour = 0;
+		heardOutside = 0;
+		heardCount = 0;
+		heardRevision++;
 		return finished;
 	}
 
@@ -1193,11 +1296,9 @@
 	/** The floating transport taps its foot, on the audio clock rather than a CSS loop. */
 	function pulseTransport(strength: number) {
 		if (!fireworks || !motionOK || !transportEl) return;
-		transportBeat?.cancel();
-		transportBeat = transportEl.animate(
-			[{ transform: `scale(${1 + 0.085 * strength})` }, { transform: 'scale(1)' }],
-			{ duration: 120 + 220 * strength, easing: 'cubic-bezier(0.15, 0.9, 0.3, 1)' }
-		);
+		const animation = strength >= 0.75 ? transportDownbeat : transportBeat;
+		animation?.cancel();
+		animation?.play();
 	}
 
 	/*
@@ -1240,9 +1341,15 @@
 	 * open chord is therefore folded in provisionally: the number is live and
 	 * honest, and firms up rather than jumping when the bar turns.
 	 */
-	const provisional = $derived<Tally>(
-		openTarget && heard.length > 0 ? addAttempt(tally, judge(heard, openTarget)) : tally
-	);
+	const provisional = $derived.by((): Tally => {
+		heardRevision;
+		return openTarget && heardCount > 0
+			? addAttempt(
+					tally,
+					judgeAccumulated(heardMask, heardChord, heardColour, heardOutside, openTarget)
+				)
+			: tally;
+	});
 
 	/** The run on show: the one just finished, or the one under way. */
 	const shown = $derived<Tally>(lastRun ?? provisional);
@@ -1421,7 +1528,7 @@
 		// a bar does when nothing is playing.
 		if (liveBar > 0) {
 			pinnedBar = liveBar;
-			const live = bars.find((bar) => bar.number === liveBar);
+			const live = barAt(liveBar);
 			if (live) pinnedChord = chordIndexAtBeat(live, liveBeat);
 		}
 		playing = false;
@@ -2145,7 +2252,7 @@
 						<div
 							class="degree"
 							data-degree={pc}
-							class:is-played={litTones.has(pc)}
+							class:is-played={toneIsLit(pc)}
 							style:--tone="var(--pc-{pc})"
 							style:background="var(--pc-{pc})"
 							style:color="var(--pc-{pc}-ink)"

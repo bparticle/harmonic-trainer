@@ -63,21 +63,32 @@ const DRAG = 1.7;
 /** Longer than this and the tab was not painting, so no time has passed worth simulating. */
 const MAX_STEP = 1 / 20;
 
+/** Enough to absorb several bursts without retaining an entire long session. */
+const POOL_LIMIT = 512;
+const pool: Particle[] = [];
+
+function recycleParticle(particle: Particle): void {
+	if (pool.length < POOL_LIMIT) pool.push(particle);
+}
+
 /**
  * Advance every particle and drop the dead ones.
  *
- * Fields are updated in place and a new array is returned: one allocation per
- * frame rather than one per particle, which matters at the counts a good run
- * throws about.
+ * Both fields and the array are updated in place. A write cursor compacts live
+ * particles over dead ones, so the 60/120Hz hot path creates no garbage.
  */
 export function step(particles: Particle[], dt: number): Particle[] {
 	const t = Math.min(Math.max(dt, 0), MAX_STEP);
 	const damp = Math.exp(-DRAG * t);
-	const alive: Particle[] = [];
+	let alive = 0;
 
-	for (const particle of particles) {
+	for (let read = 0; read < particles.length; read++) {
+		const particle = particles[read];
 		particle.life -= t;
-		if (particle.life <= 0) continue;
+		if (particle.life <= 0) {
+			recycleParticle(particle);
+			continue;
+		}
 
 		const vx = particle.vx;
 		const vy = particle.vy;
@@ -91,10 +102,26 @@ export function step(particles: Particle[], dt: number): Particle[] {
 		particle.spin += particle.spinRate * t;
 		particle.size += particle.grow * t;
 
-		alive.push(particle);
+		particles[alive++] = particle;
 	}
 
-	return alive;
+	particles.length = alive;
+	return particles;
+}
+
+/** Return a whole effect to the bounded pool, used when the layer is cleared. */
+export function recycle(particles: Particle[]): void {
+	for (const particle of particles) recycleParticle(particle);
+	particles.length = 0;
+}
+
+/** Drop the oldest particles and compact without allocating a sliced array. */
+export function trimOldest(particles: Particle[], ceiling: number): void {
+	const remove = particles.length - Math.max(0, ceiling);
+	if (remove <= 0) return;
+	for (let index = 0; index < remove; index++) recycleParticle(particles[index]);
+	particles.copyWithin(0, remove);
+	particles.length -= remove;
 }
 
 /** 1 at birth, 0 at death. What opacity and trail length are drawn from. */
@@ -104,21 +131,39 @@ const between = (random: Random, lo: number, hi: number) => lo + random() * (hi 
 
 /** A base particle with the fields nothing usually overrides. */
 function make(kind: ParticleKind, pc: number, x: number, y: number, ttl: number): Particle {
-	return {
-		kind,
-		x,
-		y,
-		vx: 0,
-		vy: 0,
-		life: ttl,
-		ttl,
-		size: 2,
-		pc,
-		spin: 0,
-		spinRate: 0,
-		weight: 1,
-		grow: 0
-	};
+	const particle = pool.pop();
+	if (!particle) {
+		return {
+			kind,
+			x,
+			y,
+			vx: 0,
+			vy: 0,
+			life: ttl,
+			ttl,
+			size: 2,
+			pc,
+			spin: 0,
+			spinRate: 0,
+			weight: 1,
+			grow: 0
+		};
+	}
+
+	particle.kind = kind;
+	particle.x = x;
+	particle.y = y;
+	particle.vx = 0;
+	particle.vy = 0;
+	particle.life = ttl;
+	particle.ttl = ttl;
+	particle.size = 2;
+	particle.pc = pc;
+	particle.spin = 0;
+	particle.spinRate = 0;
+	particle.weight = 1;
+	particle.grow = 0;
+	return particle;
 }
 
 export type BurstOptions = {
@@ -138,10 +183,13 @@ export type BurstOptions = {
  * colour. Deliberately cheap, because at a fast tempo with both hands going
  * this fires several times a second.
  */
-export function sparkBurst(options: BurstOptions, random: Random = Math.random): Particle[] {
+export function sparkBurst(
+	options: BurstOptions,
+	random: Random = Math.random,
+	out: Particle[] = []
+): Particle[] {
 	const { x, y, pc, power = 1, aim = -Math.PI / 2, arc = Math.PI * 0.9 } = options;
 	const count = Math.round(5 + 16 * power);
-	const out: Particle[] = [];
 
 	for (let i = 0; i < count; i++) {
 		const angle = aim + between(random, -arc / 2, arc / 2);
@@ -163,9 +211,13 @@ export function sparkBurst(options: BurstOptions, random: Random = Math.random):
  * Bigger than a spark burst on purpose — this is the moment the whole feature
  * exists for, and it happens at most once per chord rather than once per note.
  */
-export function landBurst(options: BurstOptions, random: Random = Math.random): Particle[] {
+export function landBurst(
+	options: BurstOptions,
+	random: Random = Math.random,
+	out: Particle[] = []
+): Particle[] {
 	const { x, y, pc, power = 1 } = options;
-	const out = sparkBurst({ x, y, pc, power: 0.8 + 0.2 * power, arc: Math.PI * 2 }, random);
+	sparkBurst({ x, y, pc, power: 0.8 + 0.2 * power, arc: Math.PI * 2 }, random, out);
 
 	const stars = Math.round(4 + 7 * power);
 	for (let i = 0; i < stars; i++) {
@@ -206,10 +258,10 @@ export function confettiFall(
 	width: number,
 	pitchClasses: number[],
 	count = 90,
-	random: Random = Math.random
+	random: Random = Math.random,
+	out: Particle[] = []
 ): Particle[] {
 	const palette = pitchClasses.length ? pitchClasses : [0];
-	const out: Particle[] = [];
 
 	for (let i = 0; i < count; i++) {
 		const pc = palette[Math.floor(random() * palette.length) % palette.length];
