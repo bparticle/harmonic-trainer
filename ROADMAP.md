@@ -497,10 +497,10 @@ not have: there is now a record worth taking with you, not just charts.
 
 ## M17 — Crossings: the curriculum stops being one key at a time
 
-**Status: proposed, not started.** The argument, the evidence and the build
-order are written up in full at
-[Widen Before You Deepen](https://claude.ai/code/artifact/92343df1-8d93-41ab-a6f5-eaf515b819ba),
-and only the parts that constrain other work are repeated here.
+**Status: pass one landed; passes two to four not started.** Everything below is
+the whole argument — the longer write-up it came from is a private working
+document and this file does not depend on it. Sources are named inline so the
+claims can be checked.
 
 The complaint that started it: the app feels siloed in one scale, and the ladder
 implies you must _finish_ a key before meeting the next. That reading is
@@ -536,6 +536,18 @@ ingredient is **discrimination** — juxtaposing confusable categories — rathe
 than spacing.
 
 Telling C from G is a discrimination between two highly confusable categories.
+
+The papers, so the claims can be checked: Stambaugh, _When repetition isn't the
+best practice strategy_ (JRME 2011); Carter and Grahn, _Optimizing music
+learning_ (Frontiers in Psychology 7:1251, 2016); Mathias and Goldman, _How does
+increasing contextual interference in a musical practice session affect
+acquisition and retention?_ (JRME 2025) — design only, the results are paywalled
+and unread; Kornell and Bjork, _Learning concepts and categories: is spacing the
+"enemy of induction"?_ (Psychological Science 2008); Birnbaum, Kornell, Bjork and
+Bjork, _Why interleaving enhances inductive learning_ (Memory & Cognition 2013);
+Krumhansl and Kessler (Psychological Review 1982) for the key torus; Cuddy and
+Thompson (Psychological Research 1992) for the asymmetry of perceived key
+movement; Gordon's Music Learning Theory for tonality against keyality.
 
 What the evidence does **not** support is abolishing the ladder. The note at the
 top of `ladder.ts` records why it exists, and that judgement stands. M17 is a
