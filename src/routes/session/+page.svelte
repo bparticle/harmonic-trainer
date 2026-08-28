@@ -225,13 +225,24 @@
 	);
 
 	/**
-	 * A cadence, and nothing written down.
+	 * The three questions whose subject is a key rather than a chord.
 	 *
-	 * The one question whose subject is a key rather than a chord, so it wants
-	 * its own copy on screen and its own way of being sounded — chords in turn
-	 * rather than a chord — and it must never show the key before the answer.
+	 * They share one rule: **the page must not answer them anywhere.** The
+	 * wheel's key overlay and the header line that names a card's key are both
+	 * written for the other drills and both give the game away here — see the
+	 * note on `questionSource`. So the whole family is treated together, and a
+	 * fourth crossing direction inherits the discipline by existing.
 	 */
-	const isKeyQuestion = $derived(prompt?.direction === 'key_hear');
+	const isCrossingQuestion = $derived(
+		prompt?.direction === 'key_hear' ||
+			prompt?.direction === 'key_moved' ||
+			prompt?.direction === 'pivot_play'
+	);
+
+	/** The two that are heard rather than read, and so get a "hear it" button. */
+	const isHeardKeyQuestion = $derived(
+		prompt?.direction === 'key_hear' || prompt?.direction === 'key_moved'
+	);
 
 	/**
 	 * Whether what you play is marked against the card.
@@ -534,8 +545,12 @@
 		 * listening test into a reading test. Found by rendering the page, because
 		 * the leak is in the one place the drill's own tests cannot see: a header
 		 * that belongs to the workout rather than to the card.
+		 *
+		 * Silent for the pivot too, which does not leak — it names both keys in
+		 * its own prompt — but would get "C · where are we?" over a question that
+		 * is not asking that.
 		 */
-		if (currentCard.direction === 'key_hear') return '';
+		if (isCrossingQuestion) return '';
 		const topic = skillLabel(currentCard.skillCode)?.toLowerCase();
 		const key = glyph(currentCard.keyCenter);
 		return topic ? `${key} · ${topic}` : key;
@@ -1071,24 +1086,32 @@
 											: 'Hear the chord again'}
 								</button>
 							{/if}
+						{:else if prompt.direction === 'pivot_play'}
+							<p class="prompt-kicker">Turn the corner</p>
+							<p class="pivot-functions">{prompt.visible}</p>
+							<p class="prompt-copy">{prompt.instruction}</p>
 						{:else if prompt.visible}
 							<p class="prompt-name">{prompt.visible}</p>
 						{:else if revealed}
 							<p class="prompt-name">{(currentCard.payload as { label: string }).label}</p>
-							{#if isKeyQuestion}
+							{#if isHeardKeyQuestion}
 								<p class="chord-context">
 									{(currentCard.payload as { detail?: string }).detail ?? ''}
 								</p>
 							{/if}
-						{:else if isKeyQuestion}
-							<p class="prompt-kicker">Where are we?</p>
+						{:else if isHeardKeyQuestion}
+							<p class="prompt-kicker">
+								{prompt.direction === 'key_moved' ? 'What changed?' : 'Where are we?'}
+							</p>
 							<p class="prompt-copy">{prompt.instruction}</p>
 							<button class="hear-button" onclick={playQuestion} disabled={playingQuestion}>
 								{playingQuestion
-									? 'Playing the cadence…'
+									? 'Playing…'
 									: audioUnlocked
 										? 'Hear it again'
-										: 'Hear the cadence'}
+										: prompt.direction === 'key_moved'
+											? 'Hear both cadences'
+											: 'Hear the cadence'}
 							</button>
 						{:else}
 							<p class="prompt-copy">{prompt.instruction}</p>
@@ -1154,9 +1177,9 @@
 						-->
 						<Wheel
 							{config}
-							active={isKeyQuestion ? [] : keyView.pitchClasses}
-							degrees={isKeyQuestion ? undefined : keyView.degrees}
-							highlights={isKeyQuestion ? keyAnswerHighlights : highlights}
+							active={isCrossingQuestion ? [] : keyView.pitchClasses}
+							degrees={isCrossingQuestion ? undefined : keyView.degrees}
+							highlights={isCrossingQuestion ? keyAnswerHighlights : highlights}
 							lit={session.live.map((n) => n % 12)}
 							size={280}
 							interactive={false}
@@ -1195,7 +1218,10 @@
 			</section>
 		{/if}
 
-		{#if task.kind === 'ear' || task.kind === 'function'}
+		<!-- Every task whose answer is played needs somewhere to play it. The
+		     crossing task was missed when it was added, which on a machine with no
+		     MIDI keyboard made its questions unanswerable. -->
+		{#if task.kind === 'ear' || task.kind === 'function' || task.kind === 'crossing'}
 			<footer class="keyboard-stage" class:is-success={answered}>
 				<div class="keyboard-status">
 					<p><span class="listening-dot"></span>{listeningLine}</p>
@@ -1368,6 +1394,16 @@
 
 	/* Where this question came from. Dim ink, because a key's *name* is not a
 	   swatch and this line is a label rather than a pitch. */
+	/* Two numerals and two keys, read as a phrase rather than shouted as a chord
+	   name — the whole question is that they are one chord, not two. */
+	.pivot-functions {
+		font-family: var(--font-mono);
+		font-size: 1.15rem;
+		line-height: 1.4;
+		color: var(--color-ink);
+		text-wrap: balance;
+	}
+
 	.question-source {
 		margin-top: 0.15rem;
 		font-family: var(--font-mono);

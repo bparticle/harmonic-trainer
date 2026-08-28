@@ -224,7 +224,7 @@ function previewLine(task: Task): string {
 		case 'crossing':
 			// The keys are the answer, so `describeMaterial` must not name them —
 			// a preview that lists C, G and F has given away three of six.
-			return `${task.cardIds.length} cadences · name where each one lands`;
+			return `${task.cardIds.length} questions · where the music is, and where it went`;
 		case 'mission':
 			return `${task.mission.chartName}. ${describeGoal(task.goal)}`;
 		case 'new_thing':

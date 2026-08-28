@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { CardPayload } from '$lib/curriculum/cards';
 import { STAGES, itemsForRung } from '$lib/curriculum/ladder';
-import { cardsForKeyCentre } from '$lib/curriculum/cards';
+import { cardsForKeyCentre, cardsForKeyMoved, cardsForPivots } from '$lib/curriculum/cards';
 import { choicesFor, markGathered, markNamed, markPlayed, pose, toVoicing } from './drill';
 
 const cmaj7: CardPayload = {
@@ -154,6 +154,55 @@ describe('asking where we are', () => {
 		for (const direction of ['hear_name', 'hear_play', 'see_play', 'play_name'] as const) {
 			expect(pose(direction, cmaj7).sequence, direction).toBeNull();
 		}
+	});
+});
+
+describe('asking what changed', () => {
+	const [, dominant] = cardsForKeyMoved('C');
+	const prompt = pose('key_moved', dominant.payload, 60, 'C');
+
+	it('writes nothing down, exactly as the key question does not', () => {
+		expect(prompt.visible).toBeNull();
+		const written = [prompt.visible, prompt.instruction].filter(Boolean).join(' ');
+		expect(written).not.toContain('G');
+		expect(written).not.toContain('dominant');
+	});
+
+	it('sounds six chords: one cadence, then another somewhere else', () => {
+		expect(prompt.sequence).toHaveLength(6);
+	});
+
+	it('is answered by playing where it landed', () => {
+		expect(prompt.answerWith).toBe('play');
+		expect(markPlayed(dominant.payload.answerPitchClasses, [67]).correct).toBe(true);
+		// The key it left is the obvious wrong answer, so it has to be wrong.
+		expect(markPlayed(dominant.payload.answerPitchClasses, [60]).correct).toBe(false);
+	});
+});
+
+describe('turning the corner', () => {
+	const pivot = cardsForPivots('C').find((card) => card.identity.includes('|G|'))!;
+	const prompt = pose('pivot_play', pivot.payload, 60, 'C');
+
+	/*
+	 * The one crossing question with something written down — and what is written
+	 * is two numerals rather than a chord, because the realisation that they point
+	 * at the same place is the exercise.
+	 */
+	it('shows the two functions and withholds the chord', () => {
+		expect(prompt.visible).toBe('Imaj7 in C · IVmaj7 in G');
+		expect(prompt.visible).not.toContain('Cmaj7');
+	});
+
+	it('sounds nothing: this one is for the hands', () => {
+		expect(prompt.audible).toBeNull();
+		expect(prompt.sequence).toBeNull();
+	});
+
+	it('is answered by playing the chord both numerals name', () => {
+		expect(prompt.answerWith).toBe('play');
+		expect(markPlayed(pivot.payload.answerPitchClasses, [60, 64, 67, 71]).correct).toBe(true);
+		expect(markPlayed(pivot.payload.answerPitchClasses, [60, 64, 67]).correct).toBe(false);
 	});
 });
 

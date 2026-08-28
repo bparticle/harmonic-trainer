@@ -1,0 +1,26 @@
+-- The other two crossing directions, finishing what 0014 started.
+--
+-- `key_moved` plays two cadences and asks where the second one landed: the ear
+-- has to hold one key while another arrives, which is the thing Krumhansl and
+-- Kessler measured and the thing no other direction here comes near.
+--
+-- `pivot_play` names one chord by its function in two keys at once — vi in C,
+-- ii in G — and asks for the chord. Two numerals, one pair of hands, and the
+-- realisation that they point at the same place is the whole of what a pivot
+-- modulation is.
+--
+-- Nothing already recorded changes, for the same reasons 0014 gives. Both
+-- values are appended because `ALTER TYPE ... ADD VALUE` only appends, so the
+-- order in `schema.ts` is written to match what the type actually holds.
+--
+-- Two statements this time rather than one, and that is safe where 0014's
+-- single statement was necessary: the constraint is that a value cannot be
+-- *used* in the transaction that adds it, not that only one may be added. These
+-- two add and use nothing. Anything that wants to write either value belongs in
+-- a later migration or, as here, in the application.
+--
+-- No new skill row. Both hang off `crossing:key-centre`, seeded since 0014,
+-- because "can you hear where the music is" is one ability and these are three
+-- ways of asking it.
+ALTER TYPE "public"."card_direction" ADD VALUE 'key_moved';--> statement-breakpoint
+ALTER TYPE "public"."card_direction" ADD VALUE 'pivot_play';

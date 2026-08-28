@@ -142,6 +142,41 @@ export function pose(
 				answerWith: 'play',
 				instruction: 'Listen. Play the note it comes home to.'
 			};
+		/*
+		 * Two cadences, and the answer is where the second one landed.
+		 *
+		 * The same silence as `key_hear` and for the same reason, one step
+		 * harder: the ear has to hold the first key while the second arrives.
+		 * What is *called* what — the dominant, the relative — is in the payload
+		 * for the reveal and deliberately not in the prompt.
+		 */
+		case 'key_moved':
+			return {
+				direction,
+				visible: null,
+				audible: payload.steps?.length ? null : voicing,
+				sequence: payload.steps?.length ? payload.steps.map((step) => step.voicing) : null,
+				answerWith: 'play',
+				instruction: 'Two cadences. Play the note the second one comes home to.'
+			};
+		/*
+		 * One chord, named by what it does in two keys at once.
+		 *
+		 * The only crossing question with something written down, and what is
+		 * written is two numerals rather than a chord: `vi7 in C · ii7 in G`.
+		 * Realising they point at the same place under the hands is the whole of
+		 * what a pivot modulation is. Nothing is sounded — this one is a question
+		 * for the hands, not the ear.
+		 */
+		case 'pivot_play':
+			return {
+				direction,
+				visible: payload.detail ?? payload.label,
+				audible: null,
+				sequence: null,
+				answerWith: 'play',
+				instruction: 'One chord, two jobs. Play it.'
+			};
 	}
 }
 

@@ -491,15 +491,19 @@ const EAR_DIRECTIONS: CardDirection[] = ['hear_play', 'hear_name'];
 const FUNCTION_DIRECTIONS: CardDirection[] = ['degree_play'];
 
 /**
- * The key-centre question, alone in its own partition.
+ * The three key questions, in their own partition.
  *
- * One direction, and it must not be folded into the ear task. The ear task's
- * whole instruction is "listen, then play or name *it*" — a chord, a thing with
- * a symbol. This asks where you are, which is a different question with a
- * different answer, and mixing them would make one task that could not say what
- * it wanted.
+ * Where are we, where did it go, and what was the hinge. They must not be folded
+ * into the ear task: its whole instruction is "listen, then play or name *it*" —
+ * a chord, a thing with a symbol. These ask where you are, which is a different
+ * question with a different answer, and mixing them would make one task that
+ * could not say what it wanted.
+ *
+ * Together rather than three tasks, because they are three ways of asking one
+ * thing and a workout with three key-drills in it would be a workout about
+ * nothing else.
  */
-const CROSSING_DIRECTIONS: CardDirection[] = ['key_hear'];
+const CROSSING_DIRECTIONS: CardDirection[] = ['key_hear', 'key_moved', 'pivot_play'];
 
 /** Six keys is enough to be a discrimination and short enough to finish. */
 const CROSSING_QUESTIONS = 6;
@@ -756,14 +760,25 @@ function spreadByKey(cards: Schedulable[], day: number, lead?: string): Schedula
 		[...(lead && byKey.has(lead) ? [lead] : []), ...rotate([...byKey.keys()], day)],
 		(key) => key
 	);
-	const lanes = keyOrder.map((key) => byKey.get(key)!);
+	return interleave(keyOrder.map((key) => byKey.get(key)!));
+}
 
-	const spread: Schedulable[] = [];
-	const deepest = Math.max(...lanes.map((lane) => lane.length));
+/**
+ * One from each lane, then the next from each, until they run out.
+ *
+ * Written once because two queues want it for two different reasons: the
+ * function task takes its lanes to be keys, so eight questions touch eight
+ * keys, and the crossing task takes its lanes to be *directions*, so a task
+ * called "where are we?" is not six of the one question that happens to have
+ * the most cards.
+ */
+function interleave<T>(lanes: T[][]): T[] {
+	const out: T[] = [];
+	const deepest = Math.max(0, ...lanes.map((lane) => lane.length));
 	for (let depth = 0; depth < deepest; depth++) {
-		for (const lane of lanes) if (lane[depth]) spread.push(lane[depth]);
+		for (const lane of lanes) if (lane[depth]) out.push(lane[depth]);
 	}
-	return spread;
+	return out;
 }
 
 /**
@@ -822,7 +837,30 @@ export function crossingQueue(
 ): string[] {
 	const tiered = tieredPool(cards, { ...options, directions: CROSSING_DIRECTIONS });
 	if (tiered.length === 0) return [];
-	return toQueue(spreadByKey(tiered, options.day), CROSSING_QUESTIONS);
+
+	/*
+	 * Interleaved by *direction* first, and this is not a preference.
+	 *
+	 * The three questions do not have equal numbers of cards and never will: one
+	 * key-centre card per key, four modulations per key, and a pivot for every
+	 * near relation that has one. Spreading by key alone let the ratio decide the
+	 * task, and six questions came back as four modulations and two key centres
+	 * with the pivot never appearing at all — a task named "where are we?" that
+	 * mostly asked something else.
+	 *
+	 * So each direction is a lane, each lane is spread across keys the way the
+	 * function task spreads, and the lanes are taken in turn. The day rotates
+	 * which lane leads, so the same three questions do not arrive in the same
+	 * order every morning.
+	 */
+	const lanes = CROSSING_DIRECTIONS.map((direction) =>
+		spreadByKey(
+			tiered.filter((card) => card.direction === direction),
+			options.day
+		)
+	).filter((lane) => lane.length > 0);
+
+	return toQueue(interleave(rotate(lanes, options.day)), CROSSING_QUESTIONS);
 }
 
 // ---------------------------------------------------------------------------
@@ -1019,7 +1057,7 @@ function crossingTask(cardIds: string[], cards: Schedulable[]): CrossingTask | n
 	return {
 		kind: 'crossing',
 		title: 'Where are we?',
-		instruction: `${cardIds.length} cadences · play the note each one comes home to.`,
+		instruction: `${cardIds.length} questions · where the music is, where it went, and what turned it.`,
 		goal: { kind: 'questions', count: cardIds.length },
 		cardIds,
 		makeup: makeupOf(cardIds, cards)

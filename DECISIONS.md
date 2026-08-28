@@ -4781,3 +4781,77 @@ its own prompt.** Nothing in the type system says so.
 pass three. `cadenceIn` was written for all three and `pivotChords` has been
 waiting since pass one, so both are additions rather than rework — but neither is
 here, and the roadmap's own advice was to ship this one alone first.
+
+## M17 pass three, finished — what changed, and what turned it
+
+`key_moved` and `pivot_play` join `key_hear`, and the three of them share one
+skill, one task and one rule: **the page must not answer them anywhere.**
+
+### Two cadences, and the answer is where the second one landed
+
+`key_moved` is the harder sibling of `key_hear`, and harder for a reason worth
+naming: identifying a key from silence is one job, and _holding_ one key while
+another arrives is another. That second one is what Krumhansl and Kessler
+measured — close modulations are established by the listener sooner than distant
+ones — so the four near relations are what it asks about, met near-first because
+`crossingsWithRelation` returns them in the curriculum's own order.
+
+The answer is still one note: the tonic of the key it moved to. The **relation**
+is the half that transposes and the half worth learning, so it is named in the
+reveal — _G — the dominant_, _up a fifth, to the dominant_ — rather than demanded
+as an answer. Grading a relation would need a multiple choice this app does not
+have, and the honour-system reveal the naming directions already use would put a
+number in the record that always says "correct" and therefore means nothing.
+
+### One chord, two jobs
+
+`pivot_play` shows `Imaj7 in C · ♭IIImaj7 in Am` and asks for the chord. Two
+numerals, one pair of hands, and the realisation that they point at the same
+place is the whole of what a pivot modulation is. It is the only crossing
+question with something written down and the only one that sounds nothing —
+a question for the hands rather than the ear.
+
+It is also the only one that has to wait. Its answer is a diatonic seventh, so
+it is held back until the `all-sevenths` rung is open **in that key**, while its
+two siblings are answered with a single note and are open from the first morning.
+And there is no pivot card for the parallel key, because C major and C minor
+share no diatonic chord at all — which is exactly why that modulation is hard,
+and better said by an absence than by a card with an empty answer.
+
+One card per crossing rather than one per pivot: the relative pair shares all
+seven of its chords, so taking every pivot would make seven near-identical cards
+for the easiest relation in the set.
+
+### The ratio was deciding the task
+
+Six questions came back as four modulations and two key centres, with the pivot
+never appearing at all — a task called _Where are we?_ that mostly asked
+something else. The cause is structural and permanent: there is one key-centre
+card per key, four modulations per key, and a pivot for every near relation that
+has one, so spreading by key alone lets the card counts choose.
+
+So the crossing queue interleaves by **direction** first — each direction a lane,
+each lane spread across keys the way the function task spreads, the lanes taken
+in turn and rotated by the day. The interleave itself moved out of `spreadByKey`
+and is now written once, because two queues want it for two different reasons.
+
+### Three more things running it found
+
+**The crossing task had no keyboard.** `key_hear` shipped in the first half of
+this pass answered by _playing_ a note, and the footer that draws the on-screen
+piano was gated on `ear || function`. On a machine with no MIDI keyboard its
+questions were unanswerable. That is the third page-level miss in this pass
+alone, all of the same shape: a task kind added to the composer and not to every
+`kind ===` in the view.
+
+**The suppression had to cover the family, not the direction.** `isKeyQuestion`
+became `isCrossingQuestion` and covers all three, so the wheel's key overlay and
+the header that names a card's key stay off for a fourth crossing direction by
+default rather than by somebody remembering.
+
+**A payload is written once.** The pivot prompt was spelled `bIIImaj7` until the
+numerals were run through the app's own accidentals — and fixing the code did not
+fix the cards, because `ensureCards` is idempotent by identity and never rewrites
+a payload. That is deliberate and is what keeps review history across a
+regeneration; it also means a change to how a card _reads_ reaches only cards
+that do not exist yet. Worth knowing before editing any payload text.

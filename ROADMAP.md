@@ -497,7 +497,7 @@ not have: there is now a record worth taking with you, not just charts.
 
 ## M17 — Crossings: the curriculum stops being one key at a time
 
-**Status: passes one and two landed, pass three half landed; pass four not started.** Everything below is
+**Status: passes one to three landed; pass four not started.** Everything below is
 the whole argument — the longer write-up it came from is a private working
 document and this file does not depend on it. Sources are named inline so the
 claims can be checked.
@@ -589,12 +589,13 @@ Four passes, each shippable alone, in this order:
    changed?"), `pivot_play` ("turn the corner"), and a fifth task kind beside
    ear, function, mission and one new thing. This pass needs a migration:
    `card_direction` is a Postgres enum. Ship `key_hear` on its own first.
-   _`key_hear` landed_, with the `crossing` task kind, migration `0014` and the
-   `crossing:key-centre` skill — **which means a deploy needs `npm run db:seed`
-   as well as `db:migrate`, or no key cards are created.** `key_moved` and
-   `pivot_play` remain; `cadenceIn` and `pivotChords` are already there for both.
-   See `DECISIONS.md` for the two places the key leaked onto the page, neither of
-   them in the drill.
+   _Landed, all three_, with the `crossing` task kind, migrations `0014` and
+   `0015`, and the `crossing:key-centre` skill they share — **which means a
+   deploy needs `npm run db:seed` as well as `db:migrate`, or no crossing cards
+   are created.** `pivot_play` waits for the `all-sevenths` rung in its key; the
+   other two are open from the first morning. See `DECISIONS.md` for the four
+   page-level misses, every one of them the same shape: a task kind or a
+   direction added to the composer and not to every `kind ===` in the view.
 4. **Crossings in the songbook** — `Demand` gains a third axis fed by
    `detectModulations`, so the gate can say _this one goes to the dominant and
    you have practised that_ instead of refusing it for a reason that is not the

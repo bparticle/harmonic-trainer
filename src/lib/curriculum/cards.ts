@@ -1,7 +1,14 @@
 import type { CardDirection } from '$lib/server/db/schema';
 import { formatKey, key as makeKey } from '$lib/music/key';
 import { midi, pitchClass } from '$lib/music/note';
-import { CADENCE_NAME, cadenceIn } from './crossing';
+import {
+	CADENCE_NAME,
+	NEAR_RELATIONS,
+	RELATION_LABELS,
+	cadenceIn,
+	crossingsWithRelation,
+	describeCrossing
+} from './crossing';
 import {
 	RUNGS,
 	STAGES,
@@ -117,11 +124,27 @@ export function cardsForReached(reached: Array<{ key: string; rungId: RungId }>)
 	});
 
 	const keys = [...new Set(reached.map((cell) => cell.key))];
-	return [...rungs, ...keys.flatMap(cardsForKeyCentre)];
+
+	/*
+	 * The pivot question asks for a diatonic seventh, which is a chord rather
+	 * than a note — so unlike the other two it has to wait for the rung that
+	 * teaches sevenths in that key. The rest of the crossing family is answered
+	 * with a single note and is open from the first morning.
+	 */
+	const sevenths = new Set(
+		reached.filter((cell) => cell.rungId === 'all-sevenths').map((cell) => cell.key)
+	);
+
+	return [
+		...rungs,
+		...keys.flatMap(cardsForKeyCentre),
+		...keys.flatMap(cardsForKeyMoved),
+		...keys.filter((key) => sevenths.has(key)).flatMap(cardsForPivots)
+	];
 }
 
 // ---------------------------------------------------------------------------
-// Where are we?
+// Where are we, where did it go, and what was the hinge
 // ---------------------------------------------------------------------------
 
 /**
@@ -171,6 +194,109 @@ export function cardsForKeyCentre(keyName: string): GeneratedCard[] {
 			identity: `crossing|key-centre|${keyName}|key_hear`
 		}
 	];
+}
+
+/**
+ * Two cadences, and the question is where the second one landed.
+ *
+ * The harder sibling of `cardsForKeyCentre`, and harder for a reason worth
+ * naming: identifying a key from silence is one job, and *holding* one key while
+ * another arrives is another. Krumhansl and Kessler measured exactly this —
+ * modulations between close keys are established by the listener sooner than
+ * distant ones — so the four near relations are what this asks about, and the
+ * queue meets them near-first because `crossingsWithRelation` returns them in
+ * the curriculum's own order.
+ *
+ * The answer is still one note: the tonic of the key it moved to. The
+ * *relation* — the dominant, the relative — is what actually transposes and is
+ * the thing worth learning, so it is named in the reveal rather than demanded as
+ * an answer. Grading a relation would need a multiple choice this app does not
+ * have, and an honour-system reveal that always records "correct" would put a
+ * number in the record that means nothing.
+ */
+export function cardsForKeyMoved(keyName: string): GeneratedCard[] {
+	const from = makeKey(keyName);
+
+	return crossingsWithRelation(from, NEAR_RELATIONS).map((crossing) => {
+		const to = crossing.to;
+		const tonic = to.tonic;
+		const relation = RELATION_LABELS[crossing.relation];
+
+		const payload: CardPayload = {
+			kind: 'key-moved',
+			// The reveal names both halves: where it went, and what that move is
+			// called. The name is the half that survives being transposed.
+			label: `${formatKey(to, true)} — ${relation}`,
+			answerPitchClasses: [pitchClass(tonic)],
+			answerVoicing: [midi(tonic)],
+			detail: describeCrossing(crossing),
+			steps: [...cadenceIn(from), ...cadenceIn(to)].map((chord) => ({
+				numeral: chord.numeral,
+				symbol: chord.symbol,
+				pitchClasses: chord.pitchClasses,
+				voicing: chord.voicing
+			}))
+		};
+
+		return {
+			skillCode: CROSSING_SKILL,
+			keyCenter: keyName,
+			direction: 'key_moved' as const,
+			payload,
+			identity: `crossing|moved|${keyName}|${formatKey(to)}|key_moved`
+		};
+	});
+}
+
+/**
+ * One chord, named by what it does in two keys at once.
+ *
+ * `vi7 in C · ii7 in G`, and the answer is A minor seventh. The realisation that
+ * two numerals point at the same place under the hands is the whole of what a
+ * pivot modulation is, and it is a different question from `degree_play`, which
+ * gives one numeral in one key and asks for spelling.
+ *
+ * One card per crossing rather than one per pivot. C and its relative minor
+ * share all seven of their diatonic sevenths, so taking every pivot would make
+ * seven near-identical cards for the easiest relation in the set and none at all
+ * for the parallel, which shares no chord whatsoever. The first is taken because
+ * `pivotChords` walks the degrees in order and the first is the lowest — a
+ * stable choice, and a test asserts it stays one.
+ */
+export function cardsForPivots(keyName: string): GeneratedCard[] {
+	const from = makeKey(keyName);
+
+	return crossingsWithRelation(from, NEAR_RELATIONS).flatMap((crossing) => {
+		const [pivot] = crossing.pivots;
+		// The parallel key shares no diatonic chord at all, which is exactly why
+		// that modulation is hard — and why there is no hinge card for it.
+		if (!pivot) return [];
+
+		const here = formatKey(from, true);
+		const there = formatKey(crossing.to, true);
+		// The numerals arrive as the database spells them — `bIIImaj7`, `iim7b5`.
+		// The key names beside them are already unicode, and half a line of real
+		// accidentals next to half a line of ASCII reads as a mistake.
+		const numeral = (roman: string) => roman.replace(/b/g, '♭').replace(/#/g, '♯');
+
+		const payload: CardPayload = {
+			kind: 'pivot',
+			label: pivot.symbol,
+			answerPitchClasses: pivot.pitchClasses,
+			// The prompt itself: two functions, no chord name. `pose` reads this.
+			detail: `${numeral(pivot.romanInFrom)} in ${here} · ${numeral(pivot.romanInTo)} in ${there}`
+		};
+
+		return [
+			{
+				skillCode: CROSSING_SKILL,
+				keyCenter: keyName,
+				direction: 'pivot_play' as const,
+				payload,
+				identity: `crossing|pivot|${keyName}|${formatKey(crossing.to)}|${pivot.symbol}|pivot_play`
+			}
+		];
+	});
 }
 
 // ---------------------------------------------------------------------------

@@ -171,8 +171,12 @@ export function isDue(state: SrsState, now = new Date()): boolean {
  */
 export const DIRECTION_WEIGHT: Record<CardDirection, number> = {
 	play_name: 1.6,
-	// Heaviest of the lot, and it earns it: nothing is written down, the answer
-	// is one note out of twelve, and no other direction asks it at all.
+	// The heaviest three, and they earn it: nothing is written down, the answer
+	// is one note out of twelve, and no other direction asks any of it. `key_moved`
+	// leads them because holding one key while another arrives is harder than
+	// naming a key that is standing still.
+	key_moved: 1.7,
+	pivot_play: 1.55,
 	key_hear: 1.5,
 	degree_play: 1.3,
 	hear_name: 1.15,

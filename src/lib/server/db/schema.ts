@@ -57,11 +57,14 @@ const bytea = customType<{ data: Uint8Array; driverData: Buffer }>({
  * reading-off-the-wheel are genuinely different skills — you can hear a chord
  * you cannot name.
  *
- * `key_hear` is the sixth, and it is the first direction whose subject is a
- * *key* rather than a chord. A cadence sounds, nothing is written down, and the
- * answer is the note it came home to — which is the one question this app could
- * never ask, because every other direction hands you the key in the prompt.
- * Appended for the same reason `degree_play` was, below.
+ * `key_hear`, `key_moved` and `pivot_play` are the sixth, seventh and eighth,
+ * and they are the first directions whose subject is a *key* rather than a
+ * chord. A cadence sounds and the answer is the note it came home to; two
+ * cadences sound and the answer is where the second one landed; a chord is named
+ * by its function in two keys at once and the answer is the chord. Between them
+ * they are the questions this app could never ask, because every other direction
+ * hands you the key in the prompt. Appended for the same reason `degree_play`
+ * was, below.
  *
  * `degree_play` is the fifth and arrived last: the stimulus is a Roman numeral
  * and a key rather than a symbol, because seeing "A♭" and producing A♭ is
@@ -75,7 +78,9 @@ export const cardDirection = pgEnum('card_direction', [
 	'see_play',
 	'play_name',
 	'degree_play',
-	'key_hear'
+	'key_hear',
+	'key_moved',
+	'pivot_play'
 ]);
 
 /** FSRS memory states. */
