@@ -101,9 +101,9 @@ export function dayNumber(now: Date): number {
 /** Tasks, not minutes. Minutes were always an estimate; tasks are countable. */
 export type WorkoutSize = 'short' | 'standard' | 'long';
 
-export const TASK_COUNT: Record<WorkoutSize, number> = { short: 3, standard: 4, long: 5 };
+export const TASK_COUNT: Record<WorkoutSize, number> = { short: 3, standard: 4, long: 6 };
 
-export type TaskKind = 'ear' | 'function' | 'mission' | 'new_thing';
+export type TaskKind = 'ear' | 'function' | 'crossing' | 'mission' | 'new_thing';
 
 /**
  * A mission: the real play-along page under a constraint.
@@ -210,11 +210,12 @@ type TaskBase = {
 };
 
 export type EarTask = TaskBase & { kind: 'ear'; cardIds: string[]; makeup?: Makeup };
+export type CrossingTask = TaskBase & { kind: 'crossing'; cardIds: string[]; makeup?: Makeup };
 export type FunctionTask = TaskBase & { kind: 'function'; cardIds: string[]; makeup?: Makeup };
 export type MissionTask = TaskBase & { kind: 'mission'; mission: Mission };
 export type NewThingTask = TaskBase & { kind: 'new_thing'; novelty: Novelty };
 
-export type Task = EarTask | FunctionTask | MissionTask | NewThingTask;
+export type Task = EarTask | FunctionTask | CrossingTask | MissionTask | NewThingTask;
 
 export type Workout = {
 	/**
@@ -488,6 +489,20 @@ const MISSION_CHORUSES = 2;
 const EAR_DIRECTIONS: CardDirection[] = ['hear_play', 'hear_name'];
 
 const FUNCTION_DIRECTIONS: CardDirection[] = ['degree_play'];
+
+/**
+ * The key-centre question, alone in its own partition.
+ *
+ * One direction, and it must not be folded into the ear task. The ear task's
+ * whole instruction is "listen, then play or name *it*" — a chord, a thing with
+ * a symbol. This asks where you are, which is a different question with a
+ * different answer, and mixing them would make one task that could not say what
+ * it wanted.
+ */
+const CROSSING_DIRECTIONS: CardDirection[] = ['key_hear'];
+
+/** Six keys is enough to be a discrimination and short enough to finish. */
+const CROSSING_QUESTIONS = 6;
 
 /**
  * Which form a cold quality is most at home in.
@@ -786,6 +801,30 @@ export function functionQueue(
 	);
 }
 
+/**
+ * Six key questions, spread across as many keys as the frontier has opened.
+ *
+ * The spread is the exercise rather than a nicety. Kornell and Bjork's finding
+ * is about *discrimination* — interleaving pays because it puts confusable
+ * things next to each other and lets the difference become visible — and twelve
+ * keys are as confusable as categories get. Six questions all in C would be six
+ * repetitions of "yes, still C"; six across four keys is the thing being
+ * taught. So this uses the same round-robin the function task does, and for a
+ * stronger reason.
+ *
+ * No pinning. Choosing a rung on the home page leads the other two queues, and
+ * leading this one would defeat it: a pinned key is a key you have been told,
+ * which is the one thing this question must not do.
+ */
+export function crossingQueue(
+	cards: Schedulable[],
+	options: { now: Date; day: number; coldKeys?: string[] }
+): string[] {
+	const tiered = tieredPool(cards, { ...options, directions: CROSSING_DIRECTIONS });
+	if (tiered.length === 0) return [];
+	return toQueue(spreadByKey(tiered, options.day), CROSSING_QUESTIONS);
+}
+
 // ---------------------------------------------------------------------------
 // The mission
 // ---------------------------------------------------------------------------
@@ -975,6 +1014,18 @@ function functionTask(cardIds: string[], cards: Schedulable[]): FunctionTask | n
 	};
 }
 
+function crossingTask(cardIds: string[], cards: Schedulable[]): CrossingTask | null {
+	if (cardIds.length === 0) return null;
+	return {
+		kind: 'crossing',
+		title: 'Where are we?',
+		instruction: `${cardIds.length} cadences · play the note each one comes home to.`,
+		goal: { kind: 'questions', count: cardIds.length },
+		cardIds,
+		makeup: makeupOf(cardIds, cards)
+	};
+}
+
 function missionTask(mission: Mission, chart: MissionChart | undefined): MissionTask {
 	const constraint = mission.rootless ? ' Rootless · thirds and sevenths only.' : '';
 	/*
@@ -1060,23 +1111,33 @@ function noveltyLine(novelty: Novelty): string {
 /**
  * The order of the kinds, by size.
  *
- * Standard is one of each, which is the shape the plan describes. Long adds a
- * second mission at the end, because the principle of the whole milestone is
- * that the band asks whatever the band can ask. Short drops one of the two
- * drill-room questions and alternates which — the mission and the new thing
- * both survive, since a short day that never plays with anyone and never meets
- * anything is not a short workout, it is a shrug.
+ * There are three drill-room questions now rather than two, and the sizes
+ * deliberately did not all grow to fit. A workout that gains a task because the
+ * app gained a feature is the app spending somebody else's morning.
+ *
+ * So: **short** rotates through the three, one a day. **Standard** keeps its
+ * four and alternates the middle slot between the degrees and the key question —
+ * they are siblings, both asking where a sound sits rather than what it is, and
+ * every other day is often enough for either. **Long** is the one that grew, to
+ * six, because asking for the long workout is asking for all of it.
+ *
+ * The mission and the new thing survive at every size, since a short day that
+ * never plays with anyone and never meets anything is not a short workout, it
+ * is a shrug.
  */
 function slotsFor(size: WorkoutSize, day: number): TaskKind[] {
 	switch (size) {
 		case 'short':
-			return [day % 2 === 0 ? 'ear' : 'function', 'mission', 'new_thing'];
+			return [DRILLS[day % DRILLS.length], 'mission', 'new_thing'];
 		case 'standard':
-			return ['ear', 'function', 'mission', 'new_thing'];
+			return ['ear', day % 2 === 0 ? 'function' : 'crossing', 'mission', 'new_thing'];
 		case 'long':
-			return ['ear', 'function', 'mission', 'new_thing', 'mission'];
+			return ['ear', 'function', 'crossing', 'mission', 'new_thing', 'mission'];
 	}
 }
+
+/** The three question kinds a short day rotates between. */
+const DRILLS: TaskKind[] = ['ear', 'function', 'crossing'];
 
 // ---------------------------------------------------------------------------
 // The composer
@@ -1152,6 +1213,7 @@ export function composeWorkout(input: WorkoutInput): Workout {
 		functionQueue(input.cards, { now, day, coldKeys, pinnedSkill, keyCenter }),
 		input.cards
 	);
+	const crossing = crossingTask(crossingQueue(input.cards, { now, day, coldKeys }), input.cards);
 
 	let missionsBuilt = 0;
 	/*
@@ -1205,14 +1267,16 @@ export function composeWorkout(input: WorkoutInput): Workout {
 		// one that can always be posed.
 		const built =
 			slot === 'ear'
-				? (take(ear) ?? take(fn) ?? nextMission())
+				? (take(ear) ?? take(fn) ?? take(crossing) ?? nextMission())
 				: slot === 'function'
-					? (take(fn) ?? take(ear) ?? nextMission())
-					: slot === 'new_thing'
-						? novelty
-							? newThingTask(novelty)
-							: (nextMission() ?? take(ear) ?? take(fn))
-						: (nextMission() ?? take(ear) ?? take(fn));
+					? (take(fn) ?? take(crossing) ?? take(ear) ?? nextMission())
+					: slot === 'crossing'
+						? (take(crossing) ?? take(fn) ?? take(ear) ?? nextMission())
+						: slot === 'new_thing'
+							? novelty
+								? newThingTask(novelty)
+								: (nextMission() ?? take(ear) ?? take(fn) ?? take(crossing))
+							: (nextMission() ?? take(ear) ?? take(fn) ?? take(crossing));
 
 		if (built) tasks.push(built);
 	}

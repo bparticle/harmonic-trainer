@@ -1,6 +1,8 @@
 import {
 	chordPitchClasses,
+	closeVoicing,
 	diatonicSeventh,
+	diatonicTriad,
 	formatChord,
 	type AbstractChord
 } from '$lib/music/chord';
@@ -15,7 +17,7 @@ import {
 	type Key,
 	type Mode
 } from '$lib/music/key';
-import { pitchClass } from '$lib/music/note';
+import { midi, pitchClass } from '$lib/music/note';
 import { STAGES } from './ladder';
 
 /**
@@ -211,6 +213,61 @@ export function pivotChords(from: Key, to: Key): Pivot[] {
 
 	return pivots;
 }
+
+// ---------------------------------------------------------------------------
+// Planting a key in the ear
+// ---------------------------------------------------------------------------
+
+/** One chord of a cadence, in the shape a card payload and a player both read. */
+export type CadenceChord = {
+	numeral: string;
+	symbol: string;
+	pitchClasses: number[];
+	voicing: number[];
+};
+
+/**
+ * The degrees that establish a key, and why these three.
+ *
+ * IV–V–I, as plain triads. Not ii–V–I, which is the stronger cadence and the
+ * one this app spends most of its time on, because it needs sevenths — and the
+ * question these build is answerable on the first morning of an account, when
+ * the only thing anybody has met is a scale.
+ *
+ * Chenette's argument decided the shape: aural curricula over-fit to notation,
+ * and what listeners report actually using is the bass line and the cadence.
+ * Three root-position triads falling home is exactly that and nothing else.
+ */
+const CADENCE_DEGREES = [4, 5, 1];
+
+/**
+ * The chords that plant a key in the ear, ending at home.
+ *
+ * **The tonic sounds last, and that is a deliberate first version.** Stopping
+ * on the V would be the harder and more interesting question — the ear has to
+ * supply a tonic that never arrived, which is the probe-tone paradigm proper —
+ * and it is the wrong question to open with. Ending home means the answer is
+ * always available to somebody who can hear, rather than only to somebody who
+ * already has the skill being taught. The harder variant is a second direction,
+ * not a flag on this one.
+ *
+ * Root position throughout, so the bass line is the cadence rather than a
+ * voice-leading exercise wearing one.
+ */
+export function cadenceIn(k: Key): CadenceChord[] {
+	return CADENCE_DEGREES.map((degree) => {
+		const chord = diatonicTriad(k, degree);
+		return {
+			numeral: degree === 1 ? 'I' : degree === 4 ? 'IV' : 'V',
+			symbol: formatChord(chord),
+			pitchClasses: chordPitchClasses(chord),
+			voicing: closeVoicing(chord, 3).map(midi)
+		};
+	});
+}
+
+/** How the cadence is described where one has to be named. */
+export const CADENCE_NAME = 'IV – V – I';
 
 // ---------------------------------------------------------------------------
 // The crossing

@@ -8,6 +8,8 @@ import {
 	crossingBetween,
 	crossingsFrom,
 	crossingsWithRelation,
+	CADENCE_NAME,
+	cadenceIn,
 	curriculumKeys,
 	describeCrossing,
 	describePivots,
@@ -261,5 +263,50 @@ describe('saying a crossing out loud', () => {
 	it('explains a pivot, and explains the absence of one', () => {
 		expect(describePivots(crossingBetween(C, major('G')))).toContain('Cmaj7');
 		expect(describePivots(crossingBetween(C, minor('C')))).toContain('nothing to pivot on');
+	});
+});
+
+describe('the cadence that plants a key', () => {
+	it('is three triads falling home, in every key', () => {
+		for (const k of curriculumKeys()) {
+			const cadence = cadenceIn(k);
+			expect(
+				cadence.map((chord) => chord.numeral),
+				formatKey(k)
+			).toEqual(['IV', 'V', 'I']);
+			for (const chord of cadence) {
+				expect(chord.pitchClasses, `${formatKey(k)} ${chord.symbol}`).toHaveLength(3);
+				expect(chord.voicing).toHaveLength(3);
+			}
+		}
+	});
+
+	it('ends on the tonic, which is the answer the question wants', () => {
+		const cadence = cadenceIn(major('C'));
+		expect(cadence[2].symbol).toBe('C');
+		expect(cadence[2].pitchClasses).toContain(0);
+	});
+
+	it('spells the far keys the way the key spells them', () => {
+		// G flat major's fourth degree is C flat, not B. A cadence that said B
+		// would be a different chord with the same sound and the wrong name.
+		expect(cadenceIn(major('Gb'))[0].symbol).toBe('Cb');
+		expect(cadenceIn(major('Eb')).map((c) => c.symbol)).toEqual(['Ab', 'Bb', 'Eb']);
+	});
+
+	it('works in minor, where the three chords are minor too', () => {
+		expect(cadenceIn(minor('A')).map((c) => c.symbol)).toEqual(['Dm', 'Em', 'Am']);
+	});
+
+	it('never writes a double accidental, in any key', () => {
+		for (const k of curriculumKeys()) {
+			for (const chord of cadenceIn(k)) {
+				expect(chord.symbol, formatKey(k)).not.toMatch(/bb|##/);
+			}
+		}
+	});
+
+	it('names itself once, for anything that has to print it', () => {
+		expect(CADENCE_NAME).toContain('IV');
 	});
 });

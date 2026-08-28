@@ -5,7 +5,7 @@
 	import Wheel from '$lib/wheel/Wheel.svelte';
 	import { midi as session } from '$lib/midi/shared.svelte';
 	import type { MidiEvent } from '$lib/midi/cluster';
-	import { playChord, playSequence, startAudio, stopAll } from '$lib/audio/engine';
+	import { playChord, playProgression, playSequence, startAudio, stopAll } from '$lib/audio/engine';
 	import { markGathered, markPlayed, pose, toVoicing } from '$lib/session/drill';
 	import { guidanceFor, guidanceKey, isChordShape, type LessonCard } from '$lib/session/lesson';
 	import { gradeFromPerformance } from '$lib/srs/scheduler';
@@ -155,7 +155,9 @@
 	 * screen honest if a card ever fails to load.
 	 */
 	const asks = $derived(
-		task && (task.kind === 'ear' || task.kind === 'function') ? task.cardIds.length : 0
+		task && (task.kind === 'ear' || task.kind === 'function' || task.kind === 'crossing')
+			? task.cardIds.length
+			: 0
 	);
 	const goalLine = $derived(task ? describeGoal(task.goal) : '');
 
@@ -223,6 +225,15 @@
 	);
 
 	/**
+	 * A cadence, and nothing written down.
+	 *
+	 * The one question whose subject is a key rather than a chord, so it wants
+	 * its own copy on screen and its own way of being sounded — chords in turn
+	 * rather than a chord — and it must never show the key before the answer.
+	 */
+	const isKeyQuestion = $derived(prompt?.direction === 'key_hear');
+
+	/**
 	 * Whether what you play is marked against the card.
 	 *
 	 * `answerWith` names the half that *ends* a question, and for a degree that is
@@ -244,13 +255,25 @@
 		};
 		return payload.answerVoicing ?? toVoicing(payload.answerPitchClasses);
 	});
+	/** Chords to play in turn, for a question that is a passage rather than a sound. */
+	const questionSequence = $derived(prompt?.sequence ?? null);
+
 	const questionAudio = $derived(
 		prompt?.audible ?? (isChordLesson && lessonGuidance.mode === 'guided' ? chordTarget : null)
 	);
 
+	/** Whether this question has anything to sound at all, chord or passage. */
+	const hasQuestionAudio = $derived(Boolean(questionAudio || questionSequence));
+
 	/** Once audio has been unlocked by a tap, later questions can play automatically. */
 	$effect(() => {
-		if (!audioUnlocked || !questionAudio || answered || !promptKey || playedPromptKey === promptKey)
+		if (
+			!audioUnlocked ||
+			!hasQuestionAudio ||
+			answered ||
+			!promptKey ||
+			playedPromptKey === promptKey
+		)
 			return;
 		void playQuestion();
 	});
@@ -269,9 +292,10 @@
 	}
 
 	async function playQuestion() {
-		if (!questionAudio || !currentCard || !promptKey || playingQuestion) return;
+		if (!hasQuestionAudio || !currentCard || !promptKey || playingQuestion) return;
 		const thisPromptKey = promptKey;
-		const audible = questionAudio;
+		const audible = questionAudio ?? [];
+		const sequence = questionSequence;
 		playedPromptKey = thisPromptKey;
 		playingQuestion = true;
 		audioProblem = null;
@@ -283,13 +307,22 @@
 			 * cluster nobody could identify, and then demanded all seven back
 			 * simultaneously, which is not playable.
 			 */
-			if (isSequential) {
-				const sequence = playSequence(audible, 0.4);
+			if (sequence) {
+				/*
+				 * A cadence: chords in turn, and nothing lit on the keyboard while it
+				 * plays. Showing the notes would answer the question — the whole of
+				 * this one is that the key is never written down.
+				 */
+				const chordSeconds = 1.05;
+				await playProgression(sequence, chordSeconds);
+				await wait(sequence.length * chordSeconds * 1000);
+			} else if (isSequential) {
+				const playing = playSequence(audible, 0.4);
 				const demonstration =
 					lessonGuidance.mode === 'guided'
 						? animateScale(audible, 400)
 						: wait(audible.length * 400);
-				await Promise.all([sequence, demonstration]);
+				await Promise.all([playing, demonstration]);
 				if (lessonPhase === 'watch') lessonPhase = 'play';
 			} else if (isChordLesson && lessonGuidance.mode === 'guided') {
 				const run = ++demoRun;
@@ -492,9 +525,32 @@
 	 */
 	const questionSource = $derived.by(() => {
 		if (!currentCard) return '';
+		/*
+		 * Silent for the key question, and this is not a nicety.
+		 *
+		 * This line exists to say which key and which topic a question came from,
+		 * which is exactly the answer when the question is *which key is this*.
+		 * Printing it put "G · where are we?" above a cadence in G and turned a
+		 * listening test into a reading test. Found by rendering the page, because
+		 * the leak is in the one place the drill's own tests cannot see: a header
+		 * that belongs to the workout rather than to the card.
+		 */
+		if (currentCard.direction === 'key_hear') return '';
 		const topic = skillLabel(currentCard.skillCode)?.toLowerCase();
 		const key = glyph(currentCard.keyCenter);
 		return topic ? `${key} · ${topic}` : key;
+	});
+
+	/**
+	 * What the wheel shows during a key question: nothing, until it is answered.
+	 *
+	 * The same rule as the prompt — no key, no degrees, no scale outline — and
+	 * then the tonic once the answer is out, so the reveal has somewhere to land.
+	 */
+	const keyAnswerHighlights = $derived.by((): Highlight[] => {
+		if (!currentCard || !(revealed || answered)) return [];
+		const pcs = (currentCard.payload as { answerPitchClasses: number[] }).answerPitchClasses;
+		return pcs.length ? [{ cells: cellsFor(pcs, pcs[0], config, GEOMETRY), strength: 0.9 }] : [];
 	});
 
 	const guidanceTitle = $derived.by(() => {
@@ -1019,6 +1075,21 @@
 							<p class="prompt-name">{prompt.visible}</p>
 						{:else if revealed}
 							<p class="prompt-name">{(currentCard.payload as { label: string }).label}</p>
+							{#if isKeyQuestion}
+								<p class="chord-context">
+									{(currentCard.payload as { detail?: string }).detail ?? ''}
+								</p>
+							{/if}
+						{:else if isKeyQuestion}
+							<p class="prompt-kicker">Where are we?</p>
+							<p class="prompt-copy">{prompt.instruction}</p>
+							<button class="hear-button" onclick={playQuestion} disabled={playingQuestion}>
+								{playingQuestion
+									? 'Playing the cadence…'
+									: audioUnlocked
+										? 'Hear it again'
+										: 'Hear the cadence'}
+							</button>
 						{:else}
 							<p class="prompt-copy">{prompt.instruction}</p>
 							<button class="hear-button" onclick={playQuestion} disabled={playingQuestion}>
@@ -1071,11 +1142,21 @@
 							</div>
 						{/if}
 					{:else}
+						<!--
+							The wheel, and for a key question a *blank* one.
+
+							Everywhere else it draws the workout's key with its degrees
+							named, which is the context you are working in. When the question
+							is which key you are in, that context is a wrong answer drawn
+							large: it lit C and called it I while a cadence in G was playing.
+							So the overlay comes off and what is left is the twelve notes and
+							whatever your hands are doing — which is the right amount of help.
+						-->
 						<Wheel
 							{config}
-							active={keyView.pitchClasses}
-							degrees={keyView.degrees}
-							{highlights}
+							active={isKeyQuestion ? [] : keyView.pitchClasses}
+							degrees={isKeyQuestion ? undefined : keyView.degrees}
+							highlights={isKeyQuestion ? keyAnswerHighlights : highlights}
 							lit={session.live.map((n) => n % 12)}
 							size={280}
 							interactive={false}

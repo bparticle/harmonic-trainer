@@ -4692,3 +4692,92 @@ counts are all weight.
 `journeyProgress` counts **cells** now rather than position along a walk, so
 going one rung deeper moves it by more than one. That is not a bug in the number;
 it is the number finally measuring the right thing.
+
+## M17 pass three — the question the app could never ask
+
+`key_hear` is the sixth card direction and the first whose subject is a **key**
+rather than a chord. Every other direction hands the key over in the prompt:
+`see_play` shows a symbol, `degree_play` names the degree _and_ the key it is a
+degree of. So the one question this app had never been able to ask is the one
+somebody is answering, badly, every time they try to play along with a record —
+_where are we?_
+
+A cadence sounds. Nothing is written down. The answer is the note it came home
+to, played on the piano.
+
+### Why the answer is one note
+
+Not the tonic triad, which would have been the chord-shaped choice. A single
+note is answerable on the first morning of an account, when the only thing
+anybody has met is a scale — and it is the probe-tone question in its plain
+form. `markPlayed` compares pitch classes, so any octave is right and a second
+note is wrong, which is exactly the strictness this question wants.
+
+The **stimulus is allowed to be richer than the vocabulary**, and that needed
+saying out loud because it looks like the readiness gate leaking. It is not: the
+gate has always been about what the app asks you to _play_, and Tillmann,
+Bharucha and Bigand's account of tonal knowledge is that it is acquired by
+exposure in the first place. Three triads to listen to and one note to find is
+not a tune you have not been taught.
+
+The cadence is **IV–V–I as plain triads**, ending home. Not ii–V–I, which is
+stronger and is where this app spends most of its time, because it needs
+sevenths and would put the exercise four rungs out of reach. Ending on the tonic
+rather than stopping on the V is a deliberate first version: stopping on the V is
+the better question — the ear has to supply a tonic that never arrived — and it
+is the wrong one to open with, because it is only answerable by somebody who
+already has the skill. That is a second direction, not a flag on this one.
+
+### One skill, twelve instances
+
+`crossing:key-centre` names a _question_ rather than a thing to be learned, and
+the twelve keys are its instances, carried on the card's own `key_center` like
+every other card. One code rather than twelve, because "can you hear which key
+this is" is a single ability that happens to be tested in twelve places. It is
+seeded rather than migrated, and `ensureCards` has always skipped a card whose
+skill row the seed has not supplied — so a database that has migrated but not
+reseeded quietly makes no key cards instead of failing.
+
+### The sizes did not all grow to fit
+
+There are three drill-room questions now rather than two. A workout that gains a
+task because the app gained a feature is the app spending somebody else's
+morning, so: **short** rotates through the three, one a day; **standard** keeps
+its four and alternates the middle slot between the degrees and the key
+question, which are siblings — both ask where a sound sits rather than what it
+is; **long** is the one that grew, to six, because asking for the long workout is
+asking for all of it.
+
+The crossing queue uses the same round-robin as the function task and for a
+stronger reason. Six questions all in C would be six repetitions of _yes, still
+C_; the spread across keys **is** the exercise. It also refuses to be pinned:
+leading the queue with a chosen key would tell you the answer.
+
+### Two leaks, and only one of them was in the drill
+
+Rendering the page found both.
+
+**The header named the key.** `questionSource` — the line added a milestone ago
+so a question can say which key and topic it came from — printed
+`G · where are we?` above a cadence in G. A perfect answer, in the one place the
+drill's own tests cannot see, because that header belongs to the workout rather
+than to the card. It is silent for this direction now, and `pose` has a test
+asserting the key appears in neither the visible text nor the instruction, which
+is where the next person adding a direction will look.
+
+**The wheel drew the wrong key large.** It shows the workout's key with its
+degrees named, which is the context you are working in — and while a cadence in
+G played it lit C and labelled it I. For a key question the overlay comes off
+entirely: twelve plain notes and whatever your hands are doing, with the tonic
+highlighted only once the answer is out.
+
+Both are the same mistake in two places, and it is worth naming: **a question
+that withholds something has to withhold it from the whole page, not just from
+its own prompt.** Nothing in the type system says so.
+
+### What is not built yet
+
+`key_moved` (what changed?) and `pivot_play` (turn the corner) are the rest of
+pass three. `cadenceIn` was written for all three and `pivotChords` has been
+waiting since pass one, so both are additions rather than rework — but neither is
+here, and the roadmap's own advice was to ship this one alone first.

@@ -171,6 +171,9 @@ export function isDue(state: SrsState, now = new Date()): boolean {
  */
 export const DIRECTION_WEIGHT: Record<CardDirection, number> = {
 	play_name: 1.6,
+	// Heaviest of the lot, and it earns it: nothing is written down, the answer
+	// is one note out of twelve, and no other direction asks it at all.
+	key_hear: 1.5,
 	degree_play: 1.3,
 	hear_name: 1.15,
 	see_play: 1.0,

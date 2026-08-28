@@ -9,7 +9,7 @@ import {
 	type Frontier,
 	type RungId
 } from '$lib/curriculum/ladder';
-import { cardsForRung } from '$lib/curriculum/cards';
+import { cardsForRung, CROSSING_SKILL } from '$lib/curriculum/cards';
 import { STAGES } from '$lib/curriculum/ladder';
 import { PROGRESSIONS } from '$lib/curriculum/progressions';
 import { MISSION_CHARTS, chartDemand } from '$lib/curriculum/charts';
@@ -62,7 +62,15 @@ const card = (
 	}
 });
 
-/** A bank spread over every reached key and every direction. */
+/**
+ * A bank spread over every reached key and every direction.
+ *
+ * Including one key-centre card per key, because that is what an account
+ * actually holds: `cardsForReached` makes one for every key the frontier has
+ * opened, whatever depth it reaches there. A bank without them would leave the
+ * crossing slot falling through to a mission and quietly test the fallthrough
+ * instead of the thing under test.
+ */
 function bank(options: { dueInDays?: number; reps?: number } = {}): Schedulable[] {
 	const directions: CardDirection[] = [
 		'hear_name',
@@ -83,6 +91,9 @@ function bank(options: { dueInDays?: number; reps?: number } = {}): Schedulable[
 				);
 			}
 		}
+	}
+	for (const key of REACHED_KEYS) {
+		out.push(card(`${key}-key-centre`, 'key_hear', key, { ...options, skillCode: CROSSING_SKILL }));
 	}
 	return out;
 }
@@ -946,5 +957,68 @@ describe('a mission says whether the tune has been met', () => {
 	it('is zero rather than absent for a tune with no runs', () => {
 		const workout = composeWorkout(input({ charts: [ONE_TUNE] }));
 		expect(missions(workout)[0].playedBefore).toBe(0);
+	});
+});
+
+describe('the crossing task', () => {
+	const crossing = (workout: Workout) =>
+		workout.tasks.find((task) => task.kind === 'crossing') as
+			{ kind: 'crossing'; cardIds: string[]; makeup?: { keys: string[] } } | undefined;
+
+	it('appears at long, and on alternate days at standard', () => {
+		const long = composeWorkout(input({ size: 'long' }));
+		expect(taskKinds(long)).toContain('crossing');
+		expect(taskKinds(long)).toHaveLength(TASK_COUNT.long);
+
+		const kinds = [0, 1].map((d) =>
+			taskKinds(composeWorkout(input({ size: 'standard', now: new Date(NOW.getTime() + d * DAY) })))
+		);
+		expect(kinds.some((k) => k.includes('crossing'))).toBe(true);
+		expect(kinds.some((k) => k.includes('function'))).toBe(true);
+	});
+
+	it('does not lengthen the standard day to fit', () => {
+		for (let d = 0; d < 6; d++) {
+			const workout = composeWorkout(
+				input({ size: 'standard', now: new Date(NOW.getTime() + d * DAY) })
+			);
+			expect(workout.tasks, `day ${d}`).toHaveLength(TASK_COUNT.standard);
+		}
+	});
+
+	/*
+	 * The point of the exercise. Six questions all in one key would be six
+	 * repetitions of "yes, still C"; the discrimination is the spread.
+	 */
+	it('spreads across the keys the frontier has opened', () => {
+		const task = crossing(composeWorkout(input({ size: 'long' })))!;
+		expect(task.makeup!.keys.length).toBeGreaterThan(1);
+	});
+
+	it('asks only the direction that asks about a key', () => {
+		const workout = composeWorkout(input({ size: 'long' }));
+		const asked = new Set(crossing(workout)!.cardIds);
+		const bankById = new Map(bank().map((c) => [c.cardId, c]));
+		for (const id of asked) expect(bankById.get(id)!.direction).toBe('key_hear');
+	});
+
+	it('never hands the same card to two tasks', () => {
+		const workout = composeWorkout(input({ size: 'long' }));
+		const all = workout.tasks.flatMap((task) =>
+			task.kind === 'ear' || task.kind === 'function' || task.kind === 'crossing'
+				? task.cardIds
+				: []
+		);
+		const crossingIds = new Set(crossing(workout)!.cardIds);
+		const others = all.filter((id) => !crossingIds.has(id));
+		for (const id of others) expect(crossingIds.has(id)).toBe(false);
+	});
+
+	it('falls through rather than leaving a hole when no key card exists', () => {
+		// An account whose skill row has not been seeded yet owns no key cards.
+		const withoutKeys = bank().filter((c) => c.direction !== 'key_hear');
+		const workout = composeWorkout(input({ size: 'long', cards: withoutKeys }));
+		expect(taskKinds(workout)).not.toContain('crossing');
+		expect(workout.tasks.length).toBeGreaterThan(0);
 	});
 });

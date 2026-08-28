@@ -14,8 +14,17 @@ export type Prompt = {
 	direction: CardDirection;
 	/** What the screen shows. Empty when the question is purely aural. */
 	visible: string | null;
-	/** Notes to play through the speakers, if any. */
+	/** Notes to play through the speakers together, if any. */
 	audible: number[] | null;
+	/**
+	 * Chords to play one after another, if the question is a passage.
+	 *
+	 * Separate from `audible` rather than folded into it as a one-chord list,
+	 * because the two are played by different functions and mean different
+	 * things to a listener: `audible` is a sound to identify, this is music to
+	 * locate yourself inside.
+	 */
+	sequence: number[][] | null;
 	/** How the answer is given. */
 	answerWith: 'play' | 'name';
 	/** One line telling you what to do. */
@@ -48,6 +57,7 @@ export function pose(
 		case 'hear_name':
 			return {
 				direction,
+				sequence: null,
 				visible: null,
 				audible: voicing,
 				answerWith: 'name',
@@ -56,6 +66,7 @@ export function pose(
 		case 'hear_play':
 			return {
 				direction,
+				sequence: null,
 				visible: null,
 				audible: voicing,
 				answerWith: 'play',
@@ -64,6 +75,7 @@ export function pose(
 		case 'see_play':
 			return {
 				direction,
+				sequence: null,
 				visible: payload.label,
 				audible: null,
 				answerWith: 'play',
@@ -72,6 +84,7 @@ export function pose(
 		case 'play_name':
 			return {
 				direction,
+				sequence: null,
 				visible: payload.detail ?? payload.degree ?? payload.label,
 				audible: null,
 				answerWith: 'name',
@@ -100,12 +113,35 @@ export function pose(
 			const key = home ? formatKey(parseKey(home), true) : null;
 			return {
 				direction,
+				sequence: null,
 				visible: key ? `${degree} — ${key}` : degree,
 				audible: null,
 				answerWith: 'name',
 				instruction: 'Play the chord that degree asks for, then name what you played.'
 			};
 		}
+		/*
+		 * A cadence, and nothing written down.
+		 *
+		 * The only direction whose prompt shows *less* than the card knows: the
+		 * key is deliberately absent, because naming it is the question. What
+		 * comes back is one note — the tonic — which `markPlayed` compares as a
+		 * pitch class, so any octave is right and a second note is not.
+		 *
+		 * A card whose payload has lost its steps falls back to sounding the
+		 * tonic alone. That is a poor question rather than a broken one, which is
+		 * the right failure for a row that predates a change to how these are
+		 * built.
+		 */
+		case 'key_hear':
+			return {
+				direction,
+				visible: null,
+				audible: payload.steps?.length ? null : voicing,
+				sequence: payload.steps?.length ? payload.steps.map((step) => step.voicing) : null,
+				answerWith: 'play',
+				instruction: 'Listen. Play the note it comes home to.'
+			};
 	}
 }
 

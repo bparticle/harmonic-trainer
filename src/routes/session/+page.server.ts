@@ -32,7 +32,7 @@ export const load: PageServerLoad = async ({ parent, locals }) => {
 	const byTask: CardsByTask = {};
 	for (const entry of active.tasks) {
 		const task = entry.task;
-		if (task.kind !== 'ear' && task.kind !== 'function') continue;
+		if (task.kind !== 'ear' && task.kind !== 'function' && task.kind !== 'crossing') continue;
 		if (task.cardIds.length) byTask[entry.index] = await loadCards(userId, task.cardIds);
 	}
 

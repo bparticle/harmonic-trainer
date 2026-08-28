@@ -1,0 +1,30 @@
+-- A sixth direction, and the first whose subject is a key rather than a chord.
+--
+-- Every other direction hands you the key in the prompt: `see_play` shows a
+-- symbol, `degree_play` names the degree and the key it is a degree of. So the
+-- one question this app has never been able to ask is *which key is this* —
+-- which is the question somebody is answering, badly, every time they try to
+-- play along with a record. `key_hear` sounds a cadence, writes nothing down,
+-- and asks for the note it came home to.
+--
+-- Nothing already recorded changes. Every existing card keeps the direction it
+-- was created with, every review still points at the same card, and no row is
+-- rewritten: the type gains a value that nothing yet uses. The new cards come
+-- from `ensureLadderCards`, which creates whatever the frontier has opened and
+-- has always skipped what already exists, so an account halfway up the ladder
+-- grows its key cards on its next session with every other card's history
+-- untouched.
+--
+-- The skill row they hang off is seeded, not migrated: `skillSeeds()` gains
+-- `crossing:key-centre` and `npm run db:seed` is what writes it. Until that has
+-- run, `ensureCards` skips these cards rather than failing — the same tolerance
+-- it has always had for a skill the seed has not supplied yet.
+--
+-- One statement, and deliberately alone. Postgres allows `ADD VALUE` inside a
+-- transaction block, but the value it adds cannot be *used* until that
+-- transaction commits — and Drizzle runs every pending migration inside one
+-- transaction, not one each. So a default, a backfill or a check constraint
+-- mentioning 'key_hear' would fail here, and would fail only on a database that
+-- had not already migrated. Anything that wants to write the new value belongs
+-- in a later migration or, as here, in the application.
+ALTER TYPE "public"."card_direction" ADD VALUE 'key_hear';

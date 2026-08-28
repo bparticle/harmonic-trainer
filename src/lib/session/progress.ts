@@ -72,7 +72,7 @@ export function taskIndexOf(blockType: string): number | null {
 	return Number(position);
 }
 
-const KINDS = new Set<string>(['ear', 'function', 'mission', 'new_thing']);
+const KINDS = new Set<string>(['ear', 'function', 'crossing', 'mission', 'new_thing']);
 
 // ---------------------------------------------------------------------------
 // Reading a stored plan
@@ -221,6 +221,10 @@ function previewLine(task: Task): string {
 			return joinLine(`${task.cardIds.length} ear questions`, describeMaterial(task.makeup));
 		case 'function':
 			return joinLine(`${task.cardIds.length} degrees across keys`, describeMaterial(task.makeup));
+		case 'crossing':
+			// The keys are the answer, so `describeMaterial` must not name them —
+			// a preview that lists C, G and F has given away three of six.
+			return `${task.cardIds.length} cadences · name where each one lands`;
 		case 'mission':
 			return `${task.mission.chartName}. ${describeGoal(task.goal)}`;
 		case 'new_thing':
@@ -284,6 +288,10 @@ export function taskTags(task: Task): string[] {
 		case 'ear':
 		case 'function':
 			return makeupTags(task.makeup);
+		case 'crossing':
+			// How many keys it draws on, which is the size of the discrimination —
+			// but never which keys, for the reason `previewLine` gives above.
+			return crossingTags(task.makeup);
 		case 'mission':
 			return missionTags(task.mission.playedBefore);
 		case 'new_thing':
@@ -296,6 +304,11 @@ function makeupTags(makeup: Makeup | undefined): string[] {
 	if (makeup.seen === 0) return ['all new'];
 	if (makeup.fresh === 0) return ['all revision'];
 	return [`${makeup.fresh} new`, `${makeup.seen} again`];
+}
+
+function crossingTags(makeup: Makeup | undefined): string[] {
+	if (!makeup || makeup.keys.length === 0) return [];
+	return [makeup.keys.length === 1 ? 'one key' : `${makeup.keys.length} keys`];
 }
 
 function missionTags(playedBefore: number | undefined): string[] {
