@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { totalBeats } from '$lib/audio/bass';
+import { parseKey } from '$lib/music/key';
 import { CHARTS, chartBySlug, realiseChart } from './charts';
 
 const blues = chartBySlug('blues-12')!;
@@ -87,6 +88,21 @@ describe('resolving a chart into a key', () => {
 					}
 				}
 			}
+		}
+	});
+
+	/*
+	 * `defaultKey` is a *note*, always, and `mode` is what makes a chart minor.
+	 * `realiseChart` strips a trailing `m` and so forgives `Cm`; the play-along
+	 * parses the field directly and does not, so a minor chart written with the
+	 * `m` on it renders every other chart in the songbook and then throws on its
+	 * own page. Caught the first time by opening it, which is a poor way to find
+	 * a one-character mistake.
+	 */
+	it('names every default key as a note, never as a minor key', () => {
+		for (const seed of CHARTS) {
+			if (!seed.defaultKey) continue;
+			expect(() => parseKey(seed.defaultKey!), `${seed.slug}: ${seed.defaultKey}`).not.toThrow();
 		}
 	});
 

@@ -688,6 +688,185 @@ export const CHARTS: ChartSeed[] = [
 			'Two chords: the dominant leaning home, and home. Nothing to read means the whole of the attention can go on time and on singing while you play, which is harder than it sounds and is the point of having it here.'
 	},
 	{
+		slug: 'skip-to-my-lou',
+		name: 'Skip to My Lou',
+		style: 'custom',
+		category: 'traditional',
+		mode: 'major',
+		defaultBpm: 132,
+		defaultGroove: 'straight',
+		defaultKey: 'C',
+		grid: [
+			['I', 'I', 'V', 'V'],
+			['I', 'I', 'V', 'I']
+		],
+		notes:
+			'Two chords and eight bars — the smallest complete tune here, and the one to open the songbook with. Nothing to read means the whole of the attention goes on landing the change on the bar line at a tempo that will not wait for you.'
+	},
+	{
+		slug: 'go-tell-it-on-the-mountain',
+		name: 'Go Tell It on the Mountain',
+		style: 'custom',
+		category: 'traditional',
+		mode: 'major',
+		defaultBpm: 108,
+		defaultGroove: 'straight',
+		defaultKey: 'C',
+		grid: [
+			['I', 'I', 'IV', 'I'],
+			['I', 'V', 'I', 'I'],
+			['I', 'I', 'I', 'I'],
+			['I', 'V', 'I', 'I']
+		],
+		notes:
+			'A chorus that moves and a verse that mostly does not, which is the useful part: eight bars of I with one V in them is where holding time honestly gets difficult.'
+	},
+	{
+		slug: 'down-by-the-riverside',
+		name: 'Down by the Riverside',
+		style: 'custom',
+		category: 'traditional',
+		mode: 'major',
+		defaultBpm: 116,
+		defaultGroove: 'straight',
+		defaultKey: 'C',
+		grid: [
+			['I', 'I', 'I', 'I'],
+			['I', 'I', 'V', 'V'],
+			['I', 'I', 'IV', 'IV'],
+			['I', 'V', 'I', 'I']
+		],
+		notes:
+			'Three chords over sixteen bars, each held for two at a time. The long stretches are the exercise — a chord you sit on for eight beats is a chord you have to keep meaning.'
+	},
+	{
+		slug: 'coming-round-the-mountain',
+		name: "She'll Be Coming Round the Mountain",
+		style: 'custom',
+		category: 'traditional',
+		mode: 'major',
+		defaultBpm: 128,
+		defaultGroove: 'straight',
+		defaultKey: 'C',
+		grid: [
+			['I', 'I', 'I', 'I'],
+			['IV', 'IV', 'I', 'I'],
+			['I', 'I', 'V', 'V'],
+			['I', 'V', 'I', 'I']
+		],
+		notes:
+			'The same three chords again, in a different order and faster. Two tunes built from one vocabulary is how the vocabulary stops being a list of shapes and starts being something you can hear coming.'
+	},
+	{
+		slug: 'oh-susanna',
+		name: 'Oh! Susanna',
+		style: 'custom',
+		category: 'standard',
+		mode: 'major',
+		defaultBpm: 120,
+		defaultGroove: 'straight',
+		defaultKey: 'C',
+		published: 1848,
+		grid: [
+			['I', 'I', 'I', 'V'],
+			['I', 'I', 'V', 'I'],
+			['IV', 'IV', 'I', 'I'],
+			['I', 'V', 'I', 'I']
+		],
+		notes:
+			'The oldest thing in the book and still three chords. Verse and chorus differ, which the three-chord tunes above do not: the IV arrives only when the chorus does, so the form is audible in the harmony.'
+	},
+	{
+		slug: 'michael-row-the-boat',
+		name: 'Michael, Row the Boat Ashore',
+		style: 'custom',
+		category: 'traditional',
+		mode: 'major',
+		defaultBpm: 96,
+		defaultGroove: 'ballad',
+		defaultKey: 'C',
+		grid: [
+			['I', 'IV', 'I', 'vi'],
+			['I', 'IV', 'I V', 'I']
+		],
+		notes:
+			'Eight bars, and the vi in bar four is the whole lesson: the same three notes as the tonic with one moved, arriving where a major chord was expected. The plainest place in the songbook to hear what a relative minor does.'
+	},
+	{
+		slug: 'shenandoah',
+		name: 'Shenandoah',
+		style: 'custom',
+		category: 'traditional',
+		mode: 'major',
+		defaultBpm: 68,
+		defaultGroove: 'ballad',
+		defaultKey: 'C',
+		grid: [
+			['I', 'IV', 'I', 'vi'],
+			['IV', 'I', 'V', 'V'],
+			['I', 'IV', 'I', 'vi'],
+			['IV', 'I V', 'I', 'I']
+		],
+		notes:
+			'A plain setting, taken slowly. At 68 there is time between the chords to hear the vi turn the phrase and the IV set it back down, which is exactly the pair of moves the faster tunes go past too quickly to teach.'
+	},
+	{
+		slug: 'motherless-child',
+		name: 'Sometimes I Feel Like a Motherless Child',
+		style: 'custom',
+		category: 'traditional',
+		mode: 'minor',
+		defaultBpm: 66,
+		defaultGroove: 'ballad',
+		// The bare tonic, as everywhere else: `mode` is what says this is minor,
+		// and the key field is read as a note.
+		defaultKey: 'C',
+		grid: [
+			['i', 'i', 'iv', 'i'],
+			['i', 'i', 'V', 'i'],
+			['iv', 'iv', 'i', 'i'],
+			['i', 'V', 'i', 'i']
+		],
+		notes:
+			'A minor key with nothing borrowed and nothing chromatic: i, iv and the major V, which is what a minor key actually sounds like before anything is added to it. The first play-along that is minor all the way through.'
+	},
+	{
+		slug: 'careless-love',
+		name: 'Careless Love',
+		style: 'custom',
+		category: 'traditional',
+		mode: 'major',
+		defaultBpm: 96,
+		defaultGroove: 'shuffle',
+		defaultKey: 'C',
+		grid: [
+			['I', 'I', 'V7', 'V7'],
+			['I', 'I7', 'IV', 'IV'],
+			['I', 'V7', 'I', 'I']
+		],
+		notes:
+			'Twelve bars that are not a blues — the changes go somewhere else and arrive at the same place. Bar six is the whole point: a dominant seventh on the tonic, which belongs to no key at all and is the sound of most of the last century leaning towards the IV.'
+	},
+	{
+		slug: 'shine-on-harvest-moon',
+		name: 'Shine On, Harvest Moon',
+		style: 'custom',
+		category: 'standard',
+		mode: 'major',
+		defaultBpm: 132,
+		defaultGroove: 'swing',
+		defaultKey: 'C',
+		published: 1908,
+		grid: [
+			['I', 'I', 'VI7', 'VI7'],
+			['II7', 'II7', 'V7', 'V7'],
+			['I', 'I', 'VI7', 'VI7'],
+			['II7', 'V7', 'I', 'I']
+		],
+		notes:
+			'The circle of fifths as a song rather than as an exercise: VI7 to II7 to V7 to I, twice, with each dominant aimed at the next. Every ragtime-era tune in this section is built on this and it is worth meeting on its own first.'
+	},
+	{
 		slug: 'linstead-market',
 		name: 'Linstead Market',
 		style: 'custom',

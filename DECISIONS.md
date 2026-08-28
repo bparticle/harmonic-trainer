@@ -4444,3 +4444,73 @@ the skill it belongs to — so `C · the home chord` beside the count is a label
 and not a lookup. `skillLabel` reads the rung's own `label` and the
 progression's own `name` off the source rather than out of the `skills` table,
 so anything holding a code can say what it is without a query.
+
+## Ten more tunes, and where the songbook was actually thin
+
+"Every single time I'm asked to play Linstead Market" turned out to be almost
+literally true, and the reason was not the mission composer. It was the
+readiness gate doing exactly its job against a songbook that had nothing in the
+band the gate was letting through.
+
+Walking `MISSION_CHARTS` against each rung's vocabulary gave the whole answer at
+once. On **the home chord — rung two of key one, where somebody can sit
+happily for weeks — three tunes were playable**: When the Saints, Swing Low and
+Linstead Market. The composer rotates its pool by the day, so it was handing out
+a three-day cycle and doing so correctly. Three tunes is not a cycle anybody
+notices as one.
+
+    before   0 → 3 → 3 → 7 → 7 → 12 …   of 35
+    after    0 → 8 → 8 → 15 → 15 → 20 … of 45
+
+Ten charts, chosen by where the walk was thin rather than by what would be nice
+to have:
+
+- **Five on major triads alone** — Skip to My Lou, Go Tell It on the Mountain,
+  Down by the Riverside, She'll Be Coming Round the Mountain, Oh! Susanna —
+  which is the band that had three. Skip to My Lou is eight bars and two chords,
+  and is deliberately plainer than anything that was there: it is now the first
+  play-along an account meets.
+- **Three that need the minor triads** — Michael Row the Boat Ashore for the vi,
+  Shenandoah for the same pair taken slowly, and Sometimes I Feel Like a
+  Motherless Child, which is the first play-along that is minor the whole way
+  through and borrows nothing to be so.
+- **Two further up** — Careless Love, twelve bars that are not a blues with a
+  dominant on the tonic in bar six, and Shine On, Harvest Moon, which is the
+  circle of fifths as a song rather than as an exercise.
+
+Every grid was run through the songbook check before it was written down, so
+what is stored is what round-trips. Provenance follows the file's own rule: the
+two dated ones are `standard` with the year on them (1848, 1908), and the rest
+are `traditional`, where the category is the claim in place of a year.
+
+### Two constraints that decided what could not go in
+
+**Everything here is in four.** `realiseChart` takes a `beatsPerBar` that
+nothing ever passes and the backing player defaults to four, so the songbook is
+a 4/4 book. Amazing Grace, Scarborough Fair, Home on the Range and half the
+obvious folk repertoire are in three, and writing a waltz out as bars of four is
+not that tune slightly off — it is a different tune. They stay out until a chart
+can carry a time signature, which is a real and separate piece of work.
+
+**No words, for now.** Every one of these is old enough to be out of copyright
+and the existing traditionals carry their lyrics, but I am under a blanket
+instruction not to reproduce song lyrics, and "it is public domain" is a
+judgement I should not be making on my own. `lyrics` is optional and its absence
+is already a supported state — a chart without words draws exactly as it did
+before words existed — so these went in as grids. Adding them in the chart
+editor later changes nothing else.
+
+### A one-character mistake the suite could not see
+
+`defaultKey` is a _note_. `mode` is what makes a chart minor, and every existing
+minor chart in the file says `'A'` or `'D'` rather than `'Am'`. Motherless Child
+went in as `'Cm'`, which `realiseChart` forgives — it strips a trailing `m` —
+and which `PlayAlong.svelte` does not, because it parses the field directly. The
+result was a chart that appeared correctly in every list in the app and threw a
+500 on its own page.
+
+Found by opening it, which is a poor way to find a one-character mistake, so
+there is now a test asserting that every built-in's `defaultKey` parses as a
+note. It passes on the file as it stood before this milestone and fails on the
+version that shipped the bug, which is the only evidence that a regression test
+is one.
