@@ -6,18 +6,31 @@ import { cards, srsState } from '$lib/server/db/schema';
 import { loadKeyChords } from '$lib/server/db/play-log';
 import {
 	activeWorkout,
-	advanceLadder,
+	currentFrontier,
 	currentPosition,
+	deepenLadder,
 	finishWorkout,
 	ladderRecord,
 	previewWorkouts,
 	recentWorkouts,
 	rungProgress,
-	startWorkout
+	startWorkout,
+	stepBackLadder,
+	widenLadder
 } from '$lib/server/db/session-store';
-import { journeyProgress, ladderTotals, pathWindow } from '$lib/session/journey';
+import { journeyProgress, ladderPath, ladderTotals } from '$lib/session/journey';
 import { currentUserId } from '$lib/server/db/user';
-import { FIRST_POSITION, nextPosition, positionOf, RUNGS, STAGES } from '$lib/curriculum/ladder';
+import {
+	deepen,
+	FIRST_FRONTIER,
+	narrower,
+	nextCell,
+	RUNGS,
+	rungById,
+	STAGES,
+	nextWidening,
+	workingPosition
+} from '$lib/curriculum/ladder';
 import { PROGRESSIONS, PROGRESSION_LEVELS } from '$lib/curriculum/progressions';
 import {
 	previewTasks,
@@ -70,7 +83,8 @@ export const load: PageServerLoad = async ({ parent, locals }) => {
 				rungIndex: 0,
 				rung: firstRung
 			},
-			next: null,
+			deepenTo: null,
+			widenTo: null,
 			progress: { reviews: 0, correct: 0, looksSolid: false },
 			stages: STAGES,
 			rungs: RUNGS,
@@ -79,7 +93,7 @@ export const load: PageServerLoad = async ({ parent, locals }) => {
 			// Twelve keys with nothing in them, because a visitor has no record —
 			// the same shape the page reads, so one branch does not have a
 			// different data type from the other.
-			keys: keyStandings([], { stageIndex: 0, rungIndex: 0 }),
+			keys: keyStandings([], FIRST_FRONTIER, 0),
 			resume: null,
 			due: 0,
 			// A visitor has no record to compose a workout from, and inventing one
@@ -88,16 +102,20 @@ export const load: PageServerLoad = async ({ parent, locals }) => {
 			size: 'standard' as WorkoutSize,
 			previews: {} as Record<WorkoutSize, TaskPreview[]>,
 			// A visitor has no record, so the path is drawn from the ladder alone:
-			// the first steps of it, with nothing behind and nothing counted.
-			path: pathWindow(FIRST_POSITION, []),
-			journey: journeyProgress(FIRST_POSITION),
+			// the frontier of a first morning, with nothing counted against it.
+			path: ladderPath(FIRST_FRONTIER, []),
+			journey: journeyProgress(FIRST_FRONTIER),
 			totals: ladderTotals([]),
+			canDeepen: true,
+			canWiden: false,
+			canStepBack: false,
 			history: []
 		};
 	}
 
 	const userId = currentUserId(locals.userId);
-	const position = await currentPosition(userId);
+	const frontier = await currentFrontier(userId);
+	const position = workingPosition(frontier);
 	const progress = await rungProgress(userId, position);
 
 	const [due] = await db
@@ -106,7 +124,18 @@ export const load: PageServerLoad = async ({ parent, locals }) => {
 		.innerJoin(cards, eq(cards.id, srsState.cardId))
 		.where(and(eq(cards.userId, userId), sql`${srsState.dueAt} <= now()`));
 
-	const next = nextPosition(position);
+	/*
+	 * What the two moves would open, worked out here so the buttons can name them
+	 * rather than saying "move on".
+	 *
+	 * Deepening introduces an idea — the next rung, in the first key. Widening is
+	 * the same idea in one more key, and the key it adds is the next one along in
+	 * the ladder's own order. Both are offered; neither is a prerequisite for the
+	 * other, which is the whole difference from the single "advance" this replaced.
+	 */
+	const deeper = deepen(frontier);
+	const wider = nextWidening(frontier);
+	const opensRung = nextCell(frontier);
 
 	const previews = await previewWorkouts(userId);
 	const active = await activeWorkout(userId);
@@ -138,7 +167,9 @@ export const load: PageServerLoad = async ({ parent, locals }) => {
 			rungIndex: position.rungIndex,
 			rung: position.rung
 		},
-		next: next ? { key: next.stage.key, rung: next.rung } : null,
+		/** What each button would open, for the two lines beside them. */
+		deepenTo: opensRung ? { key: opensRung.key, rung: rungById(opensRung.rungId) ?? null } : null,
+		widenTo: wider ? { key: wider.stage.key, rung: wider.rung } : null,
 		progress,
 		stages: STAGES,
 		rungs: RUNGS,
@@ -152,7 +183,7 @@ export const load: PageServerLoad = async ({ parent, locals }) => {
 		 * press from now, which is the opposite of the profile's problem with
 		 * showing twelve empty things somebody has not done.
 		 */
-		keys: keyStandings(await loadKeyChords(userId), position),
+		keys: keyStandings(await loadKeyChords(userId), frontier, position.stageIndex),
 		/*
 		 * The workout in flight, in the shape the page draws.
 		 *
@@ -196,9 +227,12 @@ export const load: PageServerLoad = async ({ parent, locals }) => {
 		 * asked at eight in the morning is what comes next, and what came before is
 		 * already written on the twelve keys further down.
 		 */
-		path: pathWindow(position, record),
-		journey: journeyProgress(position),
+		path: ladderPath(frontier, record),
+		journey: journeyProgress(frontier),
 		totals: ladderTotals(record),
+		canDeepen: deeper !== null,
+		canWiden: wider !== null,
+		canStepBack: narrower(frontier) !== null,
 		history: history.map((workout) => ({
 			id: workout.id,
 			startedAt: workout.startedAt,
@@ -262,37 +296,36 @@ export const actions: Actions = {
 		redirect(303, '/');
 	},
 
-	/** Move on. Deliberately unguarded — you can tell better than a review count. */
-	advance: async ({ locals }) => {
+	/**
+	 * Go deeper: the next rung, plus one more key of every rung above it.
+	 *
+	 * Deliberately unguarded — you can tell better than a review count. What
+	 * changed with the frontier is that this is no longer the only way forward:
+	 * `widen` sits beside it, and neither is a prerequisite for the other.
+	 */
+	deepen: async ({ locals }) => {
 		const userId = currentUserId(locals.userId);
-		const position = await currentPosition(userId);
-		const next = nextPosition(position);
-		if (next) await advanceLadder(userId, next);
+		await deepenLadder(userId);
 		redirect(303, '/');
 	},
 
-	/** Go back, for when moving on turned out to be optimistic. */
+	/** Go wider: the same rung, one more key. More ground before the next idea. */
+	widen: async ({ locals }) => {
+		const userId = currentUserId(locals.userId);
+		await widenLadder(userId);
+		redirect(303, '/');
+	},
+
+	/**
+	 * Go back, for when moving on turned out to be optimistic.
+	 *
+	 * Nothing is deleted: the cards stay, their schedules stay and the reviews
+	 * stay. Closing a cell only stops the ladder offering it, which is what going
+	 * back has always meant here.
+	 */
 	back: async ({ locals }) => {
 		const userId = currentUserId(locals.userId);
-		const position = await currentPosition(userId);
-		const rungIndex = position.rungIndex - 1;
-		const target =
-			rungIndex >= 0
-				? positionOf(position.stage.key, RUNGS[rungIndex].id)
-				: position.stageIndex > 0
-					? positionOf(STAGES[position.stageIndex - 1].key, RUNGS[RUNGS.length - 1].id)
-					: null;
-
-		if (target) {
-			const settings = await loadSettings(userId);
-			await saveSettings(userId, {
-				prefs: {
-					...settings.prefs,
-					ladderKey: target.stage.key,
-					ladderRung: target.rung.id
-				}
-			});
-		}
+		await stepBackLadder(userId);
 		redirect(303, '/');
 	}
 };

@@ -1,17 +1,29 @@
 import { describe, expect, it } from 'vitest';
 import {
+	FIRST_FRONTIER,
 	FIRST_POSITION,
 	RUNGS,
 	STAGES,
+	cellsOf,
+	deepen,
+	depthOf,
 	directionsForItem,
 	directionsForRung,
+	frontierFromPosition,
+	isOpen,
+	isWellFormed,
 	itemsForRung,
 	ladderIdentity,
-	nextPosition,
+	narrower,
+	nextCell,
+	nextWidening,
 	positionOf,
-	reachedSoFar,
+	rungsOpenIn,
 	stageByKey,
-	type Position
+	widen,
+	widenNext,
+	workingPosition,
+	type Frontier
 } from './ladder';
 import { parseKey, scale } from '$lib/music/key';
 import { pitchClass } from '$lib/music/note';
@@ -220,38 +232,186 @@ describe('moving along', () => {
 		expect(FIRST_POSITION.rung.id).toBe('scale');
 	});
 
-	it('walks the rungs before changing key', () => {
-		let position: Position | null = FIRST_POSITION;
-		const seen: string[] = [];
-		for (let i = 0; i < RUNGS.length && position; i++) {
-			seen.push(`${position.stage.key}/${position.rung.id}`);
-			position = nextPosition(position);
+	it('opens one rung in one key and nothing else', () => {
+		expect(cellsOf(FIRST_FRONTIER)).toEqual([{ key: 'C', rungId: 'scale' }]);
+		expect(depthOf(FIRST_FRONTIER)).toBe(1);
+	});
+});
+
+describe('the frontier', () => {
+	const after = (moves: number): Frontier => {
+		let frontier = FIRST_FRONTIER;
+		for (let i = 0; i < moves; i++) frontier = deepen(frontier) ?? frontier;
+		return frontier;
+	};
+
+	/*
+	 * The whole of "widen before you deepen", asserted as arithmetic. Going one
+	 * rung deeper drags every rung above it one key wider, so the staircase
+	 * builds itself and being deep-and-narrow is unreachable.
+	 */
+	it('widens everything above it when it deepens', () => {
+		expect(after(0).widths).toEqual([1, 0, 0, 0, 0, 0, 0]);
+		expect(after(1).widths).toEqual([2, 1, 0, 0, 0, 0, 0]);
+		expect(after(3).widths).toEqual([4, 3, 2, 1, 0, 0, 0]);
+		expect(after(6).widths).toEqual([7, 6, 5, 4, 3, 2, 1]);
+	});
+
+	it('reaches every rung in as many moves as the old walk did', () => {
+		// Seven steps got you seven rungs before, in one key. It still does — with
+		// twenty-one cells of breadth underneath that the old walk did not have.
+		expect(depthOf(after(6))).toBe(RUNGS.length);
+		expect(cellsOf(after(6))).toHaveLength(28);
+	});
+
+	it('stops deepening at the last rung', () => {
+		expect(deepen(after(6))).toBeNull();
+	});
+
+	it('stays a staircase however it is moved', () => {
+		let frontier: Frontier = FIRST_FRONTIER;
+		for (let i = 0; i < 40; i++) {
+			frontier = deepen(frontier) ?? widenNext(frontier) ?? frontier;
+			expect(isWellFormed(frontier), `after ${i + 1} moves`).toBe(true);
 		}
-		expect(seen.every((s) => s.startsWith('C/'))).toBe(true);
 	});
 
-	it('moves to the next key after the last rung', () => {
-		const last = positionOf('C', 'relative-minor')!;
-		const next = nextPosition(last)!;
-		expect(next.stage.key).toBe('G');
-		expect(next.rung.id).toBe('scale');
+	it('refuses a widening that would break the staircase', () => {
+		// Rung two is open in one key and rung one in two. Widening rung two to
+		// two is legal; widening it again would put it ahead of rung one.
+		const frontier = after(1);
+		const once = widen(frontier, 1)!;
+		expect(once.widths).toEqual([2, 2, 0, 0, 0, 0, 0]);
+		expect(widen(once, 1)).toBeNull();
 	});
 
-	it('ends after the last rung of the last key', () => {
-		const end = positionOf('Gb', 'relative-minor')!;
-		expect(nextPosition(end)).toBeNull();
+	/*
+	 * The dead end, found by opening the page rather than by a test. An account
+	 * standing at G's third rung migrates to [2,2,2,1,1,1,1]: every rung open, so
+	 * nothing to deepen, and the last four rungs level with each other, so the
+	 * deepest one cannot widen either. Asking only the deepest rung offers the
+	 * person nothing at all, on a frontier with two legal moves in it.
+	 */
+	it('widens the deepest rung that can, not merely the deepest rung', () => {
+		const stuck: Frontier = { widths: [2, 2, 2, 1, 1, 1, 1] };
+		expect(deepen(stuck)).toBeNull();
+		expect(widen(stuck, 6)).toBeNull();
+
+		const target = nextWidening(stuck)!;
+		expect(target.rungIndex).toBe(3);
+		// Rung four is open in C alone, so the key it gains is the next one along.
+		expect(target.stage.key).toBe('G');
+		expect(widenNext(stuck)!.widths).toEqual([2, 2, 2, 2, 1, 1, 1]);
 	});
 
-	it('reports everything reached so far', () => {
-		const reached = reachedSoFar(positionOf('G', 'primary-triads')!);
-		// All of C, plus the first three rungs of G.
-		expect(reached.filter((r) => r.key === 'C')).toHaveLength(RUNGS.length);
-		expect(reached.filter((r) => r.key === 'G')).toHaveLength(3);
-		expect(reached.some((r) => r.key === 'F')).toBe(false);
+	it('always offers somewhere to go until the whole ladder is open', () => {
+		let frontier: Frontier = FIRST_FRONTIER;
+		for (let i = 0; i < STAGES.length * RUNGS.length; i++) {
+			const next = deepen(frontier) ?? widenNext(frontier);
+			if (!next) break;
+			frontier = next;
+		}
+		// Only the complete ladder is allowed to be a dead end.
+		expect(deepen(frontier)).toBeNull();
+		expect(widenNext(frontier)).toBeNull();
+		expect(frontier.widths).toEqual(RUNGS.map(() => STAGES.length));
 	});
 
-	it('reports only the scale at the very beginning', () => {
-		expect(reachedSoFar(FIRST_POSITION)).toEqual([{ key: 'C', rungId: 'scale' }]);
+	it('refuses to widen a rung that is not open, or past the twelfth key', () => {
+		expect(widen(FIRST_FRONTIER, 3)).toBeNull();
+		expect(widen({ widths: RUNGS.map(() => STAGES.length) }, 0)).toBeNull();
+	});
+
+	it('never opens a rung in a key whose shallower rungs are closed', () => {
+		const frontier = after(4);
+		for (const cell of cellsOf(frontier)) {
+			const r = RUNGS.findIndex((rung) => rung.id === cell.rungId);
+			for (let above = 0; above < r; above++) {
+				expect(isOpen(frontier, cell.key, RUNGS[above].id), `${cell.key} ${cell.rungId}`).toBe(
+					true
+				);
+			}
+		}
+	});
+
+	it('counts the rungs open in one key, for a swatch to print', () => {
+		expect(rungsOpenIn(after(3), 'C')).toBe(4);
+		expect(rungsOpenIn(after(3), 'D')).toBe(1);
+		expect(rungsOpenIn(after(3), 'Gb')).toBe(0);
+		expect(rungsOpenIn(after(3), 'nonsense')).toBe(0);
+	});
+
+	it('stands on the deepest rung, in the newest key of it', () => {
+		const here = workingPosition(after(3));
+		expect(here.rung.id).toBe(RUNGS[3].id);
+		expect(here.stage.key).toBe('C');
+	});
+
+	it('offers the next rung as the thing to open next, and nothing at the end', () => {
+		expect(nextCell(FIRST_FRONTIER)).toEqual({ key: 'C', rungId: RUNGS[1].id });
+		expect(nextCell(after(6))).toBeNull();
+	});
+
+	it('steps back a key at a time, then closes the rung, and never the last cell', () => {
+		const wide = widenNext(after(1))!;
+		expect(wide.widths).toEqual([2, 2, 0, 0, 0, 0, 0]);
+		expect(narrower(wide)!.widths).toEqual([2, 1, 0, 0, 0, 0, 0]);
+		expect(narrower(narrower(wide)!)!.widths).toEqual([2, 0, 0, 0, 0, 0, 0]);
+		expect(narrower({ widths: [1, 0, 0, 0, 0, 0, 0] })).toBeNull();
+	});
+
+	it('rejects a frontier that is not a staircase', () => {
+		expect(isWellFormed({ widths: [1, 2, 0, 0, 0, 0, 0] })).toBe(false);
+		expect(isWellFormed({ widths: [0, 0, 0, 0, 0, 0, 0] })).toBe(false);
+		expect(isWellFormed({ widths: [1, 0, 0] })).toBe(false);
+		expect(isWellFormed({ widths: [13, 0, 0, 0, 0, 0, 0] })).toBe(false);
+		expect(isWellFormed({ widths: [1.5, 0, 0, 0, 0, 0, 0] })).toBe(false);
+	});
+});
+
+describe('migrating a stored position', () => {
+	/*
+	 * The upgrade, and it has to be exact rather than close. Every one of the
+	 * eighty-four positions an account could have been stored at names a prefix
+	 * of the old walk; the frontier it becomes must enumerate that same prefix,
+	 * or somebody loses ground on the morning they update.
+	 */
+	const oldPrefix = (stage: number, rung: number) => {
+		const out: string[] = [];
+		for (let s = 0; s <= stage; s++) {
+			const last = s === stage ? rung : RUNGS.length - 1;
+			for (let r = 0; r <= last; r++) out.push(`${STAGES[s].key}|${RUNGS[r].id}`);
+		}
+		return out.sort();
+	};
+
+	it('holds exactly the cells the old walk had reached, everywhere', () => {
+		for (let s = 0; s < STAGES.length; s++) {
+			for (let r = 0; r < RUNGS.length; r++) {
+				const frontier = frontierFromPosition(STAGES[s].key, RUNGS[r].id)!;
+				const cells = cellsOf(frontier)
+					.map((cell) => `${cell.key}|${cell.rungId}`)
+					.sort();
+				expect(cells, `${STAGES[s].key} / ${RUNGS[r].id}`).toEqual(oldPrefix(s, r));
+			}
+		}
+	});
+
+	it('produces a well-formed staircase from every position', () => {
+		for (const stage of STAGES) {
+			for (const rung of RUNGS) {
+				expect(isWellFormed(frontierFromPosition(stage.key, rung.id)!)).toBe(true);
+			}
+		}
+	});
+
+	it('refuses a position that names nothing', () => {
+		expect(frontierFromPosition('H', 'scale')).toBeNull();
+		expect(frontierFromPosition('C', 'nonsense')).toBeNull();
+	});
+
+	it('leaves somebody at the very beginning at the very beginning', () => {
+		expect(frontierFromPosition('C', 'scale')).toEqual(FIRST_FRONTIER);
 	});
 });
 

@@ -497,7 +497,7 @@ not have: there is now a record worth taking with you, not just charts.
 
 ## M17 — Crossings: the curriculum stops being one key at a time
 
-**Status: pass one landed; passes two to four not started.** Everything below is
+**Status: passes one and two landed; passes three and four not started.** Everything below is
 the whole argument — the longer write-up it came from is a private working
 document and this file does not depend on it. Sources are named inline so the
 claims can be checked.
@@ -581,6 +581,10 @@ Four passes, each shippable alone, in this order:
 2. **The frontier** — `Position` becomes depth-per-rung plus a key horizon per
    rung. A stored position maps exactly onto the frontier it implies, so the
    migration is clean. The home page's path becomes a map rather than a line.
+   _Landed._ Deepening widens every rung above it, so the staircase builds
+   itself; one move in, the ear task already spans two keys. See `DECISIONS.md`
+   for the two faults only running it found — the migration sitting on the write
+   path, and a "wider" that could refuse with legal widenings available.
 3. **The crossing exercises** — `key_hear` ("where are we?"), `key_moved` ("what
    changed?"), `pivot_play` ("turn the corner"), and a fifth task kind beside
    ear, function, mission and one new thing. This pass needs a migration:

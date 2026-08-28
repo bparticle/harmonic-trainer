@@ -1,22 +1,30 @@
 import { describe, expect, it } from 'vitest';
-import { FIRST_POSITION, positionOf, RUNGS, STAGES } from '$lib/curriculum/ladder';
 import {
-	LADDER_LENGTH,
+	FIRST_FRONTIER,
+	RUNGS,
+	STAGES,
+	deepen,
+	frontierFromPosition,
+	widenNext,
+	type Frontier
+} from '$lib/curriculum/ladder';
+import {
+	LADDER_CELLS,
 	describeTasks,
 	describeWhen,
 	journeyProgress,
+	ladderPath,
 	ladderTotals,
 	looksSolid,
-	ordinalOf,
-	pathWindow,
 	rungOfSkill,
 	type RungRecord
 } from './journey';
 
-const at = (key: string, rungId: string) => {
-	const position = positionOf(key, rungId);
-	if (!position) throw new Error(`no such position: ${key} ${rungId}`);
-	return position;
+/** A frontier `moves` deepenings past the start. */
+const after = (moves: number): Frontier => {
+	let frontier = FIRST_FRONTIER;
+	for (let i = 0; i < moves; i++) frontier = deepen(frontier) ?? frontier;
+	return frontier;
 };
 
 describe('looksSolid', () => {
@@ -37,78 +45,110 @@ describe('looksSolid', () => {
 	});
 });
 
-describe('pathWindow', () => {
-	it('puts the current position in the middle and names the sides', () => {
-		const steps = pathWindow(at('C', 'primary-triads'), [], { behind: 2, ahead: 3 });
-		expect(steps.map((step) => step.label)).toEqual([
-			'The scale',
-			'The home chord',
-			'The three main chords',
-			'All seven triads',
-			'Adding the seventh',
-			'All seven sevenths'
-		]);
-		expect(steps.map((step) => step.state)).toEqual([
-			'done',
-			'done',
+describe('the path, as the frontier', () => {
+	it('is one row per rung, always, so nothing is hidden behind a scroll', () => {
+		expect(ladderPath(FIRST_FRONTIER)).toHaveLength(RUNGS.length);
+		expect(ladderPath(after(4))).toHaveLength(RUNGS.length);
+	});
+
+	it('names how many keys each rung is open in', () => {
+		const path = ladderPath(after(3));
+		expect(path.map((step) => step.keys)).toEqual([4, 3, 2, 1, 0, 0, 0]);
+		expect(path[0].keyNames).toEqual(['C', 'G', 'F', 'D']);
+	});
+
+	it('marks the deepest open rung as here, the rest as open or ahead', () => {
+		const path = ladderPath(after(2));
+		expect(path.map((step) => step.state)).toEqual([
+			'open',
+			'open',
 			'here',
+			'ahead',
 			'ahead',
 			'ahead',
 			'ahead'
 		]);
 	});
 
-	it('clamps rather than inventing a past', () => {
-		const steps = pathWindow(FIRST_POSITION, [], { behind: 3, ahead: 2 });
-		expect(steps).toHaveLength(3);
-		expect(steps[0].state).toBe('here');
+	it('puts the whole ladder ahead on a first morning but the first rung here', () => {
+		const path = ladderPath(FIRST_FRONTIER);
+		expect(path[0].state).toBe('here');
+		expect(path.slice(1).every((step) => step.state === 'ahead')).toBe(true);
 	});
 
-	it('clamps at the far end of the ladder too', () => {
-		const last = at(STAGES[STAGES.length - 1].key, RUNGS[RUNGS.length - 1].id);
-		const steps = pathWindow(last, [], { behind: 1, ahead: 4 });
-		expect(steps).toHaveLength(2);
-		expect(steps[steps.length - 1].ordinal).toBe(LADDER_LENGTH);
-	});
-
-	it('crosses into the next key and marks where it did', () => {
-		const steps = pathWindow(at('C', 'relative-minor'), [], { behind: 1, ahead: 2 });
-		const opened = steps.filter((step) => step.opensKey);
-		expect(opened).toHaveLength(1);
-		expect(opened[0].key).toBe('G');
-		expect(opened[0].label).toBe('The scale');
-	});
-
-	it('carries the record for the step it belongs to, and nobody else', () => {
+	/*
+	 * The number that answers "do I know this yet". A rung met in four keys and
+	 * answered well in all of them is a different thing from one met in four and
+	 * answered well in one, and only a total across its keys can say so.
+	 */
+	it('sums the record across every key a rung is open in', () => {
 		const records: RungRecord[] = [
-			{ key: 'C', rungId: 'scale', reviews: 8, correct: 8 },
-			// Same rung, different key: must not be read as this key's.
+			{ key: 'C', rungId: 'scale', reviews: 6, correct: 6 },
+			{ key: 'G', rungId: 'scale', reviews: 4, correct: 3 },
+			// Open in neither: rung two only reaches C at this depth.
 			{ key: 'G', rungId: 'tonic-triad', reviews: 40, correct: 40 }
 		];
-		const steps = pathWindow(at('C', 'tonic-triad'), records, { behind: 1, ahead: 0 });
-		expect(steps[0]).toMatchObject({ key: 'C', reviews: 8, correct: 8, solid: true });
-		expect(steps[1]).toMatchObject({ key: 'C', reviews: 0, correct: 0, untouched: true });
+		const path = ladderPath(after(1), records);
+		expect(path[0]).toMatchObject({ keys: 2, reviews: 10, correct: 9 });
+		expect(path[1]).toMatchObject({ keys: 1, reviews: 0, correct: 0, untouched: true });
 	});
 
-	it('never calls a step ahead untouched, because it has not been reached', () => {
-		const steps = pathWindow(FIRST_POSITION, [], { behind: 0, ahead: 3 });
-		expect(steps.filter((step) => step.state === 'ahead').every((step) => !step.untouched)).toBe(
-			true
-		);
+	it('never counts a key the rung is not open in', () => {
+		const records: RungRecord[] = [{ key: 'Gb', rungId: 'scale', reviews: 99, correct: 99 }];
+		expect(ladderPath(FIRST_FRONTIER, records)[0].reviews).toBe(0);
+	});
+
+	it('calls a rung solid on its total, agreeing with the button that offers it', () => {
+		const records: RungRecord[] = [
+			{ key: 'C', rungId: 'scale', reviews: 4, correct: 4 },
+			{ key: 'G', rungId: 'scale', reviews: 4, correct: 4 }
+		];
+		// Four is under the rung's suggestAfter of six; eight across two keys is not.
+		expect(ladderPath(FIRST_FRONTIER, records)[0].solid).toBe(false);
+		expect(ladderPath(after(1), records)[0].solid).toBe(true);
+	});
+
+	it('never calls a closed rung untouched, because it has not been opened', () => {
+		expect(ladderPath(FIRST_FRONTIER).filter((step) => step.untouched)).toHaveLength(1);
 	});
 });
 
 describe('journeyProgress', () => {
-	it('counts from one and ends at the length of the ladder', () => {
-		expect(journeyProgress(FIRST_POSITION)).toMatchObject({ step: 1, total: LADDER_LENGTH });
-		const last = at(STAGES[STAGES.length - 1].key, RUNGS[RUNGS.length - 1].id);
-		expect(journeyProgress(last).step).toBe(LADDER_LENGTH);
-		expect(journeyProgress(last).fill).toBe(1);
+	it('counts cells open rather than steps along a walk', () => {
+		expect(journeyProgress(FIRST_FRONTIER)).toMatchObject({ cells: 1, total: LADDER_CELLS });
+		// Deepening opens more than one cell, which is the point of it.
+		expect(journeyProgress(after(1)).cells).toBe(3);
+		expect(journeyProgress(after(6)).cells).toBe(28);
 	});
 
-	it('agrees with the ordinal the window uses', () => {
-		const position = at('F', 'tonic-seventh');
-		expect(journeyProgress(position).step).toBe(ordinalOf(position.stageIndex, position.rungIndex));
+	it('reports depth and breadth separately, because they move separately', () => {
+		const progress = journeyProgress(after(3));
+		expect(progress.depth).toBe(4);
+		expect(progress.rungs).toBe(RUNGS.length);
+		expect(progress.keys).toBe(4);
+	});
+
+	it('fills to one only when every cell is open', () => {
+		const everything: Frontier = { widths: RUNGS.map(() => STAGES.length) };
+		expect(journeyProgress(everything).fill).toBe(1);
+		expect(journeyProgress(everything).cells).toBe(LADDER_CELLS);
+	});
+
+	it('only ever goes up, whichever move is made', () => {
+		let frontier: Frontier = FIRST_FRONTIER;
+		let last = journeyProgress(frontier).cells;
+		for (let i = 0; i < 30; i++) {
+			frontier = deepen(frontier) ?? widenNext(frontier) ?? frontier;
+			const now = journeyProgress(frontier).cells;
+			expect(now).toBeGreaterThanOrEqual(last);
+			last = now;
+		}
+	});
+
+	it('agrees with a migrated position about how much is open', () => {
+		const migrated = frontierFromPosition('G', 'primary-triads')!;
+		// All seven of C, plus three of G: ten cells.
+		expect(journeyProgress(migrated).cells).toBe(10);
 	});
 });
 

@@ -1,6 +1,12 @@
 import { isInSrgbGamut, type Oklch } from './design/color';
-import { rungById, stageByKey } from './curriculum/ladder';
-import type { ColorMap, Prefs, WheelConfig } from './settings';
+import {
+	FIRST_FRONTIER,
+	frontierFromPosition,
+	isWellFormed,
+	RUNGS,
+	STAGES
+} from './curriculum/ladder';
+import { DEFAULT_PREFS, type ColorMap, type Prefs, type WheelConfig } from './settings';
 
 /**
  * Validation for the two settings the UI can write.
@@ -43,12 +49,15 @@ export function parseWheelConfig(input: unknown): WheelConfig {
  * but the endpoint is reachable without it, and a chord window of zero would
  * quietly break note clustering in a way that looks like broken MIDI.
  */
+/** The three lengths the picker offers. Written once, read by both readers. */
+const SESSION_LENGTHS: Array<Prefs['sessionLengthMinutes']> = [10, 20, 35];
+
 export function parsePrefs(input: unknown): Prefs {
 	if (typeof input !== 'object' || input === null) throw new Error('Prefs must be an object');
 	const value = input as Record<string, unknown>;
 
 	const length = Number(value.sessionLengthMinutes);
-	if (![10, 20, 35].includes(length)) {
+	if (!SESSION_LENGTHS.includes(length as Prefs['sessionLengthMinutes'])) {
 		throw new Error('sessionLengthMinutes must be 10, 20 or 35');
 	}
 
@@ -60,20 +69,100 @@ export function parsePrefs(input: unknown): Prefs {
 		return Math.round(n);
 	};
 
-	// The ladder position has to name a real place, or the session planner would
-	// be asked for material that does not exist.
-	const ladderKey = String(value.ladderKey ?? 'C');
-	const ladderRung = String(value.ladderRung ?? 'scale');
-	if (!stageByKey(ladderKey)) throw new Error(`Unknown key on the ladder: ${ladderKey}`);
-	if (!rungById(ladderRung)) throw new Error(`Unknown rung: ${ladderRung}`);
-
 	return {
 		sessionLengthMinutes: length as Prefs['sessionLengthMinutes'],
 		revealDelayMs: bounded('revealDelayMs', 0, 30_000),
 		chordClusterWindowMs: bounded('chordClusterWindowMs', 20, 500),
 		midiLatencyOffsetMs: bounded('midiLatencyOffsetMs', -500, 500),
-		ladderKey,
-		ladderRung
+		ladderWidths: readFrontier(value)
+	};
+}
+
+/**
+ * The frontier, from a row that may predate it.
+ *
+ * Three cases, in this order, and the order is the migration:
+ *
+ *   1. A well-formed `ladderWidths` is taken as it stands.
+ *   2. Otherwise a stored `ladderKey` and `ladderRung` are converted to the
+ *      frontier they always meant — the same set of cells, expressed the new
+ *      way. This is what upgrades an existing account without it losing ground.
+ *   3. Otherwise the beginning.
+ *
+ * Anything malformed falls through rather than throwing. The old code threw on
+ * an unknown key, which was right when the value named a single place the
+ * planner had to find; a widths array that has been fiddled with is better read
+ * as "start again" than as a five-hundred, because the practice record it
+ * belongs to is still perfectly good.
+ */
+function readFrontier(value: Record<string, unknown>): number[] {
+	const stored = value.ladderWidths;
+	if (Array.isArray(stored)) {
+		const widths = stored.map((w) => Number(w));
+		if (isWellFormed({ widths })) return widths;
+	}
+
+	const key = value.ladderKey;
+	const rung = value.ladderRung;
+	if (typeof key === 'string' && typeof rung === 'string') {
+		const migrated = frontierFromPosition(key, rung);
+		if (migrated) return migrated.widths;
+	}
+
+	return [...FIRST_FRONTIER.widths];
+}
+
+/** Kept honest by a test: the two constants describe the same ladder. */
+export const LADDER_SHAPE = { rungs: RUNGS.length, keys: STAGES.length };
+
+/**
+ * Prefs as stored, read forgivingly, for the path that loads rather than saves.
+ *
+ * **`parsePrefs` was only ever on the write path, and that was the bug.**
+ * `toAppSettings` cast `prefs_json` straight to `Prefs`, so a row written before
+ * a field existed came back missing it and nothing noticed until something read
+ * it — which for the frontier meant every existing account 500ing on its first
+ * request after the upgrade. Found by running the app against a row shaped like
+ * a real one; no unit test was ever going to catch it, because every test built
+ * its prefs in TypeScript where the field is not optional.
+ *
+ * So there are two readers now and the difference between them is the point.
+ * `parsePrefs` is strict and is what an API request goes through: somebody
+ * posting a session length of seven should be refused. This one is tolerant and
+ * is what a stored row goes through: a field that is missing or has been
+ * fiddled with falls back to its default, because refusing to load the settings
+ * would lock somebody out of an account whose practice record is perfectly good.
+ */
+export function readPrefs(stored: unknown): Prefs {
+	const value =
+		typeof stored === 'object' && stored !== null ? (stored as Record<string, unknown>) : {};
+
+	const number = (name: keyof Prefs, fallback: number, min: number, max: number) => {
+		const n = Number(value[name]);
+		return Number.isFinite(n) && n >= min && n <= max ? Math.round(n) : fallback;
+	};
+
+	const length = Number(value.sessionLengthMinutes);
+	const sessionLength = SESSION_LENGTHS.includes(length as Prefs['sessionLengthMinutes'])
+		? (length as Prefs['sessionLengthMinutes'])
+		: DEFAULT_PREFS.sessionLengthMinutes;
+
+	return {
+		sessionLengthMinutes: sessionLength,
+		revealDelayMs: number('revealDelayMs', DEFAULT_PREFS.revealDelayMs, 0, 30_000),
+		chordClusterWindowMs: number(
+			'chordClusterWindowMs',
+			DEFAULT_PREFS.chordClusterWindowMs,
+			20,
+			500
+		),
+		midiLatencyOffsetMs: number(
+			'midiLatencyOffsetMs',
+			DEFAULT_PREFS.midiLatencyOffsetMs,
+			-500,
+			500
+		),
+		ladderWidths: readFrontier(value)
 	};
 }
 

@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { positionOf, reachedSoFar, RUNGS, STAGES } from '$lib/curriculum/ladder';
-import { chordsByTonic, keysPlayed, keyStandings, rungsReached } from './warmth';
+import {
+	cellsOf,
+	FIRST_FRONTIER,
+	frontierFromPosition,
+	RUNGS,
+	STAGES,
+	workingPosition
+} from '$lib/curriculum/ladder';
+import { chordsByTonic, keysPlayed, keyStandings } from './warmth';
 
-const AT_START = { stageIndex: 0, rungIndex: 0 };
+const AT_START = FIRST_FRONTIER;
 
 /** The record this was designed against: two keys played, ten never touched. */
 const RECORD = [
@@ -11,8 +18,8 @@ const RECORD = [
 	{ key: 'F', chords: 88 }
 ];
 
-const standing = (key: string, rows = RECORD, at = AT_START) =>
-	keyStandings(rows, at).find((entry) => entry.key === key)!;
+const standing = (key: string, rows = RECORD, at = AT_START, here = 0) =>
+	keyStandings(rows, at, here).find((entry) => entry.key === key)!;
 
 describe('what the record holds in a key', () => {
 	it('counts the chords heard in it, whatever mode they were written in', () => {
@@ -68,34 +75,39 @@ describe('what the record holds in a key', () => {
 	});
 
 	it('counts the keys that hold something without ranking them', () => {
-		expect(keysPlayed(keyStandings(RECORD, AT_START))).toBe(3);
-		expect(keysPlayed(keyStandings([], AT_START))).toBe(0);
+		expect(keysPlayed(keyStandings(RECORD, AT_START, 0))).toBe(3);
+		expect(keysPlayed(keyStandings([], AT_START, 0))).toBe(0);
 	});
 });
 
 describe('where the ladder is standing', () => {
 	it('offers all twelve keys wherever the ladder happens to be', () => {
-		expect(keyStandings([], AT_START).map((entry) => entry.key)).toEqual(
+		expect(keyStandings([], AT_START, 0).map((entry) => entry.key)).toEqual(
 			STAGES.map((stage) => stage.key)
 		);
 	});
 
 	it('marks the one key it is standing in, and only that one', () => {
-		const standings = keyStandings([], { stageIndex: 3, rungIndex: 2 });
+		const standings = keyStandings([], frontierFromPosition('D', 'primary-triads')!, 3);
 		expect(standings.filter((entry) => entry.here).map((entry) => entry.key)).toEqual([
 			STAGES[3].key
 		]);
 	});
 
-	it('counts the rung it is on as met, so a first day has met something', () => {
-		expect(rungsReached(AT_START, 0)).toBe(1);
+	it('counts the rung it is on as open, so a first day has met something', () => {
+		expect(standing('C').reached).toBe(1);
+		expect(standing('G').reached).toBe(0);
 	});
 
-	it('has met everything in the keys behind it and nothing in the keys ahead', () => {
-		const at = { stageIndex: 2, rungIndex: 3 };
-		expect(rungsReached(at, 0)).toBe(RUNGS.length);
-		expect(rungsReached(at, 2)).toBe(4);
-		expect(rungsReached(at, 5)).toBe(0);
+	it('counts how many rungs each key holds, which is now a per-key number', () => {
+		// A frontier opens rungs to different depths in different keys, so this is
+		// no longer "everything behind, nothing ahead" — it is a count per key.
+		const frontier = frontierFromPosition('F', 'all-triads')!;
+		const at = (key: string) => standing(key, [], frontier).reached;
+		expect(at('C')).toBe(RUNGS.length);
+		expect(at('G')).toBe(RUNGS.length);
+		expect(at('F')).toBe(4);
+		expect(at('D')).toBe(0);
 	});
 
 	it('agrees with the ladder itself about everywhere it has been', () => {
@@ -106,14 +118,15 @@ describe('where the ladder is standing', () => {
 		] as const;
 
 		for (const [key, rungId] of places) {
-			const position = positionOf(key, rungId)!;
+			const frontier = frontierFromPosition(key, rungId)!;
 			const counted = new Map<string, number>();
-			for (const place of reachedSoFar(position)) {
-				counted.set(place.key, (counted.get(place.key) ?? 0) + 1);
+			for (const cell of cellsOf(frontier)) {
+				counted.set(cell.key, (counted.get(cell.key) ?? 0) + 1);
 			}
 
-			for (const entry of keyStandings([], position)) {
-				expect(entry.reached).toBe(counted.get(entry.key) ?? 0);
+			const here = workingPosition(frontier).stageIndex;
+			for (const entry of keyStandings([], frontier, here)) {
+				expect(entry.reached, `${key}/${rungId}: ${entry.key}`).toBe(counted.get(entry.key) ?? 0);
 			}
 		}
 	});

@@ -1,4 +1,4 @@
-import { RUNGS, STAGES, type Stage } from '$lib/curriculum/ladder';
+import { RUNGS, STAGES, rungsOpenIn, type Frontier, type Stage } from '$lib/curriculum/ladder';
 import { parseKey } from '$lib/music/key';
 import { pitchClass } from '$lib/music/note';
 
@@ -29,9 +29,6 @@ import { pitchClass } from '$lib/music/note';
 
 /** One key the record has chords in, as the query hands it over. */
 export type KeyRow = { key: string; chords: number };
-
-/** Where the ladder is standing, which is all this needs of it. */
-export type LadderAt = { stageIndex: number; rungIndex: number };
 
 export type KeyStanding = {
 	/** The stage's key, as stored — ASCII, so it survives the database. */
@@ -94,7 +91,8 @@ export function chordsByTonic(rows: KeyRow[]): Map<number, number> {
  */
 export function keyStandings(
 	rows: KeyRow[],
-	at: LadderAt,
+	frontier: Frontier,
+	here: number,
 	stages: Stage[] = STAGES,
 	rungs: number = RUNGS.length
 ): KeyStanding[] {
@@ -111,26 +109,11 @@ export function keyStandings(
 			chords,
 			fill: chords === 0 ? 0 : Math.max(SLIVER, chords / busiest),
 			fresh: chords === 0,
-			reached: rungsReached(at, index, rungs),
+			reached: rungsOpenIn(frontier, stage.key),
 			rungs,
-			here: index === at.stageIndex
+			here: index === here
 		};
 	});
-}
-
-/**
- * How many rungs of one key the ladder has introduced.
- *
- * The same walk `reachedSoFar` takes, counted rather than listed — every key
- * behind the ladder has all its rungs, the one it is standing in has everything
- * up to and including where it stands, and the ones ahead have none yet. A test
- * checks this against `reachedSoFar` itself, because two answers to one question
- * eventually disagree.
- */
-export function rungsReached(at: LadderAt, index: number, rungs: number = RUNGS.length): number {
-	if (index < at.stageIndex) return rungs;
-	if (index > at.stageIndex) return 0;
-	return Math.min(rungs, at.rungIndex + 1);
 }
 
 /** How many of the twelve hold anything. A count of places been, never a score. */

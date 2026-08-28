@@ -1,3 +1,4 @@
+import { FIRST_FRONTIER } from './curriculum/ladder';
 import type { Oklch } from './design/color';
 import { DEFAULT_PALETTE } from './design/palette';
 
@@ -34,14 +35,23 @@ export type Prefs = {
 	/** Offset applied to incoming MIDI timestamps after latency calibration. */
 	midiLatencyOffsetMs: number;
 	/**
-	 * Where you are on the ladder: which key, and which rung of it.
+	 * The frontier: how many keys each rung of the ladder is open in.
 	 *
-	 * Advancing is a decision, not a threshold. The app says when a rung looks
-	 * solid; you decide when to move, because you can tell whether something is
-	 * under your fingers far better than a review count can.
+	 * One number per rung, in `RUNGS` order, non-increasing. This replaced
+	 * `ladderKey` and `ladderRung`, which between them named a single point on a
+	 * walk and therefore made everything reached a prefix of that walk — see the
+	 * note on `Frontier` in `curriculum/ladder.ts` for what that cost.
+	 *
+	 * A stored position migrates to the frontier it always meant, exactly rather
+	 * than approximately, so nobody loses ground on the upgrade. `parsePrefs`
+	 * does that conversion and is the only place the old two fields are still
+	 * read.
+	 *
+	 * Opening more is a decision, not a threshold. The app says when a rung looks
+	 * solid; you decide when to go deeper or wider, because you can tell whether
+	 * something is under your fingers far better than a review count can.
 	 */
-	ladderKey: string;
-	ladderRung: string;
+	ladderWidths: number[];
 };
 
 export type ColorMap = Oklch[];
@@ -59,8 +69,7 @@ export const DEFAULT_PREFS: Prefs = {
 	chordClusterWindowMs: 80,
 	midiLatencyOffsetMs: 0,
 	// Everyone starts at the beginning: C major, and the seven notes in it.
-	ladderKey: 'C',
-	ladderRung: 'scale'
+	ladderWidths: FIRST_FRONTIER.widths
 };
 
 export const DEFAULT_COLOR_MAP: ColorMap = DEFAULT_PALETTE;

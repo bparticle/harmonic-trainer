@@ -1,9 +1,10 @@
 import {
 	RUNGS,
 	STAGES,
+	depthOf,
 	rungById,
 	stageIndex,
-	type Position,
+	type Frontier,
 	type Rung,
 	type RungId
 } from '$lib/curriculum/ladder';
@@ -23,12 +24,12 @@ import {
  * So two things live here, and both are readings of rows rather than new
  * measurements:
  *
- *   - **A window on the ladder.** A few steps behind, where you are, a few
- *     ahead. Not all eighty-four: the full grid is still one press away in the
- *     library below, and a path you can read in a glance is worth more on the
- *     page you open at eight in the morning than a complete one you have to
- *     study. Each step behind carries what the record actually holds for it,
- *     so "done" is a count of questions answered and not a tick somebody drew.
+ *   - **The frontier, as seven rows.** One per rung, each carrying how many keys
+ *     it is open in and what the record holds across all of them. This was a
+ *     sliding window over a single walk while the ladder was one; a frontier
+ *     moves in two directions at once and the honest picture of it is the
+ *     staircase itself, so "open" is a count of questions answered in a count of
+ *     keys, and not a tick somebody drew.
  *   - **What the last few days were made of.** Titles of tasks, in the key they
  *     were in, on the day they happened. Nothing here is a streak and nothing
  *     here can fall while you are away from the piano — the same rule the twelve
@@ -59,102 +60,113 @@ export function looksSolid(rung: Rung, reviews: number, correct: number): boolea
 }
 
 // ---------------------------------------------------------------------------
-// The window
+// The path
 // ---------------------------------------------------------------------------
 
 /** What the record holds for one rung in one key, as the query hands it over. */
 export type RungRecord = { key: string; rungId: string; reviews: number; correct: number };
 
-/** Where a step sits relative to where you are standing. */
-export type StepState = 'done' | 'here' | 'ahead';
+/** Where a rung sits relative to how deep the frontier goes. */
+export type StepState = 'open' | 'here' | 'ahead';
 
 export type PathStep = {
-	key: string;
 	rungId: RungId;
 	label: string;
 	teaches: string;
-	/** Position in the whole ladder, from one, so a step can say where it is. */
-	ordinal: number;
-	stageIndex: number;
 	rungIndex: number;
+	/** How many keys this rung is open in. The breadth axis, per rung. */
+	keys: number;
+	/** Which keys, in the ladder's order, so the row can draw them. */
+	keyNames: string[];
 	state: StepState;
-	/** True where this step is a key's first rung, so the strip can mark the seam. */
-	opensKey: boolean;
+	/** Every review of this rung, across every key it is open in. */
 	reviews: number;
 	correct: number;
-	/** Reached, but nothing has ever been asked here. Not the same as failed. */
+	/** Open, but nothing has ever been asked here. Not the same as failed. */
 	untouched: boolean;
 	solid: boolean;
 };
 
-/** How many steps the ladder has in total. Twelve keys of seven. */
-export const LADDER_LENGTH = STAGES.length * RUNGS.length;
-
-/** A step's place in the whole ladder, from one. */
-export const ordinalOf = (stage: number, rung: number) => stage * RUNGS.length + rung + 1;
+/** How many cells the ladder has in total. Twelve keys of seven. */
+export const LADDER_CELLS = STAGES.length * RUNGS.length;
 
 const recordKey = (key: string, rungId: string) => `${key}|${rungId}`;
 
 /**
- * The steps around where you are standing.
+ * The frontier as seven rows, one per rung.
  *
- * `behind` and `ahead` are counts of steps and not of keys, so the window
- * crosses from the end of one key into the start of the next exactly as walking
- * the ladder does — and `opensKey` marks where that happened, because "G · the
- * scale" arriving after "C · the relative minor" is the single most important
- * thing this strip has to say and it should not be left to the reader to spot.
+ * **This replaced a sliding window over a single walk, and the change is the
+ * point.** A prefix had an obvious "here" and an obvious few steps either side
+ * of it, so the path could be a line. A frontier does not: depth and breadth
+ * move separately, and the honest picture of one is the staircase itself —
+ * every rung, and how many keys it is open in.
  *
- * Clamped at both ends rather than padded. On the first morning of an account
- * there is nothing behind you, and drawing empty slots to keep the shape
- * rectangular would be inventing a past.
+ * Seven rows is short enough to read at eight in the morning and is the whole
+ * of the state rather than a view onto part of it, so nothing is hidden behind
+ * a scroll. The rungs ahead are still listed, carrying their own `teaches` line,
+ * because what comes next is the question this page is actually asked.
+ *
+ * The record on a row is summed across every key the rung is open in, which is
+ * the number that answers "do I know this yet" — a rung met in four keys and
+ * answered well in all of them is a different thing from one met in four and
+ * answered well in one, and only a total can say so.
  */
-export function pathWindow(
-	position: Position,
-	records: RungRecord[] = [],
-	window: { behind?: number; ahead?: number } = {}
-): PathStep[] {
-	const behind = window.behind ?? 2;
-	const ahead = window.ahead ?? 3;
-
+export function ladderPath(frontier: Frontier, records: RungRecord[] = []): PathStep[] {
 	const held = new Map(records.map((row) => [recordKey(row.key, row.rungId), row]));
-	const here = ordinalOf(position.stageIndex, position.rungIndex);
-	const from = Math.max(1, here - behind);
-	const to = Math.min(LADDER_LENGTH, here + ahead);
+	const depth = depthOf(frontier);
 
-	const steps: PathStep[] = [];
-	for (let ordinal = from; ordinal <= to; ordinal++) {
-		const si = Math.floor((ordinal - 1) / RUNGS.length);
-		const ri = (ordinal - 1) % RUNGS.length;
-		const stage = STAGES[si];
-		const rung = RUNGS[ri];
-		const row = held.get(recordKey(stage.key, rung.id));
-		const reviews = row?.reviews ?? 0;
-		const correct = row?.correct ?? 0;
+	return RUNGS.map((rung, rungIndex) => {
+		const width = Math.min(frontier.widths[rungIndex] ?? 0, STAGES.length);
+		const keyNames = STAGES.slice(0, width).map((stage) => stage.key);
 
-		steps.push({
-			key: stage.key,
+		let reviews = 0;
+		let correct = 0;
+		for (const key of keyNames) {
+			const row = held.get(recordKey(key, rung.id));
+			reviews += row?.reviews ?? 0;
+			correct += row?.correct ?? 0;
+		}
+
+		const state: StepState = width === 0 ? 'ahead' : rungIndex === depth - 1 ? 'here' : 'open';
+
+		return {
 			rungId: rung.id,
 			label: rung.label,
 			teaches: rung.teaches,
-			ordinal,
-			stageIndex: si,
-			rungIndex: ri,
-			state: ordinal < here ? 'done' : ordinal === here ? 'here' : 'ahead',
-			opensKey: ri === 0,
+			rungIndex,
+			keys: width,
+			keyNames,
+			state,
 			reviews,
 			correct,
-			untouched: ordinal <= here && reviews === 0,
+			untouched: width > 0 && reviews === 0,
 			solid: looksSolid(rung, reviews, correct)
-		});
-	}
-
-	return steps;
+		};
+	});
 }
 
-/** Where the ladder has got to, as a step out of eighty-four. */
-export function journeyProgress(position: Position) {
-	const step = ordinalOf(position.stageIndex, position.rungIndex);
-	return { step, total: LADDER_LENGTH, fill: step / LADDER_LENGTH };
+/**
+ * How much of the ladder is open, as cells out of eighty-four.
+ *
+ * Cells rather than steps, because a frontier is a set. The old number counted
+ * position along one walk, which could only ever be one of eighty-four places;
+ * this counts how much ground is actually open, and going one rung deeper moves
+ * it by more than one because deepening widens.
+ */
+export function journeyProgress(frontier: Frontier) {
+	const open = frontier.widths.reduce(
+		(total, width) => total + Math.min(Math.max(width, 0), STAGES.length),
+		0
+	);
+	return {
+		cells: open,
+		total: LADDER_CELLS,
+		fill: open / LADDER_CELLS,
+		depth: depthOf(frontier),
+		rungs: RUNGS.length,
+		/** The widest any rung is open. How many keys the ladder has been into. */
+		keys: Math.min(frontier.widths[0] ?? 0, STAGES.length)
+	};
 }
 
 /**

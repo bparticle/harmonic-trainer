@@ -1,6 +1,6 @@
 import { GROOVES, type Groove } from '$lib/audio/groove';
 import { MISSION_CHARTS, type ChartCategory } from '$lib/curriculum/charts';
-import { nextPosition, positionOf, rungById, type RungId } from '$lib/curriculum/ladder';
+import { rungById, type RungId } from '$lib/curriculum/ladder';
 import { PROGRESSIONS } from '$lib/curriculum/progressions';
 import {
 	describeShortfall,
@@ -384,8 +384,19 @@ export type WorkoutInput = {
 	size?: WorkoutSize;
 	/** Everything with a schedule, due or not. */
 	cards: Schedulable[];
-	/** Everywhere the ladder has been: `reachedSoFar(position)`. */
+	/** Every cell the frontier holds: `cellsOf(frontier)`. */
 	reached: Array<{ key: string; rungId: RungId }>;
+	/**
+	 * The cell the frontier would open next, for the slot that offers a new thing.
+	 *
+	 * Passed in rather than derived, because working it out means knowing the
+	 * shape of the frontier and this module is pure and does not. It used to be
+	 * computed here — take the last cell reached, ask `nextPosition` — which only
+	 * worked while "reached" was a prefix of one walk and the last element of it
+	 * was therefore the edge. A frontier has no last element in that sense: the
+	 * deepest rung is not the most recently opened cell.
+	 */
+	nextCell?: { key: string; rungId: RungId } | null;
 	/** The record's cold spots. Empty is a fair answer on a first workout. */
 	coldSpots?: ColdSpot[];
 	/** Yesterday's novelty, by `noveltyId`. */
@@ -901,19 +912,18 @@ function missionGoal(chart: MissionChart | undefined, mission: Mission): Goal {
  * encouraging.
  */
 export function chooseNovelty(input: {
-	reached: Array<{ key: string; rungId: RungId }>;
 	keyCenter: string;
+	/** What the frontier would open next, or null at the bottom of the ladder. */
+	nextCell?: { key: string; rungId: RungId } | null;
 	playedProgressions: string[];
 	playedGrooves: Groove[];
 	rungLooksSolid: boolean;
 	yesterday: string | null;
 	day: number;
 }): Novelty | null {
-	const frontier = input.reached[input.reached.length - 1];
-	const position = frontier ? positionOf(frontier.key, frontier.rungId) : null;
-	const next = position ? nextPosition(position) : null;
+	const next = input.nextCell ?? null;
 	const nextRung: Novelty | null = next
-		? { kind: 'rung', key: next.stage.key, rungId: next.rung.id }
+		? { kind: 'rung', key: next.key, rungId: next.rungId }
 		: null;
 
 	const seenProgressions = new Set(input.playedProgressions);
@@ -1122,8 +1132,8 @@ export function composeWorkout(input: WorkoutInput): Workout {
 			: progressionSkillCode(choice.progressionId)
 		: null;
 	const novelty = chooseNovelty({
-		reached: input.reached,
 		keyCenter,
+		nextCell: input.nextCell ?? null,
 		playedProgressions: input.played?.progressions ?? [],
 		playedGrooves: input.played?.grooves ?? [],
 		rungLooksSolid: input.rungLooksSolid ?? false,

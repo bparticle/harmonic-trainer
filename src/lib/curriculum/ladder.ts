@@ -183,37 +183,235 @@ export function positionOf(key: string, rungId: string): Position | null {
 	return { stage: STAGES[si], rung: RUNGS[ri], stageIndex: si, rungIndex: ri };
 }
 
-/** The next place, walking rungs then keys. Null at the end of everything. */
-export function nextPosition(current: Position): Position | null {
-	if (current.rungIndex + 1 < RUNGS.length) {
-		return {
-			stage: current.stage,
-			rung: RUNGS[current.rungIndex + 1],
-			stageIndex: current.stageIndex,
-			rungIndex: current.rungIndex + 1
-		};
-	}
-	if (current.stageIndex + 1 < STAGES.length) {
-		return {
-			stage: STAGES[current.stageIndex + 1],
-			rung: RUNGS[0],
-			stageIndex: current.stageIndex + 1,
-			rungIndex: 0
-		};
-	}
-	return null;
+// ---------------------------------------------------------------------------
+// The frontier
+// ---------------------------------------------------------------------------
+
+/**
+ * Where you have got to: how many keys each rung is open in.
+ *
+ * **This replaced a single position, and the replacement is the whole of M17's
+ * second pass.** A position was a point on one walk — rungs then keys — so
+ * everything reached was a *prefix* of that walk. Three things followed from
+ * that and none of them was a bug: the second key cost seven steps of the
+ * first, cards outside the prefix did not exist so there was nothing in another
+ * key to interleave with, and `spreadByKey` — which exists precisely so eight
+ * questions touch eight keys — had one key to spread across on the second rung.
+ * The app was at its most blocked exactly when the learner was newest.
+ *
+ * So depth and breadth stop being one ordering. `widths[r]` is the number of
+ * keys rung `r` is open in, counted in `STAGES` order, and the array is
+ * **non-increasing**: a rung is never open in more keys than the rung above it.
+ * That is the staircase, and it is what makes the set a curriculum rather than
+ * a scattering — you cannot be four rungs deep in a key whose scale you have
+ * never played.
+ *
+ * Everything the old model guaranteed survives. The frontier is still a set the
+ * app opened on purpose, so nothing is ever asked that has not been introduced,
+ * which is the rule the note at the top of this file exists to keep.
+ *
+ * Widths only ever grow. Nothing here can take material away except `narrower`
+ * below, which is a person pressing "step back" rather than the curriculum
+ * revising itself.
+ */
+export type Frontier = {
+	/** One count per rung, in `RUNGS` order. Non-increasing, each 0…STAGES.length. */
+	widths: number[];
+};
+
+/** One rung, one key. The first morning of an account. */
+export const FIRST_FRONTIER: Frontier = {
+	widths: [1, ...RUNGS.slice(1).map(() => 0)]
+};
+
+/**
+ * The frontier a stored position means, exactly.
+ *
+ * The migration, and it is not an approximation. A position at stage `s`, rung
+ * `r` meant: every rung of every earlier key, plus rungs `0…r` of this one. As
+ * widths that is `s + 1` keys for the rungs at or below `r` and `s` keys for
+ * the rungs above it — which is non-increasing, and which enumerates the
+ * identical set of cells. A test asserts that for all eighty-four positions.
+ */
+export function frontierFromPosition(key: string, rungId: string): Frontier | null {
+	const position = positionOf(key, rungId);
+	if (!position) return null;
+	return {
+		widths: RUNGS.map((_, r) =>
+			r <= position.rungIndex ? position.stageIndex + 1 : position.stageIndex
+		)
+	};
 }
 
-/** Everything up to and including a position, for choosing review material. */
-export function reachedSoFar(current: Position): Array<{ key: string; rungId: RungId }> {
+/** Rungs that are open in at least one key. Depth, as opposed to breadth. */
+export function depthOf(frontier: Frontier): number {
+	return frontier.widths.filter((width) => width > 0).length;
+}
+
+/** Every cell the frontier holds, in the order the ladder introduced them. */
+export function cellsOf(frontier: Frontier): Array<{ key: string; rungId: RungId }> {
 	const out: Array<{ key: string; rungId: RungId }> = [];
-	for (let s = 0; s <= current.stageIndex; s++) {
-		const lastRung = s === current.stageIndex ? current.rungIndex : RUNGS.length - 1;
-		for (let r = 0; r <= lastRung; r++) {
+	for (let r = 0; r < RUNGS.length; r++) {
+		for (let s = 0; s < Math.min(frontier.widths[r] ?? 0, STAGES.length); s++) {
 			out.push({ key: STAGES[s].key, rungId: RUNGS[r].id });
 		}
 	}
 	return out;
+}
+
+/** Is this rung open in this key? The one question the card generator asks. */
+export function isOpen(frontier: Frontier, key: string, rungId: string): boolean {
+	const r = RUNGS.findIndex((rung) => rung.id === rungId);
+	const s = stageIndex(key);
+	if (r < 0 || s < 0) return false;
+	return s < (frontier.widths[r] ?? 0);
+}
+
+/** How many rungs of one key are open. What a key swatch prints. */
+export function rungsOpenIn(frontier: Frontier, key: string): number {
+	const s = stageIndex(key);
+	if (s < 0) return 0;
+	return frontier.widths.filter((width) => s < width).length;
+}
+
+/**
+ * Where you are standing: the deepest rung, in the last key it was opened in.
+ *
+ * A frontier is a set and a lesson is a place, so something has to answer "what
+ * am I working on". This does, and it is the only thing `Position` is still for
+ * — the hero, the rung's own review count, and the default the picker starts
+ * on. Nothing gates on it any more.
+ */
+export function workingPosition(frontier: Frontier): Position {
+	const rungIndex = Math.max(0, depthOf(frontier) - 1);
+	const stage = Math.max(0, Math.min((frontier.widths[rungIndex] ?? 1) - 1, STAGES.length - 1));
+	return { stage: STAGES[stage], rung: RUNGS[rungIndex], stageIndex: stage, rungIndex };
+}
+
+/**
+ * Open the next rung — and one more key of every rung above it.
+ *
+ * The single most important function in this file, and the whole of "widen
+ * before you deepen" expressed as one move. Going deeper is not free: it drags
+ * every shallower rung one key wider, so the staircase builds itself and it is
+ * impossible to be deep and narrow. Seven of these gives
+ * `[7, 6, 5, 4, 3, 2, 1]` — the same seven rungs the old walk reached in seven
+ * steps, with twenty-one cells of breadth underneath them that the old walk did
+ * not have.
+ *
+ * Null when every rung is already open; widening is what is left after that.
+ */
+export function deepen(frontier: Frontier): Frontier | null {
+	const depth = depthOf(frontier);
+	if (depth >= RUNGS.length) return null;
+
+	return {
+		widths: frontier.widths.map((width, r) => {
+			if (r === depth) return 1;
+			if (r < depth) return Math.min(width + 1, STAGES.length);
+			return width;
+		})
+	};
+}
+
+/**
+ * Open one rung in one more key, without going deeper.
+ *
+ * For somebody who wants more ground before the next idea. Refused where it
+ * would break the staircase — a rung may never be open in more keys than the
+ * one above it — and refused at twelve, because there is no thirteenth key.
+ */
+export function widen(frontier: Frontier, rungIndex: number): Frontier | null {
+	const width = frontier.widths[rungIndex];
+	if (width === undefined || width === 0) return null;
+	if (width >= STAGES.length) return null;
+	if (rungIndex > 0 && width >= (frontier.widths[rungIndex - 1] ?? 0)) return null;
+
+	return { widths: frontier.widths.map((w, r) => (r === rungIndex ? w + 1 : w)) };
+}
+
+/**
+ * The rung a plain "wider" means, and the key it would add.
+ *
+ * The **deepest rung that can take another key**, which is not always the
+ * deepest rung. A frontier like `[2, 2, 2, 1, 1, 1, 1]` — which is what an
+ * account standing at G's third rung migrates to — has its last four rungs
+ * level with each other, so none of them can widen without breaking the
+ * staircase. Asking only the deepest one gives "no", and the page then offers
+ * nothing at all: every rung open, no deepening left, and a widening that was
+ * refused. A dead end, found by opening the page rather than by a test.
+ *
+ * Deepest-that-can is the right answer rather than a patch. Breadth is most
+ * useful where the staircase is thinnest relative to what sits above it, and
+ * that is exactly the deepest rung with room.
+ */
+export function nextWidening(
+	frontier: Frontier
+): { rungIndex: number; rung: Rung; stage: Stage } | null {
+	for (let r = frontier.widths.length - 1; r >= 0; r--) {
+		if (widen(frontier, r)) {
+			return { rungIndex: r, rung: RUNGS[r], stage: STAGES[frontier.widths[r]] };
+		}
+	}
+	return null;
+}
+
+/** Open one more key on whichever rung `nextWidening` names. */
+export function widenNext(frontier: Frontier): Frontier | null {
+	const target = nextWidening(frontier);
+	return target ? widen(frontier, target.rungIndex) : null;
+}
+
+/**
+ * Undo the last opening, for when going on turned out to be optimistic.
+ *
+ * Deliberately not the inverse of `deepen`: it closes the deepest rung and
+ * leaves the widths above it alone, because taking keys back off rungs somebody
+ * has been practising for a week would be the app deciding they had forgotten
+ * them. Never closes the last cell — there is always somewhere to stand.
+ */
+export function narrower(frontier: Frontier): Frontier | null {
+	const depth = depthOf(frontier);
+	if (depth === 0) return null;
+	const last = depth - 1;
+	const width = frontier.widths[last];
+
+	if (width > 1) {
+		return { widths: frontier.widths.map((w, r) => (r === last ? w - 1 : w)) };
+	}
+	// The deepest rung holds one key. Closing it is only allowed if it is not
+	// the only thing open.
+	if (depth === 1) return null;
+	return { widths: frontier.widths.map((w, r) => (r === last ? 0 : w)) };
+}
+
+/**
+ * Non-increasing, in range, and at least one cell open.
+ *
+ * Takes `unknown` because its whole job is to be asked about a value that came
+ * out of a JSON column and may be anything at all — including, on the first
+ * request after this shipped, `undefined`.
+ */
+export function isWellFormed(frontier: { widths?: unknown } | null | undefined): boolean {
+	const widths = frontier?.widths;
+	if (!Array.isArray(widths)) return false;
+	if (widths.length !== RUNGS.length) return false;
+	if (widths.some((w) => !Number.isInteger(w) || w < 0 || w > STAGES.length)) return false;
+	for (let r = 1; r < widths.length; r++) if (widths[r] > widths[r - 1]) return false;
+	return widths[0] > 0;
+}
+
+/**
+ * The next cell the frontier would open, for the slot that offers a new thing.
+ *
+ * Deepening rather than widening, because the new *thing* is a new idea and a
+ * rung met in one more key is the same idea somewhere else. Null at the bottom
+ * of the ladder, where there is no new rung left to meet.
+ */
+export function nextCell(frontier: Frontier): { key: string; rungId: RungId } | null {
+	const depth = depthOf(frontier);
+	if (depth >= RUNGS.length) return null;
+	return { key: STAGES[0].key, rungId: RUNGS[depth].id };
 }
 
 // ---------------------------------------------------------------------------

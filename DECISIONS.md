@@ -4608,3 +4608,87 @@ about the wrong thing.
 
 Nothing here is wired to a card, a workout or a screen yet. That is pass two and
 pass three; this is the module they will both read.
+
+## M17 pass two — the ladder stops being one walk
+
+The prefix is gone. `Position` was a point on a single ordering — rungs, then
+keys — so everything reached was a prefix of that walk, and three things
+followed from it that were never bugs and were always costs. The second key cost
+seven steps of the first. Cards outside the prefix did not exist, so there was
+nothing in another key to interleave _with_. And `spreadByKey`, which exists
+precisely so that eight questions touch eight keys, had one key to spread across
+on the second rung: the app was at its most blocked exactly when the learner was
+newest.
+
+`Frontier` replaces it. `widths[r]` is how many keys rung `r` is open in,
+counted in `STAGES` order, and the array is non-increasing. That is the
+staircase, and the invariant is what keeps the set a curriculum rather than a
+scattering — you cannot be four rungs deep in a key whose scale you have never
+played. Everything the old model guaranteed survives: the frontier is still a
+set the app opened on purpose, so nothing is asked that has not been introduced,
+which is the rule `ladder.ts` was written to keep.
+
+### Deepening is not free, and that is the whole design
+
+`deepen` opens the next rung **and widens every rung above it by one key**. One
+move, no choice to get wrong, and the staircase builds itself:
+
+    [1] → [2,1] → [3,2,1] → [4,3,2,1] → … → [7,6,5,4,3,2,1]
+
+Seven of those reach every rung — the same seven the old walk reached in seven
+steps — with twenty-one cells of breadth underneath that the old walk did not
+have. Depth is no slower and breadth is enormously greater, which is the trade
+the milestone was for. `widen` sits beside it for somebody who wants more ground
+before the next idea, and neither is a prerequisite for the other.
+
+The effect is visible one move in. On a fresh account, one deepening and the ear
+task is already drawing on **G and C**. Under the prefix it took seven.
+
+### The migration had to be exact, and is
+
+A stored position at stage `s`, rung `r` meant every rung of every earlier key
+plus rungs `0…r` of this one. As widths that is `s + 1` keys for the rungs at or
+below `r` and `s` for those above — non-increasing, and enumerating the identical
+set of cells. `frontierFromPosition` does that conversion and a test asserts the
+cell sets match at all eighty-four positions, because approximately-right here
+means somebody opens the app to find their ground has moved.
+
+### Two things only running it could have found
+
+**The migration was in the wrong place.** `parsePrefs` lived on the write path
+only; `toAppSettings` cast `prefs_json` straight to `Prefs`. So a row written
+before a field existed came back missing it with the types insisting otherwise —
+and every existing account would have hit an Internal Error on its first request
+after this shipped. No unit test was going to catch it, because every test builds
+its prefs in TypeScript where the field is not optional. There are two readers
+now and the difference between them is the point: `parsePrefs` stays strict for
+an API request, and `readPrefs` is tolerant for a stored row, filling defaults
+and never throwing — because a settings row that cannot be read must not cost
+somebody an account whose practice record is perfectly good.
+
+**"Wider" could refuse on a frontier with two legal widenings in it.** Asking
+only the deepest rung gives "no" whenever the last few rungs are level with each
+other — which is exactly what `[2,2,2,1,1,1,1]` looks like, and exactly what an
+account standing at G's third rung migrates to. Every rung open, so nothing to
+deepen; the deepest rung level with the one above it, so nothing to widen; and
+the page offering nothing at all. `nextWidening` takes the deepest rung that
+_can_, which is the right answer rather than a patch: breadth is most useful
+where the staircase is thinnest relative to what sits above it. A test now walks
+the whole ladder and asserts that only the complete ladder is ever a dead end.
+
+### The path became a map
+
+Seven rows, one per rung, each carrying how many keys it is open in and twelve
+pips showing which. Depth reads down the page and breadth reads across it, which
+is the shape of the thing rather than a summary of it. The record on a row is
+summed across every key the rung is open in — a rung met in four keys and
+answered well in all of them is a different thing from one met in four and
+answered well in one, and only a total can say so.
+
+Colour follows the house rule without an exception: the pips are the only hue,
+each wearing its own key's swatch, and the rung numbers, the states and the
+counts are all weight.
+
+`journeyProgress` counts **cells** now rather than position along a walk, so
+going one rung deeper moves it by more than one. That is not a bug in the number;
+it is the number finally measuring the right thing.

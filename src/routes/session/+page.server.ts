@@ -1,7 +1,12 @@
 import { redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { activeWorkout, advanceLadder, finishTask, loadCards } from '$lib/server/db/session-store';
-import { positionOf } from '$lib/curriculum/ladder';
+import {
+	activeWorkout,
+	currentFrontier,
+	deepenLadder,
+	finishTask,
+	loadCards
+} from '$lib/server/db/session-store';
 import { currentUserId } from '$lib/server/db/user';
 
 type CardsByTask = Record<number, Awaited<ReturnType<typeof loadCards>>>;
@@ -51,11 +56,19 @@ export const actions: Actions = {
 		const form = await request.formData();
 		const sessionId = String(form.get('sessionId') ?? '');
 		const index = Number(form.get('index'));
-		const target = positionOf(String(form.get('key') ?? ''), String(form.get('rung') ?? ''));
 
-		if (target) await advanceLadder(userId, target);
+		/*
+		 * No target to look up any more. The novelty slot offers whatever the
+		 * frontier would open next, and the frontier knows what that is — so this
+		 * says "go deeper" rather than naming a place, and the two can no longer
+		 * disagree about which rung was being offered.
+		 */
+		const before = await currentFrontier(userId);
+		const after = await deepenLadder(userId);
+		const moved = after.widths.join() !== before.widths.join();
+
 		if (sessionId && Number.isInteger(index)) {
-			await finishTask(userId, sessionId, index, { tried: true, advanced: Boolean(target) });
+			await finishTask(userId, sessionId, index, { tried: true, advanced: moved });
 		}
 		redirect(303, '/session');
 	}

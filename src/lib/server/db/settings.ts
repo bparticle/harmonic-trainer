@@ -7,9 +7,9 @@ import {
 	DEFAULT_WHEEL_CONFIG,
 	type AppSettings,
 	type ColorMap,
-	type Prefs,
 	type WheelConfig
 } from '$lib/settings';
+import { readPrefs } from '$lib/settings-validate';
 
 /**
  * The defaults row is a singleton pinned to id 1. It is created on first read
@@ -96,7 +96,14 @@ function toAppSettings(
 	return {
 		colorMap: row.colorMapJson as ColorMap,
 		wheelConfig: row.wheelConfigJson as WheelConfig,
-		prefs: row.prefsJson as Prefs,
+		/*
+		 * Read rather than cast. A row written before a field existed does not
+		 * have it, and a cast says otherwise — which is how the frontier arrived
+		 * as `undefined` in code whose types promised an array. `readPrefs` fills
+		 * the gaps and migrates the old ladder position; it never throws, because
+		 * a settings row that cannot be read must not cost somebody their account.
+		 */
+		prefs: readPrefs(row.prefsJson),
 		midiDevice: row.midiDevice,
 		// The singleton template has no opinion on this — it is not personal
 		// data, and a new account has always seen nothing regardless of what

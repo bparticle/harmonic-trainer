@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { CardDirection } from '$lib/server/db/schema';
 import { initialState, type Schedulable } from '$lib/srs/scheduler';
-import { FIRST_POSITION, positionOf, reachedSoFar, type RungId } from '$lib/curriculum/ladder';
+import {
+	cellsOf,
+	FIRST_FRONTIER,
+	frontierFromPosition,
+	nextCell,
+	type Frontier,
+	type RungId
+} from '$lib/curriculum/ladder';
 import { cardsForRung } from '$lib/curriculum/cards';
 import { STAGES } from '$lib/curriculum/ladder';
 import { PROGRESSIONS } from '$lib/curriculum/progressions';
@@ -33,8 +40,8 @@ const NOW = new Date('2026-02-10T09:00:00Z');
 const DAY = 24 * 60 * 60 * 1000;
 
 /** As far as a player with a few months on the ladder has got. */
-const FAR = positionOf('Eb', 'all-sevenths')!;
-const REACHED = reachedSoFar(FAR);
+const FAR = frontierFromPosition('Eb', 'all-sevenths')!;
+const REACHED = cellsOf(FAR);
 const REACHED_KEYS = [...new Set(REACHED.map((r) => r.key))];
 
 const card = (
@@ -95,6 +102,7 @@ const KNOWS_EVERYTHING = vocabularyOf({
 const input = (overrides: Partial<WorkoutInput> = {}): WorkoutInput => ({
 	cards: bank(),
 	reached: REACHED,
+	nextCell: nextCell(FAR),
 	vocabulary: KNOWS_EVERYTHING,
 	now: NOW,
 	...overrides
@@ -431,21 +439,23 @@ describe('one new thing', () => {
 
 	it('says “ready to move on” out loud when the rung looks solid', () => {
 		const novelty = chooseNovelty({
-			reached: REACHED,
 			keyCenter: 'Eb',
+			// What the frontier would open next, handed over rather than derived —
+			// the composer is pure and does not know the frontier's shape.
+			nextCell: { key: 'C', rungId: 'relative-minor' },
 			playedProgressions: [],
 			playedGrooves: [],
 			rungLooksSolid: true,
 			yesterday: null,
 			day: 0
 		});
-		expect(novelty).toEqual({ kind: 'rung', key: 'Eb', rungId: 'relative-minor' });
+		expect(novelty).toEqual({ kind: 'rung', key: 'C', rungId: 'relative-minor' });
 	});
 
 	it('offers something else when the rung is still being fought', () => {
 		const novelty = chooseNovelty({
-			reached: REACHED,
 			keyCenter: 'Eb',
+			nextCell: { key: 'C', rungId: 'relative-minor' },
 			playedProgressions: [],
 			playedGrooves: [],
 			rungLooksSolid: false,
@@ -457,8 +467,8 @@ describe('one new thing', () => {
 
 	it('does not offer a progression or a groove the record already holds', () => {
 		const novelty = chooseNovelty({
-			reached: REACHED,
 			keyCenter: 'C',
+			nextCell: null,
 			playedProgressions: ['I-IV-V-I'],
 			playedGrooves: ['swing'],
 			rungLooksSolid: false,
@@ -486,9 +496,13 @@ describe('one new thing', () => {
 				'funk'
 			] as const
 		};
-		const finished = reachedSoFar(positionOf('Gb', 'relative-minor')!);
+		const full: Frontier = frontierFromPosition('Gb', 'relative-minor')!;
 		const workout = composeWorkout(
-			input({ reached: finished, played: { ...everything, grooves: [...everything.grooves] } })
+			input({
+				reached: cellsOf(full),
+				nextCell: nextCell(full),
+				played: { ...everything, grooves: [...everything.grooves] }
+			})
 		);
 
 		expect(workout.novelty).toBeNull();
@@ -675,7 +689,7 @@ describe('the mission', () => {
 });
 
 describe('a brand-new account', () => {
-	const firstReached = reachedSoFar(FIRST_POSITION);
+	const firstReached = cellsOf(FIRST_FRONTIER);
 	const firstCards: Schedulable[] = cardsForRung('scale', STAGES[0]).map((generated, i) => ({
 		cardId: `first-${i}`,
 		direction: generated.direction,
@@ -687,7 +701,8 @@ describe('a brand-new account', () => {
 	const first = composeWorkout({
 		cards: firstCards,
 		reached: firstReached,
-		vocabulary: vocabularyOf({ rungs: firstReached.map((place) => place.rungId) }),
+		nextCell: nextCell(FIRST_FRONTIER),
+		vocabulary: vocabularyOf({ rungs: firstReached.map((cell) => cell.rungId) }),
 		now: NOW
 	});
 
@@ -718,11 +733,11 @@ describe('a brand-new account', () => {
 	});
 
 	it('has a play-along by the time the home chord is met', () => {
-		const second = reachedSoFar(positionOf('C', 'tonic-triad')!);
+		const second = cellsOf(frontierFromPosition('C', 'tonic-triad')!);
 		const workout = composeWorkout({
 			cards: firstCards,
 			reached: second,
-			vocabulary: vocabularyOf({ rungs: second.map((place) => place.rungId) }),
+			vocabulary: vocabularyOf({ rungs: second.map((cell) => cell.rungId) }),
 			now: NOW
 		});
 		expect(taskKinds(workout)).toContain('mission');
@@ -754,10 +769,10 @@ describe('the mission only lands on a tune you have been taught', () => {
 	 * nobody had been to. `curriculum/vocabulary.ts` decides what is ready; this
 	 * is the proof that the composer actually asks it.
 	 */
-	const early = reachedSoFar(positionOf('C', 'all-triads')!);
+	const early = cellsOf(frontierFromPosition('C', 'all-triads')!);
 	const earlyInput = input({
 		reached: early,
-		vocabulary: vocabularyOf({ rungs: early.map((place) => place.rungId) }),
+		vocabulary: vocabularyOf({ rungs: early.map((cell) => cell.rungId) }),
 		charts: MISSION_CHARTS
 	});
 

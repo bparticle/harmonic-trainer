@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CHARTS, MISSION_CHARTS, chartDemand } from './charts';
 import { PROGRESSIONS, progressionById } from './progressions';
-import { RUNGS, STAGES, itemsForRung, reachedSoFar, positionOf, type RungId } from './ladder';
+import { RUNGS, STAGES, cellsOf, frontierFromPosition, itemsForRung, type RungId } from './ladder';
 import {
 	ALL_RUNGS,
 	demandOfGrid,
@@ -24,7 +24,7 @@ const demandOf = (numerals: string[], mode: 'major' | 'minor' = 'major') =>
 	demandOfNumerals(numerals, mode);
 
 const rungsTo = (key: string, rungId: RungId) =>
-	reachedSoFar(positionOf(key, rungId)!).map((place) => place.rungId);
+	cellsOf(frontierFromPosition(key, rungId)!).map((cell) => cell.rungId);
 
 const knowing = (key: string, rungId: RungId, progressions: string[] = []) =>
 	vocabularyOf({ rungs: rungsTo(key, rungId), progressions });

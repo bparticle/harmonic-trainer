@@ -203,34 +203,34 @@
 
 	// -- The path -----------------------------------------------------------
 	//
-	// A few steps either side of where the ladder is standing, each carrying the
-	// count the record actually holds for it. This is the part of the page that
-	// was missing: everything below was a picker, and a picker is not a route.
+	// Seven rows, one per rung, each carrying how many keys it is open in and
+	// what the record holds across all of them. The ladder used to be one walk,
+	// so the path could be a line; a frontier moves in two directions at once and
+	// the honest picture of it is the staircase itself.
 
-	/** What a step has to say for itself, which depends on which side of you it is on. */
+	/** What a row has to say for itself, which depends on whether it is open. */
 	const stepNote = (step: PathStep) => {
 		if (step.state === 'ahead') return step.teaches;
-		if (step.reviews === 0) return 'not asked yet';
+		if (step.reviews === 0) return `${keysLine(step)} · not asked yet`;
 		const right = `${step.correct} of ${step.reviews} right`;
-		return step.solid ? `${right} · solid` : right;
+		return `${keysLine(step)} · ${step.solid ? `${right} · solid` : right}`;
 	};
 
-	/** What pressing it would do, said for a screen reader and a hover alike. */
-	const stepAction = (step: PathStep) =>
-		step.state === 'done'
-			? `Practise ${step.label} in ${glyph(step.key)} again`
-			: step.state === 'here'
-				? `Practise ${step.label} in ${glyph(step.key)}`
-				: `Look ahead to ${step.label} in ${glyph(step.key)}`;
+	const keysLine = (step: PathStep) => (step.keys === 1 ? 'in 1 key' : `in ${step.keys} keys`);
 
-	const stepMark = (step: PathStep) =>
-		step.state === 'done' ? (step.reviews > 0 ? '✓' : '·') : step.state === 'here' ? '◆' : '';
+	/** Pressing a row pins its rung, in the key the workout would use for it. */
+	const stepKey = (step: PathStep) => step.keyNames[step.keyNames.length - 1] ?? data.stages[0].key;
+
+	const stepAction = (step: PathStep) =>
+		step.state === 'ahead'
+			? `Look ahead to ${step.label}`
+			: `Practise ${step.label} in ${glyph(stepKey(step))}`;
 
 	const isChosen = (step: PathStep) =>
-		choice.kind === 'rung' && choice.key === step.key && choice.rung === step.rungId;
+		choice.kind === 'rung' && choice.key === stepKey(step) && choice.rung === step.rungId;
 
-	/** The step after the one you are on, for the sentence beside "move on". */
-	const nextStep = $derived(data.path.find((step) => step.state === 'ahead') ?? null);
+	/** Which of the twelve a rung is open in, for the little strip on its row. */
+	const openIn = (step: PathStep, key: string) => step.keyNames.includes(key);
 </script>
 
 <svelte:head>
@@ -383,7 +383,8 @@
 			<div class="section-head">
 				<h2 class="panel-title">Your path</h2>
 				<p class="path-count">
-					step {data.journey.step} of {data.journey.total}
+					{data.journey.depth} of {data.journey.rungs} steps · {data.journey.keys} of {data.stages
+						.length} keys
 					{#if data.totals.reviews > 0}
 						· {data.totals.correct.toLocaleString()} of {data.totals.reviews.toLocaleString()} right so
 						far
@@ -394,75 +395,96 @@
 			<div
 				class="path-rail"
 				role="progressbar"
-				aria-label="Steps of the ladder introduced"
+				aria-label="How much of the ladder is open"
 				aria-valuemin="0"
 				aria-valuemax={data.journey.total}
-				aria-valuenow={data.journey.step}
+				aria-valuenow={data.journey.cells}
 			>
 				<span style:transform={`scaleX(${data.journey.fill})`}></span>
 			</div>
 
+			<!--
+				The staircase. Each row is a rung and the twelve marks beside it are
+				the keys it is open in, so depth reads down the page and breadth reads
+				across it — which is the shape of the thing rather than a summary of it.
+			-->
 			<ol class="steps">
-				{#each data.path as step (step.ordinal)}
-					<li class:opens-key={step.opensKey && step.ordinal > 1}>
+				{#each data.path as step (step.rungId)}
+					<li>
 						<button
 							type="button"
 							class="step"
-							class:is-done={step.state === 'done'}
+							class:is-open={step.state === 'open'}
 							class:is-here={step.state === 'here'}
 							class:is-ahead={step.state === 'ahead'}
 							class:is-chosen={isChosen(step)}
-							style:--tint={tint(step.key)}
-							style:--tint-ink={tintInk(step.key)}
+							style:--tint={tint(stepKey(step))}
 							title={stepAction(step)}
 							aria-label={stepAction(step)}
 							aria-pressed={isChosen(step)}
-							onclick={() => (choice = { kind: 'rung', key: step.key, rung: step.rungId })}
+							onclick={() => (choice = { kind: 'rung', key: stepKey(step), rung: step.rungId })}
 						>
-							<span class="step-key">{glyph(step.key)}</span>
+							<span class="step-index">{step.rungIndex + 1}</span>
 							<span class="min-w-0 flex-1">
 								<span class="step-label">{step.label}</span>
 								<span class="step-note">{stepNote(step)}</span>
 							</span>
-							<span class="step-mark" aria-hidden="true">{stepMark(step)}</span>
+							<span class="step-keys" aria-hidden="true">
+								{#each data.stages as stage (stage.key)}
+									<i
+										class="step-pip"
+										class:is-lit={openIn(step, stage.key)}
+										style:--tint={tint(stage.key)}
+									></i>
+								{/each}
+							</span>
 						</button>
 					</li>
 				{/each}
 			</ol>
 
 			<!--
-				Moving the ladder, next to the path it moves along.
+				The two ways forward, next to the path they move along.
 
-				These used to sit under the start button in mono type the size of a
-				footnote, which is how somebody could open this app most days for a
-				fortnight and never notice that moving on was a thing they were allowed
-				to do. Still two plain forms, still unguarded, still a suggestion.
+				There used to be one button called "move on", because there was one
+				walk. There are two now and neither is a prerequisite for the other:
+				wider is the same idea in one more key, deeper is the next idea — and
+				deepening widens everything above it, so it is impossible to end up
+				four rungs down in a key whose scale was never opened.
+
+				Still plain forms, still unguarded, still a suggestion.
 			-->
 			{#if !resuming}
 				<div class="path-move">
 					<form method="POST" action="?/back">
-						<button class="move-back" disabled={reachedIndex === 0 && data.position.rungIndex === 0}
-							>← step back</button
-						>
+						<button class="move-back" disabled={!data.canStepBack}>← step back</button>
 					</form>
 
-					{#if data.next}
-						<form method="POST" action="?/advance">
+					{#if data.canWiden && data.widenTo}
+						<form method="POST" action="?/widen">
 							<button class="move-on" class:is-suggested={data.progress.looksSolid}>
-								{data.progress.looksSolid ? 'Ready — move on to' : 'Move on to'}
-								{data.next.rung.id === 'scale' && data.next.key !== data.position.key
-									? `${glyph(data.next.key)} · ${data.next.rung.label.toLowerCase()}`
-									: data.next.rung.label.toLowerCase()} →
+								Wider · {data.widenTo.rung.label.toLowerCase()} in {glyph(data.widenTo.key)} →
 							</button>
 						</form>
-						<p class="move-note">
-							{#if data.progress.looksSolid}
-								{glyph(data.position.key)} · {data.position.rung.label.toLowerCase()} looks solid.
-							{:else if nextStep}
-								Moving on is your call — nothing here is locked.
-							{/if}
-						</p>
 					{/if}
+
+					{#if data.canDeepen && data.deepenTo?.rung}
+						<form method="POST" action="?/deepen">
+							<button class="move-on" class:is-suggested={data.progress.looksSolid}>
+								Deeper · {data.deepenTo.rung.label.toLowerCase()} →
+							</button>
+						</form>
+					{/if}
+
+					<p class="move-note">
+						{#if !data.canWiden && !data.canDeepen}
+							Every rung, in all twelve keys. There is nowhere left to open.
+						{:else if data.progress.looksSolid}
+							{glyph(data.position.key)} · {data.position.rung.label.toLowerCase()} looks solid.
+						{:else}
+							Your call — nothing here is locked.
+						{/if}
+					</p>
 				</div>
 			{/if}
 		</section>
@@ -1093,13 +1115,6 @@
 		gap: 0.2rem;
 	}
 
-	/* A new key on the ladder is the one seam in this list worth drawing. */
-	.steps > li.opens-key {
-		margin-top: 0.55rem;
-		padding-top: 0.55rem;
-		border-top: 1px dashed var(--color-ground-line);
-	}
-
 	.step {
 		display: flex;
 		width: 100%;
@@ -1123,36 +1138,54 @@
 		border-color: var(--tint);
 	}
 
-	/*
-	 * The key's letter, in the key's own colour, and the only hue in the row.
-	 * Steps behind and ahead wear it as an outline; the one you are standing on
-	 * wears it filled, which is the strongest thing this strip says and the one
-	 * time a swatch here is solid.
-	 */
-	.step-key {
-		display: grid;
-		width: 2.1rem;
-		height: 2.1rem;
+	/* The rung's number. Weight, not colour — a step is not a pitch. */
+	.step-index {
+		width: 1.2rem;
 		flex: none;
-		place-items: center;
-		border: 2px solid var(--tint);
-		border-radius: 8px;
-		background: color-mix(in oklab, var(--tint) 10%, var(--color-ground));
-		font-family: var(--font-display);
-		font-size: 0.86rem;
-		font-weight: 600;
+		font-family: var(--font-mono);
+		font-size: 0.72rem;
+		color: var(--color-ink-dim);
+		font-variant-numeric: tabular-nums;
+		text-align: right;
+	}
+
+	.step.is-here .step-index,
+	.step.is-open .step-index {
 		color: var(--color-ink);
 	}
 
-	.step.is-here .step-key {
-		background: var(--tint);
-		color: var(--tint-ink);
+	/*
+	 * Twelve pips: which keys this rung is open in.
+	 *
+	 * The breadth axis, drawn where breadth actually lives. Each pip wears its
+	 * own key's colour when it is open and an ink outline when it is not, so the
+	 * staircase is legible as a shape from across the room and every hue on it is
+	 * a pitch — the house rule, kept.
+	 */
+	.step-keys {
+		display: flex;
+		flex: none;
+		gap: 0.14rem;
+		align-items: center;
 	}
 
-	/* Ahead is not unavailable — it is dashed, the same "nothing here yet" the
-	   twelve keys already draw, and never dimmed into looking locked. */
-	.step.is-ahead .step-key {
-		border-style: dashed;
+	.step-pip {
+		width: 0.34rem;
+		height: 0.9rem;
+		border-radius: 2px;
+		background: transparent;
+		box-shadow: inset 0 0 0 1px var(--color-ground-line);
+	}
+
+	.step-pip.is-lit {
+		background: var(--tint);
+		box-shadow: none;
+	}
+
+	@media (max-width: 640px) {
+		.step-keys {
+			display: none;
+		}
 	}
 
 	.step-label {
@@ -1167,22 +1200,22 @@
 		color: var(--color-ink);
 	}
 
+	/* Where the ladder is deepest. A hairline, because being here is not a pitch. */
+	.step.is-here {
+		border-color: var(--color-ground-line);
+		background: var(--color-ground-raised);
+	}
+
+	.step.is-here.is-chosen {
+		background: color-mix(in oklab, var(--tint) 16%, var(--color-ground-raised));
+		border-color: var(--tint);
+	}
+
 	.step-note {
 		display: block;
 		font-size: 0.72rem;
 		line-height: 1.3;
 		color: var(--color-ink-dim);
-	}
-
-	.step-mark {
-		flex: none;
-		font-family: var(--font-mono);
-		font-size: 0.8rem;
-		color: var(--color-ink-dim);
-	}
-
-	.step.is-here .step-mark {
-		color: var(--color-ink);
 	}
 
 	.path-move {

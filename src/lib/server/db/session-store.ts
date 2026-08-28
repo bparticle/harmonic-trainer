@@ -47,11 +47,18 @@ import { vocabularyOf, type Vocabulary } from '$lib/curriculum/vocabulary';
 import { isGroove, type Groove } from '$lib/audio/groove';
 import { keyTonic } from '$lib/music/key';
 import {
-	FIRST_POSITION,
+	cellsOf,
+	deepen,
+	FIRST_FRONTIER,
+	isWellFormed,
+	narrower,
+	nextCell,
 	positionOf,
-	reachedSoFar,
 	rungById,
 	stageByKey,
+	widenNext,
+	workingPosition,
+	type Frontier,
 	type Position
 } from '$lib/curriculum/ladder';
 import {
@@ -88,10 +95,24 @@ import { loadSettings, saveSettings } from './settings';
  * `isWorkout`, one function away, and this file only ever asks it.
  */
 
-/** Where the ladder currently is, from settings, falling back to the very start. */
-export async function currentPosition(userId: string): Promise<Position> {
+/**
+ * How far the ladder is open, from settings, falling back to the very start.
+ *
+ * `parsePrefs` has already migrated a stored position into the frontier it
+ * meant, so this only has to guard against a row that predates validation
+ * entirely. The check is `isWellFormed` rather than a shape test, because a
+ * widths array that is not a staircase would let the card generator open a rung
+ * in a key whose scale is closed.
+ */
+export async function currentFrontier(userId: string): Promise<Frontier> {
 	const settings = await loadSettings(userId);
-	return positionOf(settings.prefs.ladderKey, settings.prefs.ladderRung) ?? FIRST_POSITION;
+	const frontier = { widths: settings.prefs.ladderWidths };
+	return isWellFormed(frontier) ? frontier : FIRST_FRONTIER;
+}
+
+/** Where the lesson is, for the hero and the rung's own review count. */
+export async function currentPosition(userId: string): Promise<Position> {
+	return workingPosition(await currentFrontier(userId));
 }
 
 /**
@@ -147,9 +168,9 @@ export async function ensureCards(userId: string, generated: GeneratedCard[]): P
 	return newCards.length;
 }
 
-/** Bring the ladder's cards up to date with where you have got to. */
-export async function ensureLadderCards(userId: string, position: Position): Promise<number> {
-	return ensureCards(userId, cardsForReached(reachedSoFar(position)));
+/** Bring the ladder's cards up to date with everything the frontier holds. */
+export async function ensureLadderCards(userId: string, frontier: Frontier): Promise<number> {
+	return ensureCards(userId, cardsForReached(cellsOf(frontier)));
 }
 
 /** Bring a progression into existence in a key, the first time it is asked for. */
@@ -163,13 +184,47 @@ export async function ensureProgressionCards(
 	return ensureCards(userId, cardsForProgression(progression, keyName));
 }
 
-/** Move one step along the ladder, and create whatever that unlocks. */
-export async function advanceLadder(userId: string, to: Position): Promise<Position> {
+/** Write a frontier and create whatever it opened. The one way the ladder moves. */
+async function saveFrontier(userId: string, to: Frontier): Promise<Frontier> {
 	const settings = await loadSettings(userId);
-	await saveSettings(userId, {
-		prefs: { ...settings.prefs, ladderKey: to.stage.key, ladderRung: to.rung.id }
-	});
+	await saveSettings(userId, { prefs: { ...settings.prefs, ladderWidths: to.widths } });
 	await ensureLadderCards(userId, to);
+	return to;
+}
+
+/**
+ * Go deeper: open the next rung, and one more key of every rung above it.
+ *
+ * Two moves where there used to be one, and this is the one that carries the
+ * milestone. Deepening is not free — see `deepen` — so it is impossible to end
+ * up four rungs down in a key whose scale was never opened.
+ */
+export async function deepenLadder(userId: string): Promise<Frontier> {
+	const from = await currentFrontier(userId);
+	const to = deepen(from);
+	return to ? saveFrontier(userId, to) : from;
+}
+
+/** Go wider: the same rung, one more key, for somebody who wants more ground. */
+export async function widenLadder(userId: string): Promise<Frontier> {
+	const from = await currentFrontier(userId);
+	const to = widenNext(from);
+	return to ? saveFrontier(userId, to) : from;
+}
+
+/**
+ * Step back, for when going on turned out to be optimistic.
+ *
+ * Nothing is deleted. The cards stay, their schedules stay, and the reviews
+ * stay — closing a cell only stops the ladder offering it, which is what going
+ * back has always meant here.
+ */
+export async function stepBackLadder(userId: string): Promise<Frontier> {
+	const from = await currentFrontier(userId);
+	const to = narrower(from);
+	if (!to) return from;
+	const settings = await loadSettings(userId);
+	await saveSettings(userId, { prefs: { ...settings.prefs, ladderWidths: to.widths } });
 	return to;
 }
 
@@ -232,10 +287,10 @@ async function schedulableCards(userId: string): Promise<Schedulable[]> {
  * workout will not set.
  */
 export async function currentVocabulary(userId: string): Promise<Vocabulary> {
-	const position = await currentPosition(userId);
+	const frontier = await currentFrontier(userId);
 	const played = await alreadyPlayed(userId);
 	return vocabularyOf({
-		rungs: reachedSoFar(position).map((place) => place.rungId),
+		rungs: cellsOf(frontier).map((cell) => cell.rungId),
 		progressions: played.progressions
 	});
 }
@@ -390,10 +445,11 @@ export type WorkoutRequest = {
  */
 async function gatherWorkoutInput(
 	userId: string,
-	position: Position,
+	frontier: Frontier,
 	request: WorkoutRequest,
 	now: Date
 ): Promise<WorkoutInput> {
+	const position = workingPosition(frontier);
 	const [cardBank, coldSpots, chartList, played, progress, yesterdaysNovelty, tempo, plays] =
 		await Promise.all([
 			schedulableCards(userId),
@@ -406,12 +462,15 @@ async function gatherWorkoutInput(
 			chartPlays(userId)
 		]);
 
-	const reached = reachedSoFar(position);
+	const reached = cellsOf(frontier);
 
 	return {
 		size: request.size,
 		cards: cardBank,
 		reached,
+		// What deepening would open next, worked out here because it needs the
+		// shape of the frontier and the composer is pure.
+		nextCell: nextCell(frontier),
 		coldSpots,
 		charts: chartList,
 		ladders: tempo.ladders,
@@ -450,9 +509,9 @@ export async function previewWorkouts(
 	userId: string,
 	now = new Date()
 ): Promise<Record<WorkoutSize, Workout>> {
-	const position = await currentPosition(userId);
-	await ensureLadderCards(userId, position);
-	const input = await gatherWorkoutInput(userId, position, {}, now);
+	const frontier = await currentFrontier(userId);
+	await ensureLadderCards(userId, frontier);
+	const input = await gatherWorkoutInput(userId, frontier, {}, now);
 
 	return {
 		short: composeWorkout({ ...input, size: 'short' }),
@@ -515,8 +574,8 @@ export async function startWorkout(
 	const open = await activeWorkout(userId);
 	if (open) return open;
 
-	const position = await currentPosition(userId);
-	await ensureLadderCards(userId, position);
+	const frontier = await currentFrontier(userId);
+	await ensureLadderCards(userId, frontier);
 
 	const choice = request.choice ?? null;
 	if (choice?.kind === 'progression') {
@@ -527,7 +586,7 @@ export async function startWorkout(
 	}
 
 	const workout = composeWorkout(
-		await gatherWorkoutInput(userId, position, { ...request, choice }, now)
+		await gatherWorkoutInput(userId, frontier, { ...request, choice }, now)
 	);
 
 	const id = randomUUID();
