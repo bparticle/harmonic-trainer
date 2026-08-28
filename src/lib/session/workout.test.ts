@@ -18,7 +18,9 @@ import {
 	dayNumber,
 	earQueue,
 	functionQueue,
+	makeupOf,
 	noveltyId,
+	describeAcquaintance,
 	type MissionChart,
 	type Novelty,
 	type Task,
@@ -853,5 +855,81 @@ describe('the record’s cold spots, folded out of one GROUP BY', () => {
 
 	it('steers the day’s key ranking towards what the record has least of', () => {
 		expect(coldestKeys(['C', 'A', 'Eb'], coldSpotsFrom(rows), 2)).toEqual(['Eb', 'A']);
+	});
+});
+
+describe('makeupOf', () => {
+	const bank = [
+		card('a', 'hear_play', 'C', { reps: 0, skillCode: 'rung:scale' }),
+		card('b', 'hear_play', 'C', { reps: 4, skillCode: 'rung:scale' }),
+		card('c', 'hear_play', 'G', { reps: 2, skillCode: 'rung:tonic-triad' })
+	];
+
+	it('names keys and skills in the order they are first asked', () => {
+		expect(makeupOf(['c', 'a', 'b'], bank)).toMatchObject({
+			keys: ['G', 'C'],
+			skills: ['rung:tonic-triad', 'rung:scale']
+		});
+	});
+
+	it('counts questions rather than cards, because a short pool repeats', () => {
+		expect(makeupOf(['a', 'a', 'b'], bank)).toMatchObject({ fresh: 2, seen: 1 });
+	});
+
+	it('calls a card new only when nobody has ever answered it', () => {
+		expect(makeupOf(['a'], bank)).toMatchObject({ fresh: 1, seen: 0 });
+		expect(makeupOf(['b'], bank)).toMatchObject({ fresh: 0, seen: 1 });
+	});
+
+	it('skips a card the bank no longer holds rather than counting it as new', () => {
+		expect(makeupOf(['a', 'gone'], bank)).toMatchObject({ fresh: 1, seen: 0, keys: ['C'] });
+	});
+});
+
+describe('the makeup a composed workout carries', () => {
+	it('is on both drill tasks and agrees with their queues', () => {
+		const workout = composeWorkout(input({ size: 'standard' }));
+		for (const task of workout.tasks) {
+			if (task.kind !== 'ear' && task.kind !== 'function') continue;
+			expect(task.makeup).toBeDefined();
+			expect(task.makeup!.fresh + task.makeup!.seen).toBe(task.cardIds.length);
+			expect(task.makeup!.keys.length).toBeGreaterThan(0);
+		}
+	});
+
+	it('reports revision when the whole bank has been answered before', () => {
+		const workout = composeWorkout(input({ cards: bank({ reps: 5 }) }));
+		const drills = workout.tasks.filter((t) => t.kind === 'ear' || t.kind === 'function');
+		expect(drills.length).toBeGreaterThan(0);
+		for (const task of drills) {
+			expect((task as { makeup?: { fresh: number } }).makeup!.fresh).toBe(0);
+		}
+	});
+});
+
+describe('describeAcquaintance', () => {
+	it('says nothing at all about a mission with no count on it', () => {
+		expect(describeAcquaintance(undefined)).toBe('');
+	});
+
+	it('separates never, once, and more than once', () => {
+		expect(describeAcquaintance(0)).toContain('First time');
+		expect(describeAcquaintance(1)).toContain('once before');
+		expect(describeAcquaintance(6)).toContain('6 times before');
+	});
+});
+
+describe('a mission says whether the tune has been met', () => {
+	it('carries the count the record handed over', () => {
+		const workout = composeWorkout(input({ charts: [ONE_TUNE], plays: { 'rhythm-changes': 3 } }));
+		expect(missions(workout)[0].playedBefore).toBe(3);
+		expect(workout.tasks.find((t) => t.kind === 'mission')!.instruction).toContain(
+			'Played 3 times before'
+		);
+	});
+
+	it('is zero rather than absent for a tune with no runs', () => {
+		const workout = composeWorkout(input({ charts: [ONE_TUNE] }));
+		expect(missions(workout)[0].playedBefore).toBe(0);
 	});
 });

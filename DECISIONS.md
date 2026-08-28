@@ -4383,3 +4383,64 @@ anywhere.
 Colour follows the house rule without an exception. The only tinted thing in a
 step is the key's letter, because a key is a pitch; behind, here and ahead are
 ink, dim ink and a dashed outline, because none of those three is one.
+
+## A task that says what it is made of
+
+The second half of the same complaint, and the fairer half: the mix of material
+a workout hands out is _good_ — some chords in C, a scale in G, degrees from
+whichever rungs have been met — and the workout said none of it. Four tasks
+called Ear, Function, Mission and One new thing, each with a count of questions,
+is a workout that knows a great deal about itself and lets none of it out.
+
+Nothing about the composition changed. What changed is that the composer now
+writes down what it composed.
+
+### Makeup: three facts, read off the queue after it is built
+
+`Makeup` carries the keys the questions touch, the skills they come from, and
+how many of them are on material nobody has ever been asked. Derived _after_
+the queue is built rather than alongside it, because a summary computed from
+the inputs is a summary of a different queue — the tiers, the rotation, the
+round-robin and the pinning all get a say between the bank and the ten card ids
+that come out.
+
+Counted per question and not per card. A queue repeats cards when the pool is
+small — `MAX_PASSES` exists for exactly that — and the honest reading of "three
+new" is three of the things you are about to be asked. `reps === 0` is the test,
+not the FSRS state: a card failed back into `learning` has still been met, and
+calling it new would be the app forgetting something the player has not.
+
+Optional on the task, and every reader treats its absence as _say nothing_.
+There are workouts in `plan_json` composed before this existed and they have to
+draw exactly as they did, rather than as tasks made entirely of revision.
+
+### The mission says whether you have met the tune
+
+`playedBefore` is one `GROUP BY` over `play_runs` and it changes what the next
+twenty minutes are: reading a chart for the first time and coming back to one
+for the fifth are different jobs, and a mission that names a tune without saying
+which is the first sentence of a paragraph nobody wrote. Every run counts,
+mission or free — an evening spent playing along to it for fun taught you
+exactly as much as a mission did.
+
+### Chips, and one place that decides what they say
+
+`taskTags` is the whole of it: `all new`, `all revision`, or `2 new` / `8 again`
+for a mixture, new first because that is the half somebody wants warning of.
+`first time` or `played 4×` on a mission. Nothing at all beside One new thing,
+whose title already contains the word.
+
+The home page's preview and the session header both call it, so the chip you
+read before pressing start and the chip you read while answering cannot
+disagree. They are ink and an outline — none of this is a pitch, so none of it
+is coloured.
+
+### The question knows where it came from
+
+`Question 3 of 9` says how far through you are and nothing about what is being
+asked, which on a queue deliberately spread across keys and rungs is the more
+useful half. Both facts were already on the card — the key it was generated in,
+the skill it belongs to — so `C · the home chord` beside the count is a label
+and not a lookup. `skillLabel` reads the rung's own `label` and the
+progression's own `name` off the source rather than out of the `skills` table,
+so anything holding a code can say what it is without a query.

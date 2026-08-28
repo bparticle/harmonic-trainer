@@ -299,6 +299,24 @@ async function missionCharts(userId: string): Promise<MissionChart[]> {
 	return [...MISSION_CHARTS, ...mine];
 }
 
+/**
+ * How many runs each tune already has, by slug.
+ *
+ * One `GROUP BY` over `play_runs`, and the composer's input for saying whether
+ * a mission's tune is one you have met. Every run counts, mission or free — the
+ * question is whether you know the tune, and an evening spent playing along to
+ * it for fun taught you exactly as much as a mission did.
+ */
+async function chartPlays(userId: string): Promise<Record<string, number>> {
+	const rows = await db
+		.select({ slug: playRuns.chartSlug, n: sql<number>`count(*)::int` })
+		.from(playRuns)
+		.where(eq(playRuns.userId, userId))
+		.groupBy(playRuns.chartSlug);
+
+	return Object.fromEntries(rows.map((row) => [row.slug, row.n]));
+}
+
 /** Progressions the bank has met, and grooves the record has been played over. */
 async function alreadyPlayed(
 	userId: string
@@ -376,7 +394,7 @@ async function gatherWorkoutInput(
 	request: WorkoutRequest,
 	now: Date
 ): Promise<WorkoutInput> {
-	const [cardBank, coldSpots, chartList, played, progress, yesterdaysNovelty, tempo] =
+	const [cardBank, coldSpots, chartList, played, progress, yesterdaysNovelty, tempo, plays] =
 		await Promise.all([
 			schedulableCards(userId),
 			loadColdSpots(userId),
@@ -384,7 +402,8 @@ async function gatherWorkoutInput(
 			alreadyPlayed(userId),
 			rungProgress(userId, position),
 			lastNovelty(userId, now),
-			loadTempoGrades(userId)
+			loadTempoGrades(userId),
+			chartPlays(userId)
 		]);
 
 	const reached = reachedSoFar(position);
@@ -396,6 +415,7 @@ async function gatherWorkoutInput(
 		coldSpots,
 		charts: chartList,
 		ladders: tempo.ladders,
+		plays,
 		played,
 		yesterdaysNovelty,
 		choice: request.choice ?? null,

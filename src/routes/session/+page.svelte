@@ -13,6 +13,8 @@
 	import { formatNote } from '$lib/music/note';
 	import { spell } from '$lib/music/spell';
 	import { describeGoal, type Verdict } from '$lib/practice/goal';
+	import { taskTags } from '$lib/session/progress';
+	import { skillLabel } from '$lib/curriculum/cards';
 	import type { Mission } from '$lib/session/workout';
 	import type { WorkoutReport } from '$lib/session/report';
 	import { keyOverlay } from '$lib/wheel/overlays';
@@ -479,6 +481,22 @@
 		return prompt.visible;
 	});
 	const chordRoles = ['root', 'third', 'fifth', 'seventh'];
+	/**
+	 * Which key and which topic this question came from.
+	 *
+	 * "Question 3 of 10" says how far through you are and nothing about what you
+	 * are being asked, which on a queue deliberately spread across keys and rungs
+	 * is the more useful half. Both facts are already on the card — the key it was
+	 * generated in and the skill it belongs to — so this is a label rather than a
+	 * lookup, and it says nothing at all for a card whose skill names nothing.
+	 */
+	const questionSource = $derived.by(() => {
+		if (!currentCard) return '';
+		const topic = skillLabel(currentCard.skillCode)?.toLowerCase();
+		const key = glyph(currentCard.keyCenter);
+		return topic ? `${key} · ${topic}` : key;
+	});
+
 	const guidanceTitle = $derived.by(() => {
 		if (isSequential) {
 			if (lessonPhase === 'watch') return 'Watch the scale move';
@@ -774,6 +792,12 @@
 				<span class="text-ink-muted font-mono text-xs">
 					Task {progress} · {glyph(workout?.keyCenter ?? '')}
 				</span>
+				<!-- What is new here and what is coming round again, in the one place
+				     somebody is actually about to answer the questions. Composed by
+				     `taskTags` so this and the home page's preview cannot disagree. -->
+				{#each taskTags(task) as label (label)}
+					<span class="task-tag">{label}</span>
+				{/each}
 			</div>
 			<div class="flex items-center gap-2 sm:gap-4">
 				<!-- The goal, in view for as long as the task runs. -->
@@ -915,9 +939,16 @@
 						<p class="phase-label">{guidanceTitle}</p>
 						<h2>Question {Math.min(cardIndex + 1, asks)} of {asks}</h2>
 					</div>
-					{#if (isSequential || isChordLesson) && lessonGuidance.rounds > 1}
-						<span class="round-label">round {lessonGuidance.round} of {lessonGuidance.rounds}</span>
-					{/if}
+					<div class="text-right">
+						{#if (isSequential || isChordLesson) && lessonGuidance.rounds > 1}
+							<span class="round-label"
+								>round {lessonGuidance.round} of {lessonGuidance.rounds}</span
+							>
+						{/if}
+						{#if questionSource}
+							<p class="question-source">{questionSource}</p>
+						{/if}
+					</div>
 				</div>
 
 				<div
@@ -1203,6 +1234,18 @@
 		color: var(--color-ground);
 	}
 
+	.task-tag {
+		flex: none;
+		padding: 0.05rem 0.4rem;
+		border-radius: 999px;
+		border: 1px solid var(--color-ground-line);
+		font-family: var(--font-mono);
+		font-size: 0.6rem;
+		letter-spacing: 0.03em;
+		color: var(--color-ink-dim);
+		white-space: nowrap;
+	}
+
 	.task-instruction {
 		max-width: 62ch;
 		margin-bottom: 1.25rem;
@@ -1240,6 +1283,15 @@
 		margin-bottom: 0.2rem;
 		color: var(--color-ink-muted);
 		font-size: 0.76rem;
+	}
+
+	/* Where this question came from. Dim ink, because a key's *name* is not a
+	   swatch and this line is a label rather than a pitch. */
+	.question-source {
+		margin-top: 0.15rem;
+		font-family: var(--font-mono);
+		font-size: 0.68rem;
+		color: var(--color-ink-dim);
 	}
 
 	.question-heading h2 {

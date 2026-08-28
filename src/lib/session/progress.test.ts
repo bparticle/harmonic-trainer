@@ -4,15 +4,17 @@ import type { LegacyBlockType } from '$lib/server/db/schema';
 import {
 	hydrateWorkout,
 	isWorkout,
+	describeMaterial,
 	previewTasks,
 	readChoice,
 	readSize,
 	sizeFromMinutes,
 	taskBlockType,
 	taskIndexOf,
+	taskTags,
 	type StoredBlock
 } from './progress';
-import type { Mission, Task, Workout } from './workout';
+import type { Makeup, Mission, Task, Workout } from './workout';
 
 const STARTED = new Date('2026-02-10T09:00:00Z');
 
@@ -281,5 +283,87 @@ describe('the three sizes', () => {
 		expect(sizeFromMinutes(10)).toBe('short');
 		expect(sizeFromMinutes(20)).toBe('standard');
 		expect(sizeFromMinutes(35)).toBe('long');
+	});
+});
+
+describe('saying what a task is made of', () => {
+	const makeup = (over: Partial<Makeup> = {}): Makeup => ({
+		keys: ['C'],
+		skills: ['rung:scale'],
+		fresh: 0,
+		seen: 4,
+		...over
+	});
+
+	it('names the keys with real accidentals and the topics in lower case', () => {
+		expect(describeMaterial(makeup({ keys: ['Bb', 'F#'], skills: ['rung:tonic-triad'] }))).toBe(
+			'B♭, F♯ · the home chord'
+		);
+	});
+
+	it('caps a long list rather than printing all of it', () => {
+		const line = describeMaterial(makeup({ keys: ['C', 'G', 'F', 'D', 'Bb'] }));
+		expect(line).toContain('C, G, F +2');
+		expect(line).not.toContain('Bb');
+	});
+
+	it('drops a skill code that names nothing rather than printing the code', () => {
+		expect(describeMaterial(makeup({ skills: ['rung:gone'] }))).toBe('C');
+	});
+
+	it('says nothing at all about a task with no makeup recorded', () => {
+		expect(describeMaterial(undefined)).toBe('');
+	});
+});
+
+describe('the chips beside a task', () => {
+	const drill = (makeup: Makeup | undefined): Task => ({
+		kind: 'ear',
+		title: 'Ear',
+		instruction: '',
+		goal: { kind: 'questions', count: 1 },
+		cardIds: ['a'],
+		makeup
+	});
+
+	const base: Makeup = { keys: ['C'], skills: [], fresh: 0, seen: 0 };
+
+	it('says all new, or all revision, in one chip', () => {
+		expect(taskTags(drill({ ...base, fresh: 6 }))).toEqual(['all new']);
+		expect(taskTags(drill({ ...base, seen: 6 }))).toEqual(['all revision']);
+	});
+
+	it('splits a mixture, new first', () => {
+		expect(taskTags(drill({ ...base, fresh: 2, seen: 8 }))).toEqual(['2 new', '8 again']);
+	});
+
+	it('says nothing where nothing is recorded', () => {
+		expect(taskTags(drill(undefined))).toEqual([]);
+		expect(taskTags(drill(base))).toEqual([]);
+	});
+
+	it('says whether a mission’s tune has been met', () => {
+		const mission = (playedBefore: number | undefined): Task => ({
+			kind: 'mission',
+			title: 'Mission',
+			instruction: '',
+			goal: { kind: 'choruses', count: 1 },
+			mission: { ...MISSION, playedBefore }
+		});
+		expect(taskTags(mission(0))).toEqual(['first time']);
+		expect(taskTags(mission(4))).toEqual(['played 4×']);
+		expect(taskTags(mission(undefined))).toEqual([]);
+	});
+
+	it('says nothing beside the new thing, which is new by its own name', () => {
+		expect(
+			taskTags({
+				kind: 'new_thing',
+				title: 'One new thing',
+				instruction: '',
+				goal: { kind: 'once' },
+				novelty: { kind: 'groove', groove: 'bossa' }
+			})
+		).toEqual([]);
 	});
 });

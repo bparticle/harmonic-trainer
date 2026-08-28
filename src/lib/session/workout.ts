@@ -133,6 +133,15 @@ export type Mission = {
 	 * else — no new task kind, no second goal type.
 	 */
 	band: BandId | null;
+	/**
+	 * Runs this tune already has on the record, before today.
+	 *
+	 * So the mission can say *first time* or *played four times* rather than
+	 * naming a tune with no indication of whether you have ever met it. Optional
+	 * for the usual reason: a mission composed before this existed says nothing
+	 * rather than claiming the tune is new.
+	 */
+	playedBefore?: number;
 };
 
 /** A single unseen item: the next rung, the next progression, or a new groove. */
@@ -159,6 +168,40 @@ export function noveltyId(novelty: Novelty): string {
 	}
 }
 
+/**
+ * What a drill task is actually made of.
+ *
+ * The complaint this answers is a fair one and was never about the material:
+ * the mix of keys and rungs a workout hands out is good, and the workout simply
+ * refused to say what the mix *was*. Four tasks called Ear, Function, Mission
+ * and One new thing, with a count of questions each, is a workout that knows
+ * far more about itself than it is letting on.
+ *
+ * So a task now carries the answer to the three questions somebody asks while
+ * looking at it: **which keys**, **which material**, and **how much of this
+ * have I seen before**. All three come off the cards that were just queued —
+ * nothing new is measured and nothing is estimated.
+ *
+ * Counted per question rather than per card, because a queue repeats cards when
+ * the pool is small and the honest reading of "three new" is three of the things
+ * you are about to be asked, not three rows in a table.
+ *
+ * Optional on the task, and every reader treats its absence as "say nothing":
+ * a workout composed before this existed is still sitting in somebody's
+ * `plan_json` and must draw as it always did rather than as a task made
+ * entirely of revision.
+ */
+export type Makeup = {
+	/** Keys the questions touch, in the order they are first asked. */
+	keys: string[];
+	/** Skill codes covered, in the order they are first asked. */
+	skills: string[];
+	/** Questions on material that has never been answered before. */
+	fresh: number;
+	/** Questions on material that has. */
+	seen: number;
+};
+
 type TaskBase = {
 	title: string;
 	/** One line saying what to do, shown while the task runs. */
@@ -166,8 +209,8 @@ type TaskBase = {
 	goal: Goal;
 };
 
-export type EarTask = TaskBase & { kind: 'ear'; cardIds: string[] };
-export type FunctionTask = TaskBase & { kind: 'function'; cardIds: string[] };
+export type EarTask = TaskBase & { kind: 'ear'; cardIds: string[]; makeup?: Makeup };
+export type FunctionTask = TaskBase & { kind: 'function'; cardIds: string[]; makeup?: Makeup };
 export type MissionTask = TaskBase & { kind: 'mission'; mission: Mission };
 export type NewThingTask = TaskBase & { kind: 'new_thing'; novelty: Novelty };
 
@@ -369,6 +412,15 @@ export type WorkoutInput = {
 	 * as new, which is true of a first workout and harmless after.
 	 */
 	played?: { progressions?: string[]; grooves?: Groove[] };
+	/**
+	 * How many runs each tune already has on the record, by chart slug.
+	 *
+	 * The same kind of input as the ladders above and derived the same way, so
+	 * the mission can say whether the tune it names is one you have met. A tune
+	 * missing from here has never been played, which is what an absent key in a
+	 * count means everywhere else in this module.
+	 */
+	plays?: Record<string, number>;
 	/** Whether the current rung looks solid, so the slot can say "ready to move on". */
 	rungLooksSolid?: boolean;
 	/**
@@ -607,6 +659,39 @@ function toQueue(ordered: Schedulable[], count: number): string[] {
 const withSkill = (cards: Schedulable[], skill: string | null | undefined) =>
 	skill ? cards.filter((c) => c.skillCode === skill) : [];
 
+/**
+ * What a queue turned out to be made of.
+ *
+ * Read off the same cards the queue was built from, after it was built, so it
+ * cannot drift from what will actually be asked — a summary derived from the
+ * inputs rather than from the output is a summary of a different queue.
+ *
+ * A card the bank no longer holds is skipped rather than counted as new. That
+ * cannot happen while a queue is composed and handed out in one breath; it is
+ * the shape of the bug on the day one is composed from a stale bank, and
+ * miscounting is a worse outcome there than counting fewer.
+ */
+export function makeupOf(cardIds: string[], cards: Schedulable[]): Makeup {
+	const byId = new Map(cards.map((card) => [card.cardId, card]));
+	const keys: string[] = [];
+	const skills: string[] = [];
+	let fresh = 0;
+	let seen = 0;
+
+	for (const id of cardIds) {
+		const card = byId.get(id);
+		if (!card) continue;
+		if (!keys.includes(card.keyCenter)) keys.push(card.keyCenter);
+		if (card.skillCode && !skills.includes(card.skillCode)) skills.push(card.skillCode);
+		// Reps and not `state`, because a card failed back to `learning` has still
+		// been met — "new" here means nobody has ever been asked this.
+		if (card.state.reps === 0) fresh++;
+		else seen++;
+	}
+
+	return { keys, skills, fresh, seen };
+}
+
 /** Ten aural questions, and never fewer because the deck is well run. */
 export function earQueue(
 	cards: Schedulable[],
@@ -709,6 +794,7 @@ function composeMission(input: {
 	coldKeys: string[];
 	coldSpots: ColdSpot[];
 	ladders: Record<string, TempoLadder>;
+	plays: Record<string, number>;
 	day: number;
 	nth: number;
 }): Mission | null {
@@ -789,7 +875,8 @@ function composeMission(input: {
 		// Every third day the roots are taken away. Often enough to be a habit,
 		// rarely enough that it still reads as a constraint rather than the rules.
 		rootless: (input.day + input.nth) % 3 === 2,
-		coldSpot: coldest
+		coldSpot: coldest,
+		playedBefore: input.plays[chart.slug] ?? 0
 	};
 }
 
@@ -854,25 +941,27 @@ export function chooseNovelty(input: {
 // Building the tasks
 // ---------------------------------------------------------------------------
 
-function earTask(cardIds: string[]): EarTask | null {
+function earTask(cardIds: string[], cards: Schedulable[]): EarTask | null {
 	if (cardIds.length === 0) return null;
 	return {
 		kind: 'ear',
 		title: 'Ear',
 		instruction: `${cardIds.length} questions · listen, then play or name.`,
 		goal: { kind: 'questions', count: cardIds.length },
-		cardIds
+		cardIds,
+		makeup: makeupOf(cardIds, cards)
 	};
 }
 
-function functionTask(cardIds: string[]): FunctionTask | null {
+function functionTask(cardIds: string[], cards: Schedulable[]): FunctionTask | null {
 	if (cardIds.length === 0) return null;
 	return {
 		kind: 'function',
 		title: 'Function',
 		instruction: `${cardIds.length} degrees across keys · play, then name.`,
 		goal: { kind: 'questions', count: cardIds.length },
-		cardIds
+		cardIds,
+		makeup: makeupOf(cardIds, cards)
 	};
 }
 
@@ -888,13 +977,34 @@ function missionTask(mission: Mission, chart: MissionChart | undefined): Mission
 	 */
 	const band = mission.band ? bandById(mission.band) : null;
 	const climbing = band ? ` ${band.name} · one band up.` : '';
+	/*
+	 * Whether you have met this tune, said in the instruction and not only in a
+	 * chip. A mission that names a tune without saying that is the first sentence
+	 * of a paragraph nobody wrote the rest of — and the answer changes what the
+	 * next twenty minutes are: reading a chart for the first time and returning
+	 * to one for the fifth are different jobs.
+	 */
+	const met = describeAcquaintance(mission.playedBefore);
 	return {
 		kind: 'mission',
 		title: 'Mission',
-		instruction: `${mission.chartName} · ${mission.keyCenter} · ${mission.groove} · ≥${mission.bpmFloor} BPM.${climbing}${constraint}`,
+		instruction: `${mission.chartName} · ${mission.keyCenter} · ${mission.groove} · ≥${mission.bpmFloor} BPM.${met}${climbing}${constraint}`,
 		goal: missionGoal(chart, mission),
 		mission
 	};
+}
+
+/**
+ * How well you already know this tune, in the words a person would use.
+ *
+ * Nothing at all when the count is missing, which is what an old stored mission
+ * looks like: silence is honest there and "first time" would not be.
+ */
+export function describeAcquaintance(playedBefore: number | undefined): string {
+	if (playedBefore === undefined) return '';
+	if (playedBefore === 0) return ' First time on this tune.';
+	if (playedBefore === 1) return ' Played once before.';
+	return ` Played ${playedBefore} times before.`;
 }
 
 function newThingTask(novelty: Novelty): NewThingTask {
@@ -1027,9 +1137,10 @@ export function composeWorkout(input: WorkoutInput): Workout {
 
 	// Two queues, one bank, partitioned by direction — so nothing is asked twice
 	// without either queue having to know the other exists.
-	const ear = earTask(earQueue(input.cards, { now, day, coldKeys, pinnedSkill }));
+	const ear = earTask(earQueue(input.cards, { now, day, coldKeys, pinnedSkill }), input.cards);
 	const fn = functionTask(
-		functionQueue(input.cards, { now, day, coldKeys, pinnedSkill, keyCenter })
+		functionQueue(input.cards, { now, day, coldKeys, pinnedSkill, keyCenter }),
+		input.cards
 	);
 
 	let missionsBuilt = 0;
@@ -1053,6 +1164,7 @@ export function composeWorkout(input: WorkoutInput): Workout {
 			coldKeys,
 			coldSpots,
 			ladders: input.ladders ?? {},
+			plays: input.plays ?? {},
 			day,
 			nth: missionsBuilt
 		});

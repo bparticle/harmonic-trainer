@@ -269,6 +269,24 @@
 	<span class="key-count">{standing.fresh ? 'new' : standing.chords.toLocaleString()}</span>
 {/snippet}
 
+<!--
+	What a task is made of, in two or three words.
+
+	Drawn separately from the line rather than appended to it, because these are
+	labels and that is a sentence — and because a task with nothing to say hands
+	back an empty list, which has to draw as nothing at all rather than as an
+	empty row of chips. Ink and weight, never colour: none of this is a pitch.
+-->
+{#snippet tags(labels: string[])}
+	{#if labels.length}
+		<span class="task-tags">
+			{#each labels as label (label)}
+				<span class="task-tag">{label}</span>
+			{/each}
+		</span>
+	{/if}
+{/snippet}
+
 {#if data.public}
 	<LandingPage />
 {:else}
@@ -307,6 +325,7 @@
 								<span class="min-w-0 flex-1">
 									<span class="task-title">{item.title}</span>
 									<span class="task-line">{item.line}</span>
+									{@render tags(item.tags)}
 								</span>
 							</li>
 						{/each}
@@ -319,6 +338,7 @@
 								<span class="min-w-0 flex-1">
 									<span class="task-title">{item.title}</span>
 									<span class="task-line">{item.line}</span>
+									{@render tags(item.tags)}
 								</span>
 							</li>
 						{/each}
@@ -981,6 +1001,24 @@
 		font-size: 0.85rem;
 		font-weight: 600;
 		color: var(--color-ink);
+	}
+
+	.task-tags {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.25rem;
+		margin-top: 0.2rem;
+	}
+
+	.task-tag {
+		padding: 0.05rem 0.35rem;
+		border-radius: 999px;
+		border: 1px solid var(--color-ground-line);
+		font-family: var(--font-mono);
+		font-size: 0.58rem;
+		letter-spacing: 0.03em;
+		color: var(--color-ink-dim);
+		white-space: nowrap;
 	}
 
 	.task-line {

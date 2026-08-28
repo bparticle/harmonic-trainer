@@ -134,6 +134,26 @@ export function cardsForProgression(progression: Progression, keyName: string): 
 	}));
 }
 
+/**
+ * What a skill code is called, in the words the material already carries.
+ *
+ * The rung's own `label` and the progression's own `name` — the same two
+ * strings `skillSeeds` copies into the database, read here off the source
+ * rather than off the row, so anything that has a code in its hand can say what
+ * it is without a query. Null for a code naming nothing, which is what a card
+ * left behind by a rung that has since been renamed looks like: a task that
+ * cannot name its material says nothing about it.
+ */
+export function skillLabel(code: string): string | null {
+	if (code.startsWith('rung:')) {
+		return RUNGS.find((rung) => rungSkillCode(rung.id) === code)?.label ?? null;
+	}
+	if (code.startsWith('prog:')) {
+		return PROGRESSIONS.find((p) => progressionSkillCode(p.id) === code)?.name ?? null;
+	}
+	return null;
+}
+
 /** Every skill code the ladder and the progression library need. */
 export function allSkillCodes(): string[] {
 	return [

@@ -2,9 +2,11 @@ import { progressionById } from '$lib/curriculum/progressions';
 import { rungById, stageByKey } from '$lib/curriculum/ladder';
 import { describeGoal } from '$lib/practice/goal';
 import type { WorkoutBlockType } from '$lib/server/db/schema';
+import { skillLabel } from '$lib/curriculum/cards';
 import {
 	TASK_COUNT,
 	type Choice,
+	type Makeup,
 	type Task,
 	type TaskKind,
 	type Workout,
@@ -173,7 +175,21 @@ export function hydrateWorkout(row: StoredSession, blocks: StoredBlock[]): Activ
 // Previewing one
 // ---------------------------------------------------------------------------
 
-export type TaskPreview = { kind: TaskKind; title: string; line: string };
+export type TaskPreview = {
+	kind: TaskKind;
+	title: string;
+	line: string;
+	/**
+	 * Two or three words each, saying where this task's material came from.
+	 *
+	 * Separate from `line` because they are drawn separately — a line is a
+	 * sentence and these are labels — and because a task with nothing to say
+	 * about its own provenance hands back an empty list rather than a sentence
+	 * with a hole in it. That is the case for every workout composed before
+	 * `Makeup` existed, and for the new thing, which is new by definition.
+	 */
+	tags: string[];
+};
 
 /**
  * Today's tasks, in one line each, for the home page.
@@ -194,21 +210,98 @@ export function previewTasks(workout: Workout): TaskPreview[] {
 	return workout.tasks.map((task) => ({
 		kind: task.kind,
 		title: task.title,
-		line: previewLine(task)
+		line: previewLine(task),
+		tags: taskTags(task)
 	}));
 }
 
 function previewLine(task: Task): string {
 	switch (task.kind) {
 		case 'ear':
-			return `${task.cardIds.length} ear questions`;
+			return joinLine(`${task.cardIds.length} ear questions`, describeMaterial(task.makeup));
 		case 'function':
-			return `${task.cardIds.length} degrees across keys`;
+			return joinLine(`${task.cardIds.length} degrees across keys`, describeMaterial(task.makeup));
 		case 'mission':
 			return `${task.mission.chartName}. ${describeGoal(task.goal)}`;
 		case 'new_thing':
 			return task.instruction.split('. ')[0];
 	}
+}
+
+const joinLine = (head: string, tail: string) => (tail ? `${head} · ${tail}` : head);
+
+// ---------------------------------------------------------------------------
+// Saying what a task is made of
+// ---------------------------------------------------------------------------
+
+/**
+ * The material a drill task draws on, named rather than counted.
+ *
+ * Keys and topics, in the order the questions first reach them. Both are capped
+ * at three and then say how many more there were, because the point of the line
+ * is to be read at a glance and "C, G, F and 4 more" tells you the shape of the
+ * thing while a list of seven does not.
+ *
+ * Empty for a task with no makeup recorded — an old stored workout — so every
+ * caller falls back to the line it always printed rather than to a wrong one.
+ */
+export function describeMaterial(makeup: Makeup | undefined): string {
+	if (!makeup) return '';
+	const parts: string[] = [];
+	const keys = nameSome(makeup.keys.map(glyph));
+	if (keys) parts.push(keys);
+	const topics = nameSome(
+		makeup.skills.map(skillLabel).filter((label): label is string => Boolean(label))
+	);
+	if (topics) parts.push(topics.toLowerCase());
+	return parts.join(' · ');
+}
+
+const NAMED = 3;
+
+function nameSome(items: string[]): string {
+	if (items.length === 0) return '';
+	if (items.length <= NAMED) return items.join(', ');
+	return `${items.slice(0, NAMED).join(', ')} +${items.length - NAMED}`;
+}
+
+const glyph = (name: string) => name.replace(/b/g, '♭').replace(/#/g, '♯');
+
+/**
+ * The chips beside a task: what is new here, and what is coming round again.
+ *
+ * The complaint these answer is *what's repeated, what's new*, and the honest
+ * answer is a count of questions rather than an adjective. A task that is all
+ * one or all the other says so in one chip; a mixture gets two, in that order,
+ * because the new material is the part somebody wants warning of.
+ *
+ * The new thing gets no chip at all. Its title is *One new thing* and the task
+ * is defined by being new — a chip saying `1 new` beside it would be the page
+ * explaining a word it just used.
+ */
+export function taskTags(task: Task): string[] {
+	switch (task.kind) {
+		case 'ear':
+		case 'function':
+			return makeupTags(task.makeup);
+		case 'mission':
+			return missionTags(task.mission.playedBefore);
+		case 'new_thing':
+			return [];
+	}
+}
+
+function makeupTags(makeup: Makeup | undefined): string[] {
+	if (!makeup || makeup.fresh + makeup.seen === 0) return [];
+	if (makeup.seen === 0) return ['all new'];
+	if (makeup.fresh === 0) return ['all revision'];
+	return [`${makeup.fresh} new`, `${makeup.seen} again`];
+}
+
+function missionTags(playedBefore: number | undefined): string[] {
+	if (playedBefore === undefined) return [];
+	if (playedBefore === 0) return ['first time'];
+	return [`played ${playedBefore}×`];
 }
 
 // ---------------------------------------------------------------------------
