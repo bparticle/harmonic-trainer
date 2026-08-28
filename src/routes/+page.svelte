@@ -4,6 +4,7 @@
 	import LandingPage from '$lib/components/LandingPage.svelte';
 	import type { WorkoutSize } from '$lib/session/workout';
 	import type { KeyStanding } from '$lib/session/warmth';
+	import { describeTasks, describeWhen, type PathStep } from '$lib/session/journey';
 
 	/*
 	 * Today: what would you like to practise?
@@ -199,6 +200,37 @@
 		standing.fresh
 			? `${glyph(standing.key)} · new`
 			: `${glyph(standing.key)} · ${standing.chords.toLocaleString()} chords`;
+
+	// -- The path -----------------------------------------------------------
+	//
+	// A few steps either side of where the ladder is standing, each carrying the
+	// count the record actually holds for it. This is the part of the page that
+	// was missing: everything below was a picker, and a picker is not a route.
+
+	/** What a step has to say for itself, which depends on which side of you it is on. */
+	const stepNote = (step: PathStep) => {
+		if (step.state === 'ahead') return step.teaches;
+		if (step.reviews === 0) return 'not asked yet';
+		const right = `${step.correct} of ${step.reviews} right`;
+		return step.solid ? `${right} · solid` : right;
+	};
+
+	/** What pressing it would do, said for a screen reader and a hover alike. */
+	const stepAction = (step: PathStep) =>
+		step.state === 'done'
+			? `Practise ${step.label} in ${glyph(step.key)} again`
+			: step.state === 'here'
+				? `Practise ${step.label} in ${glyph(step.key)}`
+				: `Look ahead to ${step.label} in ${glyph(step.key)}`;
+
+	const stepMark = (step: PathStep) =>
+		step.state === 'done' ? (step.reviews > 0 ? '✓' : '·') : step.state === 'here' ? '◆' : '';
+
+	const isChosen = (step: PathStep) =>
+		choice.kind === 'rung' && choice.key === step.key && choice.rung === step.rungId;
+
+	/** The step after the one you are on, for the sentence beside "move on". */
+	const nextStep = $derived(data.path.find((step) => step.state === 'ahead') ?? null);
 </script>
 
 <svelte:head>
@@ -314,6 +346,138 @@
 					</p>
 				{/if}
 			</div>
+		</section>
+
+		<!--
+			The path.
+
+			Out in the open, above the library and never folded away. What was wrong
+			with this page was not what it offered but that it offered it without a
+			before or an after: the ladder existed, the record existed, and neither
+			was on screen. Every step here is pressable — behind you it means play it
+			again, ahead of you it means look at it now — and pressing one pins the
+			workout without moving the ladder, which is the same rule the library
+			below has always kept.
+		-->
+		<section class="path" aria-label="Your path">
+			<div class="section-head">
+				<h2 class="panel-title">Your path</h2>
+				<p class="path-count">
+					step {data.journey.step} of {data.journey.total}
+					{#if data.totals.reviews > 0}
+						· {data.totals.correct.toLocaleString()} of {data.totals.reviews.toLocaleString()} right so
+						far
+					{/if}
+				</p>
+			</div>
+
+			<div
+				class="path-rail"
+				role="progressbar"
+				aria-label="Steps of the ladder introduced"
+				aria-valuemin="0"
+				aria-valuemax={data.journey.total}
+				aria-valuenow={data.journey.step}
+			>
+				<span style:transform={`scaleX(${data.journey.fill})`}></span>
+			</div>
+
+			<ol class="steps">
+				{#each data.path as step (step.ordinal)}
+					<li class:opens-key={step.opensKey && step.ordinal > 1}>
+						<button
+							type="button"
+							class="step"
+							class:is-done={step.state === 'done'}
+							class:is-here={step.state === 'here'}
+							class:is-ahead={step.state === 'ahead'}
+							class:is-chosen={isChosen(step)}
+							style:--tint={tint(step.key)}
+							style:--tint-ink={tintInk(step.key)}
+							title={stepAction(step)}
+							aria-label={stepAction(step)}
+							aria-pressed={isChosen(step)}
+							onclick={() => (choice = { kind: 'rung', key: step.key, rung: step.rungId })}
+						>
+							<span class="step-key">{glyph(step.key)}</span>
+							<span class="min-w-0 flex-1">
+								<span class="step-label">{step.label}</span>
+								<span class="step-note">{stepNote(step)}</span>
+							</span>
+							<span class="step-mark" aria-hidden="true">{stepMark(step)}</span>
+						</button>
+					</li>
+				{/each}
+			</ol>
+
+			<!--
+				Moving the ladder, next to the path it moves along.
+
+				These used to sit under the start button in mono type the size of a
+				footnote, which is how somebody could open this app most days for a
+				fortnight and never notice that moving on was a thing they were allowed
+				to do. Still two plain forms, still unguarded, still a suggestion.
+			-->
+			{#if !resuming}
+				<div class="path-move">
+					<form method="POST" action="?/back">
+						<button class="move-back" disabled={reachedIndex === 0 && data.position.rungIndex === 0}
+							>← step back</button
+						>
+					</form>
+
+					{#if data.next}
+						<form method="POST" action="?/advance">
+							<button class="move-on" class:is-suggested={data.progress.looksSolid}>
+								{data.progress.looksSolid ? 'Ready — move on to' : 'Move on to'}
+								{data.next.rung.id === 'scale' && data.next.key !== data.position.key
+									? `${glyph(data.next.key)} · ${data.next.rung.label.toLowerCase()}`
+									: data.next.rung.label.toLowerCase()} →
+							</button>
+						</form>
+						<p class="move-note">
+							{#if data.progress.looksSolid}
+								{glyph(data.position.key)} · {data.position.rung.label.toLowerCase()} looks solid.
+							{:else if nextStep}
+								Moving on is your call — nothing here is locked.
+							{/if}
+						</p>
+					{/if}
+				</div>
+			{/if}
+		</section>
+
+		<!--
+			What the last few days were made of.
+
+			Not a streak, not a calendar, and nothing here can fall while you are
+			away from the piano — the same rule the twelve key swatches keep. It is
+			one answer to one question: does this thing know what I did.
+		-->
+		<section class="history" aria-label="Recent practice">
+			<div class="section-head">
+				<h2 class="panel-title">Recently practised</h2>
+				<a class="history-more" href="/profile">the whole record →</a>
+			</div>
+
+			{#if data.history.length}
+				<ol class="days">
+					{#each data.history as past (past.id)}
+						<li class="day">
+							<span class="day-when">{describeWhen(new Date(past.startedAt))}</span>
+							<span class="day-key" style:--tint={tint(past.keyCenter)}>
+								{glyph(past.keyCenter)}
+							</span>
+							<span class="day-what">{describeTasks(past.titles)}</span>
+							<span class="day-count">{past.finished}/{past.total}</span>
+						</li>
+					{/each}
+				</ol>
+			{:else}
+				<p class="text-ink-dim text-[0.78rem] leading-relaxed">
+					Nothing yet. Whatever you start below will be the first thing here.
+				</p>
+			{/if}
 		</section>
 
 		<details class="practice-library" open={resuming}>
@@ -548,36 +712,16 @@
 				</form>
 			{/if}
 
-			<!-- Moving the ladder is a separate decision from what to play today, so
-		     these sit outside the form that starts a session. -->
+			<!-- Where the ladder is standing, said once more beside the button that
+			     is about to start something. Moving it lives up in the path now,
+			     next to the steps it moves along. -->
 			{#if !resuming}
-				<div class="flex flex-wrap items-center justify-center gap-3">
-					<form method="POST" action="?/back">
-						<button
-							class="text-ink-dim hover:text-ink font-mono text-[0.7rem] transition-colors"
-							disabled={reachedIndex === 0 && data.position.rungIndex === 0}>← step back</button
-						>
-					</form>
-					<span class="text-ink-dim font-mono text-[0.68rem]">
-						Ladder · {glyph(data.position.key)} · {data.position.rung.label.toLowerCase()}
-						{#if data.progress.reviews > 0}
-							· {data.progress.correct}/{data.progress.reviews} right here
-						{/if}
-					</span>
-					{#if data.next}
-						<form method="POST" action="?/advance">
-							<button
-								class="border-ground-line hover:border-ink-dim rounded-lg border px-2.5 py-1 font-mono text-[0.7rem] transition-colors"
-								class:is-suggested={data.progress.looksSolid}
-							>
-								{data.progress.looksSolid ? 'ready for' : 'move on to'}
-								{data.next.rung.id === 'scale' && data.next.key !== data.position.key
-									? glyph(data.next.key)
-									: data.next.rung.label.toLowerCase()} →
-							</button>
-						</form>
+				<span class="text-ink-dim font-mono text-[0.68rem]">
+					Ladder · {glyph(data.position.key)} · {data.position.rung.label.toLowerCase()}
+					{#if data.progress.reviews > 0}
+						· {data.progress.correct}/{data.progress.reviews} right here
 					{/if}
-				</div>
+				</span>
 			{/if}
 		</section>
 	</main>
@@ -863,6 +1007,269 @@
 		color: var(--color-ink);
 	}
 
+	/* ---------------------------------------------------------------------
+	 * The path
+	 *
+	 * A vertical run of steps rather than a horizontal one, because a step's
+	 * label is a sentence and sentences do not fit in a twelfth of a screen —
+	 * the twelve keys below get the horizontal strip because a key is a letter.
+	 *
+	 * Colour follows the house rule exactly: the only tinted thing in a step is
+	 * the key's own letter, because a key is a pitch. Where you are, what is
+	 * behind and what is ahead are drawn in weight — ink, dim ink, and an
+	 * outline — because none of those three is a pitch and nothing here is
+	 * allowed to go red.
+	 * ------------------------------------------------------------------- */
+	.path {
+		display: flex;
+		flex-direction: column;
+		gap: 0.55rem;
+	}
+
+	.path-count {
+		font-family: var(--font-mono);
+		font-size: 0.66rem;
+		color: var(--color-ink-dim);
+		font-variant-numeric: tabular-nums;
+		text-align: right;
+	}
+
+	.path-rail {
+		height: 3px;
+		border-radius: 2px;
+		background: var(--color-ground-line);
+		overflow: hidden;
+	}
+
+	.path-rail span {
+		display: block;
+		height: 100%;
+		background: var(--color-ink-dim);
+		transform-origin: left;
+		transition: transform 350ms var(--ease-wheel);
+	}
+
+	.steps {
+		display: flex;
+		flex-direction: column;
+		gap: 0.2rem;
+	}
+
+	/* A new key on the ladder is the one seam in this list worth drawing. */
+	.steps > li.opens-key {
+		margin-top: 0.55rem;
+		padding-top: 0.55rem;
+		border-top: 1px dashed var(--color-ground-line);
+	}
+
+	.step {
+		display: flex;
+		width: 100%;
+		align-items: center;
+		gap: 0.7rem;
+		padding: 0.5rem 0.7rem;
+		border-radius: 10px;
+		border: 1px solid transparent;
+		text-align: left;
+		transition:
+			background 120ms ease,
+			border-color 120ms ease;
+	}
+
+	.step:hover {
+		background: var(--color-ground-raised);
+	}
+
+	.step.is-chosen {
+		background: color-mix(in oklab, var(--tint) 16%, var(--color-ground-raised));
+		border-color: var(--tint);
+	}
+
+	/*
+	 * The key's letter, in the key's own colour, and the only hue in the row.
+	 * Steps behind and ahead wear it as an outline; the one you are standing on
+	 * wears it filled, which is the strongest thing this strip says and the one
+	 * time a swatch here is solid.
+	 */
+	.step-key {
+		display: grid;
+		width: 2.1rem;
+		height: 2.1rem;
+		flex: none;
+		place-items: center;
+		border: 2px solid var(--tint);
+		border-radius: 8px;
+		background: color-mix(in oklab, var(--tint) 10%, var(--color-ground));
+		font-family: var(--font-display);
+		font-size: 0.86rem;
+		font-weight: 600;
+		color: var(--color-ink);
+	}
+
+	.step.is-here .step-key {
+		background: var(--tint);
+		color: var(--tint-ink);
+	}
+
+	/* Ahead is not unavailable — it is dashed, the same "nothing here yet" the
+	   twelve keys already draw, and never dimmed into looking locked. */
+	.step.is-ahead .step-key {
+		border-style: dashed;
+	}
+
+	.step-label {
+		display: block;
+		font-family: var(--font-display);
+		font-size: 0.88rem;
+		font-weight: 600;
+		color: var(--color-ink-muted);
+	}
+
+	.step.is-here .step-label {
+		color: var(--color-ink);
+	}
+
+	.step-note {
+		display: block;
+		font-size: 0.72rem;
+		line-height: 1.3;
+		color: var(--color-ink-dim);
+	}
+
+	.step-mark {
+		flex: none;
+		font-family: var(--font-mono);
+		font-size: 0.8rem;
+		color: var(--color-ink-dim);
+	}
+
+	.step.is-here .step-mark {
+		color: var(--color-ink);
+	}
+
+	.path-move {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.6rem 0.9rem;
+		padding-top: 0.35rem;
+	}
+
+	.move-back {
+		font-family: var(--font-mono);
+		font-size: 0.7rem;
+		color: var(--color-ink-dim);
+		transition: color 120ms ease;
+	}
+
+	.move-back:hover:not(:disabled) {
+		color: var(--color-ink);
+	}
+
+	.move-on {
+		padding: 0.35rem 0.75rem;
+		border-radius: 9px;
+		border: 1px solid var(--color-ground-line);
+		font-family: var(--font-mono);
+		font-size: 0.72rem;
+		color: var(--color-ink-muted);
+		transition:
+			border-color 120ms ease,
+			color 120ms ease;
+	}
+
+	.move-on:hover {
+		border-color: var(--color-ink-dim);
+		color: var(--color-ink);
+	}
+
+	.move-note {
+		font-size: 0.72rem;
+		color: var(--color-ink-dim);
+	}
+
+	/* ---------------------------------------------------------------------
+	 * Recently practised
+	 * ------------------------------------------------------------------- */
+	.history {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.history-more {
+		font-family: var(--font-mono);
+		font-size: 0.66rem;
+		color: var(--color-ink-dim);
+		transition: color 120ms ease;
+	}
+
+	.history-more:hover {
+		color: var(--color-ink);
+	}
+
+	.days {
+		display: flex;
+		flex-direction: column;
+	}
+
+	.day {
+		display: flex;
+		align-items: baseline;
+		gap: 0.6rem;
+		padding: 0.4rem 0.1rem;
+		border-top: 1px solid var(--color-ground-line);
+	}
+
+	.day:first-child {
+		border-top: 0;
+	}
+
+	.day-when {
+		width: 4.6rem;
+		flex: none;
+		font-family: var(--font-mono);
+		font-size: 0.68rem;
+		color: var(--color-ink-muted);
+	}
+
+	.day-key {
+		flex: none;
+		padding: 0.05rem 0.35rem;
+		border-radius: 5px;
+		border: 1px solid var(--tint);
+		background: color-mix(in oklab, var(--tint) 12%, var(--color-ground));
+		font-family: var(--font-display);
+		font-size: 0.72rem;
+		font-weight: 600;
+		color: var(--color-ink);
+	}
+
+	.day-what {
+		min-width: 0;
+		flex: 1;
+		overflow: hidden;
+		font-size: 0.76rem;
+		line-height: 1.3;
+		color: var(--color-ink-dim);
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.day-count {
+		flex: none;
+		font-family: var(--font-mono);
+		font-size: 0.66rem;
+		color: var(--color-ink-dim);
+		font-variant-numeric: tabular-nums;
+	}
+
+	@media (max-width: 520px) {
+		.day-what {
+			display: none;
+		}
+	}
+
 	/* The twelve keys, in the order the ladder meets them. */
 	.keys {
 		display: grid;
@@ -1129,7 +1536,8 @@
 
 	@media (prefers-reduced-motion: reduce) {
 		.key-fill,
-		.library-toggle {
+		.library-toggle,
+		.path-rail span {
 			transition: none;
 		}
 	}

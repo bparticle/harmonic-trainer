@@ -33,6 +33,13 @@ import {
 	type ActiveWorkout
 } from '$lib/session/progress';
 import { reportWorkout, type Asked, type WorkoutReport } from '$lib/session/report';
+import {
+	isLadderKey,
+	looksSolid,
+	rungOfSkill,
+	type PastWorkout,
+	type RungRecord
+} from '$lib/session/journey';
 import { loadTempoGrades } from './play-log';
 import type { Verdict } from '$lib/practice/goal';
 import { chartDemand, MISSION_CHARTS } from '$lib/curriculum/charts';
@@ -918,15 +925,122 @@ export async function rungProgress(userId: string, position: Position) {
 
 	const total = row?.total ?? 0;
 	const correct = row?.correct ?? 0;
-	const accuracy = total > 0 ? correct / total : 0;
 
 	return {
 		reviews: total,
 		correct,
-		accuracy,
+		accuracy: total > 0 ? correct / total : 0,
 		/** Only ever a suggestion — moving on is your call. */
-		looksSolid: total >= position.rung.suggestAfter && accuracy >= 0.8
+		looksSolid: looksSolid(position.rung, total, correct)
 	};
+}
+
+/**
+ * The same count, for every rung of every key at once.
+ *
+ * One `GROUP BY` where the home page used to have nothing at all. `rungProgress`
+ * answers it for the rung you are standing on and this answers it for the whole
+ * ladder, so the path can say what the record holds at each step behind you
+ * instead of drawing a tick that means "the settings row moved past here".
+ *
+ * A left join, so a rung whose cards exist but which has never been asked comes
+ * back as a zero rather than as an absence — the page draws those differently
+ * and needs to be able to tell them apart. Rows whose skill is not a rung's, or
+ * whose key the ladder does not know, are dropped here rather than shown as a
+ * step nobody can find: a progression is not a place on this path.
+ */
+export async function ladderRecord(userId: string): Promise<RungRecord[]> {
+	const rows = await db
+		.select({
+			code: skills.code,
+			key: cards.keyCenter,
+			reviews: sql<number>`count(${reviews.id})::int`,
+			correct: sql<number>`count(*) filter (where ${reviews.correct})::int`
+		})
+		.from(cards)
+		.innerJoin(skills, eq(skills.id, cards.skillId))
+		.leftJoin(reviews, eq(reviews.cardId, cards.id))
+		.where(and(eq(cards.userId, userId), sql`${skills.code} like 'rung:%'`))
+		.groupBy(skills.code, cards.keyCenter);
+
+	return rows.flatMap((row) => {
+		const rungId = rungOfSkill(row.code);
+		if (!rungId || !isLadderKey(row.key)) return [];
+		return [{ key: row.key, rungId, reviews: row.reviews, correct: row.correct }];
+	});
+}
+
+/**
+ * The last few workouts, as what they were made of.
+ *
+ * Everything on this page that looks backwards has to survive one test: it must
+ * not be able to fall. This does — a workout that happened stays happened, an
+ * abandoned one keeps whatever it got through, and there is no streak anywhere
+ * near it. What it is for is the answer to "does this thing know what I did",
+ * asked by somebody who has practised most days for a fortnight and been shown
+ * the same screen every time.
+ *
+ * The workout in flight is excluded by id rather than by its null `ended_at`,
+ * because an abandoned workout also has a null one and it happened too. Sessions
+ * written by the six-block planner are skipped for the usual reason: a plan that
+ * is not a v2 workout has no tasks to name.
+ */
+export async function recentWorkouts(
+	userId: string,
+	options: { limit?: number; exclude?: string | null } = {}
+): Promise<PastWorkout[]> {
+	const limit = options.limit ?? 5;
+
+	// Read more rows than are wanted, because v1 sessions are dropped below and
+	// a page of history should not go short on an account old enough to have any.
+	const rows = await db
+		.select({
+			id: sessions.id,
+			startedAt: sessions.startedAt,
+			keyCenter: sessions.keyCenter,
+			planJson: sessions.planJson
+		})
+		.from(sessions)
+		.where(eq(sessions.userId, userId))
+		.orderBy(desc(sessions.startedAt))
+		.limit(limit * 4);
+
+	const wanted = rows
+		.filter((row) => row.id !== options.exclude && isWorkout(row.planJson))
+		.slice(0, limit);
+
+	if (wanted.length === 0) return [];
+
+	const finished = await db
+		.select({ sessionId: sessionBlocks.sessionId, n: sql<number>`count(*)::int` })
+		.from(sessionBlocks)
+		.where(
+			and(
+				inArray(
+					sessionBlocks.sessionId,
+					wanted.map((row) => row.id)
+				),
+				sql`${sessionBlocks.endedAt} is not null`
+			)
+		)
+		.groupBy(sessionBlocks.sessionId);
+
+	const bySession = new Map(finished.map((row) => [row.sessionId, row.n]));
+
+	return wanted.map((row) => {
+		const workout = row.planJson as Workout;
+		return {
+			id: row.id,
+			startedAt: row.startedAt,
+			keyCenter: row.keyCenter,
+			titles: workout.tasks.map((task) => task.title),
+			// Clamped: a block row for a task the plan no longer has would otherwise
+			// print "5 of 4 done", which is the sort of thing that makes a reader
+			// stop believing the rest of the page.
+			finished: Math.min(bySession.get(row.id) ?? 0, workout.tasks.length),
+			total: workout.tasks.length
+		};
+	});
 }
 
 /**

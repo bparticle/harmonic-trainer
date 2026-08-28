@@ -9,12 +9,15 @@ import {
 	advanceLadder,
 	currentPosition,
 	finishWorkout,
+	ladderRecord,
 	previewWorkouts,
+	recentWorkouts,
 	rungProgress,
 	startWorkout
 } from '$lib/server/db/session-store';
+import { journeyProgress, ladderTotals, pathWindow } from '$lib/session/journey';
 import { currentUserId } from '$lib/server/db/user';
-import { nextPosition, positionOf, RUNGS, STAGES } from '$lib/curriculum/ladder';
+import { FIRST_POSITION, nextPosition, positionOf, RUNGS, STAGES } from '$lib/curriculum/ladder';
 import { PROGRESSIONS, PROGRESSION_LEVELS } from '$lib/curriculum/progressions';
 import {
 	previewTasks,
@@ -83,7 +86,13 @@ export const load: PageServerLoad = async ({ parent, locals }) => {
 			// would be the landing page promising a day of practice that nobody's
 			// rows asked for. The picker below it is hidden for a visitor anyway.
 			size: 'standard' as WorkoutSize,
-			previews: {} as Record<WorkoutSize, TaskPreview[]>
+			previews: {} as Record<WorkoutSize, TaskPreview[]>,
+			// A visitor has no record, so the path is drawn from the ladder alone:
+			// the first steps of it, with nothing behind and nothing counted.
+			path: pathWindow(FIRST_POSITION, []),
+			journey: journeyProgress(FIRST_POSITION),
+			totals: ladderTotals([]),
+			history: []
 		};
 	}
 
@@ -101,6 +110,21 @@ export const load: PageServerLoad = async ({ parent, locals }) => {
 
 	const previews = await previewWorkouts(userId);
 	const active = await activeWorkout(userId);
+
+	/*
+	 * The path, and the days behind it.
+	 *
+	 * Both were missing, and their absence was the whole complaint: somebody who
+	 * opens this most days saw one rung, one key and four tasks, with nothing
+	 * saying they had ever been anywhere or that anywhere came next. The ladder
+	 * was in the page all along — folded into a disclosure called "choose
+	 * something else", which is a filing cabinet rather than a route.
+	 *
+	 * Both are readings of rows already being written. Neither is a streak and
+	 * neither can fall.
+	 */
+	const record = await ladderRecord(userId);
+	const history = await recentWorkouts(userId, { exclude: active?.id ?? null });
 
 	return {
 		public: false,
@@ -165,7 +189,24 @@ export const load: PageServerLoad = async ({ parent, locals }) => {
 		 * on the first one or two, where it is the difference between a workout that
 		 * quietly has one task fewer and one that says why.
 		 */
-		missionHeld: previews.standard.missionHeld ?? null
+		missionHeld: previews.standard.missionHeld ?? null,
+		/*
+		 * A few steps either side of where you are standing, each carrying its own
+		 * count. Wider ahead than behind on purpose: the question this page is
+		 * asked at eight in the morning is what comes next, and what came before is
+		 * already written on the twelve keys further down.
+		 */
+		path: pathWindow(position, record),
+		journey: journeyProgress(position),
+		totals: ladderTotals(record),
+		history: history.map((workout) => ({
+			id: workout.id,
+			startedAt: workout.startedAt,
+			keyCenter: workout.keyCenter,
+			titles: workout.titles,
+			finished: workout.finished,
+			total: workout.total
+		}))
 	};
 };
 

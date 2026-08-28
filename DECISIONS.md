@@ -4312,3 +4312,74 @@ acceptance pass with two real family accounts on one real evening,
 confirming by eye what the integration test already proves in code —
 and that is the one item on this list that was never going to be finished
 by writing more of it.
+
+## The page that never said where you had been
+
+Somebody who opens this app most days said it felt jammed: always C, always
+"the home chord", no history on the front page, and no path they could see. All
+three were true, and none of them was a scheduling bug. The ladder was in the
+page the whole time — folded into a disclosure labelled "choose something
+else", which is a filing cabinet and not a route — and the record was on the
+profile, one navigation away from the screen you actually open at eight in the
+morning.
+
+The ladder never moves on its own, by design: `ladder.ts` says progress is
+suggested and never enforced, and that is right. But the only thing on the home
+page that offered to move it was a mono-type footnote under the start button,
+sitting between "← step back" and the size picker at 0.7rem. So an account can
+sit on rung two of key one for a fortnight while the app quietly does exactly
+what it promised, and the person doing the practising has no way to tell the
+difference between "this is where you are" and "this is all there is".
+
+### Two readings of rows already being written
+
+`session/journey.ts` is pure and adds no new measurement. It answers two
+questions the page could not previously ask.
+
+**A window on the ladder,** not the whole of it. Five or six steps — a couple
+behind, where you are, three ahead — because the complete eighty-four are still
+one press away below and a path you can read in a glance beats a complete one
+you have to study. Each step behind carries the count the record actually holds
+for it, so "done" is `11 of 14 right` rather than a tick meaning the settings
+row moved past here. Steps ahead carry the rung's own `teaches` line, which was
+already written for exactly this purpose. `opensKey` marks the seam where the
+window crosses into a new key, since "G · the scale" arriving after "C · the
+relative minor" is the most important thing this strip has to say.
+
+Every step is pressable, and what pressing one means depends on which side of
+you it is on: behind is _play it again_, ahead is _look at it now_. Both pin the
+workout without moving the ladder, which is the rule the library below has kept
+since the picker was built.
+
+**What the last few days were made of** — task titles, in the key they were in,
+on the day they happened, read straight off `plan_json` and the finished blocks.
+It has to survive one test to belong on this page: it must not be able to fall.
+It does. A workout that happened stays happened, an abandoned one keeps whatever
+it got through, and there is no streak anywhere near it. `describeWhen` names
+today, yesterday, then the weekday, then the date, and never says "3 days ago" —
+a count of days since is the shape of a reproach, and this strip is for what was
+done rather than what was missed.
+
+### One rule, written once
+
+`looksSolid` moved out of `rungProgress` and into `journey.ts`, because the path
+now asks it about every rung behind you and the store asks it about the one you
+are standing on. A step drawn as solid next to a "move on" button that refuses
+to light up would be the page arguing with itself. `ladderRecord` is the same
+count as `rungProgress` with the `where` clause taken off — one `GROUP BY` over
+cards, skills and reviews, left-joined so a rung whose cards exist but which has
+never been asked comes back as a zero rather than as an absence. The page draws
+those two states differently and has to be able to tell them apart.
+
+### Moving the ladder now lives on the path
+
+The `back` and `advance` forms left the sticky footer and sit under the steps
+they move along, at a size somebody might notice. When the rung looks solid the
+button says _Ready — move on to the three main chords_; when it does not it says
+_Move on to_, and the line under it says that moving on is your call and nothing
+here is locked. That sentence is the whole policy, and it had never been printed
+anywhere.
+
+Colour follows the house rule without an exception. The only tinted thing in a
+step is the key's letter, because a key is a pitch; behind, here and ahead are
+ink, dim ink and a dashed outline, because none of those three is one.
