@@ -495,6 +495,104 @@ not have: there is now a record worth taking with you, not just charts.
 
 ---
 
+## M17 — Crossings: the curriculum stops being one key at a time
+
+**Status: proposed, not started.** The argument, the evidence and the build
+order are written up in full at
+[Widen Before You Deepen](https://claude.ai/code/artifact/92343df1-8d93-41ab-a6f5-eaf515b819ba),
+and only the parts that constrain other work are repeated here.
+
+The complaint that started it: the app feels siloed in one scale, and the ladder
+implies you must _finish_ a key before meeting the next. That reading is
+correct. `nextPosition` increments the rung and only then the key, so a position
+is a point on a single walk and `reachedSoFar` is a **prefix** of it. Three
+things follow, none of them a bug:
+
+- The second key costs seven steps of the first. The last key's first rung is
+  step 78 of 84.
+- `cardsForReached` generates only for reached cells, so there is nothing in
+  another key to interleave _with_.
+- `spreadByKey` — the one interleaving mechanism in the app, which exists
+  precisely so eight questions touch eight keys — has one key to spread across
+  on rung two. The workout is at its most blocked when the learner is newest.
+
+And a fourth: nothing in the curriculum knows that keys are _related_. `Stage`
+carries accidentals, a sentence and a relative minor. The readiness gate's
+`Device` axis is about leaving the key for a chord and coming back, which is
+colour rather than travel — so a tune that genuinely modulates is filed under
+`chromatic`, beside the tritone sub.
+
+### What the evidence supports, and what it does not
+
+Interleaving beats blocking on retention and transfer and loses on acquisition;
+that trade is the mechanism rather than a side effect. The music-specific
+studies are few and small — Stambaugh's beginning clarinettists show the classic
+shape (no difference during practice, a difference at 24 hours), Carter and
+Grahn's ten advanced players point the same way with weak inter-rater agreement.
+The closest evidence to this particular problem is not about retention at all:
+Kornell and Bjork on inductive category learning, where interleaving improves
+the ability to classify unseen examples, and Birnbaum et al. showing the active
+ingredient is **discrimination** — juxtaposing confusable categories — rather
+than spacing.
+
+Telling C from G is a discrimination between two highly confusable categories.
+
+What the evidence does **not** support is abolishing the ladder. The note at the
+top of `ladder.ts` records why it exists, and that judgement stands. M17 is a
+ramp, not a flip: the first widening is gated on the same `looksSolid` the path
+strip already trusts, and widening never introduces a new _rung_ — only a key
+you have already met the idea in.
+
+### Three engines already built, wired to nothing
+
+This is why the milestone is cheap, and it is the part worth knowing before
+anyone touches these files:
+
+- `fifthsDistance` in `music/key.ts` carries a doc comment calling it "the
+  number the curriculum uses to order modulations by difficulty". The curriculum
+  has never called it. `relativeKey` is exported and used nowhere at all.
+- `modulationOverlay` in `wheel/overlays.ts` returns, for any two keys, their
+  distance, their shared notes and **every pivot chord with its numeral in both
+  keys**. Its only caller is its own test file. That return value is exactly the
+  payload a pivot exercise needs.
+- `detectModulations` in `music/analyse.ts` already finds a key change and walks
+  backwards for the pivot — "the chord where the ear has already changed key
+  without knowing it yet". It feeds the study panel. The readiness gate has
+  never asked it anything.
+
+### Shape of the work
+
+Four passes, each shippable alone, in this order:
+
+1. **`curriculum/crossing.ts`** — a `Relation` type and a near-first ordering,
+   pure and consumed by nothing, the way `vocabulary.ts` arrived.
+2. **The frontier** — `Position` becomes depth-per-rung plus a key horizon per
+   rung. A stored position maps exactly onto the frontier it implies, so the
+   migration is clean. The home page's path becomes a map rather than a line.
+3. **The crossing exercises** — `key_hear` ("where are we?"), `key_moved` ("what
+   changed?"), `pivot_play` ("turn the corner"), and a fifth task kind beside
+   ear, function, mission and one new thing. This pass needs a migration:
+   `card_direction` is a Postgres enum. Ship `key_hear` on its own first.
+4. **Crossings in the songbook** — `Demand` gains a third axis fed by
+   `detectModulations`, so the gate can say _this one goes to the dominant and
+   you have practised that_ instead of refusing it for a reason that is not the
+   real one. `walk.test.ts` is the check that this has not put a cliff in.
+
+### The number to watch, decided in advance
+
+Per-session accuracy **will fall** when one rung starts arriving in three keys.
+That is the effect working, and it is the moment somebody reverts the change. The
+figure that matters is accuracy on a key's _first-ever_ question — transfer — and
+`reviews` already stores every graded answer with its card, key and timestamp, so
+this is measurable without building anything new.
+
+### Where it sits
+
+After M12 and M13. It changes what daily practice is, which is M15's kind of
+work rather than M12's, and it must not be interleaved with billing.
+
+---
+
 ## Order
 
 **M12 → M13.** M15 and M16 have landed, and M14, M9 and M10 before them, with
