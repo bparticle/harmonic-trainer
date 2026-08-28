@@ -4,6 +4,7 @@ import {
 	formatChord,
 	type AbstractChord
 } from '$lib/music/chord';
+import { diatonicSeventhNumerals, pivotChords } from '$lib/curriculum/crossing';
 import {
 	BRIGHTNESS_ORDER,
 	fifthsDistance,
@@ -44,14 +45,11 @@ export type KeyOverlay = {
 const MAJOR_DEGREES = ['I', 'ii', 'iii', 'IV', 'V', 'vi', 'vii°'];
 const MINOR_DEGREES = ['i', 'ii°', '♭III', 'iv', 'v', '♭VI', '♭VII'];
 
-const MAJOR_ROMAN = ['Imaj7', 'ii7', 'iii7', 'IVmaj7', 'V7', 'vi7', 'viim7b5'];
-const MINOR_ROMAN = ['i7', 'iim7b5', 'bIIImaj7', 'iv7', 'v7', 'bVImaj7', 'bVII7'];
-
 /** The current key: its scale shape and its seven diatonic sevenths. */
 export function keyOverlay(k: Key, config: WheelConfig, geometry: WheelGeometry): KeyOverlay {
 	const pitchClasses = scale(k).map(pitchClass);
 	const tonic = pitchClass(k.tonic);
-	const roman = k.mode === 'aeolian' ? MINOR_ROMAN : MAJOR_ROMAN;
+	const roman = diatonicSeventhNumerals(k.mode);
 
 	const degreeNames = k.mode === 'aeolian' ? MINOR_DEGREES : MAJOR_DEGREES;
 
@@ -179,33 +177,14 @@ export function modulationOverlay(
 	const toPcs = scalePitchClasses(to);
 	const shared = sharedPitchClasses([...fromPcs], [...toPcs]);
 
-	const fromRoman = from.mode === 'aeolian' ? MINOR_ROMAN : MAJOR_ROMAN;
-	const toRoman = to.mode === 'aeolian' ? MINOR_ROMAN : MAJOR_ROMAN;
-
-	const pivots: ModulationOverlay['pivots'] = [];
-	for (let degree = 1; degree <= 7; degree++) {
-		const chord = diatonicSeventh(from, degree);
-		const pcs = chordPitchClasses(chord);
-		if (!pcs.every((pc) => toPcs.has(pc))) continue;
-
-		// Same notes is not enough — it has to be a chord the target key builds too.
-		const symbol = formatChord(chord);
-		let matchedDegree = -1;
-		for (let d = 1; d <= 7; d++) {
-			if (formatChord(diatonicSeventh(to, d)) === symbol) {
-				matchedDegree = d;
-				break;
-			}
-		}
-		if (matchedDegree < 0) continue;
-
-		pivots.push({
-			symbol,
-			romanInFrom: fromRoman[degree - 1] ?? '',
-			romanInTo: toRoman[matchedDegree - 1] ?? '',
-			cells: cellsFor(pcs, pitchClass(chord.root), config, geometry)
-		});
-	}
+	// Which chords the two keys share is a musical fact and lives in the
+	// curriculum's `crossing.ts`; what this function adds is where to draw them.
+	const pivots: ModulationOverlay['pivots'] = pivotChords(from, to).map((pivot) => ({
+		symbol: pivot.symbol,
+		romanInFrom: pivot.romanInFrom,
+		romanInTo: pivot.romanInTo,
+		cells: cellsFor(pivot.pitchClasses, pivot.root, config, geometry)
+	}));
 
 	const distance = fifthsDistance(from, to);
 

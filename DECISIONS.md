@@ -4514,3 +4514,97 @@ there is now a test asserting that every built-in's `defaultKey` parses as a
 note. It passes on the file as it stood before this milestone and fails on the
 version that shipped the bug, which is the only evidence that a regression test
 is one.
+
+## M17 pass one — crossings, and the two distances that are not one number
+
+The first quarter of M17, and deliberately the quarter that changes no
+behaviour: `curriculum/crossing.ts` is pure, and the only thing consuming it is
+a refactor of code that already existed. Nothing on any screen moved.
+
+### A crossing is two keys and the relation between them
+
+The ladder teaches what is inside a key and the progression library teaches how
+chords move within one. The third thing — how you get from one key to another,
+and how you know when you have — had no object in the codebase at all. `Stage`
+carries a count of accidentals, a sentence about them and a relative minor;
+there was no dominant, no subdominant, no parallel, and no distance.
+
+`Relation` is five names and a remainder: `home`, `relative`, `dominant`,
+`subdominant`, `parallel`, `other`. From C major nineteen of the twenty-three
+destinations land in `other`, and that is the right shape rather than a gap. The
+near neighbourhood is small, everything in it is nameable, and a _what changed?_
+question with five answers is one somebody can actually answer. `other` still
+carries its shift, so it can be described precisely without being named.
+
+Two traps, both one-line mistakes that would have recorded a wrong answer
+against a right question, and both now have a test:
+
+- **E minor is not the dominant of C.** It carries one sharp exactly as G major
+  does, so the mode has to be part of the test. It is the relative of the
+  dominant, which is a different journey with a different sound.
+- **E flat major is not the parallel of C.** Three flats, exactly like C minor.
+  The tonic is what separates them, so `parallel` is decided on the tonic and
+  never on the signature.
+
+### The part worth reading before using any of it
+
+There are **two distances between keys and they are not the same number**.
+
+The _signature shift_ is how many accidentals change: C to G is one sharp, and C
+to A minor is nothing at all. The _tonic distance_ is how far the home note
+moved round the circle, which is what `fifthsDistance` has always measured: C to
+A minor is three by that reading. Both are true and they answer different
+questions — how much the page changes, and how far the ear is asked to move its
+centre. The relative-minor move is the extreme case, zero on one measure and
+three on the other, which is exactly why it feels like the smallest move there
+is and still feels like a move.
+
+Krumhansl and Kessler's key space is a torus for this reason: the circle of
+fifths in two dimensions and the relative and parallel relations in two more. So
+this module refuses to collapse the two into one perceptual scalar. Nobody has
+measured what the weights would be, and a made-up weighting would immediately
+become a number the curriculum ordered itself by. Ordering is by named relation
+first and raw distance second, which is how the research reports it and how a
+musician says it.
+
+**Which raw distance is the tiebreak turned out to matter, visibly.** Ranking
+the remainder by tonic distance puts F minor ahead of D minor out of C major,
+because F is one fifth from C and D is two — while F minor shares three notes
+with C major and D minor shares six. D minor is the ii of the key you are
+already standing in; F minor is a borrowed world. The order has to say so, so
+the second key is the signature shift and the tonic distance is the third. The
+test for it fails on the other ordering, which is the only evidence that a
+regression test is one.
+
+### The pivot chords came out of the wheel
+
+`modulationOverlay` in `wheel/overlays.ts` already computed, for any two keys,
+every chord diatonic in both, with its numeral on each side. It was a drawing
+concern that happened to know some music, and it had exactly one caller: its own
+test file. That is the wrong way round — the music is the fact and the cells are
+the drawing — so `pivotChords` moved to `crossing.ts` and the overlay now maps
+geometry onto what it returns. `MAJOR_ROMAN` and `MINOR_ROMAN` went with it as
+`diatonicSeventhNumerals`, because the overlay's _other_ consumer of those seven
+strings would otherwise have kept a second copy.
+
+The overlay's seventeen tests were not touched and still pass, which is the
+whole of the evidence that the move was faithful.
+
+Two of the answers that fall out are worth knowing. C major and A minor share
+all seven of their diatonic sevenths, so every chord is a hinge. **C major and C
+minor share none at all** — the parallel move, which is the one that feels
+closest because the tonic never budges, is the one with nothing to pivot on. It
+has to be taken directly or through a dominant, and `describePivots` says so
+rather than drawing an empty list.
+
+### Two smaller decisions
+
+`curriculumKeys` reads the twenty-four keys off `STAGES` rather than listing
+them again, so a key spelled G♭ in the ladder is spelled G♭ here and they cannot
+drift. And `describeCrossing` claims a mode only where the destination has one:
+D dorian shares C major's signature exactly, is a real crossing, and has nothing
+to say about major or minor — "into the major" would be a confident sentence
+about the wrong thing.
+
+Nothing here is wired to a card, a workout or a screen yet. That is pass two and
+pass three; this is the module they will both read.
