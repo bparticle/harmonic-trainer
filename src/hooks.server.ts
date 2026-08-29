@@ -5,13 +5,14 @@ import { resolveSessionUser } from '$lib/server/db/accounts';
 const PUBLIC_PATHS = ['/login', '/forgot-password', '/reset-password'];
 
 /**
- * Readable by anyone: the project page at the root, and the demo.
+ * Readable by anyone: the project page at the root, the demo, and the notes.
  *
  * The demo is the whole play-along page with no account behind it, so it must
  * be reachable without a session — but it writes nothing and has no actions, so
- * it has no business accepting anything but a read.
+ * it has no business accepting anything but a read. `/notes` is the public
+ * writing section: how the app works and the theory under it, all static.
  */
-const PUBLIC_READ_PATHS = ['/demo'];
+const PUBLIC_READ_PATHS = ['/demo', '/notes'];
 
 export function isPublicRequest(pathname: string, method: string): boolean {
 	if (PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))) return true;

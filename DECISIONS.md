@@ -5315,3 +5315,55 @@ And both the mission instruction and the novelty line now say **A minor** rather
 than **A**. A bare `A` above a task that is about to hand over Am, Dm and E7 is
 the app being vague about the exact fact this pass exists to get right — and it is
 part of why the bug was invisible on the page as well as in the composer.
+
+## Notes — the app explained to somebody who has not signed in
+
+`DECISIONS.md` is 5,000 lines of why, `README.md` is a tour, and `CONTRIBUTING.md`
+is the house rules — and all three are written for somebody already looking at the
+source. There was nothing that explained the music theory the app encodes, and the
+parts it has derived from that theory, to a musician deciding whether the thing is
+worth their evening. `/notes` is that: three illustrated essays, public, at a
+reading measure, semi-technical.
+
+### Routes, not an artifact
+
+They are SvelteKit pages under `src/routes/notes/`, committed and deployed with
+everything else, because a page that explains the app should live at the same
+origin as the app, be indexable, and not rot in a chat log. `hooks.server.ts`
+gains `/notes` in `PUBLIC_READ_PATHS` beside `/demo` — GET and HEAD only, no
+session, and a prefix guard that already refused `/demonstration` refuses
+`/notesomething` for free. The root layout renders them bare for a signed-out
+visitor, so `+layout.svelte` here supplies the only chrome: a line back to the
+app and to the index.
+
+### The one place the type is set for a chair
+
+Everything else in this app assumes a screen most of a metre away on a music
+stand, which is why the floor type size is far above a normal UI's. Prose read in
+a chair is the opposite constraint, so the body of these pages runs in a serif —
+a system stack, `Iowan Old Style` through Georgia, nothing vendored and no extra
+request. Every label, numeral, eyebrow and figure caption stays in Space Grotesk
+and IBM Plex Mono, because those are the fonts that carry meaning here. The serif
+is the signal that this is writing rather than app chrome.
+
+### The colour rule does not relax
+
+Hue still means pitch, and nothing else. The only colours on these pages are the
+twelve pitch classes, pulled from the same injected `--pc-*` properties the rest
+of the app uses; every other distinction — a citation, a figure outline, an
+emphasised table row — is made in weight. The figures are hand-drawn SVG rather
+than the live `Wheel` component: they have to hold still and be read, and several
+of them show a state the real wheel only passes through — a single radial spoke,
+one chord shape rotated onto another, the brightness block mid-slide.
+
+### Three essays, in the order the app works in
+
+See, then drill, then hear and count. `hue-means-pitch` is the music core and the
+wheel — notes spelled not numbered, twelve colours from seven, five circles of
+fifths stacked so a chord is a shape you rotate. `the-ladder` is the curriculum —
+the frontier, cards that do not exist until reached, FSRS with its two knobs off,
+the workout composed from the date, the crossing exercises and the readiness gate.
+`naming-and-counting` is recognition, roman-numeral analysis, the generated band,
+guide-tone judging, and a record with no daily streak. They are linked from the
+landing page's nav and footer and from each other — not from the signed-in
+`AppNav`, which is a deliberate fixed five and not the place for an essay.

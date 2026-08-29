@@ -1,0 +1,531 @@
+/*
+ * The reading layer.
+ *
+ * The rest of the app is a practice instrument on a music stand; this section
+ * is prose, and it is the one place the type is set for a chair and a screen an
+ * arm's length away rather than a metre. So the body runs in a serif — a system
+ * face, nothing vendored — while every label, numeral and caption stays in the
+ * app's own two fonts, because those are the ones that mean something here.
+ *
+ * The colour rule does not relax. Hue means pitch on these pages exactly as it
+ * does everywhere else: the only colours are the twelve pitch classes, borrowed
+ * from the injected --pc-* properties, and every other distinction — a citation,
+ * a figure outline, an emphasised row — is made in weight.
+ */
+
+.note-shell {
+	--reading:
+		'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, ui-serif, serif;
+	--measure: 36rem;
+	--wide: 56rem;
+
+	min-height: 100dvh;
+	background: var(--color-ground);
+	color: var(--color-ink);
+}
+
+.note-topbar {
+	display: flex;
+	align-items: center;
+	gap: 1.1rem;
+	width: min(calc(100% - 3rem), var(--wide));
+	margin: 0 auto;
+	min-height: 3.75rem;
+	border-bottom: 1px solid var(--color-ground-line);
+	font-family: var(--font-mono);
+	font-size: 0.72rem;
+	letter-spacing: 0.03em;
+}
+
+.note-topbar a {
+	display: inline-flex;
+	align-items: center;
+	min-height: 2.75rem;
+	color: var(--color-ink-muted);
+	text-decoration: none;
+}
+
+.note-topbar a:hover {
+	color: var(--color-ink);
+}
+
+.note-topbar .sep {
+	color: var(--color-ink-dim);
+}
+
+.note-topbar .here {
+	color: var(--color-ink);
+}
+
+/* ---------------- article ---------------- */
+
+.note {
+	width: min(calc(100% - 3rem), var(--wide));
+	margin: 0 auto;
+	padding: 0 0 7rem;
+}
+
+.note-hero {
+	padding: 4.5rem 0 3rem;
+	border-bottom: 1px solid var(--color-ground-line);
+}
+
+.note-eyebrow {
+	margin: 0 0 1.5rem;
+	font-family: var(--font-mono);
+	font-size: 0.7rem;
+	font-weight: 500;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: var(--color-ink-dim);
+}
+
+.note h1 {
+	margin: 0 0 1.3rem;
+	max-width: 18ch;
+	font-family: var(--font-display);
+	font-size: clamp(2.5rem, 6vw, 4rem);
+	font-weight: 600;
+	line-height: 0.98;
+	letter-spacing: -0.04em;
+	text-wrap: balance;
+}
+
+.note-standfirst {
+	max-width: 42rem;
+	margin: 0;
+	font-family: var(--reading);
+	font-size: clamp(1.12rem, 2vw, 1.35rem);
+	line-height: 1.5;
+	color: var(--color-ink-muted);
+}
+
+.note-body {
+	font-family: var(--reading);
+	font-size: 1.09rem;
+	line-height: 1.62;
+}
+
+.note-body :where(p, ul, ol) {
+	max-width: var(--measure);
+}
+
+.note-body p {
+	margin: 0 0 1.05em;
+	text-wrap: pretty;
+}
+
+.note-body ul,
+.note-body ol {
+	margin: 0 0 1.2em;
+	padding-left: 1.2rem;
+}
+
+.note-body li {
+	margin-bottom: 0.5em;
+}
+
+.note-body a {
+	color: inherit;
+	text-decoration-color: var(--color-ground-line);
+	text-underline-offset: 0.18em;
+}
+
+.note-body a:hover {
+	text-decoration-color: currentColor;
+}
+
+.note-body strong {
+	font-weight: 600;
+	color: var(--color-ink);
+}
+
+.note-body em {
+	font-style: italic;
+}
+
+.note-section {
+	padding-top: 4rem;
+}
+
+.note-label {
+	margin: 0 0 0.8rem;
+	font-family: var(--font-mono);
+	font-size: 0.7rem;
+	font-weight: 500;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: var(--color-ink-dim);
+}
+
+.note h2 {
+	margin: 0 0 1.2rem;
+	max-width: 24ch;
+	font-family: var(--font-display);
+	font-size: clamp(1.6rem, 3.2vw, 2.2rem);
+	font-weight: 600;
+	line-height: 1.1;
+	letter-spacing: -0.024em;
+	text-wrap: balance;
+}
+
+.note h3 {
+	margin: 2.4rem 0 0.6rem;
+	font-family: var(--font-display);
+	font-size: 1.1rem;
+	font-weight: 600;
+	letter-spacing: -0.01em;
+}
+
+.note .lede {
+	font-size: 1.16rem;
+	line-height: 1.55;
+	color: var(--color-ink-muted);
+}
+
+.note code {
+	font-family: var(--font-mono);
+	font-size: 0.84em;
+	background: var(--color-ground-raised);
+	border: 1px solid var(--color-ground-line);
+	border-radius: 4px;
+	padding: 0.05em 0.32em;
+}
+
+/* ---------------- the colour rule, stated ---------------- */
+
+.rule {
+	max-width: var(--measure);
+	margin: 2rem 0;
+	padding: 1.1rem 1.3rem;
+	border: 1px solid var(--color-ground-line);
+	border-radius: 10px;
+	background: var(--color-ground-raised);
+	font-family: var(--reading);
+	font-size: 0.98rem;
+	line-height: 1.55;
+	color: var(--color-ink-muted);
+}
+
+.rule strong {
+	color: var(--color-ink);
+}
+
+/* ---------------- figures ---------------- */
+
+figure {
+	margin: 2.6rem 0;
+	max-width: var(--wide);
+}
+
+.figure-frame {
+	overflow-x: auto;
+	padding: 1.5rem 1.3rem;
+	border: 1px solid var(--color-ground-line);
+	border-radius: 12px;
+	/* Overlay rather than raised: against the near-black ground a one-step lift
+	   is invisible, and a figure needs to read as its own surface. */
+	background: var(--color-ground-overlay);
+}
+
+/*
+ * Figures are drawn at wide viewBoxes, but an SVG at width:100% renders as tall
+ * as its aspect ratio says — so each is capped and centred instead. The default
+ * suits a roughly two-to-one diagram; `.wide` fills the frame and scrolls on a
+ * phone; `.compact` is for the near-square radial ones.
+ */
+figure svg {
+	display: block;
+	width: 100%;
+	max-width: 44rem;
+	/* An SVG with a viewBox is a replaced element, so capping the height makes
+	   the width follow proportionally — which keeps a wide diagram from
+	   rendering as tall as its aspect ratio would otherwise make it. */
+	max-height: 23rem;
+	height: auto;
+	margin-inline: auto;
+	color: var(--color-ink);
+}
+
+figure svg.wide {
+	max-width: 100%;
+}
+
+figure svg.compact {
+	max-width: 21rem;
+	max-height: 21rem;
+}
+
+figcaption {
+	margin-top: 0.8rem;
+	max-width: var(--measure);
+	font-family: var(--reading);
+	font-size: 0.95rem;
+	line-height: 1.5;
+	color: var(--color-ink-muted);
+}
+
+/*
+ * SVG helpers shared by the diagrams.
+ *
+ * These set only `stroke`, never `fill`: a CSS `fill` rule beats a `fill=`
+ * presentation attribute, so setting `fill: none` here would silently blank
+ * every shape that carries its own fill. Stroke-only paths and rings pass
+ * `fill="none"` themselves.
+ */
+.f-line {
+	stroke: currentColor;
+}
+.f-faint {
+	stroke: currentColor;
+	stroke-opacity: 0.24;
+}
+.f-fill {
+	fill: currentColor;
+}
+.f-mono {
+	font-family: var(--font-mono);
+	fill: currentColor;
+}
+.f-display {
+	font-family: var(--font-display);
+	fill: currentColor;
+}
+.f-dim {
+	fill: currentColor;
+	opacity: 0.6;
+}
+
+/* ---------------- evidence ---------------- */
+
+.evidence {
+	max-width: var(--measure);
+	margin: 1.9rem 0;
+	padding: 0.1rem 0 0.1rem 1.3rem;
+	border-left: 2px solid var(--color-ground-line);
+}
+
+.evidence cite {
+	display: block;
+	margin-bottom: 0.45rem;
+	font-family: var(--font-mono);
+	font-style: normal;
+	font-size: 0.72rem;
+	letter-spacing: 0.03em;
+	color: var(--color-ink-dim);
+}
+
+.evidence p {
+	margin: 0 0 0.6em;
+	font-size: 1.02rem;
+	line-height: 1.55;
+}
+
+.evidence p:last-child {
+	margin-bottom: 0;
+}
+
+.evidence .caveat {
+	font-size: 0.94em;
+	color: var(--color-ink-muted);
+}
+
+.evidence .caveat::before {
+	content: 'Caveat. ';
+	font-family: var(--font-mono);
+	font-size: 0.78em;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--color-ink-dim);
+}
+
+/* ---------------- key chips ---------------- */
+
+.k {
+	font-family: var(--font-display);
+	font-weight: 600;
+	font-size: 0.9em;
+	padding: 0.03em 0.4em;
+	border: 1px solid var(--tint, var(--color-ground-line));
+	border-radius: 4px;
+	white-space: nowrap;
+}
+
+/* ---------------- tables ---------------- */
+
+.table-wrap {
+	overflow-x: auto;
+	margin: 2rem 0;
+	max-width: var(--wide);
+}
+
+.note table {
+	border-collapse: collapse;
+	width: 100%;
+	min-width: 32rem;
+	font-family: var(--font-display);
+	font-size: 0.9rem;
+}
+
+.note th,
+.note td {
+	text-align: left;
+	padding: 0.65rem 1rem 0.65rem 0;
+	border-bottom: 1px solid var(--color-ground-line);
+	vertical-align: top;
+}
+
+.note thead th {
+	font-family: var(--font-mono);
+	font-size: 0.68rem;
+	font-weight: 500;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--color-ink-dim);
+}
+
+.note td.num {
+	font-family: var(--font-mono);
+	font-size: 0.85rem;
+	font-variant-numeric: tabular-nums;
+	color: var(--color-ink-muted);
+}
+
+/* ---------------- foot of the article ---------------- */
+
+.note-foot {
+	margin-top: 5rem;
+	padding-top: 2rem;
+	border-top: 1px solid var(--color-ground-line);
+}
+
+.note-foot .note-label {
+	margin-bottom: 1.2rem;
+}
+
+.note-more {
+	display: grid;
+	gap: 0.9rem;
+}
+
+.note-more a {
+	display: block;
+	padding: 1rem 1.2rem;
+	border: 1px solid var(--color-ground-line);
+	border-radius: 10px;
+	color: inherit;
+	text-decoration: none;
+	transition:
+		border-color 140ms ease,
+		background 140ms ease;
+}
+
+.note-more a:hover {
+	border-color: var(--color-ink-dim);
+	background: var(--color-ground-raised);
+}
+
+.note-more .kicker {
+	display: block;
+	margin-bottom: 0.25rem;
+	font-family: var(--font-mono);
+	font-size: 0.66rem;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--color-ink-dim);
+}
+
+.note-more .title {
+	font-family: var(--font-display);
+	font-size: 1.02rem;
+	font-weight: 600;
+}
+
+.note-sources {
+	margin-top: 3rem;
+}
+
+.note-sources ol {
+	max-width: var(--wide);
+	padding-left: 1.3rem;
+	font-family: var(--reading);
+	font-size: 0.92rem;
+	line-height: 1.55;
+	color: var(--color-ink-muted);
+}
+
+.note-sources li {
+	margin-bottom: 0.55em;
+}
+
+.note-sources a {
+	color: inherit;
+	text-underline-offset: 0.18em;
+}
+
+/* ---------------- index ---------------- */
+
+.note-index-list {
+	display: grid;
+	gap: 1.4rem;
+	margin: 3rem 0 0;
+	max-width: var(--wide);
+}
+
+.note-card {
+	display: block;
+	padding: 1.6rem 1.7rem;
+	border: 1px solid var(--color-ground-line);
+	border-radius: 12px;
+	color: inherit;
+	text-decoration: none;
+	transition:
+		border-color 140ms ease,
+		background 140ms ease;
+}
+
+.note-card:hover {
+	border-color: var(--color-ink-dim);
+	background: var(--color-ground-raised);
+}
+
+.note-card .kicker {
+	font-family: var(--font-mono);
+	font-size: 0.66rem;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--color-ink-dim);
+}
+
+.note-card h2 {
+	margin: 0.7rem 0 0.6rem;
+	max-width: none;
+	font-size: clamp(1.4rem, 3vw, 1.9rem);
+}
+
+.note-card p {
+	margin: 0;
+	max-width: 46rem;
+	font-family: var(--reading);
+	font-size: 1rem;
+	line-height: 1.55;
+	color: var(--color-ink-muted);
+}
+
+@media (max-width: 640px) {
+	.note,
+	.note-topbar {
+		width: calc(100% - 2rem);
+	}
+
+	.figure-frame {
+		padding: 1rem 0.9rem;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.note * {
+		animation: none !important;
+		transition: none !important;
+	}
+}

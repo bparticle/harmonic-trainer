@@ -48,6 +48,7 @@
 
 		<nav class="site-nav" aria-label="Project">
 			<a href="#features">Features</a>
+			<a href="/notes">Notes</a>
 			<a href="#open-source">Open source</a>
 			<a href="#stack">Stack</a>
 		</nav>
@@ -384,7 +385,7 @@
 		</a>
 		<p>Open source under the AGPL-3.0 license.</p>
 		<div>
-			<a href={REPOSITORY} target="_blank" rel="noreferrer">Source</a><a
+			<a href="/notes">Notes</a><a href={REPOSITORY} target="_blank" rel="noreferrer">Source</a><a
 				href={`${REPOSITORY}/issues`}
 				target="_blank"
 				rel="noreferrer">Issues</a
@@ -1644,7 +1645,7 @@
 		.principle-list article {
 			gap: 0.7rem;
 		}
-		footer > div a:nth-child(2) {
+		footer > div a:nth-child(3) {
 			display: none;
 		}
 	}

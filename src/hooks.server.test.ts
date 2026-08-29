@@ -27,8 +27,15 @@ describe('public routes', () => {
 		expect(isPublicRequest('/demo', 'POST')).toBe(false);
 	});
 
+	it('serves the notes and every essay under them to visitors', () => {
+		expect(isPublicRequest('/notes', 'GET')).toBe(true);
+		expect(isPublicRequest('/notes/the-ladder', 'GET')).toBe(true);
+		expect(isPublicRequest('/notes', 'POST')).toBe(false);
+	});
+
 	it('does not let a public prefix open a private path', () => {
 		expect(isPublicRequest('/demonstration', 'GET')).toBe(false);
+		expect(isPublicRequest('/notesomething', 'GET')).toBe(false);
 		expect(isPublicRequest('/settings/colours', 'GET')).toBe(false);
 	});
 });
