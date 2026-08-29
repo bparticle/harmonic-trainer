@@ -10,7 +10,14 @@ import { CHARTS, chartDemand, type ChartSeed } from '$lib/curriculum/charts';
 import { isGroove, type Groove } from '$lib/audio/groove';
 import { slugify, uniqueSlug } from '$lib/curriculum/import';
 import { gridToRows, lyricsToRows, readGrid, type Grid } from '$lib/curriculum/editor';
-import { DEVICE_CHIPS, isReady, reachOf, shortfall, type Demand } from '$lib/curriculum/vocabulary';
+import {
+	CROSSING_CHIPS,
+	DEVICE_CHIPS,
+	isReady,
+	reachOf,
+	shortfall,
+	type Demand
+} from '$lib/curriculum/vocabulary';
 
 /**
  * The songbook: everything there is to play, and where a tune of your own is written.
@@ -113,7 +120,11 @@ export const load: PageServerLoad = async ({ locals }) => {
 			ready: isReady(demand, vocabulary),
 			// Already in words, because the page must not have to know what a
 			// half-diminished is in order to say that you have not met one.
-			wants: [...gap.shapes, ...gap.devices.map((device) => DEVICE_CHIPS[device])],
+			wants: [
+				...gap.shapes,
+				...gap.devices.map((device) => DEVICE_CHIPS[device]),
+				...gap.crossings.map((relation) => CROSSING_CHIPS[relation])
+			],
 			reach: reachOf(demand)
 		};
 	});

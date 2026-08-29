@@ -439,6 +439,34 @@ them:
 The deciding evidence is whether anybody writes one down, which the record will
 show.
 
+### Two charts want a crossing nothing teaches
+
+M17's fourth pass gave the gate a third axis — `crossings`, in
+`curriculum/vocabulary.ts` — so a tune that genuinely modulates is judged on
+having _travelled to a key_ rather than misfiled as a fistful of `chromatic`
+chords. The four near relations it added are taught from the first morning of
+an account; a fifth answer, `other`, names everything further out and is taught
+by nothing, on purpose — see `DECISIONS.md`.
+
+Walking the full songbook against full mastery found two built-in charts that
+land there: `bird-blues` and `indiana`. Both are, by their own notes, unbroken
+chains of secondary ii–Vs, and each resolves at least once onto a chord too far
+from home to be a named relation. They are pinned in `walk.test.ts` and
+`vocabulary.test.ts` rather than hidden — both charts stay in the songbook and
+stay playable by choice, and neither is ever set as an automatic mission until
+one of two things happens:
+
+- **A far-crossing exercise gets built.** The same shape as `key_hear`, asking
+  about a modulation the near four do not cover — real additional scope, not a
+  tweak.
+- **`other` stops gating readiness.** Cheaper, and a real loss: the whole point
+  of this axis was refusing to wave a distant modulation through on the
+  strength of an unrelated `chromatic` device. Loosening it for these two loosens
+  it for every tune that ever lands there.
+
+The deciding evidence is the same shape as the augmented triad's, above: whether
+either chart is missed enough that somebody asks.
+
 ### A note on stored verdicts
 
 `session_blocks.result_json` holds verdicts computed under the old chorus rule,
@@ -497,10 +525,10 @@ not have: there is now a record worth taking with you, not just charts.
 
 ## M17 — Crossings: the curriculum stops being one key at a time
 
-**Status: passes one to three landed; pass four not started.** Everything below is
-the whole argument — the longer write-up it came from is a private working
-document and this file does not depend on it. Sources are named inline so the
-claims can be checked.
+**Status: done.** All four passes landed. Everything below is the whole
+argument — the longer write-up it came from is a private working document and
+this file does not depend on it. Sources are named inline so the claims can be
+checked.
 
 The complaint that started it: the app feels siloed in one scale, and the ladder
 implies you must _finish_ a key before meeting the next. That reading is
@@ -600,6 +628,17 @@ Four passes, each shippable alone, in this order:
    `detectModulations`, so the gate can say _this one goes to the dominant and
    you have practised that_ instead of refusing it for a reason that is not the
    real one. `walk.test.ts` is the check that this has not put a cliff in.
+   _Landed._ Shipping it exposed a real double-count: a chord inside a passage
+   that had genuinely modulated was still being judged against the tune's
+   _original_ key, so a full modulation demanded both the crossing and a stale
+   `chromatic`/`secondary` device for the same bars — one true fact, counted
+   twice, one of the two counts unteachable. `deviceOf` now takes the _active_
+   key a chord is actually in, walking the same modulation boundaries
+   `keyChangesIn` found; `walk.test.ts`'s "everything eventually opens" is what
+   caught the double-count before it shipped. Two charts, `bird-blues` and
+   `indiana`, still land on a relation nothing teaches — see "Two charts want a
+   crossing nothing teaches," above, for why that is a real and deliberate gap
+   rather than a bug.
 
 ### The number to watch, decided in advance
 

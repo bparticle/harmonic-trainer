@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import golden from './__fixtures__/golden.json';
-import { analyse, guideToneMotion, guideTones, romanNumeral } from './analyse';
+import { analyse, guideToneMotion, guideTones, keyChangesIn, romanNumeral } from './analyse';
 import { diatonicSeventh, formatChord, parseChord } from './chord';
 import { formatKey, parseKey } from './key';
 import { formatNote, pitchClass } from './note';
@@ -192,5 +192,43 @@ describe('a minor triad where the key has a diminished one', () => {
 		expect(romanNumeral(parseChord('Dm'), parseKey('C'))).toBe('ii');
 		expect(romanNumeral(parseChord('Em'), parseKey('C'))).toBe('iii');
 		expect(romanNumeral(parseChord('Am'), parseKey('C'))).toBe('vi');
+	});
+});
+
+/*
+ * The keys themselves, rather than a position in `analyse()`'s own array.
+ *
+ * `curriculum/vocabulary.ts` is the second caller `keyChangesIn` exists for —
+ * it wants to know which relation a tune crosses into, not which index a
+ * colour starts colouring from — so this pins the same detector from that
+ * caller's side: the pair of keys, and where in the chord list the second one
+ * takes over.
+ */
+describe('the keys a progression actually goes through', () => {
+	it('is empty where nothing modulates', () => {
+		const chords = ['Cmaj7', 'Am7', 'Dm7', 'G7', 'Cmaj7'].map(parseChord);
+		expect(keyChangesIn(chords, parseKey('C'))).toEqual([]);
+	});
+
+	it('names both keys and where the second one takes over', () => {
+		const chords = ['Cmaj7', 'Am7', 'D7', 'Gmaj7'].map(parseChord);
+		const changes = keyChangesIn(chords, parseKey('C'));
+		expect(changes).toHaveLength(1);
+		expect(formatKey(changes[0].fromKey)).toBe('C');
+		expect(formatKey(changes[0].toKey)).toBe('G');
+		expect(changes[0].at).toBe(1);
+	});
+
+	it('chains through more than one change, each naming where it left from', () => {
+		// C, then to its dominant G, then to G's dominant D.
+		const chords = ['Cmaj7', 'Am7', 'D7', 'Gmaj7', 'Em7', 'A7', 'Dmaj7'].map(parseChord);
+		const changes = keyChangesIn(chords, parseKey('C'));
+		expect(changes.map((c) => formatKey(c.fromKey))).toEqual(['C', 'G']);
+		expect(changes.map((c) => formatKey(c.toKey))).toEqual(['G', 'D']);
+	});
+
+	it('does not mistake a secondary dominant for one of these either', () => {
+		const chords = ['Cmaj7', 'E7', 'Am7', 'Dm7', 'G7', 'Cmaj7'].map(parseChord);
+		expect(keyChangesIn(chords, parseKey('C'))).toEqual([]);
 	});
 });

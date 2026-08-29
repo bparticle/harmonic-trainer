@@ -4855,3 +4855,101 @@ fix the cards, because `ensureCards` is idempotent by identity and never rewrite
 a payload. That is deliberate and is what keeps review history across a
 regeneration; it also means a change to how a card _reads_ reaches only cards
 that do not exist yet. Worth knowing before editing any payload text.
+
+## M17 pass four, and M17 done — the axis that says where a tune actually goes
+
+`Demand` gains a third field. `crossings: Relation[]`, beside `shapes` and
+`devices`, and it exists because the first two could not tell a coloured chord
+from a real key change. Read one chord at a time against a single reference
+key — which is what `deviceOf` has always done — and a tune that fully
+establishes the dominant for sixteen bars comes back exactly the same shape as
+a tritone substitution: a fistful of `chromatic`. The two questions are not the
+same question. A tritone sub is a chord away from home for one bar and back.
+Sixteen bars in the dominant is a different key.
+
+`crossing.ts`'s `Relation` — the relative, the dominant, the subdominant, the
+parallel, or `other` for everything further out — is the vocabulary this axis
+speaks, and `keyChangesIn` (the wheel's own modulation detector, exported for
+the first time this pass) is where it reads a chart's demand from. Same
+detector the study panel already used, so a chart's demand and the wheel's
+analysis of the same numerals can never disagree about what counts as a
+modulation.
+
+### Known the moment any key is open, and that is the correct rule
+
+`vocabularyOf` grants all four near relations as soon as `rungs` is non-empty
+— which, since the ladder always starts with the C scale, is always. That
+looks like a constant dressed up as a derivation, and the doc comment on
+`vocabularyOf` says so before a reader has to work it out themselves. It is
+correct anyway: `cardsForKeyMoved` (M17's third pass) already creates a card
+for all four near relations from every reached key, unconditionally, from the
+first morning of an account. "Which relations has this account been taught"
+has exactly one honest answer once that is true, and dressing a constant up as
+a lookup over reached keys would only have hidden the reason it is a constant.
+
+What this is not is a hole in the gate. `other` is never granted by anything,
+so a tune reaching for it stays exactly as blocked as it should — which is the
+entire fix this pass makes: a modulation to a near relation stops being
+misfiled as `chromatic` colour, and a modulation to a genuinely distant key
+keeps being refused, honestly, for being one.
+
+### The double-count `walk.test.ts` caught before this shipped
+
+The axis alone was not the whole fix, and the first cut of it proved that by
+breaking a real invariant: `vocabulary.test.ts`'s "lets everything in the book
+be reached eventually" and `walk.test.ts`'s "ends with the whole songbook
+open" both failed the moment `crossings` was wired in, on two real charts —
+`bird-blues` and `indiana` — that had been reachable for every milestone up to
+this one.
+
+The cause was a chord inside a modulated passage still being judged against
+the tune's _original_ key. A full modulation to the dominant demanded both the
+`dominant` crossing _and_ a `chromatic`/`secondary` device for the same
+sixteen bars — one true musical fact, counted as two unrelated demands, one of
+which nothing had ever taught. That is not a hole in the new axis; it is the
+old axis refusing to notice the new one had already explained the same notes.
+
+The fix re-anchors `deviceOf` onto whichever key is actually active when each
+chord sounds, rather than always onto C. `tonicPc` is the whole of it — the
+same four rules deviceOf has always tested, run against `pc - tonicPc` instead
+of `pc`, so a chord fully diatonic to the key it modulated into now reads as
+`null` (no device) there, exactly as a diatonic chord at home always has.
+`demandOfNumerals` walks the chord list once, tracking which key is current
+via the same indices `keyChangesIn` numbered its modulations against, so a
+chord counts toward home until the first change and toward the target from
+there on.
+
+Two charts still land on `other` after the fix — not because of the
+double-count, which is gone, but because they genuinely do resolve, once each,
+onto a chord too far from home to be a named relation. Both are chains of
+secondary ii–Vs by design (`bird-blues`'s own note: "an unbroken chain of
+ii–Vs... almost nothing left of the original harmony"), which the shared
+modulation detector reads the same way it would read a real, lasting key
+change — it has no notion of "and then immediately moved on again" versus "and
+stayed," because building one was out of scope for a pass whose job was the
+axis, not the detector. `walk.test.ts` and `vocabulary.test.ts` now name both
+charts and assert the reason is `other` specifically, so the tests read as a
+record of a known, deliberate gap rather than a mystery the next person has to
+re-derive. It joins the augmented triad and the `unknown` shape in
+ROADMAP.md's own list of open questions — see "Two charts want a crossing
+nothing teaches" there for the two ways it could close.
+
+### The songbook says it in words it already had
+
+`gap.crossings.map((relation) => CROSSING_CHIPS[relation])` is the entire
+change to `/songbook`'s `wants` line — `bird-blues` now reads _wants borrowed
+chords, blues sevenths, secondary dominants, chromatic chords, **a distant
+key**_ rather than stopping one word short of the real reason. `CROSSING_CHIPS`
+and `CROSSING_LABELS` sit beside `DEVICE_CHIPS`/`DEVICE_LABELS` in
+`vocabulary.ts`, reusing the same "said in words, because the page must not
+have to know what a half-diminished is" rule the device chips were already
+built on.
+
+### Where M17 lands
+
+Four passes, and all four are in `main`. The frontier stopped the ladder being
+a single walk; the crossing exercises taught the four near relations from day
+one; and this pass is the one that finally lets the songbook say what it
+means, in the same words a musician already reaches for — _up a fifth, to the
+dominant_ — instead of the accidental vocabulary of a chord-by-chord scan that
+was never asked whether the tune had moved.

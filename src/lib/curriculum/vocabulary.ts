@@ -1,8 +1,10 @@
 import { chordPitchClasses, type AbstractChord, type ChordQuality } from '$lib/music/chord';
 import { key as makeKey } from '$lib/music/key';
+import { keyChangesIn } from '$lib/music/analyse';
 import { pitchClass } from '$lib/music/note';
 import { itemsForRung, RUNGS, STAGES, type RungId } from './ladder';
 import { chordFromNumeral, PROGRESSIONS, progressionById } from './progressions';
+import { NEAR_RELATIONS, RELATION_ORDER, relationBetween, type Relation } from './crossing';
 
 /**
  * What a tune asks of you, and what you have been shown.
@@ -21,7 +23,7 @@ import { chordFromNumeral, PROGRESSIONS, progressionById } from './progressions'
  * and the progression library state what they teach, derived from the chords
  * they already build. A mission is set only where the second covers the first.
  *
- * ## Two axes, because there are two ways to be lost
+ * ## Three axes, because there are three ways to be lost
  *
  * **The shape.** Can your hands make this chord at all? A dominant seventh is a
  * different thing to learn than a minor triad, and the complaint that started
@@ -29,18 +31,29 @@ import { chordFromNumeral, PROGRESSIONS, progressionById } from './progressions'
  * shapes, get to know the names*. Shapes are counted without regard to where
  * they sit, because a B♭m7 is the same hand as a Dm7.
  *
- * **The device.** How does the tune leave the key, if it does? Four named ways,
- * each with its own progression teaching it — see `Device` below.
+ * **The device.** How does a *chord* colour its way out of the key, if it does
+ * — a blues seventh, a borrowed iv, a secondary dominant — without the tonal
+ * centre itself moving. Four named ways, each with its own progression teaching
+ * it — see `Device` below.
  *
- * A chart demands the shapes it uses and the devices it uses. Ready means both
- * sets are covered. That is not a promise the tune is *easy* — how fast to play
- * it is the tempo ladder's question and stays there — only that nothing in it is
- * unheard-of.
+ * **The crossing.** Does the tune actually *modulate* — leave one key and
+ * settle in another? This is the axis M17 added, and it exists because the
+ * first two could not tell the difference between a coloured chord and a real
+ * key change: read one chord at a time against a single reference key, a tune
+ * that establishes a genuine new tonic came back as a fistful of `chromatic`
+ * chords, indistinguishable from a tritone sub. `crossing.ts`'s `Relation` is
+ * the vocabulary — the relative, the dominant, the subdominant, the parallel,
+ * or `other` for everything further out — and it is taught by the crossing
+ * exercises rather than by the progression library.
+ *
+ * A chart demands the shapes it uses, the devices it uses, and the crossings it
+ * makes. Ready means all three sets are covered. That is not a promise the tune
+ * is *easy* — how fast to play it is the tempo ladder's question and stays
+ * there — only that nothing in it is unheard-of.
  *
  * ## Where the teaching comes from
  *
- * The two halves of the drill room divide the work cleanly, and neither had to
- * be edited to make it so:
+ * Three sources, and none of them had to be edited to make this true:
  *
  *   - **The ladder** teaches shapes, and never leaves the key. Seven rungs a
  *     key: the scale, then the triads a few at a time, then the sevenths. Every
@@ -48,8 +61,13 @@ import { chordFromNumeral, PROGRESSIONS, progressionById } from './progressions'
  *   - **The progressions** teach devices. Levels one to three are movement
  *     inside the key; from level four each one is the first place a particular
  *     way out of the key is met.
+ *   - **The crossing exercises** teach relations — `key_hear`, `key_moved`,
+ *     `pivot_play` — and they teach all four near relations from the first
+ *     morning of an account, the moment any key at all is reached. See the note
+ *     on `vocabularyOf` below for why that is the right rule and not a hole in
+ *     the gate.
  *
- * Both are read through the same classifier below, so "what a progression
+ * All three are read through the same classifier below, so "what a progression
  * teaches" and "what a chart demands" cannot be measured on different rulers.
  *
  * Pure, and deliberately so: no clock, no database, no browser. The composer is
@@ -151,13 +169,16 @@ const DEVICE_WEIGHT: Record<Device, number> = {
 	chromatic: 8
 };
 
-/** What a tune asks for: every shape in it, and every way it leaves the key. */
-export type Demand = { shapes: Shape[]; devices: Device[] };
+/**
+ * What a tune asks for: every shape in it, every way it colours out of the key,
+ * and every key it actually goes to.
+ */
+export type Demand = { shapes: Shape[]; devices: Device[]; crossings: Relation[] };
 
-/** What you can answer with: the shapes and the devices you have met. */
-export type Vocabulary = { shapes: Shape[]; devices: Device[] };
+/** What you can answer with: the shapes, devices and crossings you have met. */
+export type Vocabulary = { shapes: Shape[]; devices: Device[]; crossings: Relation[] };
 
-export const emptyVocabulary = (): Vocabulary => ({ shapes: [], devices: [] });
+export const emptyVocabulary = (): Vocabulary => ({ shapes: [], devices: [], crossings: [] });
 
 // ---------------------------------------------------------------------------
 // Reading one chord
@@ -248,12 +269,24 @@ const BLUES_ROOTS = new Set([0, 5]);
  *    `chromatic`.
  * 4. **Anything else** left over belongs to neither key and resolves to nothing
  *    in it: `chromatic`.
+ *
+ * `tonicPc` re-anchors all of the above onto a key other than C. Every caller
+ * before M17 was inside a single fixed key and never passed it, so it defaults
+ * to 0 and nothing about their reading changes. `demandOfNumerals` is the one
+ * caller that does pass it, for a chord that a modulation has carried into a
+ * different key: `home` and `parallel` stay the same two shapes, and shifting
+ * the chord's own pitch classes by the new tonic is the same test asked from
+ * where the tune actually is rather than from where it started.
  */
-export function deviceOf(chord: AbstractChord, mode: 'major' | 'minor'): Device | null {
+export function deviceOf(
+	chord: AbstractChord,
+	mode: 'major' | 'minor',
+	tonicPc = 0
+): Device | null {
 	const home = homeScale(mode);
 	const parallel = parallelScale(mode);
-	const notes = chordPitchClasses(chord).map(wrap);
-	const root = wrap(pitchClass(chord.root));
+	const notes = chordPitchClasses(chord).map((pc) => wrap(pc - tonicPc));
+	const root = wrap(pitchClass(chord.root) - tonicPc);
 
 	if (notes.every((pc) => home.has(pc))) return null;
 	if (notes.every((pc) => parallel.has(pc))) return 'borrowed';
@@ -274,19 +307,29 @@ export function deviceOf(chord: AbstractChord, mode: 'major' | 'minor'): Device 
 // ---------------------------------------------------------------------------
 
 /**
- * C, always.
+ * C, always. Minor charts get C's *aeolian*, for the one place mode actually
+ * matters here.
  *
- * Neither axis moves with the key — a shape is a shape in all twelve and a
- * chord is inside the key or outside it in all twelve — so the demand is read
- * once against C rather than twelve times against nothing in particular. This
- * is the same reason charts are stored as numerals in the first place.
+ * Neither of the first two axes moves with the key — a shape is a shape in all
+ * twelve and a chord is inside the key or outside it in all twelve — so the
+ * demand is read once against C rather than twelve times against nothing in
+ * particular. This is the same reason charts are stored as numerals in the
+ * first place. Numeral resolution itself is always against `HOME`, major or
+ * minor tune alike — see `chordFromNumeral`'s own note and `realiseChart`'s —
+ * so only the crossing detector, which has to test scale membership rather
+ * than just build a chord, needs the minor variant at all.
  */
 const HOME = makeKey('C');
+const HOME_MINOR = makeKey('C', 'aeolian');
 
 const sortShapes = (shapes: Iterable<Shape>): Shape[] => [...new Set(shapes)].sort();
 
 const sortDevices = (devices: Iterable<Device>): Device[] =>
 	DEVICES.filter((device) => new Set(devices).has(device));
+
+/** Near to far, the same order `crossing.ts` teaches them in. */
+const sortCrossings = (relations: Iterable<Relation>): Relation[] =>
+	RELATION_ORDER.filter((relation) => new Set(relations).has(relation));
 
 /**
  * What a list of Roman numerals asks for.
@@ -300,6 +343,12 @@ const sortDevices = (devices: Iterable<Device>): Device[] =>
 export function demandOfNumerals(numerals: string[], mode: 'major' | 'minor'): Demand {
 	const shapes: Shape[] = [];
 	const devices: Device[] = [];
+	// Only the numerals that actually parsed, in order, because a crossing is
+	// found by walking real chords — a numeral this app cannot read has already
+	// been counted, above, as the `unknown` shape and the `chromatic` device, and
+	// asking a modulation detector to make sense of a gap would only teach it the
+	// wrong tune.
+	const chords: AbstractChord[] = [];
 
 	for (const numeral of numerals) {
 		let chord: AbstractChord;
@@ -311,11 +360,72 @@ export function demandOfNumerals(numerals: string[], mode: 'major' | 'minor'): D
 			continue;
 		}
 		shapes.push(shapeOf(chord));
-		const device = deviceOf(chord, mode);
+		chords.push(chord);
+	}
+
+	/*
+	 * Where this actually goes, read off the same chords the shape pass just
+	 * built. `keyChangesIn` is the wheel's own modulation detector — the one
+	 * that finds a resolved ii–V–I and walks back for its pivot — so a chart's
+	 * demand and the analysis view can never disagree about what counts as a
+	 * modulation.
+	 *
+	 * The starting key follows `mode` even though numeral resolution never does:
+	 * `chordFromNumeral` always reads against the major scale, by the same
+	 * convention `realiseChart` documents, but the detector also has to test
+	 * scale *membership* to know when a passage has left home, and a minor
+	 * tune's home is the aeolian scale, not the major one built on the same
+	 * letter.
+	 */
+	const startKey = mode === 'minor' ? HOME_MINOR : HOME;
+	const changes = keyChangesIn(chords, startKey);
+	const crossings = changes.map((change) => relationBetween(change.fromKey, change.toKey));
+
+	/*
+	 * Devices, read against wherever the tune actually is when each chord
+	 * sounds — not always against C.
+	 *
+	 * This is the fix pass four is for, and it is not only about adding a third
+	 * axis: a chord inside a passage that has genuinely modulated is at home in
+	 * the key it modulated *to*, and asking `deviceOf` about it against the
+	 * tune's original key was always going to say otherwise, because nothing
+	 * about that question knows the tune has moved. Left uncorrected, a tune
+	 * that fully establishes the dominant for sixteen bars would demand both
+	 * the `chromatic` device *and* the `dominant` crossing for the same sixteen
+	 * bars — one true fact about the tune, counted as two unrelated demands,
+	 * one of which nothing has ever taught. Two built-in charts hit exactly
+	 * this and became permanently unreachable the first time this shipped
+	 * without the correction: `walk.test.ts`'s "everything eventually opens"
+	 * is what caught it.
+	 *
+	 * `active` walks the same chord indices `keyChangesIn` numbered its
+	 * modulations against, so a chord counts toward whichever key was current
+	 * at that point — home until the first `at`, the target from there until
+	 * the next one, and so on. `deviceOf`'s new `tonicPc` is what makes "at
+	 * home in G" a different pitch-class test from "at home in C" without a
+	 * second copy of the four rules it tests.
+	 */
+	const activeMode = (k: { mode: string }): 'major' | 'minor' =>
+		k.mode === 'aeolian' ? 'minor' : 'major';
+	let change = 0;
+	let active = { tonicPc: pitchClass(startKey.tonic), mode: activeMode(startKey) };
+	for (let i = 0; i < chords.length; i++) {
+		while (change < changes.length && changes[change].at === i) {
+			active = {
+				tonicPc: pitchClass(changes[change].toKey.tonic),
+				mode: activeMode(changes[change].toKey)
+			};
+			change++;
+		}
+		const device = deviceOf(chords[i], active.mode, active.tonicPc);
 		if (device) devices.push(device);
 	}
 
-	return { shapes: sortShapes(shapes), devices: sortDevices(devices) };
+	return {
+		shapes: sortShapes(shapes),
+		devices: sortDevices(devices),
+		crossings: sortCrossings(crossings)
+	};
 }
 
 /**
@@ -358,7 +468,10 @@ export function vocabularyFromRungs(rungIds: Iterable<RungId>): Vocabulary {
 	return {
 		shapes: sortShapes([...seen].flatMap(shapesForRung)),
 		// Every rung is built from the scale it belongs to. No device, all seven.
-		devices: []
+		devices: [],
+		// The ladder never leaves the key, so it has nothing to say about crossing
+		// one either — that is `vocabularyOf`'s job, below.
+		crossings: []
 	};
 }
 
@@ -371,20 +484,53 @@ export function vocabularyFromProgressions(ids: Iterable<string>): Vocabulary {
 
 	return {
 		shapes: sortShapes(demands.flatMap((d) => d.shapes)),
-		devices: sortDevices(demands.flatMap((d) => d.devices))
+		devices: sortDevices(demands.flatMap((d) => d.devices)),
+		// None of the library modulates today — every progression returns to its
+		// own tonic — so this is empty in practice and not by exclusion. A future
+		// progression that genuinely changed key would be read by the same
+		// `demandOfNumerals` call above and would teach it correctly without this
+		// function needing to change at all.
+		crossings: sortCrossings(demands.flatMap((d) => d.crossings))
 	};
 }
 
-/** The two halves of the drill room, added up. */
+/**
+ * The three halves of the drill room, added up.
+ *
+ * The near relations are folded straight in here rather than earned through a
+ * third `vocabularyFrom...` function, and that needs justifying because it
+ * looks like a shortcut.
+ *
+ * `cardsForKeyMoved` — the exercise that teaches a relation — creates a card
+ * for **all four** near relations from **every** key the frontier has opened,
+ * unconditionally, from the first morning of an account (see the note in
+ * `curriculum/cards.ts`). So "which relations has this account been taught"
+ * has only one honest answer once any key at all is open, which — since the
+ * ladder always starts with the C scale — is always. Modelling that as a
+ * derivation over reached keys would compute a constant and dress it up as a
+ * lookup.
+ *
+ * What this is not is a hole in the gate. `other` — the relations nothing
+ * teaches — is never in this set, so a tune that modulates somewhere the
+ * crossing exercises do not reach stays exactly as blocked as it should.
+ * That is the entire fix pass four makes: a modulation to a near relation
+ * stops being misfiled as `chromatic` colour and reads as what it is, while a
+ * modulation to a genuinely distant key keeps being refused, honestly, for
+ * being one.
+ */
 export function vocabularyOf(input: {
 	rungs: Iterable<RungId>;
 	progressions?: Iterable<string>;
 }): Vocabulary {
-	const ladder = vocabularyFromRungs(input.rungs);
+	const rungIds = [...input.rungs];
+	const ladder = vocabularyFromRungs(rungIds);
 	const library = vocabularyFromProgressions(input.progressions ?? []);
+	const crossings = rungIds.length > 0 ? NEAR_RELATIONS : [];
+
 	return {
 		shapes: sortShapes([...ladder.shapes, ...library.shapes]),
-		devices: sortDevices([...ladder.devices, ...library.devices])
+		devices: sortDevices([...ladder.devices, ...library.devices]),
+		crossings: sortCrossings([...crossings, ...library.crossings])
 	};
 }
 
@@ -399,35 +545,88 @@ export function vocabularyOf(input: {
  * a boolean is deliberate: a page that can only say *not yet* is a locked door,
  * and a page that can say *you have not met a dominant seventh* is a curriculum.
  */
-export type Shortfall = { shapes: Shape[]; devices: Device[] };
+export type Shortfall = { shapes: Shape[]; devices: Device[]; crossings: Relation[] };
 
 export function shortfall(demand: Demand, known: Vocabulary): Shortfall {
 	const haveShapes = new Set(known.shapes);
 	const haveDevices = new Set(known.devices);
+	const haveCrossings = new Set(known.crossings);
 	return {
 		shapes: demand.shapes.filter((shape) => !haveShapes.has(shape)),
-		devices: demand.devices.filter((device) => !haveDevices.has(device))
+		devices: demand.devices.filter((device) => !haveDevices.has(device)),
+		crossings: demand.crossings.filter((relation) => !haveCrossings.has(relation))
 	};
 }
 
 export function isReady(demand: Demand, known: Vocabulary): boolean {
 	const gap = shortfall(demand, known);
-	return gap.shapes.length === 0 && gap.devices.length === 0;
+	return gap.shapes.length === 0 && gap.devices.length === 0 && gap.crossings.length === 0;
 }
+
+/**
+ * What each crossing weighs when tunes are put in order.
+ *
+ * Ordering only, like `DEVICE_WEIGHT` beside it and for the same reason. The
+ * relative costs nothing to the page — same notes, same shapes — so it sits at
+ * the bottom; the parallel costs more than the dominant or subdominant even
+ * though the tonic does not move, because three notes do, which is the hands'
+ * measure rather than the ear's. `other` weighs as much as `chromatic`,
+ * deliberately: neither is taught by anything yet, so a tune reaching for
+ * either should sort exactly as far away.
+ */
+const CROSSING_WEIGHT: Record<Relation, number> = {
+	home: 0,
+	relative: 1,
+	dominant: 2,
+	subdominant: 2,
+	parallel: 3,
+	other: 8
+};
 
 /**
  * How far into what you know a tune reaches, as one number.
  *
  * Only ever used to put tunes in order, so that the first play-along of an
  * account is a four-chord loop and not the thirty-two bars of rhythm changes
- * that happen to have become legal on the same day. Devices count for more than
- * shapes because leaving the key is what makes a chart feel like somewhere you
- * have never been.
+ * that happen to have become legal on the same day. Devices and crossings count
+ * for more than shapes because leaving the key — in colour or for good — is
+ * what makes a chart feel like somewhere you have never been.
  */
 export function reachOf(demand: Demand): number {
 	const devices = demand.devices.reduce((total, device) => total + DEVICE_WEIGHT[device], 0);
-	return devices * 10 + demand.shapes.length;
+	const crossings = demand.crossings.reduce(
+		(total, relation) => total + CROSSING_WEIGHT[relation],
+		0
+	);
+	return (devices + crossings) * 10 + demand.shapes.length;
 }
+
+/**
+ * Said in a shortfall sentence: "you have not met … {this}".
+ *
+ * `home` never appears — a crossing to where you already are is not one, and
+ * `demandOfNumerals` never produces it — but the map is total for the same
+ * reason `DEVICE_LABELS` covers every `Device`: a `Record` with a hole in it is
+ * a runtime error waiting for the day a caller asks the wrong question.
+ */
+export const CROSSING_LABELS: Record<Relation, string> = {
+	home: 'no key change at all',
+	relative: 'a move to the relative',
+	dominant: 'a move to the dominant',
+	subdominant: 'a move to the subdominant',
+	parallel: 'a move to the parallel',
+	other: 'a key change nothing here has taught yet'
+};
+
+/** Short enough for a chip beside a tune in a list, next to `DEVICE_CHIPS`. */
+export const CROSSING_CHIPS: Record<Relation, string> = {
+	home: 'no change',
+	relative: 'to the relative',
+	dominant: 'to the dominant',
+	subdominant: 'to the subdominant',
+	parallel: 'to the parallel',
+	other: 'a distant key'
+};
 
 /** One line saying what a tune would need. For a page that has to explain a hole. */
 export function describeShortfall(gap: Shortfall): string {
@@ -437,6 +636,7 @@ export function describeShortfall(gap: Shortfall): string {
 	if (named.length) parts.push(named.join(', '));
 	if (named.length !== gap.shapes.length) parts.push('chords this app cannot read');
 	for (const device of gap.devices) parts.push(DEVICE_LABELS[device]);
+	for (const relation of gap.crossings) parts.push(CROSSING_LABELS[relation]);
 
 	if (parts.length === 0) return '';
 	const last = parts.pop() as string;

@@ -341,6 +341,8 @@ type Modulation = {
 	from: number;
 	/** Index of the common chord, when there is one. */
 	pivotIndex: number | null;
+	/** The key this modulation left. */
+	fromKey: Key;
 	to: Key;
 };
 
@@ -401,12 +403,38 @@ function detectModulations(chords: AbstractChord[], startKey: Key): Modulation[]
 			}
 		}
 
-		modulations.push({ from: pivotIndex ?? i, pivotIndex, to: target });
+		modulations.push({ from: pivotIndex ?? i, pivotIndex, fromKey: current, to: target });
 		current = target;
 		i += 1;
 	}
 
 	return modulations;
+}
+
+/**
+ * Every place this progression settles into a new key, as the change itself
+ * rather than as a position in the chord list.
+ *
+ * `analyse()` wants an index — which chord does a modulation start colouring —
+ * and keeps `detectModulations` private for exactly that question. A caller
+ * asking a different one — *which keys does this go through, and from where* —
+ * wants the keys themselves, not a position in an array it may not even hold.
+ * Same detector underneath, so the wheel's analysis and a chart's demand can
+ * never disagree about what counts as a modulation.
+ */
+export type KeyChange = {
+	/** Index into `chords` where the new key takes over. */
+	at: number;
+	fromKey: Key;
+	toKey: Key;
+};
+
+export function keyChangesIn(chords: AbstractChord[], startKey: Key): KeyChange[] {
+	return detectModulations(chords, startKey).map((m) => ({
+		at: m.from,
+		fromKey: m.fromKey,
+		toKey: m.to
+	}));
 }
 
 // ---------------------------------------------------------------------------
