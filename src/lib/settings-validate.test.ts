@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { cellsOf, isWellFormed, RUNGS, STAGES } from './curriculum/ladder';
-import { parsePrefs, readPrefs } from './settings-validate';
-import { DEFAULT_PREFS } from './settings';
+import { parsePrefs, prefsFromRequest, readPrefs } from './settings-validate';
+import { DEFAULT_PREFS, type Prefs } from './settings';
 
 /**
  * The upgrade path, tested against the rows that actually exist.
@@ -85,6 +85,34 @@ describe('reading the frontier out of stored prefs', () => {
 	it('still refuses a session length it does not recognise', () => {
 		// The other fields kept their old strictness; only the ladder softened.
 		expect(() => parsePrefs(withPrefs({ sessionLengthMinutes: 7 }))).toThrow();
+	});
+});
+
+/**
+ * The settings menu lives in the layout and copies `Prefs` once, so the frontier
+ * it posts beside a slider change is whatever it was when the tab loaded — often
+ * several deepen/widen moves stale. `/api/settings` runs the request through this,
+ * so a slider save can never move the ladder.
+ */
+describe('prefs from a settings request keep the stored frontier', () => {
+	const stored: Prefs = { ...DEFAULT_PREFS, ladderWidths: [5, 4, 3, 2, 1, 0, 0] };
+
+	it('ignores a stale frontier in the request and keeps the stored one', () => {
+		const result = prefsFromRequest(
+			withPrefs({ revealDelayMs: 4000, ladderWidths: [1, 0, 0, 0, 0, 0, 0] }),
+			stored
+		);
+		expect(result.ladderWidths).toEqual([5, 4, 3, 2, 1, 0, 0]);
+		expect(result.revealDelayMs).toBe(4000);
+	});
+
+	it('ignores a request that tries to advance the frontier too', () => {
+		const result = prefsFromRequest(withPrefs({ ladderWidths: [7, 7, 7, 7, 7, 7, 7] }), stored);
+		expect(result.ladderWidths).toEqual([5, 4, 3, 2, 1, 0, 0]);
+	});
+
+	it('still validates everything else the request carries', () => {
+		expect(() => prefsFromRequest(withPrefs({ sessionLengthMinutes: 7 }), stored)).toThrow();
 	});
 });
 

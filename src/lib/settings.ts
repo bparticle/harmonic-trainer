@@ -68,8 +68,10 @@ export const DEFAULT_PREFS: Prefs = {
 	revealDelayMs: 2000,
 	chordClusterWindowMs: 80,
 	midiLatencyOffsetMs: 0,
-	// Everyone starts at the beginning: C major, and the seven notes in it.
-	ladderWidths: FIRST_FRONTIER.widths
+	// Everyone starts at the beginning: C major, and the seven notes in it. Copied
+	// rather than shared, so this module constant and `FIRST_FRONTIER` cannot be
+	// aliased into one array that a careless in-place edit would corrupt for both.
+	ladderWidths: [...FIRST_FRONTIER.widths]
 };
 
 export const DEFAULT_COLOR_MAP: ColorMap = DEFAULT_PALETTE;

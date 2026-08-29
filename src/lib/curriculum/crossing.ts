@@ -453,7 +453,16 @@ export function describeCrossing(crossing: Crossing): string {
 		case 'parallel':
 			return `to the parallel ${toMinor ? 'minor' : 'major'} — the same home note, three notes moved`;
 		case 'other': {
-			const way = crossing.shift > 0 ? 'sharpwards' : 'flatwards';
+			// `shift` is the wrapped, shortest-path signature change. Six is a tie —
+			// six sharps and six flats reach the same sounding key — and `wrapShift`
+			// breaks it sharpwards. Follow the spelled destination there instead: a
+			// move to G♭ reads as flatwards however the circle is walked.
+			const way =
+				crossing.shift === 6 && keySignature(crossing.to) < keySignature(crossing.from)
+					? 'flatwards'
+					: crossing.shift > 0
+						? 'sharpwards'
+						: 'flatwards';
 			const accidentals =
 				crossing.shift === 0
 					? 'no change of signature'

@@ -167,6 +167,23 @@ export function readPrefs(stored: unknown): Prefs {
 }
 
 /**
+ * Prefs from a settings request, with the frontier left exactly as it was.
+ *
+ * `/api/settings` is the one write path that takes prefs from the browser, and
+ * the only thing on that screen is four sliders. The frontier rides along in the
+ * same object because the settings menu is a layout component that copies the
+ * whole `Prefs` once when it mounts — so by the time somebody drags the reveal
+ * delay, its `ladderWidths` can be several deepen/widen moves behind the row.
+ * `parsePrefs` would take that stale staircase as authoritative and quietly roll
+ * the ladder back. The frontier moves through the deepen / widen / step-back
+ * actions and nowhere else, so this keeps whatever is stored and ignores what
+ * the request said about it.
+ */
+export function prefsFromRequest(input: unknown, stored: Prefs): Prefs {
+	return { ...parsePrefs(input), ladderWidths: stored.ladderWidths };
+}
+
+/**
  * The remembered MIDI device, by name.
  *
  * Names come from the driver, so they are trusted only as far as being a

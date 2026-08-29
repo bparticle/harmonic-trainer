@@ -4953,3 +4953,74 @@ one; and this pass is the one that finally lets the songbook say what it
 means, in the same words a musician already reaches for — _up a fifth, to the
 dominant_ — instead of the accidental vocabulary of a chord-by-chord scan that
 was never asked whether the tune had moved.
+
+## M17, a bugfixing pass — the four passes read back for what they left open
+
+Nothing new was built here. Four things the passes above shipped were read
+back once each and one of them was a real hole.
+
+### A settings save could roll the ladder back to the first morning
+
+The real one. M17's second pass moved the ladder from `ladderKey` /
+`ladderRung` — one point on a walk — to `prefs.ladderWidths`, the frontier, and
+made the deepen / widen / step-back actions its only writer. But the settings
+menu lives in `+layout.svelte`, so it mounts once for the life of the tab and
+seeds `draft = { ...prefs }` a single time. It never re-reads. Every one of its
+saves posts the _whole_ `Prefs` object — session length, reveal delay, and a
+copy of `ladderWidths` that is however stale the tab is. `parsePrefs` then took
+that stale staircase at face value, because `isWellFormed` is true of any
+staircase, and `saveSettings` writes `prefs_json` whole. So: open the app,
+deepen the ladder four times, later nudge the reveal-delay slider — and the
+frontier is written back to what it was when the tab loaded. The path collapses
+to rung one, `journeyProgress` drops to one cell, and `vocabularyFromRungs`
+loses every shape, so most missions and most of the songbook go back to _not
+yet_. The cards are all still there; only the frontier that decides what counts
+as reached has moved.
+
+The old two-field version had the same shape of bug and smaller teeth: a stale
+draft reverted a single position rather than a two-dimensional progress array.
+M17 raised the stakes and left the door open.
+
+The fix draws the boundary where it belongs. The frontier is curriculum
+progress, not a preference, and `/api/settings` is the one write path that
+takes prefs from a browser. So it no longer writes the frontier at all:
+`prefsFromRequest(input, stored)` validates everything the request carries and
+then forces `ladderWidths` back to the stored value. A reveal-delay change
+cannot move the ladder because the endpoint that accepts it has no way to. The
+deepen / widen / step-back actions are unaffected — they were always writing
+through `saveFrontier`, server-side, and never touched this route.
+
+### The device scan and the wheel could disagree about a chord's key
+
+Pass four's `demandOfNumerals` walked the chord list with a cursor that stepped
+into a modulation only when its `at` index was hit exactly and in array order.
+`analyse()` reads the identical `keyChangesIn` list with
+`findLast((m) => m.from <= i)`. On every real chart the two agree, because
+pivot indices come out monotonic — but a chart with two modulations whose
+pivots walked backwards out of order would leave the cursor stuck on the first
+one, and a chord's device counted against the wrong key. Two readings of one
+list, and "the wheel's analysis and a chart's demand can never disagree" was
+the whole reason pass four called `keyChangesIn` instead of rolling its own.
+So the scan now uses the same `findLast` `analyse()` does, and a test pins the
+two together chord-for-chord across every library progression, both
+chained-tonicization charts, and a hand-built double modulation.
+
+### "Six accidentals sharpwards" for a move to G♭
+
+`describeCrossing`'s `other` branch reads the direction of travel off
+`crossing.shift`, which is `wrapShift`'s output — and `wrapShift` breaks the
+six-sharps-or-six-flats tie sharpwards. So a crossing to G♭, a key the ladder
+spells with six flats, was described as going the other way. The branch never
+runs in the app — only the four near relations are ever handed to
+`describeCrossing` — but the sentence has to agree with the label, so at a
+shift of exactly six it now follows the spelled destination:
+`keySignature(to) < keySignature(from)` is flatwards, whichever way the circle
+is walked.
+
+### Two smaller things, read back at the same time
+
+`DIRECTION_WEIGHT`'s doc comment still said play-to-name was weighted highest;
+pass three put the three crossing directions above it and did not update the
+prose. And `DEFAULT_PREFS.ladderWidths` was `FIRST_FRONTIER.widths` by
+reference — one array behind two module constants, harmless only for as long as
+nothing edits a frontier in place. Both corrected in passing.

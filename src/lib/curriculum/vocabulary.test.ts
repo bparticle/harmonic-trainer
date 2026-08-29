@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { CHARTS, MISSION_CHARTS, chartDemand } from './charts';
-import { PROGRESSIONS, progressionById } from './progressions';
+import { PROGRESSIONS, chordFromNumeral, progressionById } from './progressions';
 import { RUNGS, STAGES, cellsOf, frontierFromPosition, itemsForRung, type RungId } from './ladder';
 import {
 	ALL_RUNGS,
 	CROSSING_CHIPS,
 	CROSSING_LABELS,
+	DEVICES,
 	deviceOf,
 	demandOfGrid,
 	demandOfNumerals,
@@ -23,7 +24,10 @@ import {
 	type Shape
 } from './vocabulary';
 import { NEAR_RELATIONS, RELATION_ORDER, type Relation } from './crossing';
+import { analyse } from '$lib/music/analyse';
 import { parseChord } from '$lib/music/chord';
+import { key as makeKey, type Key } from '$lib/music/key';
+import { pitchClass } from '$lib/music/note';
 
 const demandOf = (numerals: string[], mode: 'major' | 'minor' = 'major') =>
 	demandOfNumerals(numerals, mode);
@@ -475,6 +479,59 @@ describe('crossings: whether a tune actually changes key', () => {
 			'major'
 		);
 		expect(demand.crossings).toEqual(['dominant']);
+	});
+
+	/*
+	 * The device scan reads the same modulation list `analyse()` does, so the two
+	 * must never disagree about which key a given chord is in — that agreement is
+	 * the whole reason `demandOfNumerals` calls `keyChangesIn` rather than rolling
+	 * its own detector. This pins it: for every progression the library holds and
+	 * for the two songbook charts that modulate for real, the devices
+	 * `demandOfNumerals` reports equal the devices you get by asking `deviceOf`
+	 * against exactly the key `analyse()` puts each chord in. A scan that stepped
+	 * through the changes in lockstep with the chord index — rather than the
+	 * `findLast` `analyse()` uses — would drift here the moment two modulations'
+	 * pivots resolved out of order.
+	 */
+	it('scans devices against the same key analyse() assigns each chord', () => {
+		const HOME = makeKey('C');
+		const modeOf = (k: Key): 'major' | 'minor' => (k.mode === 'aeolian' ? 'minor' : 'major');
+
+		const agrees = (numerals: string[], mode: 'major' | 'minor') => {
+			const chords = numerals.flatMap((numeral) => {
+				try {
+					return [chordFromNumeral(numeral, HOME)];
+				} catch {
+					return [];
+				}
+			});
+			// Not what this test is about: an unparseable numeral, which
+			// `demandOfNumerals` charges a `chromatic` of its own before the scan.
+			if (chords.length !== numerals.length) return;
+
+			const startKey = mode === 'minor' ? makeKey('C', 'aeolian') : HOME;
+			const rows = analyse(chords, startKey);
+			const viaAnalyse = chords.flatMap((chord, i) => {
+				const device = deviceOf(chord, modeOf(rows[i].key), pitchClass(rows[i].key.tonic));
+				return device ? [device] : [];
+			});
+
+			expect(demandOfNumerals(numerals, mode).devices, numerals.join(' ')).toEqual(
+				DEVICES.filter((device) => viaAnalyse.includes(device))
+			);
+		};
+
+		for (const progression of PROGRESSIONS) agrees(progression.numerals, progression.mode);
+		for (const slug of ['bird-blues', 'indiana']) {
+			const chart = CHARTS.find((c) => c.slug === slug)!;
+			agrees(
+				chart.grid.flatMap((row) => row.flatMap((bar) => bar.split(/\s+/).filter(Boolean))),
+				chart.mode
+			);
+		}
+		// A hand-built double modulation — C to its dominant, then on to the
+		// dominant of that — which is the shape the lockstep cursor could not hold.
+		agrees(['Imaj7', 'vi7', 'II7', 'Vmaj7', 'iii7', 'VI7', 'IImaj7'], 'major');
 	});
 });
 

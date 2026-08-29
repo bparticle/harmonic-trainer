@@ -160,17 +160,18 @@ export function isDue(state: SrsState, now = new Date()): boolean {
  * FSRS's intervals to favour a direction would corrupt its model of your
  * memory; changing which due card gets picked does not.
  *
- * Play-to-name is weighted highest because it is the weakest
- * link, and it is the direction the whole app exists to fix — being able to
- * play a thing you cannot name is the problem statement.
+ * The three crossing questions lead, because nothing is written down and the
+ * answer is one note out of twelve — no other direction asks anything like it,
+ * and until M17 the app could not ask it at all.
  *
- * Degree-to-play sits just behind it, and for the same reason from the other
- * end: knowing that the chord under the numeral IV in E♭ is A♭ is the half of
- * the problem statement that the play-along page never asks, because a chart
- * shows symbols and never numbers.
+ * Play-to-name comes next: it is the weakest link among the chord directions and
+ * the one the whole app exists to fix — being able to play a thing you cannot
+ * name is the problem statement. Degree-to-play sits behind it, for the same
+ * reason from the other end: knowing that the chord under the numeral IV in E♭
+ * is A♭ is the half of that statement the play-along page never asks, because a
+ * chart shows symbols and never numbers.
  */
 export const DIRECTION_WEIGHT: Record<CardDirection, number> = {
-	play_name: 1.6,
 	// The heaviest three, and they earn it: nothing is written down, the answer
 	// is one note out of twelve, and no other direction asks any of it. `key_moved`
 	// leads them because holding one key while another arrives is harder than
@@ -178,6 +179,8 @@ export const DIRECTION_WEIGHT: Record<CardDirection, number> = {
 	key_moved: 1.7,
 	pivot_play: 1.55,
 	key_hear: 1.5,
+	// Then the chord directions, play-to-name first — see the note above.
+	play_name: 1.6,
 	degree_play: 1.3,
 	hear_name: 1.15,
 	see_play: 1.0,

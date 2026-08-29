@@ -398,26 +398,23 @@ export function demandOfNumerals(numerals: string[], mode: 'major' | 'minor'): D
 	 * without the correction: `walk.test.ts`'s "everything eventually opens"
 	 * is what caught it.
 	 *
-	 * `active` walks the same chord indices `keyChangesIn` numbered its
-	 * modulations against, so a chord counts toward whichever key was current
-	 * at that point — home until the first `at`, the target from there until
-	 * the next one, and so on. `deviceOf`'s new `tonicPc` is what makes "at
-	 * home in G" a different pitch-class test from "at home in C" without a
-	 * second copy of the four rules it tests.
+	 * The key in force at chord `i` is read the way `analyse()` reads it —
+	 * `findLast` over the changes for the last one to take over at or before
+	 * `i` — rather than a cursor stepping through `changes` in lockstep with
+	 * `i`. A cursor only lands on a modulation whose `at` it hits exactly and
+	 * in array order, so a pair of close modulations whose pivots walked back
+	 * out of order would leave one of them never applied and the wheel's
+	 * analysis and this demand quietly disagreeing about a chord's key.
+	 * `deviceOf`'s `tonicPc` is what makes "at home in G" a different
+	 * pitch-class test from "at home in C" without a second copy of the four
+	 * rules it tests.
 	 */
 	const activeMode = (k: { mode: string }): 'major' | 'minor' =>
 		k.mode === 'aeolian' ? 'minor' : 'major';
-	let change = 0;
-	let active = { tonicPc: pitchClass(startKey.tonic), mode: activeMode(startKey) };
 	for (let i = 0; i < chords.length; i++) {
-		while (change < changes.length && changes[change].at === i) {
-			active = {
-				tonicPc: pitchClass(changes[change].toKey.tonic),
-				mode: activeMode(changes[change].toKey)
-			};
-			change++;
-		}
-		const device = deviceOf(chords[i], active.mode, active.tonicPc);
+		const change = changes.findLast((c) => c.at <= i);
+		const activeKey = change ? change.toKey : startKey;
+		const device = deviceOf(chords[i], activeMode(activeKey), pitchClass(activeKey.tonic));
 		if (device) devices.push(device);
 	}
 

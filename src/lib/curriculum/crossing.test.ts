@@ -245,6 +245,11 @@ describe('saying a crossing out loud', () => {
 	it('says which way the accidentals went', () => {
 		expect(describeCrossing(crossingBetween(C, major('D')))).toContain('sharpwards');
 		expect(describeCrossing(crossingBetween(C, major('Bb')))).toContain('flatwards');
+		// Six accidentals is a tie the circle-of-fifths wrap breaks sharpwards, but
+		// the destination is spelled G♭ — the sentence has to agree with the label.
+		expect(describeCrossing(crossingBetween(C, major('Gb')))).toContain('flatwards');
+		expect(describeCrossing(crossingBetween(C, major('Gb')))).not.toContain('sharpwards');
+		expect(describeCrossing(crossingBetween(C, minor('Eb')))).toContain('flatwards');
 	});
 
 	it('claims a mode only where the destination has one', () => {
