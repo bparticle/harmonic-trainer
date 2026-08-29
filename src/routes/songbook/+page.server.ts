@@ -13,6 +13,7 @@ import { gridToRows, lyricsToRows, readGrid, type Grid } from '$lib/curriculum/e
 import {
 	CROSSING_CHIPS,
 	DEVICE_CHIPS,
+	TONALITY_CHIPS,
 	isReady,
 	reachOf,
 	shortfall,
@@ -121,6 +122,10 @@ export const load: PageServerLoad = async ({ locals }) => {
 			// Already in words, because the page must not have to know what a
 			// half-diminished is in order to say that you have not met one.
 			wants: [
+				// The key leads, because it is the largest thing that can be missing:
+				// a tune in a kind of key you have never been in is not a tune with a
+				// chord problem, and listing "minor" among the shapes would read as one.
+				...(gap.tonality ? [TONALITY_CHIPS[gap.tonality]] : []),
 				...gap.shapes,
 				...gap.devices.map((device) => DEVICE_CHIPS[device]),
 				...gap.crossings.map((relation) => CROSSING_CHIPS[relation])

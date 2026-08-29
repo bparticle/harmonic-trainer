@@ -13,6 +13,8 @@ import {
 	frontierFromPosition,
 	isOpen,
 	isWellFormed,
+	minorKeysReached,
+	relativeMinorOf,
 	itemsForRung,
 	ladderIdentity,
 	narrower,
@@ -491,5 +493,41 @@ describe('reading a frontier back off the card bank', () => {
 		const merged = widest(stored, evidence);
 		expect(merged.widths).toEqual([3, 2, 1, 1, 0, 0, 0]);
 		expect(isWellFormed(merged)).toBe(true);
+	});
+});
+
+describe('which minor keys the ladder has actually opened', () => {
+	/*
+	 * The complaint this answers, in one line: *I tried a lesson on "relative
+	 * minor" in the C scale and then had to play St. James Infirmary that had Cmin
+	 * and Fmin, which is not part of A minor*. Quite right. The ladder teaches C's
+	 * relative minor, which is A minor — the same seven notes. It has never taught
+	 * C minor, and on this ladder C minor belongs to the E-flat stage.
+	 */
+	it('is empty until the relative minor rung is open', () => {
+		expect(minorKeysReached(cellsOf({ widths: [2, 2, 2, 1, 1, 1, 0] }))).toEqual([]);
+	});
+
+	it('is the relative minor, never the parallel', () => {
+		const reached = cellsOf({ widths: [2, 1, 1, 1, 1, 1, 1] });
+		expect(minorKeysReached(reached)).toEqual(['A']);
+		expect(minorKeysReached(reached)).not.toContain('C');
+	});
+
+	it('opens one minor key per stage, in the ladder’s order', () => {
+		expect(minorKeysReached(cellsOf({ widths: [3, 3, 3, 3, 3, 3, 3] }))).toEqual(['A', 'E', 'D']);
+	});
+
+	it('reaches C minor only through E-flat, which is where it lives', () => {
+		// Seven keys deep: the E-flat stage is the seventh, and its relative minor
+		// is C minor. So the tune the complaint named becomes legal here, honestly.
+		expect(minorKeysReached(cellsOf({ widths: [7, 7, 7, 7, 7, 7, 7] }))).toContain('C');
+		expect(minorKeysReached(cellsOf({ widths: [6, 6, 6, 6, 6, 6, 6] }))).not.toContain('C');
+	});
+
+	it('names the relative of a key whether or not it is open', () => {
+		expect(relativeMinorOf('C')).toBe('A');
+		expect(relativeMinorOf('Eb')).toBe('C');
+		expect(relativeMinorOf('nowhere')).toBeNull();
 	});
 });

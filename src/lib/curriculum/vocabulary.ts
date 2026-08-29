@@ -23,7 +23,7 @@ import { NEAR_RELATIONS, RELATION_ORDER, relationBetween, type Relation } from '
  * and the progression library state what they teach, derived from the chords
  * they already build. A mission is set only where the second covers the first.
  *
- * ## Three axes, because there are three ways to be lost
+ * ## Four axes, because there are four ways to be lost
  *
  * **The shape.** Can your hands make this chord at all? A dominant seventh is a
  * different thing to learn than a minor triad, and the complaint that started
@@ -46,10 +46,24 @@ import { NEAR_RELATIONS, RELATION_ORDER, relationBetween, type Relation } from '
  * or `other` for everything further out — and it is taught by the crossing
  * exercises rather than by the progression library.
  *
- * A chart demands the shapes it uses, the devices it uses, and the crossings it
- * makes. Ready means all three sets are covered. That is not a promise the tune
- * is *easy* — how fast to play it is the tempo ladder's question and stays
- * there — only that nothing in it is unheard-of.
+ * **The tonality.** Is the tune in a major key or a minor one, and have you been
+ * shown a minor key at all? This is the axis the bugfixing pass added, and it is
+ * emphatically *not* the same question as whether your hands can make a minor
+ * triad. The two came apart in the worst possible place. The ladder teaches
+ * minor triads on its fourth rung — as the ii, iii and vi of a major key — so a
+ * minor-mode tune cleared the shape gate long before anybody had been shown a
+ * minor key to play it in. And `realiseChart` resolves numerals against the
+ * major scale, so the key such a tune landed in was the **parallel** minor.
+ * Somebody who had just been taught that the relative minor of C is A minor was
+ * handed St. James Infirmary in C minor: Cm, Fm, G7, three flats, and no rung
+ * anywhere on this ladder that teaches them. The relative minor rung is what
+ * opens a minor key, it opens exactly one per stage, and that is the fact this
+ * axis carries.
+ *
+ * A chart demands the shapes it uses, the devices it uses, the crossings it
+ * makes, and the tonality it sits in. Ready means all four are covered. That is
+ * not a promise the tune is *easy* — how fast to play it is the tempo ladder's
+ * question and stays there — only that nothing in it is unheard-of.
  *
  * ## Where the teaching comes from
  *
@@ -66,6 +80,10 @@ import { NEAR_RELATIONS, RELATION_ORDER, relationBetween, type Relation } from '
  *     morning of an account, the moment any key at all is reached. See the note
  *     on `vocabularyOf` below for why that is the right rule and not a hole in
  *     the gate.
+ *   - **The relative minor rung** teaches the minor tonality, and is the only
+ *     thing that does. A progression written in the minor is *material* in a
+ *     minor key rather than a teacher of one — it has to be placed in a minor
+ *     key itself, and can only be placed in one the ladder has opened.
  *
  * All three are read through the same classifier below, so "what a progression
  * teaches" and "what a chart demands" cannot be measured on different rulers.
@@ -170,15 +188,49 @@ const DEVICE_WEIGHT: Record<Device, number> = {
 };
 
 /**
- * What a tune asks for: every shape in it, every way it colours out of the key,
- * and every key it actually goes to.
+ * Major or minor, as a place to be rather than as a chord quality.
+ *
+ * A scalar on a demand and a set on a vocabulary, because a tune sits in exactly
+ * one of them and a player may have been shown either or both.
  */
-export type Demand = { shapes: Shape[]; devices: Device[]; crossings: Relation[] };
+export type Tonality = 'major' | 'minor';
 
-/** What you can answer with: the shapes, devices and crossings you have met. */
-export type Vocabulary = { shapes: Shape[]; devices: Device[]; crossings: Relation[] };
+/** Said in a shortfall sentence, and short enough for a chip beside a tune. */
+export const TONALITY_LABELS: Record<Tonality, string> = {
+	major: 'a major key',
+	minor: 'a minor key — the relative minor rung opens one'
+};
 
-export const emptyVocabulary = (): Vocabulary => ({ shapes: [], devices: [], crossings: [] });
+export const TONALITY_CHIPS: Record<Tonality, string> = {
+	major: 'major key',
+	minor: 'minor key'
+};
+
+/**
+ * What a tune asks for: every shape in it, every way it colours out of the key,
+ * every key it actually goes to, and whether it sits in a major key or a minor.
+ */
+export type Demand = {
+	shapes: Shape[];
+	devices: Device[];
+	crossings: Relation[];
+	tonality: Tonality;
+};
+
+/** What you can answer with: the shapes, devices, crossings and keys you have met. */
+export type Vocabulary = {
+	shapes: Shape[];
+	devices: Device[];
+	crossings: Relation[];
+	tonalities: Tonality[];
+};
+
+export const emptyVocabulary = (): Vocabulary => ({
+	shapes: [],
+	devices: [],
+	crossings: [],
+	tonalities: []
+});
 
 // ---------------------------------------------------------------------------
 // Reading one chord
@@ -421,7 +473,8 @@ export function demandOfNumerals(numerals: string[], mode: 'major' | 'minor'): D
 	return {
 		shapes: sortShapes(shapes),
 		devices: sortDevices(devices),
-		crossings: sortCrossings(crossings)
+		crossings: sortCrossings(crossings),
+		tonality: mode
 	};
 }
 
@@ -468,7 +521,14 @@ export function vocabularyFromRungs(rungIds: Iterable<RungId>): Vocabulary {
 		devices: [],
 		// The ladder never leaves the key, so it has nothing to say about crossing
 		// one either — that is `vocabularyOf`'s job, below.
-		crossings: []
+		crossings: [],
+		/*
+		 * Any rung at all is a rung of a major key, and the relative minor rung is
+		 * the one that opens a minor one. Nothing else on the ladder does, and
+		 * nothing else in the app does either: this is the only place the minor
+		 * tonality is granted, which is what makes the rule checkable.
+		 */
+		tonalities: seen.size === 0 ? [] : seen.has('relative-minor') ? ['major', 'minor'] : ['major']
 	};
 }
 
@@ -487,12 +547,21 @@ export function vocabularyFromProgressions(ids: Iterable<string>): Vocabulary {
 		// progression that genuinely changed key would be read by the same
 		// `demandOfNumerals` call above and would teach it correctly without this
 		// function needing to change at all.
-		crossings: sortCrossings(demands.flatMap((d) => d.crossings))
+		crossings: sortCrossings(demands.flatMap((d) => d.crossings)),
+		/*
+		 * Nothing. A progression written in the minor is *material* in a minor key,
+		 * not a teacher of one — it has to be placed in a key itself, and can only
+		 * be placed in one the ladder has opened. Granting the tonality here would
+		 * let a minor progression unlock minor tunes by being met, which is the
+		 * circularity that let one be offered in the parallel minor in the first
+		 * place.
+		 */
+		tonalities: []
 	};
 }
 
 /**
- * The three halves of the drill room, added up.
+ * The halves of the drill room, added up.
  *
  * The near relations are folded straight in here rather than earned through a
  * third `vocabularyFrom...` function, and that needs justifying because it
@@ -527,7 +596,8 @@ export function vocabularyOf(input: {
 	return {
 		shapes: sortShapes([...ladder.shapes, ...library.shapes]),
 		devices: sortDevices([...ladder.devices, ...library.devices]),
-		crossings: sortCrossings([...crossings, ...library.crossings])
+		crossings: sortCrossings([...crossings, ...library.crossings]),
+		tonalities: ladder.tonalities
 	};
 }
 
@@ -542,22 +612,35 @@ export function vocabularyOf(input: {
  * a boolean is deliberate: a page that can only say *not yet* is a locked door,
  * and a page that can say *you have not met a dominant seventh* is a curriculum.
  */
-export type Shortfall = { shapes: Shape[]; devices: Device[]; crossings: Relation[] };
+export type Shortfall = {
+	shapes: Shape[];
+	devices: Device[];
+	crossings: Relation[];
+	/** The kind of key the tune is in, when it is one you have never been in. */
+	tonality: Tonality | null;
+};
 
 export function shortfall(demand: Demand, known: Vocabulary): Shortfall {
 	const haveShapes = new Set(known.shapes);
 	const haveDevices = new Set(known.devices);
 	const haveCrossings = new Set(known.crossings);
+	const haveTonalities = new Set(known.tonalities);
 	return {
 		shapes: demand.shapes.filter((shape) => !haveShapes.has(shape)),
 		devices: demand.devices.filter((device) => !haveDevices.has(device)),
-		crossings: demand.crossings.filter((relation) => !haveCrossings.has(relation))
+		crossings: demand.crossings.filter((relation) => !haveCrossings.has(relation)),
+		tonality: haveTonalities.has(demand.tonality) ? null : demand.tonality
 	};
 }
 
 export function isReady(demand: Demand, known: Vocabulary): boolean {
 	const gap = shortfall(demand, known);
-	return gap.shapes.length === 0 && gap.devices.length === 0 && gap.crossings.length === 0;
+	return (
+		gap.shapes.length === 0 &&
+		gap.devices.length === 0 &&
+		gap.crossings.length === 0 &&
+		gap.tonality === null
+	);
 }
 
 /**
@@ -629,6 +712,9 @@ export const CROSSING_CHIPS: Record<Relation, string> = {
 export function describeShortfall(gap: Shortfall): string {
 	const parts: string[] = [];
 
+	// The key comes first, because it is the largest thing that can be missing:
+	// a tune in a key you have never been in is not a tune with a chord problem.
+	if (gap.tonality) parts.push(TONALITY_LABELS[gap.tonality]);
 	const named = gap.shapes.filter((shape) => shape !== 'unknown');
 	if (named.length) parts.push(named.join(', '));
 	if (named.length !== gap.shapes.length) parts.push('chords this app cannot read');

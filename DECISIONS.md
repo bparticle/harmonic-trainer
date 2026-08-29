@@ -5229,3 +5229,89 @@ drill room felt monotonous, and the monotony had a better cause, fixed above:
 nine tunes and a two-cell frontier. Whether the app should ask a written chord
 symbol at all is a curriculum decision, and it should be made deliberately rather
 than as a side effect of a bug hunt.
+
+## The relative minor, and the one the app kept handing over instead
+
+Reported the morning after the previous entry shipped, and it is a good deal
+older than that entry: _I tried a lesson on "relative minor" in the C scale and
+then had to play St. James Infirmary that had Cmin and Fmin, which is not part of
+A minor. Same for Wade in the Water — suddenly the C minor scale, which is not
+the relative minor of the C scale._
+
+Exactly right, and the tune was in C minor. Three flats, a key signature nobody
+had been shown, on the morning after a lesson whose entire selling point is that
+it introduces **no new notes**.
+
+### One key name, two different keys
+
+`realiseChart` resolves Roman numerals against the **major** scale of whatever
+key name it is handed, whatever the chart's mode — a deliberate convention, since
+that is how numerals are written on every chart, and documented where it is done.
+So `st-james-infirmary`, whose grid is `i · i V7 · i · iv`, realised in "C" comes
+out **Cm, G7, Fm**. That is C minor: the _parallel_ minor of C major.
+
+And the ladder has never taught it. The relative minor rung in C teaches **A
+minor** — the same seven notes read from the sixth degree, which is the whole
+reason it is the gentle seventh rung rather than a new key signature. C minor is
+on this ladder too, but it belongs to the E♭ stage, seven keys along, as _its_
+relative.
+
+So `mission.keyCenter` was one string doing two jobs. For a major chart it meant
+C major; for a minor chart the same string quietly meant C minor, and nothing
+anywhere asked whether that key had ever been opened.
+
+### The gate could not see it, because it was only looking at chords
+
+The vocabulary gate cleared the tune, and correctly by its own rules: the demand
+is `minor` and `dominant seventh`, and both of those are taught. The fourth rung
+builds a chord on every degree of the major scale, three of which are minor
+triads. So **the minor triad arrives three rungs before any minor key does**, and
+a gate that only reads chord shapes cannot tell those two facts apart.
+
+That is a fourth way to be lost, and it now has an axis of its own beside the
+shape, the device and the crossing. `Demand.tonality` is major or minor;
+`Vocabulary.tonalities` is what has been opened. `vocabularyFromRungs` grants
+`major` for any rung at all and `minor` only for `relative-minor`, and that is the
+only place in the app the minor tonality is ever granted — which is what makes the
+rule checkable rather than merely intended.
+
+`vocabularyFromProgressions` deliberately grants nothing here, and the comment
+says why: a progression written in the minor is _material in_ a minor key, not a
+teacher of one. It has to be placed in a key itself, on exactly the terms a tune
+does. Letting one confer the tonality by being met would close the circle that
+made this possible in the first place.
+
+### And then the key it actually goes in
+
+Gating alone would have been half a fix — it would have locked the tune until the
+seventh rung and then still set it in the parallel minor. `minorKeysReached` reads
+the frontier for the minor keys the ladder has genuinely opened: the relative
+minor of every stage where that rung is open, as bare tonics, because `A` plus a
+minor chart is what prints as _A minor_ everywhere in this app already.
+
+`composeMission` then picks from those, preferring **the relative of the key the
+workout is already in**. That is not a tie-break dressed up as a principle: it is
+the answer a person expects the morning after a lesson called _the relative
+minor_, and it is what the tune becomes — Am, Dm, E7, every note of C major plus
+the one G♯ that makes a minor cadence.
+
+The same thing was waiting one slot along, and reachable sooner. A quarter of the
+progression library is minor and `realiseProgression` carries the identical
+convention, so `i – iv – v – i` offered as _one new thing_ "in C" was Cm, Fm, Gm —
+in the first week of an account. It is held back and placed by the same rule. The
+home page's own picker, incidentally, has been doing this correctly all along:
+`keyFor('minor', 'C')` returns `Am`. The app knew the rule in one place and not in
+the other two.
+
+### Two smaller things that followed
+
+`composeMission` filters minor charts out when no minor key is open, on top of the
+tonality gate that already refuses them. Two guards for one fact looks redundant
+and is not: the gate is derived one module away and the composer takes both as
+independent inputs, so this is the one that makes _the key exists_ true by
+construction rather than by the caller having wired them from the same frontier.
+
+And both the mission instruction and the novelty line now say **A minor** rather
+than **A**. A bare `A` above a task that is about to hand over Am, Dm and E7 is
+the app being vague about the exact fact this pass exists to get right — and it is
+part of why the bug was invisible on the page as well as in the composer.

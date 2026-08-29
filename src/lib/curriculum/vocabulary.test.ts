@@ -218,7 +218,12 @@ describe('what the drill room teaches', () => {
 	});
 
 	it('knows nothing by default, because that is the conservative reading', () => {
-		expect(emptyVocabulary()).toEqual({ shapes: [], devices: [], crossings: [] });
+		expect(emptyVocabulary()).toEqual({
+			shapes: [],
+			devices: [],
+			crossings: [],
+			tonalities: []
+		});
 		expect(isReady(chartsBySlug.get('blues-12')!.demand, emptyVocabulary())).toBe(false);
 	});
 });
@@ -312,7 +317,8 @@ describe('the gate, against the material the app actually ships', () => {
 		expect(chartDemand({ grid: [['I', 'IV', 'V', 'I']], mode: 'major' })).toEqual({
 			shapes: ['major'],
 			devices: [],
-			crossings: []
+			crossings: [],
+			tonality: 'major'
 		});
 		expect(chartDemand({ grid: [['I', 'bII7']], mode: 'major' }).devices).toEqual(['chromatic']);
 	});
@@ -340,7 +346,7 @@ describe('saying what is missing', () => {
 	});
 
 	it('says nothing at all when there is no gap', () => {
-		expect(describeShortfall({ shapes: [], devices: [], crossings: [] })).toBe('');
+		expect(describeShortfall({ shapes: [], devices: [], crossings: [], tonality: null })).toBe('');
 	});
 
 	it('points at a progression that would teach it, gentlest first', () => {
@@ -592,5 +598,60 @@ describe('the crossing gate', () => {
 		const near = demandOfNumerals(['I', 'vi7', 'II7', 'Vmaj7'], 'major');
 		const far = demandOfNumerals(['I', '#ivm7b5', 'VII7', 'IIImaj7'], 'major');
 		expect(reachOf(near)).toBeLessThan(reachOf(far));
+	});
+});
+
+describe('knowing a minor chord is not knowing a minor key', () => {
+	/*
+	 * The gap this closes, found by playing the app rather than by a test: a
+	 * lesson on the relative minor of C, and then St. James Infirmary with Cm and
+	 * Fm in it — the *parallel* minor, three flats, nowhere on the ladder. The
+	 * shape gate cleared it because the fourth rung teaches minor triads as the
+	 * ii, iii and vi of a major key. Those are minor chords. They are not a minor
+	 * key.
+	 */
+	const rungsTo = (last: string) => {
+		const at = ALL_RUNGS.indexOf(last as (typeof ALL_RUNGS)[number]);
+		return ALL_RUNGS.slice(0, at + 1);
+	};
+
+	const minorTune = chartsBySlug.get('st-james-infirmary')!.demand;
+
+	it('reads a minor chart as demanding a minor key', () => {
+		expect(minorTune.tonality).toBe('minor');
+		expect(chartsBySlug.get('when-the-saints')!.demand.tonality).toBe('major');
+	});
+
+	it('has the minor triad long before it has a minor key', () => {
+		const vocabulary = vocabularyOf({ rungs: rungsTo('all-triads') });
+		expect(vocabulary.shapes).toContain('minor');
+		expect(vocabulary.tonalities).toEqual(['major']);
+	});
+
+	it('holds the tune back until the relative minor rung, and says why', () => {
+		const before = vocabularyOf({ rungs: rungsTo('all-sevenths') });
+		expect(isReady(minorTune, before)).toBe(false);
+		expect(describeShortfall(shortfall(minorTune, before))).toContain('minor key');
+	});
+
+	it('opens it on the rung that actually teaches one', () => {
+		expect(isReady(minorTune, vocabularyOf({ rungs: rungsTo('relative-minor') }))).toBe(true);
+	});
+
+	it('will not let a minor progression unlock minor tunes by being met', () => {
+		// The circularity that made the bug possible: a minor progression is
+		// material *in* a minor key, not a teacher of one, and it has to be placed
+		// in a key the ladder opened just as a tune does.
+		const met = vocabularyOf({
+			rungs: rungsTo('all-sevenths'),
+			progressions: PROGRESSIONS.filter((p) => p.mode === 'minor').map((p) => p.id)
+		});
+		expect(met.tonalities).toEqual(['major']);
+		expect(isReady(minorTune, met)).toBe(false);
+	});
+
+	it('never claims a major tune needs a key nobody has', () => {
+		const first = vocabularyOf({ rungs: ['scale'] });
+		expect(shortfall(chartsBySlug.get('when-the-saints')!.demand, first).tonality).toBeNull();
 	});
 });

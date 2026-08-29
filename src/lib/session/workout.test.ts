@@ -5,6 +5,7 @@ import {
 	cellsOf,
 	FIRST_FRONTIER,
 	frontierFromPosition,
+	minorKeysReached,
 	nextCell,
 	nextOpening,
 	type Frontier,
@@ -1179,5 +1180,132 @@ describe('offering the next cell of the ladder', () => {
 		expect(nextCell(finishedC)).toBeNull();
 		expect(workout.openNext?.move).toBe('wider');
 		expect(workout.openNext?.key).toBe('G');
+	});
+});
+
+describe('a minor tune goes in a minor key the ladder opened', () => {
+	/*
+	 * *I tried a lesson on "relative minor" in the C scale and then had to play
+	 * St. James Infirmary that had Cmin and Fmin, which is not part of A minor.*
+	 *
+	 * The numerals of a minor chart resolve against the major scale of whatever
+	 * key name they are handed — see `realiseChart` — so handing one the workout's
+	 * own key produced the parallel minor. A workout in C set the tune in C minor:
+	 * Cm, Fm, G7, three flats, and no rung on this ladder teaches them.
+	 */
+	const FINISHED_C: Frontier = { widths: [2, 1, 1, 1, 1, 1, 1] };
+	const reached = cellsOf(FINISHED_C);
+	const knows = vocabularyOf({ rungs: reached.map((cell) => cell.rungId) });
+
+	const minorTune = MISSION_CHARTS.find((chart) => chart.slug === 'st-james-infirmary')!;
+
+	const inKey = (keyCenter: string, overrides: Partial<WorkoutInput> = {}) =>
+		composeWorkout(
+			input({
+				reached,
+				nextCell: nextCell(FINISHED_C),
+				vocabulary: knows,
+				charts: [minorTune],
+				coldSpots: [],
+				size: 'standard',
+				choice: { kind: 'rung', key: keyCenter, rungId: 'relative-minor' },
+				...overrides
+			})
+		);
+
+	it('opens exactly one minor key at this point on the ladder', () => {
+		expect(minorKeysReached(reached)).toEqual(['A']);
+	});
+
+	it('sets it in the relative minor of the key the workout is in', () => {
+		expect(missions(inKey('C'))[0].keyCenter).toBe('A');
+	});
+
+	it('never sets it in the parallel minor', () => {
+		for (let d = 0; d < 14; d++) {
+			const workout = inKey('C', { now: new Date(NOW.getTime() + d * DAY), size: 'long' });
+			for (const mission of missions(workout)) {
+				expect(mission.keyCenter, `day ${d}`).not.toBe('C');
+			}
+		}
+	});
+
+	it('names the key as minor, so the task does not read as A major', () => {
+		const task = inKey('C').tasks.find((t) => t.kind === 'mission')!;
+		expect(task.instruction).toContain('A minor');
+	});
+
+	it('refuses the tune outright when no minor key is open', () => {
+		const noMinor: Frontier = { widths: [2, 1, 1, 1, 1, 1, 0] };
+		const cells = cellsOf(noMinor);
+		const workout = composeWorkout(
+			input({
+				reached: cells,
+				nextCell: nextCell(noMinor),
+				vocabulary: vocabularyOf({ rungs: cells.map((cell) => cell.rungId) }),
+				charts: [minorTune]
+			})
+		);
+		expect(minorKeysReached(cells)).toEqual([]);
+		expect(missions(workout)).toHaveLength(0);
+		expect(workout.missionHeld?.needs).toContain('minor key');
+	});
+});
+
+describe('a minor progression is placed the same way', () => {
+	/*
+	 * The same bug one slot along, and reachable sooner: the library is a quarter
+	 * minor by level one, and `realiseProgression` resolves numerals against the
+	 * major scale exactly as `realiseChart` does. "i – iv – v – i in C" is Cm, Fm,
+	 * Gm — offered as *one new thing* to somebody who had never left C major.
+	 */
+	const minorIds = PROGRESSIONS.filter((p) => p.mode === 'minor').map((p) => p.id);
+
+	const novelty = (minorKeys: string[]) =>
+		chooseNovelty({
+			keyCenter: 'C',
+			nextCell: null,
+			// Everything but the minor ones already met, so a minor one leads if it
+			// is allowed to be offered at all.
+			playedProgressions: PROGRESSIONS.filter((p) => p.mode !== 'minor').map((p) => p.id),
+			playedGrooves: [],
+			rungLooksSolid: false,
+			yesterday: null,
+			minorKeys,
+			day: 0
+		});
+
+	it('has minor progressions to offer', () => {
+		expect(minorIds.length).toBeGreaterThan(0);
+	});
+
+	it('offers none of them before a minor key is open', () => {
+		const chosen = novelty([]);
+		if (chosen?.kind === 'progression') expect(minorIds).not.toContain(chosen.progressionId);
+		else expect(chosen?.kind ?? 'none').not.toBe('progression');
+	});
+
+	it('places one in the relative minor once there is one', () => {
+		const chosen = novelty(['A']);
+		expect(chosen?.kind).toBe('progression');
+		if (chosen?.kind !== 'progression') return;
+		expect(minorIds).toContain(chosen.progressionId);
+		expect(chosen.keyCenter).toBe('A');
+	});
+
+	it('leaves major progressions in the workout’s key', () => {
+		const chosen = chooseNovelty({
+			keyCenter: 'C',
+			nextCell: null,
+			playedProgressions: [],
+			playedGrooves: [],
+			rungLooksSolid: false,
+			yesterday: null,
+			minorKeys: ['A'],
+			day: 0
+		});
+		if (chosen?.kind !== 'progression') return;
+		const mode = PROGRESSIONS.find((p) => p.id === chosen.progressionId)?.mode;
+		expect(chosen.keyCenter).toBe(mode === 'minor' ? 'A' : 'C');
 	});
 });

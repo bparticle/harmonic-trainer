@@ -281,6 +281,45 @@ export function widest(a: Frontier, b: Frontier): Frontier {
 	return { widths: RUNGS.map((_, r) => Math.max(a.widths[r] ?? 0, b.widths[r] ?? 0)) };
 }
 
+/**
+ * The minor keys the ladder has actually opened, as bare tonics.
+ *
+ * **The ladder teaches exactly one minor key per stage, and it is the relative
+ * one.** C's rung teaches A minor: the same seven notes read from the sixth
+ * degree, which is the whole of what makes it the gentle next step. It has never
+ * taught C minor, and C minor is not a small variation on C major — it is three
+ * flats, a different key signature, and on this ladder it belongs to the E♭
+ * stage as *its* relative minor.
+ *
+ * That distinction had nowhere to live, so nothing enforced it: a minor-mode
+ * tune was handed the workout's key name and `realiseChart` resolves numerals
+ * against the major scale, so "St. James Infirmary in C" came out as C minor —
+ * Cm, Fm, G7 — offered to somebody whose entire minor vocabulary was A minor.
+ *
+ * Tonics rather than `Am`, because that is what every consumer of a key name in
+ * this app already expects: the chart's own `mode` is what makes it minor, and a
+ * key called `A` with a minor chart on it prints as *A minor* everywhere.
+ */
+export function minorKeysReached(reached: Array<{ key: string; rungId: string }>): string[] {
+	const open = new Set(
+		reached.filter((cell) => cell.rungId === 'relative-minor').map((cell) => cell.key)
+	);
+	return STAGES.filter((stage) => open.has(stage.key)).map((stage) =>
+		stage.relativeMinor.replace(/m$/, '')
+	);
+}
+
+/**
+ * The minor key belonging to a major one, whether or not it is open.
+ *
+ * For putting a minor tune next to the key the workout is already in, which is
+ * the answer somebody expects after a lesson called "the relative minor".
+ */
+export function relativeMinorOf(key: string): string | null {
+	const stage = stageByKey(key);
+	return stage ? stage.relativeMinor.replace(/m$/, '') : null;
+}
+
 /** Rungs that are open in at least one key. Depth, as opposed to breadth. */
 export function depthOf(frontier: Frontier): number {
 	return frontier.widths.filter((width) => width > 0).length;

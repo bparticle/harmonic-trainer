@@ -1,6 +1,12 @@
 import { GROOVES, type Groove } from '$lib/audio/groove';
 import { MISSION_CHARTS, type ChartCategory } from '$lib/curriculum/charts';
-import { rungById, type Move, type RungId } from '$lib/curriculum/ladder';
+import {
+	minorKeysReached,
+	relativeMinorOf,
+	rungById,
+	type Move,
+	type RungId
+} from '$lib/curriculum/ladder';
 import { PROGRESSIONS } from '$lib/curriculum/progressions';
 import {
 	describeShortfall,
@@ -947,6 +953,8 @@ function composeMission(input: {
 	coldSpots: ColdSpot[];
 	ladders: Record<string, TempoLadder>;
 	plays: Record<string, number>;
+	/** The minor keys the ladder has opened, as bare tonics. Often empty. */
+	minorKeys: string[];
 	day: number;
 	nth: number;
 }): Mission | null {
@@ -966,6 +974,16 @@ function composeMission(input: {
 	 */
 	const ready = input.charts
 		.filter((chart) => isReady(chart.demand, input.vocabulary))
+		/*
+		 * And a minor tune needs somewhere minor to be played.
+		 *
+		 * Belt and braces with the tonality axis, which refuses the same tunes one
+		 * module away — but the two are derived separately and this is the one that
+		 * makes "the key exists" true *by construction* rather than by the caller
+		 * having wired both inputs from the same frontier. A chart chosen with no
+		 * key to put it in is the bug this whole pass is about.
+		 */
+		.filter((chart) => chart.mode !== 'minor' || input.minorKeys.length > 0)
 		.sort((a, b) => reachOf(a.demand) - reachOf(b.demand) || a.slug.localeCompare(b.slug));
 
 	if (ready.length === 0) return null;
@@ -1018,7 +1036,8 @@ function composeMission(input: {
 	// A second mission goes somewhere else, so a long workout is not the same
 	// tune twice in a row in the same key.
 	const keys = input.coldKeys.length ? input.coldKeys : [input.keyCenter];
-	const keyCenter = input.nth === 0 ? input.keyCenter : rotate(keys, input.day + input.nth)[0];
+	const major = input.nth === 0 ? input.keyCenter : rotate(keys, input.day + input.nth)[0];
+	const keyCenter = chart.mode === 'minor' ? minorKeyFor(major, input) : major;
 
 	/*
 	 * The tempo, from the ladder where there is one.
@@ -1054,6 +1073,31 @@ function composeMission(input: {
 	};
 }
 
+/**
+ * Which minor key a minor tune goes in.
+ *
+ * **The relative of the key the workout is already in, whenever that one is
+ * open.** Not a nicety: the numerals of a minor chart resolve against the major
+ * scale of whatever key name they are handed — see `realiseChart` — so passing
+ * the workout's own key straight through produced the *parallel* minor. A
+ * workout in C set "St. James Infirmary in C", which comes out Cm, Fm, G7, three
+ * flats, to somebody whose entire minor vocabulary was the A minor they had just
+ * been taught. The relative is the one the ladder actually opened, and it is also
+ * the answer a person expects the morning after a lesson called *the relative
+ * minor*.
+ *
+ * Where that stage's relative minor is not open, the day picks from the ones that
+ * are; the caller has already refused the tune outright if there are none.
+ */
+function minorKeyFor(
+	major: string,
+	input: { minorKeys: string[]; day: number; nth: number }
+): string {
+	const relative = relativeMinorOf(major);
+	if (relative && input.minorKeys.includes(relative)) return relative;
+	return rotate(input.minorKeys, input.day + input.nth)[0] ?? major;
+}
+
 function missionGoal(chart: MissionChart | undefined, mission: Mission): Goal {
 	// Getting round a cycle at all is the achievement; guide tones are not the
 	// question a chart that modulates twelve times is asking.
@@ -1082,6 +1126,8 @@ export function chooseNovelty(input: {
 	playedGrooves: Groove[];
 	rungLooksSolid: boolean;
 	yesterday: string | null;
+	/** The minor keys the ladder has opened, as bare tonics. Often empty. */
+	minorKeys?: string[];
 	day: number;
 }): Novelty | null {
 	const next = input.nextCell ?? null;
@@ -1090,9 +1136,25 @@ export function chooseNovelty(input: {
 		: null;
 
 	const seenProgressions = new Set(input.playedProgressions);
-	const progressions: Novelty[] = PROGRESSIONS.filter((p) => !seenProgressions.has(p.id)).map(
-		(p) => ({ kind: 'progression', progressionId: p.id, keyCenter: input.keyCenter })
-	);
+	const minorKeys = input.minorKeys ?? [];
+	/*
+	 * A progression written in the minor is held back and then placed, on exactly
+	 * the terms a minor tune is — and for the same reason, because
+	 * `realiseProgression` resolves numerals against the major scale too. `i – iv
+	 * – v – i` offered "in C" is Cm, Fm, Gm: the parallel minor, three flats, and
+	 * a new thing in a key nobody has opened. The library is a third minor by
+	 * level one, so this was reachable in the first week of an account.
+	 */
+	const progressions: Novelty[] = PROGRESSIONS.filter(
+		(p) => !seenProgressions.has(p.id) && (p.mode !== 'minor' || minorKeys.length > 0)
+	).map((p) => ({
+		kind: 'progression',
+		progressionId: p.id,
+		keyCenter:
+			p.mode === 'minor'
+				? minorKeyFor(input.keyCenter, { minorKeys, day: input.day, nth: 0 })
+				: input.keyCenter
+	}));
 
 	const seenGrooves = new Set(input.playedGrooves);
 	const grooves: Novelty[] = GROOVES.filter((g) => !seenGrooves.has(g.id)).map((g) => ({
@@ -1170,10 +1232,15 @@ function missionTask(mission: Mission, chart: MissionChart | undefined): Mission
 	 * to one for the fifth are different jobs.
 	 */
 	const met = describeAcquaintance(mission.playedBefore);
+	// The same discipline as the novelty line above: a minor tune's key is named
+	// as minor, because the play-along page has always printed it that way and a
+	// bare "A" on a task that is about to hand you Am, Dm and E7 is the app being
+	// vague about the one fact this pass exists to get right.
+	const key = chart?.mode === 'minor' ? `${mission.keyCenter} minor` : mission.keyCenter;
 	return {
 		kind: 'mission',
 		title: 'Mission',
-		instruction: `${mission.chartName} · ${mission.keyCenter} · ${mission.groove} · ≥${mission.bpmFloor} BPM.${met}${climbing}${constraint}`,
+		instruction: `${mission.chartName} · ${key} · ${mission.groove} · ≥${mission.bpmFloor} BPM.${met}${climbing}${constraint}`,
 		goal: missionGoal(chart, mission),
 		mission
 	};
@@ -1219,8 +1286,12 @@ function noveltyLine(novelty: Novelty): string {
 		}
 		case 'progression': {
 			const progression = PROGRESSIONS.find((p) => p.id === novelty.progressionId);
+			// Named as the key it is actually in. "In A" over a set of minor chords
+			// reads as A major and is the sentence that made the parallel-minor bug
+			// invisible on the page as well as in the composer.
+			const key = progression?.mode === 'minor' ? `${novelty.keyCenter} minor` : novelty.keyCenter;
 			return progression
-				? `${progression.name} in ${novelty.keyCenter}. ${progression.describes} ${progression.listenFor}`
+				? `${progression.name} in ${key}. ${progression.describes} ${progression.listenFor}`
 				: `A new progression in ${novelty.keyCenter}.`;
 		}
 		case 'groove': {
@@ -1316,6 +1387,13 @@ export function composeWorkout(input: WorkoutInput): Workout {
 			? rungSkillCode(choice.rungId)
 			: progressionSkillCode(choice.progressionId)
 		: null;
+	/*
+	 * The minor keys the ladder has actually opened — the relative minors, and
+	 * only those. Read off `reached` rather than passed in, because it is a
+	 * reading of the frontier and the frontier is already here.
+	 */
+	const minorKeys = minorKeysReached(input.reached);
+
 	const novelty = chooseNovelty({
 		keyCenter,
 		nextCell: input.nextCell ?? null,
@@ -1323,6 +1401,7 @@ export function composeWorkout(input: WorkoutInput): Workout {
 		playedGrooves: input.played?.grooves ?? [],
 		rungLooksSolid: input.rungLooksSolid ?? false,
 		yesterday: input.yesterdaysNovelty ?? null,
+		minorKeys,
 		day
 	});
 	const openNext = openOffer(input);
@@ -1362,6 +1441,7 @@ export function composeWorkout(input: WorkoutInput): Workout {
 			coldSpots,
 			ladders: input.ladders ?? {},
 			plays: input.plays ?? {},
+			minorKeys,
 			day,
 			nth: missionsBuilt
 		});
