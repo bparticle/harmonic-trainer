@@ -11,7 +11,8 @@ import {
 	sessionBlocks,
 	sessions,
 	skills,
-	srsState
+	srsState,
+	userPrefs
 } from './schema';
 import type { ReviewRating, WorkoutBlockType } from './schema';
 import { initialState, schedule, type Schedulable, type SrsState } from '$lib/srs/scheduler';
@@ -36,6 +37,7 @@ import { reportWorkout, type Asked, type WorkoutReport } from '$lib/session/repo
 import {
 	isLadderKey,
 	looksSolid,
+	readyToMoveOn,
 	rungOfSkill,
 	type PastWorkout,
 	type RungRecord
@@ -50,13 +52,17 @@ import {
 	cellsOf,
 	deepen,
 	FIRST_FRONTIER,
+	frontierCovering,
 	isWellFormed,
 	narrower,
 	nextCell,
+	nextOpening,
 	positionOf,
 	rungById,
 	stageByKey,
+	STAGES,
 	widenNext,
+	widest,
 	workingPosition,
 	type Frontier,
 	type Position
@@ -113,6 +119,60 @@ export async function currentFrontier(userId: string): Promise<Frontier> {
 /** Where the lesson is, for the hero and the rung's own review count. */
 export async function currentPosition(userId: string): Promise<Position> {
 	return workingPosition(await currentFrontier(userId));
+}
+
+/**
+ * Put back a frontier that was never written down.
+ *
+ * **This repairs the worst bug in the app and it is a one-shot migration, not a
+ * policy.** `readFrontier` converts a stored `ladderKey` / `ladderRung` into the
+ * frontier it always meant, which is correct — and nothing ever wrote the answer
+ * back. So an account whose `ladderWidths` had been lost re-derived the same
+ * legacy pair on every single request and sat there. One had been through all
+ * seven rungs of C and the scale of G; it came back every morning as *the home
+ * chord in C*, two cells wide. Every consequence of that looked like a different
+ * bug: the same nine tunes were the only ones the vocabulary gate would clear,
+ * the mission was one of them, the hero said the same rung for a fortnight, and
+ * the drill room meanwhile went on asking about the sevenths, because the card
+ * bank had never forgotten.
+ *
+ * The card bank is the repair. `ensureLadderCards` is the only writer of ladder
+ * cards, so a card is *proof* that its cell was open — better evidence than a
+ * settings row, which is a cache and had been clobbered. `frontierCovering`
+ * turns those cells back into a staircase and `widest` merges it with whatever
+ * is stored, so this can only ever give ground back and never take it.
+ *
+ * It runs only where `ladderWidths` is absent, which is exactly the damaged
+ * shape. Once one is written — by this, or by any deepen or widen — the stored
+ * value is authoritative forever and stepping back keeps working, which it would
+ * not if the bank were consulted on every read.
+ */
+export async function repairFrontier(userId: string): Promise<Frontier> {
+	const stored = await currentFrontier(userId);
+
+	const [row] = await db
+		.select({ prefs: userPrefs.prefsJson })
+		.from(userPrefs)
+		.where(eq(userPrefs.userId, userId))
+		.limit(1);
+
+	const widths = (row?.prefs as { ladderWidths?: unknown } | null)?.ladderWidths;
+	if (isWellFormed({ widths })) return stored;
+
+	const cells = await db
+		.select({ code: skills.code, key: cards.keyCenter })
+		.from(cards)
+		.innerJoin(skills, eq(skills.id, cards.skillId))
+		.where(and(eq(cards.userId, userId), sql`${skills.code} like 'rung:%'`));
+
+	const evidence = frontierCovering(
+		cells.flatMap((cell) => {
+			const rungId = rungOfSkill(cell.code);
+			return rungId && isLadderKey(cell.key) ? [{ key: cell.key, rungId }] : [];
+		})
+	);
+
+	return saveFrontier(userId, widest(stored, evidence));
 }
 
 /**
@@ -209,6 +269,23 @@ export async function deepenLadder(userId: string): Promise<Frontier> {
 export async function widenLadder(userId: string): Promise<Frontier> {
 	const from = await currentFrontier(userId);
 	const to = widenNext(from);
+	return to ? saveFrontier(userId, to) : from;
+}
+
+/**
+ * Open whatever is next, whichever direction that is.
+ *
+ * What the workout's "ready to move on" button does, and it has to ask the same
+ * question `nextOpening` answers or the two disagree in the one case that
+ * matters. `deepenLadder` alone returns the frontier unchanged once every rung
+ * is open somewhere, so a button wired to it did nothing at all for anybody who
+ * had finished a key — pressed, redirected, and left them exactly where they
+ * were. The home page has offered both moves as separate buttons all along; this
+ * is the same pair behind one.
+ */
+export async function openLadder(userId: string): Promise<Frontier> {
+	const from = await currentFrontier(userId);
+	const to = deepen(from) ?? widenNext(from);
 	return to ? saveFrontier(userId, to) : from;
 }
 
@@ -456,7 +533,7 @@ async function gatherWorkoutInput(
 			loadColdSpots(userId),
 			missionCharts(userId),
 			alreadyPlayed(userId),
-			rungProgress(userId, position),
+			rungProgress(userId, position, frontier),
 			lastNovelty(userId, now),
 			loadTempoGrades(userId),
 			chartPlays(userId)
@@ -471,6 +548,9 @@ async function gatherWorkoutInput(
 		// What deepening would open next, worked out here because it needs the
 		// shape of the frontier and the composer is pure.
 		nextCell: nextCell(frontier),
+		// And what *any* move would open, which past the seventh rung is the only
+		// one of the two that still has an answer. See `nextOpening`.
+		nextOpening: nextOpening(frontier),
 		coldSpots,
 		charts: chartList,
 		ladders: tempo.ladders,
@@ -478,7 +558,15 @@ async function gatherWorkoutInput(
 		played,
 		yesterdaysNovelty,
 		choice: request.choice ?? null,
-		rungLooksSolid: progress.looksSolid,
+		// The wider reading, so the offer to go deeper arrives on a rung that has
+		// been worked to death as well as on one that has been mastered.
+		rungLooksSolid: progress.readyToMoveOn,
+		standingOn: {
+			rungId: position.rung.id,
+			label: position.rung.label,
+			reviews: progress.reviews,
+			correct: progress.correct
+		},
 		// What the two halves of the drill room have between them taught. The rungs
 		// give the shapes, the progressions give the ground; the composer compares
 		// it against what each tune asks for and sets a mission only where it fits.
@@ -509,7 +597,7 @@ export async function previewWorkouts(
 	userId: string,
 	now = new Date()
 ): Promise<Record<WorkoutSize, Workout>> {
-	const frontier = await currentFrontier(userId);
+	const frontier = await repairFrontier(userId);
 	await ensureLadderCards(userId, frontier);
 	const input = await gatherWorkoutInput(userId, frontier, {}, now);
 
@@ -574,7 +662,11 @@ export async function startWorkout(
 	const open = await activeWorkout(userId);
 	if (open) return open;
 
-	const frontier = await currentFrontier(userId);
+	// Repaired rather than read, because a workout composed from a frontier that
+	// was silently rolled back is the whole of the bug: the drills would ask about
+	// the sevenths while the mission gate believed nothing but the home chord had
+	// ever been met. Idempotent and free once the widths are on the row.
+	const frontier = await repairFrontier(userId);
 	await ensureLadderCards(userId, frontier);
 
 	const choice = request.choice ?? null;
@@ -987,9 +1079,25 @@ export async function recordReviews(
 	});
 }
 
-/** How the current rung is going, for deciding whether to suggest moving on. */
-export async function rungProgress(userId: string, position: Position) {
+/**
+ * How the current rung is going, for deciding whether to suggest moving on.
+ *
+ * Counted across **every key the rung is open in**, which is what the path on
+ * the home page has always counted and what `looksSolid`'s own note says the two
+ * had better agree about. They did not: this asked about one key — the last one
+ * the rung was opened in — so a rung practised solidly in C and freshly opened
+ * in G came back as whatever G held, which on the morning it opened is nothing.
+ * The path drew the step as done and the button underneath it stayed dark.
+ *
+ * A rung is one idea and the keys are where it is met, so the total is the
+ * number that answers "do I know this yet".
+ */
+export async function rungProgress(userId: string, position: Position, frontier?: Frontier) {
 	const code = rungSkillCode(position.rung.id);
+	const open = frontier
+		? STAGES.slice(0, frontier.widths[position.rungIndex] ?? 0).map((stage) => stage.key)
+		: [position.stage.key];
+
 	const [row] = await db
 		.select({
 			total: sql<number>`count(${reviews.id})::int`,
@@ -999,7 +1107,11 @@ export async function rungProgress(userId: string, position: Position) {
 		.innerJoin(skills, eq(skills.id, cards.skillId))
 		.leftJoin(reviews, eq(reviews.cardId, cards.id))
 		.where(
-			and(eq(cards.userId, userId), eq(skills.code, code), eq(cards.keyCenter, position.stage.key))
+			and(
+				eq(cards.userId, userId),
+				eq(skills.code, code),
+				open.length ? inArray(cards.keyCenter, open) : eq(cards.keyCenter, position.stage.key)
+			)
 		);
 
 	const total = row?.total ?? 0;
@@ -1010,7 +1122,16 @@ export async function rungProgress(userId: string, position: Position) {
 		correct,
 		accuracy: total > 0 ? correct / total : 0,
 		/** Only ever a suggestion — moving on is your call. */
-		looksSolid: looksSolid(position.rung, total, correct)
+		looksSolid: looksSolid(position.rung, total, correct),
+		/**
+		 * Whether to say "ready to move on" out loud.
+		 *
+		 * Wider than `looksSolid` by exactly one case — a rung worked far past the
+		 * point of teaching anything, see `hasOutgrown` — and kept as a separate
+		 * field so the page can still draw the step honestly as unsolid while
+		 * offering the way on.
+		 */
+		readyToMoveOn: readyToMoveOn(position.rung, total, correct)
 	};
 }
 

@@ -5024,3 +5024,208 @@ pass three put the three crossing directions above it and did not update the
 prose. And `DEFAULT_PREFS.ladderWidths` was `FIRST_FRONTIER.widths` by
 reference — one array behind two module constants, harmless only for as long as
 nothing edits a frontier in place. Both corrected in passing.
+
+## The morning the app stopped noticing
+
+Written down after a fortnight of practice and one sentence that had to be taken
+seriously: _it still feels very unresponsive to my practice, and the
+repetitiveness doesn't feel like actual practice — it feels like "okay I have
+done this, I knew this, now what?"_. Underneath it, four specifics: always the
+same triads to listen to, always **Linstead Market**, always parked on _the home
+chord_, and a piano that answered some questions and ignored others.
+
+None of that was a preference. All four were the same account being read wrong,
+or being read right and then not being told.
+
+### The ladder had rolled back and stayed there
+
+The previous entry fixed the settings menu's ability to write a stale
+`ladderWidths` over a live one. It stopped the damage; it never repaired the row
+it had already done it to. And the repair mattered more than the fix, because of
+what `readFrontier` does on a row with no widths on it: it converts the legacy
+`ladderKey` / `ladderRung` into the frontier that pair always meant —
+correctly, exactly, and **without ever writing the answer down**.
+
+So an account whose widths had been lost re-derived the same two-cell frontier on
+every request, for ever. The one this was found on had been through all seven
+rungs of C and the scale of G. It came back every morning as _the home chord in
+C_, `[1, 1, 0, 0, 0, 0, 0]`.
+
+Everything the complaint listed follows from that one array, and each consequence
+looked like its own separate bug:
+
+- `vocabularyFromRungs` saw one shape — a major triad — so `isReady` cleared nine
+  tunes out of twenty-nine. The composer was picking from nine, and doing it
+  correctly.
+- `workingPosition` reported the deepest _open_ rung, which was the home chord.
+  So the hero said the home chord, the review count was the home chord's, and
+  "ready to move on" was asked about the home chord.
+- The drill room meanwhile went on asking about the sevenths and the relative
+  minor, because `schedulableCards` reads the card bank and the card bank had
+  never forgotten. **The two halves of the app disagreed about where the learner
+  was**, and only one of them was wrong.
+
+The card bank is the repair. `ensureLadderCards` is the only thing that ever
+writes a ladder card, so a card is _proof_ that its cell was open — better
+evidence than a settings row, which is a cache and had been clobbered.
+`frontierCovering` turns a set of cells back into a staircase, raising each rung
+to at least the width of the one below it so that a bank which lost its shallow
+rungs still comes back well formed, and `widest` merges that with whatever is
+stored, so the repair can only ever give ground back.
+
+It runs only where `ladderWidths` is absent, which is exactly the damaged shape,
+and it writes. Once a width array is on the row — by this, or by any deepen or
+widen — the stored value is authoritative for ever and **step back keeps
+working**, which it would not if the bank were consulted on every read. That is
+the whole reason this is a migration and not a policy.
+
+On the account it was found on: `[1,1,0,0,0,0,0]` becomes `[2,1,1,1,1,1,1]`, and
+the tunes a mission may be set on go from nine to twenty-three.
+
+### The offer to move on was hiding behind twenty-eight other things
+
+The "move the ladder here" button existed only when the workout's _one new thing_
+happened to be the next rung. `chooseNovelty` ranks the rung last unless the
+current one looks solid, and ahead of it sit nineteen progressions and nine
+grooves. So on any account past its first week the offer was simply never on
+screen, and somebody doing exactly what the app told them to do could practise
+for a fortnight and never once be shown the way forward.
+
+Two things were tangled and are now separate. The **new thing** stays whatever is
+genuinely new. The **invitation to open more ladder** rides beside it, as
+`workout.openNext`, whenever the record says the rung has been met. One
+suggestion in one place, and the novelty slot no longer gets a vote on whether it
+appears.
+
+Three things had to change for the invitation to be worth making.
+
+**It was measured in the wrong place.** `rungProgress` counted one key — the last
+one the rung was opened in — while `ladderPath` sums across every key the rung is
+open in. `looksSolid`'s own comment says those two had better agree. They did not:
+a rung practised solidly in C and freshly opened in G came back as whatever G
+held, which on the morning it opens is nothing. The path drew the step as done and
+the button under it stayed dark. It counts across the open keys now, which is what
+"do I know this yet" means for an idea that is the same in all twelve.
+
+**Being stuck is not the same as being unready.** The account had answered the
+home chord eighty-five times at forty-nine per cent. `looksSolid` is false there
+every single morning, so the app never said anything — and the honest reading of
+eighty-five attempts is not _you are not ready_, it is _this rung has stopped
+being able to teach you anything_. `hasOutgrown` fires at three times
+`suggestAfter` regardless of accuracy, and `readyToMoveOn` is the two together.
+The multiplier is not tuned against anything and does not need to be; it only has
+to be far enough past the suggestion that nobody reaches it while the rung is
+still working. The sentence beside the offer says which of the two earned it,
+because "twelve of fifteen right" and "you have answered this eighty-five times"
+are different invitations and the reader deserves to know which one they are being
+given.
+
+**And it pointed at a move that no longer existed.** `nextCell` answers only for
+deepening and goes quiet once every rung is open in at least one key — which is
+precisely where somebody who has worked through one key ends up, and precisely
+where the whole of the remaining ladder is breadth. The button was wired to
+`deepenLadder`, which returns the frontier unchanged in that state: pressed,
+redirected, nothing moved. `nextOpening` asks for depth and falls back to breadth
+and says which it got; `openLadder` makes the same move server-side. The repaired
+account lands here immediately — seven rungs of C finished, eleven keys untouched
+— and is now told to take the home chord into G rather than being told nothing at
+all.
+
+### Twenty-five runs of one tune, chosen by a composer that knew the count
+
+`composeMission` rotated its ready pool one step a day. That sounds like variety
+and is not: every workout started before midnight gets the identical tune, and a
+pool of nine comes round once a fortnight. The record held twenty-five runs of
+Linstead Market and none at all of six tunes the same account had been cleared
+for — and `plays` was already an input, used only to print _played four times
+before_ in the instruction.
+
+So the count leads and the rotation breaks the ties. Least played first, which
+means finishing a tune moves it to the back and the next workout of the same day
+goes somewhere else without any notion of "today" being involved. The sort is
+stable and is applied to the rotated list, so an account that has played nothing —
+every count zero — behaves exactly as it did before, which is the property the
+change had to keep rather than an accident of it. Linstead Market goes from first
+of nine to last of twenty-three.
+
+### The button that graded itself correct
+
+The worst of it, and it had been there the whole time.
+
+`hear_name` and the naming half of `degree_play` had no way to answer. The only
+control was a button reading **Reveal the name**, and pressing it ran
+`record('good', true)`. `markNamed` and `choicesFor` had been sitting in
+`drill.ts` since they were written, called by nothing.
+
+Eighty of one account's hundred and eleven naming answers were that button. Every
+one of them told FSRS the card was known and stretched its interval; every one of
+them went into the rung accuracy that decides whether the app ever offers to move
+on; every one of them went into the percentage the end screen reports as _how it
+went_. The single number the app offers as feedback was partly a count of button
+presses.
+
+Four buttons now: the right name and three drawn from the workout's own material
+by `nameNeighbours` — same kind first, same key first, because those are the two
+axes a mistake actually runs along. A degree keeps both halves, which is what its
+instruction has always promised and the page used to abandon at the interval:
+play the chord the numeral asks for, _then_ say what you played. Playing it right
+and then calling it something else is not a question you answered.
+
+A wrong answer is worth more than a fake right one. That is the whole argument.
+
+### The sustain pedal was marking questions wrong
+
+Both the spacebar and the pedal landed on `advanceHandsFree`, which on an
+unanswered question called `skipCard` — `record('again', false)`, and on to the
+next one. Pianists pedal continuously. The account had forty-three failed
+`hear_play` answers, most of them under three seconds, which is not somebody
+failing to find a C major triad; and that accuracy is what `looksSolid` reads, so
+**the pedal was quietly holding the ladder shut**.
+
+The two are no longer the same key, and the distinction is not a preference: a
+spacebar press is unambiguous, because nothing about playing the piano involves
+one, so it can still mean _I am stuck, show me_ — which records `again` honestly,
+since being shown it is a real thing to record. A pedal press is part of playing,
+so while a question is waiting for your hands it now means nothing at all. Once
+the question is answered both mean the same thing again, which is when hands-free
+actually matters. The line under the keyboard says so rather than advertising a
+pedal that no longer does anything there.
+
+### And the pedal was breaking chord recognition as well
+
+The other half of _sometimes it responds to the piano and sometimes I have to
+click Next_, and the more insidious half. `ChordEvent.notes` is everything
+**sounding** — the right answer for a wheel showing what the room can hear, and
+the wrong one for marking a chord, because with the pedal down it holds the last
+four chords too. `markPlayed` refuses extras, correctly, so a correct C major
+arrived as a C major with four notes to lift and was never once marked right. On
+a real piano the drill answered to the mouse and nothing else.
+
+So `ChordEvent` carries `held` beside `notes` — what a finger is on, as opposed
+to what is ringing — and everything that _grades_ a gesture reads that, while
+everything that _draws_ one keeps reading `notes`. The live "add this, lift that"
+line moved too; it was telling a pedalling player to lift notes no finger was on.
+
+One thing had to change with it. `flush` suppresses a chord identical to the last
+one, which under the pedal is true of playing the same chord twice: the sounding
+set never changes, so the second gesture was swallowed and a drill asking for the
+same shape twice in a row never saw the answer. It compares both sets now — a
+gesture is different if what your fingers are doing is different.
+
+### Left alone, and said out loud instead
+
+`see_play` and `play_name` are generated for every chord on every rung and are in
+no task's direction list, so nothing has asked one since the six-block session was
+retired. Two of the five cards a chord owns are dead, and `isRetiredIntroduction`
+— which exists to stop `see_play` outstaying its welcome — is guarding a
+direction nobody draws.
+
+Adding `see_play` to the function task was tried and taken back out. It fights an
+explicit decision in `scheduler.ts` — _a symbol you can already play is a question
+the chart asks all day with a band behind it_ — and on a first morning it fills a
+task called Function with a scale, which is exactly the day-one honesty the
+composer's tests are there to protect. The argument for adding it was that the
+drill room felt monotonous, and the monotony had a better cause, fixed above:
+nine tunes and a two-cell frontier. Whether the app should ask a written chord
+symbol at all is a curriculum decision, and it should be made deliberately rather
+than as a side effect of a bug hunt.

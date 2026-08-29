@@ -59,6 +59,46 @@ export function looksSolid(rung: Rung, reviews: number, correct: number): boolea
 	return reviews >= rung.suggestAfter && reviews > 0 && correct / reviews >= 0.8;
 }
 
+/**
+ * How many answers before a rung stops being able to teach anything new.
+ *
+ * Three times the count at which the suggestion was meant to arrive. The
+ * multiplier is not tuned against anything and does not need to be: it only has
+ * to be far enough past `suggestAfter` that nobody reaches it while the rung is
+ * still doing its job.
+ */
+const OUTGROWN = 3;
+
+/**
+ * Answered so many times that staying here is the strange choice.
+ *
+ * `looksSolid` is the happy path and it has one failure mode, found by opening
+ * an account that had been practising for a fortnight: a rung answered eighty-five
+ * times at forty-nine per cent never clears the accuracy bar, so the app never
+ * once offered to move on, and the only visible advice was the same rung again
+ * tomorrow. That is the app confusing *this is hard* with *you are not ready*.
+ *
+ * They are different things and only the second is a reason to wait. A rung
+ * worked this far has been met; whether it has been mastered is a question the
+ * player can answer far better than a review count can, and the whole ladder has
+ * always been a suggestion rather than a gate. So the offer arrives — clearly
+ * marked as an offer — instead of nothing arriving at all.
+ */
+export function hasOutgrown(rung: Rung, reviews: number): boolean {
+	return reviews >= rung.suggestAfter * OUTGROWN;
+}
+
+/**
+ * Whether the app should say "ready to move on" out loud.
+ *
+ * The one question the novelty slot and the new-thing task both ask, so that a
+ * step drawn as finished and a button that will not offer the next rung cannot
+ * disagree — the same discipline `looksSolid` is written down once for.
+ */
+export function readyToMoveOn(rung: Rung, reviews: number, correct: number): boolean {
+	return looksSolid(rung, reviews, correct) || hasOutgrown(rung, reviews);
+}
+
 // ---------------------------------------------------------------------------
 // The path
 // ---------------------------------------------------------------------------

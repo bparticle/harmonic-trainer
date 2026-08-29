@@ -1,6 +1,6 @@
 import { GROOVES, type Groove } from '$lib/audio/groove';
 import { MISSION_CHARTS, type ChartCategory } from '$lib/curriculum/charts';
-import { rungById, type RungId } from '$lib/curriculum/ladder';
+import { rungById, type Move, type RungId } from '$lib/curriculum/ladder';
 import { PROGRESSIONS } from '$lib/curriculum/progressions';
 import {
 	describeShortfall,
@@ -236,6 +236,24 @@ export type Workout = {
 	/** Lifted out of its task so tomorrow can avoid it. */
 	novelty: Novelty | null;
 	/**
+	 * Whether the ladder is worth moving on today, and what it would open.
+	 *
+	 * Separate from the novelty on purpose. The offer used to *be* the novelty —
+	 * the "move the ladder here" button existed only when the new thing happened
+	 * to be the next rung — and the novelty slot has twenty-eight other things it
+	 * would rather show you, so on an account that had met a couple of them the
+	 * offer was simply never on screen. Somebody doing what the app told them to
+	 * do could practise for a fortnight and never once be shown the way forward.
+	 *
+	 * So the two are decoupled: the new thing stays whatever is genuinely new, and
+	 * the invitation to go deeper rides beside it whenever the record says the
+	 * rung has been met. Null is the ordinary case and means nothing is claimed.
+	 *
+	 * Optional because a workout composed before this existed is still sitting in
+	 * somebody's `plan_json`, and must draw as it always did.
+	 */
+	openNext?: OpenOffer | null;
+	/**
 	 * Why there is no play-along today, on the days there is none.
 	 *
 	 * Null whenever a mission was set, which is nearly always. It is not null on
@@ -256,6 +274,28 @@ export type Workout = {
  * `teaches` names progressions by id, in the library's own order, so the page can
  * link to the thing that unlocks it instead of leaving the reader to guess.
  */
+/**
+ * The next cell of the ladder, offered because the rung you are on has been met.
+ *
+ * Carries what it would open so the button can name it, which way the ladder
+ * would move so the sentence can, and the counts behind the suggestion so it can
+ * be honest about why it is being made — "twelve of fifteen right here" and "you
+ * have answered this eighty-five times" are different invitations and the reader
+ * deserves to know which.
+ */
+export type OpenOffer = {
+	/** A new idea, or the same idea in a new key. */
+	move: Move;
+	rungId: RungId;
+	label: string;
+	teaches: string;
+	key: string;
+	/** The rung it is offered from, and what the record holds there. */
+	from: { rungId: RungId; label: string; reviews: number; correct: number };
+	/** True when the accuracy bar was cleared, false when only the count was. */
+	solid: boolean;
+};
+
 export type MissionHeld = {
 	/** The nearest tune of the lot, by `reachOf`. */
 	chartSlug: string;
@@ -398,6 +438,17 @@ export type WorkoutInput = {
 	 * deepest rung is not the most recently opened cell.
 	 */
 	nextCell?: { key: string; rungId: RungId } | null;
+	/**
+	 * The next cell the ladder would open in *either* direction, for the offer.
+	 *
+	 * Separate from `nextCell` because they answer different questions and stop
+	 * agreeing at the same place: `nextCell` is the next new *idea* and goes quiet
+	 * once every rung is open somewhere, which is exactly when the only thing left
+	 * to do is take those rungs into another key. The novelty slot wants the first;
+	 * the offer to move on wants the second, or it disappears from the screen of
+	 * anybody who has finished a key.
+	 */
+	nextOpening?: { move: Move; key: string; rungId: RungId } | null;
 	/** The record's cold spots. Empty is a fair answer on a first workout. */
 	coldSpots?: ColdSpot[];
 	/** Yesterday's novelty, by `noveltyId`. */
@@ -435,6 +486,19 @@ export type WorkoutInput = {
 	plays?: Record<string, number>;
 	/** Whether the current rung looks solid, so the slot can say "ready to move on". */
 	rungLooksSolid?: boolean;
+	/**
+	 * The rung being worked and what the record holds on it, for the offer above.
+	 *
+	 * Arrives already counted, like everything else this pure module needs. Absent
+	 * means the caller has nothing to say, and no offer is made — which is the
+	 * right reading for a composer called from a test rather than a home page.
+	 */
+	standingOn?: {
+		rungId: RungId;
+		label: string;
+		reviews: number;
+		correct: number;
+	} | null;
 	/**
 	 * What the drill room has taught: the shapes met and the ground reached.
 	 *
@@ -913,19 +977,41 @@ function composeMission(input: {
 		wantedStyle ? ready.filter((c) => c.style === wantedStyle).map((c) => c.slug) : []
 	);
 
-	// Rotated in two halves rather than as one list, or the day's rotation would
-	// walk straight past the charts the cold quality just steered towards.
-	// `nth` then indexes rather than re-seeds, so a long workout's second mission
-	// is the next chart along and never the first one again.
+	/*
+	 * Least played first, and the day only breaks the ties.
+	 *
+	 * The rotation used to be the whole of the ordering, which sounds like variety
+	 * and is not: it walks a fixed list one step a day, so a pool of nine tunes
+	 * offers each of them once a fortnight and offers the *same* one to every
+	 * workout started on the same day. An account with twenty-five runs of Linstead
+	 * Market and none at all of six other tunes it was cleared for was being handed
+	 * Linstead Market again, three times in a morning, by a composer that already
+	 * knew the count.
+	 *
+	 * So the count leads. `plays` is every run of that tune on the record, mission
+	 * or free, which means finishing one moves it to the back and the next workout
+	 * of the same day goes somewhere else without any notion of "today" being
+	 * involved.
+	 *
+	 * The rotation survives underneath, and the sort is stable, so tunes the record
+	 * has nothing to choose between are still ordered by the day walking the
+	 * reach-sorted list. An account that has played nothing — every count zero —
+	 * therefore behaves exactly as it did before this existed, which is the test
+	 * this change has to pass and the reason the count is a tie-break on the
+	 * rotation rather than a replacement for it.
+	 *
+	 * `nth` then indexes rather than re-seeds, so a long workout's second mission
+	 * is the next chart along and never the first one again.
+	 */
+	const playsOf = (chart: MissionChart) => input.plays[chart.slug] ?? 0;
+	const byNeed = (group: MissionChart[]) =>
+		[...rotate(group, input.day)].sort((a, b) => playsOf(a) - playsOf(b));
+
+	// Two halves rather than one list, or the ordering would walk straight past
+	// the charts the cold quality just steered towards.
 	const pool = [
-		...rotate(
-			ready.filter((c) => steeredSlugs.has(c.slug)),
-			input.day
-		),
-		...rotate(
-			ready.filter((c) => !steeredSlugs.has(c.slug)),
-			input.day
-		)
+		...byNeed(ready.filter((c) => steeredSlugs.has(c.slug))),
+		...byNeed(ready.filter((c) => !steeredSlugs.has(c.slug)))
 	];
 	const chart = pool[input.nth % pool.length];
 
@@ -1239,6 +1325,7 @@ export function composeWorkout(input: WorkoutInput): Workout {
 		yesterday: input.yesterdaysNovelty ?? null,
 		day
 	});
+	const openNext = openOffer(input);
 
 	const charts = input.charts ?? MISSION_CHARTS;
 	const chartBySlug = new Map(charts.map((c) => [c.slug, c]));
@@ -1328,8 +1415,38 @@ export function composeWorkout(input: WorkoutInput): Workout {
 		choice,
 		coldSpots,
 		novelty,
+		openNext,
 		// Only worth saying when a slot actually wanted one and could not have it.
 		missionHeld: missionsBuilt === 0 ? heldBack(charts, vocabulary) : null
+	};
+}
+
+/**
+ * The invitation to open more ladder, when the record has earned one.
+ *
+ * Two facts and no judgement: the caller has already decided whether the rung
+ * has been met — that rule lives in `journey.ts` and is written down once — and
+ * the frontier has already decided what the next move would open. This puts the
+ * two together so the page has one thing to draw rather than three to reconcile.
+ */
+function openOffer(input: WorkoutInput): OpenOffer | null {
+	const next =
+		input.nextOpening ?? (input.nextCell ? { move: 'deeper' as const, ...input.nextCell } : null);
+	const from = input.standingOn ?? null;
+	if (!next || !from || !input.rungLooksSolid) return null;
+
+	const rung = rungById(next.rungId);
+	if (!rung) return null;
+
+	return {
+		move: next.move,
+		rungId: rung.id,
+		label: rung.label,
+		teaches: rung.teaches,
+		key: next.key,
+		from,
+		// The accuracy bar, as opposed to the count that eventually offers anyway.
+		solid: from.reviews > 0 && from.correct / from.reviews >= 0.8
 	};
 }
 

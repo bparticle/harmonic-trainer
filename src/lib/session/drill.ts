@@ -1,6 +1,7 @@
 import type { CardDirection } from '$lib/server/db/schema';
 import type { CardPayload } from '$lib/curriculum/cards';
-import { formatKey, parseKey } from '$lib/music/key';
+import { diatonicSeventh, diatonicTriad, formatChord } from '$lib/music/chord';
+import { formatKey, key as makeKey, keyTonic, parseKey } from '$lib/music/key';
 
 /**
  * Posing a card and marking the answer.
@@ -281,6 +282,74 @@ function normalise(symbol: string): string {
 			.replace(/^([A-Ga-g][b#]?)-/, '$1m')
 			.toLowerCase()
 	);
+}
+
+/** A card the neighbour search may draw a wrong answer from. */
+export type NameOption = { label?: string; kind?: string; keyCenter?: string };
+
+/**
+ * The seven chords of a key, as names, for when the card bank cannot fill four
+ * buttons on its own.
+ *
+ * It often cannot, and the case it fails in is the worst one: an account two
+ * rungs up owns exactly one triad, so a naming question drawn only from the
+ * material would offer a single button — which is the button that graded itself
+ * correct, wearing a different hat. The key a chord came from always has six
+ * more chords in it, they are the things it is genuinely confused with, and they
+ * can be derived rather than waited for.
+ *
+ * An unknown key gives nothing rather than a guess. A question with three
+ * choices is worse than one with four and far better than one with a wrong
+ * answer in it.
+ */
+export function diatonicNames(keyCenter: string, kind: string | undefined): NameOption[] {
+	if (kind !== 'triad' && kind !== 'seventh') return [];
+
+	let key;
+	try {
+		key = makeKey(keyTonic(keyCenter));
+	} catch {
+		return [];
+	}
+
+	const build = kind === 'triad' ? diatonicTriad : diatonicSeventh;
+	return [1, 2, 3, 4, 5, 6, 7].map((degree) => ({
+		label: formatChord(build(key, degree)),
+		kind,
+		keyCenter
+	}));
+}
+
+/**
+ * Wrong answers worth offering, nearest first.
+ *
+ * Drawn from the material the workout is actually made of rather than invented,
+ * which is what makes them confusable: the other six triads of the key you are
+ * in are the things a C major might be mistaken for, and a list of four
+ * unrelated chords tests nothing but reading.
+ *
+ * Same kind first and same key first, because those are the two axes a mistake
+ * runs along — a triad is mistaken for a triad, and a chord in this key for
+ * another chord in this key. Anything of the same kind from elsewhere follows,
+ * so a task spread across keys still fills four buttons.
+ */
+export function nameNeighbours(correct: string, among: NameOption[], keyCenter?: string): string[] {
+	const wanted = normalise(correct);
+	const seen = new Set<string>([wanted]);
+	const near: string[] = [];
+	const far: string[] = [];
+
+	for (const option of among) {
+		const label = option.label;
+		if (!label) continue;
+		const key = normalise(label);
+		if (seen.has(key)) continue;
+		seen.add(key);
+		if (keyCenter && option.keyCenter === keyCenter) near.push(label);
+		else far.push(label);
+	}
+
+	return [...near, ...far];
 }
 
 /**

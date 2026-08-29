@@ -3,7 +3,7 @@ import type { Actions, PageServerLoad } from './$types';
 import {
 	activeWorkout,
 	currentFrontier,
-	deepenLadder,
+	openLadder,
 	finishTask,
 	loadCards
 } from '$lib/server/db/session-store';
@@ -58,13 +58,18 @@ export const actions: Actions = {
 		const index = Number(form.get('index'));
 
 		/*
-		 * No target to look up any more. The novelty slot offers whatever the
-		 * frontier would open next, and the frontier knows what that is — so this
-		 * says "go deeper" rather than naming a place, and the two can no longer
+		 * No target to look up any more. The offer names whatever the frontier
+		 * would open next, and the frontier knows what that is — so this says "open
+		 * the next thing" rather than naming a place, and the two can no longer
 		 * disagree about which rung was being offered.
+		 *
+		 * Deeper *or* wider, which is the fix. This used to deepen and nothing
+		 * else, and deepening is refused once every rung is open in at least one
+		 * key — so for somebody who had worked through C the button was pressed,
+		 * the page reloaded, and the ladder had not moved.
 		 */
 		const before = await currentFrontier(userId);
-		const after = await deepenLadder(userId);
+		const after = await openLadder(userId);
 		const moved = after.widths.join() !== before.widths.join();
 
 		if (sessionId && Number.isInteger(index)) {

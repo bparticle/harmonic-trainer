@@ -2,7 +2,16 @@ import { describe, expect, it } from 'vitest';
 import type { CardPayload } from '$lib/curriculum/cards';
 import { STAGES, itemsForRung } from '$lib/curriculum/ladder';
 import { cardsForKeyCentre, cardsForKeyMoved, cardsForPivots } from '$lib/curriculum/cards';
-import { choicesFor, markGathered, markNamed, markPlayed, pose, toVoicing } from './drill';
+import {
+	choicesFor,
+	diatonicNames,
+	markGathered,
+	markNamed,
+	markPlayed,
+	nameNeighbours,
+	pose,
+	toVoicing
+} from './drill';
 
 const cmaj7: CardPayload = {
 	kind: 'chord',
@@ -374,5 +383,98 @@ describe('multiple choice', () => {
 			)
 		);
 		expect(positions.size).toBeGreaterThan(1);
+	});
+});
+
+describe('the wrong answers a naming question offers', () => {
+	/*
+	 * There were none. `hear_name` and the naming half of a degree had no control
+	 * but "Reveal the name", which recorded a correct answer for being pressed —
+	 * so the app's one number, the accuracy on the end screen, was partly a count
+	 * of button presses. Four buttons is the smallest honest replacement, and they
+	 * are only worth anything if the three wrong ones are confusable.
+	 */
+	const among = [
+		{ label: 'Dm', kind: 'triad', keyCenter: 'C' },
+		{ label: 'Em', kind: 'triad', keyCenter: 'C' },
+		{ label: 'F', kind: 'triad', keyCenter: 'C' },
+		{ label: 'D', kind: 'triad', keyCenter: 'G' },
+		{ label: 'C', kind: 'triad', keyCenter: 'C' }
+	];
+
+	it('never offers the answer as one of the wrong ones', () => {
+		expect(nameNeighbours('C', among, 'C')).not.toContain('C');
+	});
+
+	it('prefers chords from the key the question is in', () => {
+		// The mistake runs along the key: a C major is confused with the other
+		// chords of C, not with a D major from somewhere else.
+		expect(nameNeighbours('C', among, 'C').slice(0, 3)).toEqual(['Dm', 'Em', 'F']);
+	});
+
+	it('still fills the buttons from elsewhere when the key is thin', () => {
+		const thin = [
+			{ label: 'Dm', kind: 'triad', keyCenter: 'C' },
+			{ label: 'D', kind: 'triad', keyCenter: 'G' },
+			{ label: 'A', kind: 'triad', keyCenter: 'G' }
+		];
+		expect(choicesFor('C', nameNeighbours('C', thin, 'C'))).toHaveLength(4);
+	});
+
+	it('does not offer the same name twice, however it is spelled', () => {
+		const spellings = [
+			{ label: 'Cmaj7', kind: 'seventh', keyCenter: 'C' },
+			{ label: 'CM7', kind: 'seventh', keyCenter: 'C' },
+			{ label: 'Dm7', kind: 'seventh', keyCenter: 'C' }
+		];
+		expect(nameNeighbours('C∆7', spellings, 'C')).toEqual(['Dm7']);
+	});
+
+	it('holds the right answer exactly once, wherever it lands', () => {
+		const options = choicesFor('C', nameNeighbours('C', among, 'C'));
+		expect(options.filter((option) => markNamed('C', option))).toHaveLength(1);
+	});
+});
+
+describe('filling the buttons on an account that owns one chord', () => {
+	/*
+	 * The degenerate case, and it is the original bug wearing a different hat: two
+	 * rungs up the bank holds exactly one triad, so wrong answers drawn only from
+	 * the material leave a single button — press it, be right. The key the chord
+	 * came from always has six more in it.
+	 */
+	it('offers the other six chords of the key', () => {
+		// Spelled exactly as `ladder.ts` spells a card label — both go through
+		// `formatChord`, so a derived name and a stored one are the same string and
+		// `nameNeighbours` folds the duplicate away rather than offering it twice.
+		expect(diatonicNames('C', 'triad').map((option) => option.label)).toEqual([
+			'C',
+			'Dm',
+			'Em',
+			'F',
+			'G',
+			'Am',
+			'Bdim'
+		]);
+	});
+
+	it('builds four choices from one card and the key around it', () => {
+		const onlyCard = [{ label: 'C', kind: 'triad', keyCenter: 'C' }];
+		const among = [...onlyCard, ...diatonicNames('C', 'triad')];
+		const options = choicesFor('C', nameNeighbours('C', among, 'C'));
+		expect(options).toHaveLength(4);
+		expect(options.filter((option) => markNamed('C', option))).toHaveLength(1);
+	});
+
+	it('reads a mode label as the key it is in', () => {
+		expect(diatonicNames('Eb mixolydian', 'triad')[0].label).toBe('Eb');
+	});
+
+	it('says nothing about a scale, which has no name to confuse', () => {
+		expect(diatonicNames('C', 'scale')).toEqual([]);
+	});
+
+	it('says nothing about a key it cannot read', () => {
+		expect(diatonicNames('not a key', 'triad')).toEqual([]);
 	});
 });

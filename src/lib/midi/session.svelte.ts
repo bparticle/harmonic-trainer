@@ -4,6 +4,7 @@ import {
 	midiEventBuffers,
 	parseMessageInto,
 	reduce as reduceCluster,
+	fingered,
 	sounding,
 	type ChordEvent,
 	type ClusterState,
@@ -44,6 +45,15 @@ export class MidiSession {
 	selectedId = $state<string | null>(null);
 	/** Notes sounding right now, for the wheel and keyboard overlays. */
 	live = $state<number[]>([]);
+	/**
+	 * Notes under a finger right now, for anything marking a shape as it is built.
+	 *
+	 * `live` is what the room can hear and is right for the overlays. It is wrong
+	 * for a running comparison against a target chord: with the sustain pedal down
+	 * it holds the previous chord too, so the drill's live feedback read a correct
+	 * triad as a triad plus four notes to lift.
+	 */
+	held = $state<number[]>([]);
 	/** The most recently settled chord. */
 	lastChord = $state<ChordEvent | null>(null);
 	pedalDown = $state(false);
@@ -319,13 +329,18 @@ export class MidiSession {
 	#scheduleLiveUpdate() {
 		if (this.#liveFrame !== null) return;
 		if (typeof requestAnimationFrame === 'undefined') {
-			this.live = sounding(this.#cluster);
+			this.#publishLive();
 			return;
 		}
 		this.#liveFrame = requestAnimationFrame(() => {
 			this.#liveFrame = null;
-			this.live = sounding(this.#cluster);
+			this.#publishLive();
 		});
+	}
+
+	#publishLive() {
+		this.live = sounding(this.#cluster);
+		this.held = fingered(this.#cluster);
 	}
 
 	#tick() {
@@ -367,6 +382,7 @@ export class MidiSession {
 		this.#liveFrame = null;
 		this.#cluster = emptyCluster();
 		this.live = [];
+		this.held = [];
 		this.lastChord = null;
 		this.pedalDown = false;
 	}

@@ -6,6 +6,7 @@ import {
 	FIRST_FRONTIER,
 	frontierFromPosition,
 	nextCell,
+	nextOpening,
 	type Frontier,
 	type RungId
 } from '$lib/curriculum/ladder';
@@ -1020,5 +1021,163 @@ describe('the crossing task', () => {
 		const workout = composeWorkout(input({ size: 'long', cards: withoutKeys }));
 		expect(taskKinds(workout)).not.toContain('crossing');
 		expect(workout.tasks.length).toBeGreaterThan(0);
+	});
+});
+
+describe('the mission goes where the record has not been', () => {
+	/*
+	 * The complaint, exactly as it arrived: *I have to play "Linstead Market",
+	 * literally every time the same song*. The record agreed — twenty-five runs of
+	 * that tune, none at all of six others the account had been cleared for. The
+	 * composer already knew both numbers and used neither; it rotated a fixed list
+	 * one step a day, which hands the same tune to every workout started before
+	 * midnight and comes back round every nine days.
+	 */
+	const early = cellsOf(frontierFromPosition('C', 'tonic-triad')!);
+	const taughtHere = vocabularyOf({ rungs: early.map((cell) => cell.rungId) });
+	const readyTunes = MISSION_CHARTS.filter((chart) =>
+		chart.demand.shapes.every((shape) => taughtHere.shapes.includes(shape))
+	).map((chart) => chart.slug);
+
+	const withPlays = (plays: Record<string, number>) =>
+		composeWorkout(
+			input({
+				reached: early,
+				vocabulary: taughtHere,
+				charts: MISSION_CHARTS,
+				plays
+			})
+		);
+
+	it('has more than one tune to choose from at this point on the ladder', () => {
+		expect(readyTunes.length).toBeGreaterThan(1);
+	});
+
+	it('does not send you back to the tune you have played twenty-five times', () => {
+		const worn = readyTunes[0];
+		const workout = withPlays({ [worn]: 25 });
+		for (const mission of missions(workout)) expect(mission.chartSlug).not.toBe(worn);
+	});
+
+	it('takes the tune the record has least of', () => {
+		const [first, second, ...rest] = readyTunes;
+		const plays = Object.fromEntries(readyTunes.map((slug) => [slug, 5]));
+		plays[second] = 0;
+		expect(missions(withPlays(plays))[0].chartSlug).toBe(second);
+		expect(first).not.toBe(second);
+		expect(rest).toBeDefined();
+	});
+
+	it('moves on within the same day, because playing one is what changes the count', () => {
+		const before = missions(withPlays({}))[0].chartSlug;
+		const after = missions(withPlays({ [before]: 1 }))[0].chartSlug;
+		expect(after).not.toBe(before);
+	});
+
+	it('still walks the whole list when the record has nothing to choose between', () => {
+		// The old behaviour, and it has to survive: with every count at zero the
+		// day's rotation is the only thing ordering the pool.
+		const seen = new Set<string>();
+		for (let d = 0; d < 12; d++) {
+			const workout = composeWorkout(
+				input({
+					reached: early,
+					vocabulary: taughtHere,
+					charts: MISSION_CHARTS,
+					now: new Date(NOW.getTime() + d * DAY)
+				})
+			);
+			for (const mission of missions(workout)) seen.add(mission.chartSlug);
+		}
+		expect(seen.size).toBeGreaterThan(1);
+	});
+});
+
+describe('offering the next cell of the ladder', () => {
+	/*
+	 * The offer used to *be* the novelty: the "move the ladder here" button
+	 * existed only when the one new thing happened to be the next rung, and the
+	 * novelty slot has twenty-eight progressions and grooves it would rather show
+	 * first. An account past its first week never saw it.
+	 */
+	// The account the complaint came from: parked on the home chord, with five
+	// rungs of the ladder still ahead of it.
+	const PARKED = frontierFromPosition('C', 'tonic-triad')!;
+	const standingOn = {
+		rungId: 'tonic-triad' as RungId,
+		label: 'The home chord',
+		reviews: 85,
+		correct: 42
+	};
+	const parked = (overrides: Partial<WorkoutInput> = {}) =>
+		input({
+			reached: cellsOf(PARKED),
+			nextCell: nextCell(PARKED),
+			vocabulary: vocabularyOf({ rungs: cellsOf(PARKED).map((cell) => cell.rungId) }),
+			standingOn,
+			...overrides
+		});
+
+	it('says nothing while the rung is still being learned', () => {
+		expect(composeWorkout(parked({ rungLooksSolid: false })).openNext).toBeNull();
+	});
+
+	it('names the rung the frontier would open, whatever the new thing is', () => {
+		const workout = composeWorkout(parked({ rungLooksSolid: true }));
+		expect(workout.openNext?.rungId).toBe(nextCell(PARKED)?.rungId);
+		expect(workout.openNext?.from.reviews).toBe(85);
+	});
+
+	it('is offered even when the new thing is a progression', () => {
+		// The rung led the novelty yesterday, so today's new thing is something
+		// else. That used to take the offer off screen with it.
+		const next = nextCell(PARKED)!;
+		const workout = composeWorkout(
+			parked({
+				rungLooksSolid: true,
+				yesterdaysNovelty: noveltyId({ kind: 'rung', key: next.key, rungId: next.rungId })
+			})
+		);
+		expect(workout.novelty?.kind).not.toBe('rung');
+		expect(workout.openNext).not.toBeNull();
+		expect(workout.openNext?.label).toBeTruthy();
+	});
+
+	it('does not claim the rung is solid when only the count earned the offer', () => {
+		expect(composeWorkout(parked({ rungLooksSolid: true })).openNext?.solid).toBe(false);
+	});
+
+	it('claims it is solid when the accuracy actually says so', () => {
+		const workout = composeWorkout(
+			parked({ standingOn: { ...standingOn, reviews: 15, correct: 14 }, rungLooksSolid: true })
+		);
+		expect(workout.openNext?.solid).toBe(true);
+	});
+
+	it('says nothing at the bottom of the ladder, where there is nowhere left', () => {
+		expect(
+			composeWorkout(parked({ rungLooksSolid: true, nextCell: null, nextOpening: null })).openNext
+		).toBeNull();
+	});
+
+	/*
+	 * The case the repaired account landed in and the reason the offer is not
+	 * called "deepen". Seven rungs of C worked through, eleven keys untouched:
+	 * `nextCell` has no answer, so the offer used to vanish at the exact moment
+	 * the only thing left to do was take the ladder into another key.
+	 */
+	it('offers the same rung in a new key once every rung is open somewhere', () => {
+		const finishedC: Frontier = { widths: [2, 1, 1, 1, 1, 1, 1] };
+		const workout = composeWorkout(
+			parked({
+				reached: cellsOf(finishedC),
+				nextCell: nextCell(finishedC),
+				nextOpening: nextOpening(finishedC),
+				rungLooksSolid: true
+			})
+		);
+		expect(nextCell(finishedC)).toBeNull();
+		expect(workout.openNext?.move).toBe('wider');
+		expect(workout.openNext?.key).toBe('G');
 	});
 });

@@ -6,7 +6,16 @@
 	import { midi as session } from '$lib/midi/shared.svelte';
 	import type { MidiEvent } from '$lib/midi/cluster';
 	import { playChord, playProgression, playSequence, startAudio, stopAll } from '$lib/audio/engine';
-	import { markGathered, markPlayed, pose, toVoicing } from '$lib/session/drill';
+	import {
+		choicesFor,
+		diatonicNames,
+		markGathered,
+		markNamed,
+		markPlayed,
+		nameNeighbours,
+		pose,
+		toVoicing
+	} from '$lib/session/drill';
 	import { guidanceFor, guidanceKey, isChordShape, type LessonCard } from '$lib/session/lesson';
 	import { gradeFromPerformance } from '$lib/srs/scheduler';
 	import { parseKey } from '$lib/music/key';
@@ -112,6 +121,18 @@
 	let revealed = $state(false);
 	/** Pitch classes played since this card was posed, for the ones built up over time. */
 	let gathered = $state<number[]>([]);
+	/**
+	 * The naming half of a question, once the playing half is out of the way.
+	 *
+	 * `hear_name` enters it as soon as the chord has finished sounding; a degree
+	 * enters it when the chord lands under the hands. Nothing else has one.
+	 */
+	let naming = $state(false);
+	/** Whether the played half was right, for a question that has both. */
+	let playedRight = $state<boolean | null>(null);
+	/** The name that was chosen, and whether it was the right one. */
+	let chosenName = $state<string | null>(null);
+	let namedRight = $state<boolean | null>(null);
 	let showedAnswer = $state(false);
 	let cardRecorded = $state(false);
 	let audioUnlocked = $state(false);
@@ -179,7 +200,7 @@
 	$effect(() => {
 		const stopPedal = session.onPedal((down) => {
 			if (!down) return false;
-			advanceHandsFree();
+			advanceHandsFree('pedal');
 			return true;
 		});
 		const stopChord = session.onChord(handleChord);
@@ -207,6 +228,10 @@
 			revealed = false;
 			lastMarking = null;
 			gathered = [];
+			naming = false;
+			playedRight = null;
+			chosenName = null;
+			namedRight = null;
 			showedAnswer = false;
 			cardRecorded = false;
 			pending = [];
@@ -258,6 +283,38 @@
 	const isChordLesson = $derived(
 		marksPlaying && isChordShape(currentCard ? (currentCard as LessonCard) : null)
 	);
+
+	/** Whether this question ends with a name rather than with a shape. */
+	const needsName = $derived(prompt?.answerWith === 'name');
+
+	/** What the right name is, spelled as the card stores it. */
+	const answerLabel = $derived(
+		(currentCard?.payload as { label?: string } | undefined)?.label ?? ''
+	);
+
+	/**
+	 * Four names to choose between, three of them wrong.
+	 *
+	 * Drawn from the rest of the workout's own material so the wrong ones are
+	 * things this chord could actually be mistaken for. Four is enough to make a
+	 * guess worth a quarter and few enough to read without scanning.
+	 */
+	const nameChoices = $derived.by(() => {
+		if (!needsName || !answerLabel || !currentCard) return [];
+		const kind = (currentCard.payload as { kind?: string } | undefined)?.kind;
+		const fromBank = Object.values(data.cards)
+			.flat()
+			.map((card) => {
+				const payload = card.payload as { label?: string; kind?: string };
+				return { label: payload.label, kind: payload.kind, keyCenter: card.keyCenter };
+			})
+			.filter((option) => option.kind === kind);
+		// The bank first, because those are the things actually being practised —
+		// then the rest of the key, which is what makes four buttons possible on an
+		// account that owns one triad. See `diatonicNames`.
+		const among = [...fromBank, ...diatonicNames(currentCard.keyCenter, kind)];
+		return choicesFor(answerLabel, nameNeighbours(answerLabel, among, currentCard.keyCenter));
+	});
 	const chordTarget = $derived.by(() => {
 		if (!isChordLesson || !currentCard) return [];
 		const payload = currentCard.payload as {
@@ -275,6 +332,20 @@
 
 	/** Whether this question has anything to sound at all, chord or passage. */
 	const hasQuestionAudio = $derived(Boolean(questionAudio || questionSequence));
+
+	/**
+	 * A question that is only a name is waiting for one from the moment it is posed.
+	 *
+	 * `degree_play` is the exception and stays out until its chord has landed,
+	 * because there the naming is the second half of the question rather than the
+	 * whole of it.
+	 */
+	$effect(() => {
+		const wants = needsName && !marksPlaying && !answered && Boolean(currentCard);
+		untrack(() => {
+			if (wants && !naming) naming = true;
+		});
+	});
 
 	/** Once audio has been unlocked by a tap, later questions can play automatically. */
 	$effect(() => {
@@ -376,10 +447,11 @@
 		if (marking.correct) completeAnswer();
 	}
 
-	function handleChord(chord: { notes: number[] }) {
+	function handleChord(chord: { notes: number[]; held?: number[] }) {
 		if (
 			!marksPlaying ||
 			answered ||
+			naming ||
 			!currentCard ||
 			isSequential ||
 			playingQuestion ||
@@ -388,22 +460,83 @@
 			return;
 
 		const expected = (currentCard.payload as { answerPitchClasses: number[] }).answerPitchClasses;
-		const marking = markPlayed(toVoicing(expected), chord.notes);
+		/*
+		 * Marked against the notes under a finger, not everything sounding.
+		 *
+		 * With the sustain pedal down the two are different: the cluster keeps the
+		 * previous chord alive, exactly as the room hears it, so a correct C major
+		 * arrived here as C major plus four notes to lift and was never once marked
+		 * right. Every pianist pedals, so on a real piano this drill answered to the
+		 * mouse and nothing else — which is the whole of "sometimes it responds to
+		 * the piano and sometimes I have to click Next".
+		 */
+		const played = chord.held ?? chord.notes;
+		if (played.length === 0) return;
+		const marking = markPlayed(toVoicing(expected), played);
 		lastMarking = marking;
 		if (marking.correct) completeAnswer();
 	}
 
+	/**
+	 * The played half landed. Either that is the whole question, or a name follows.
+	 */
 	function completeAnswer() {
+		if (needsName) {
+			// "Play the chord that degree asks for, then name what you played" — the
+			// instruction has always said this and the page used to stop at the
+			// halfway point, recording a correct answer for the half it had seen.
+			playedRight = true;
+			naming = true;
+			revealed = true;
+			return;
+		}
 		answered = true;
 		revealed = true;
 		record(gradeFromPerformance(true, Math.round(performance.now() - askedAt)), true);
+		settleThen(() => nextCard());
+	}
+
+	/** How long the answer stays on screen before the next question. */
+	function settleThen(go: () => void) {
 		const run = cardRun;
 		setTimeout(
 			() => {
-				if (run === cardRun) nextCard();
+				if (run === cardRun) go();
 			},
 			isSequential ? 1150 : isChordLesson ? 950 : 650
 		);
+	}
+
+	/**
+	 * A name was chosen, and it is marked.
+	 *
+	 * **This is the fix for the app's least honest moment.** `hear_name` and the
+	 * naming half of a degree had no way to answer at all: the only control was a
+	 * button reading "Reveal the name", and pressing it recorded `good` and
+	 * `correct: true`. Eighty of one account's hundred and eleven naming answers
+	 * were that button. The scheduler believed them and stretched the intervals,
+	 * the rung's accuracy was built out of them, and the end screen reported a
+	 * percentage made partly of button presses — so the one number the app offers
+	 * as feedback was measuring nothing.
+	 *
+	 * A wrong answer is worth more than a fake right one, so this grades. Both
+	 * halves count where there are two: playing the right chord and then calling it
+	 * something else is not a question you answered.
+	 */
+	function chooseName(option: string) {
+		if (!currentCard || answered) return;
+		const right = markNamed(answerLabel, option);
+		chosenName = option;
+		namedRight = right;
+		answered = true;
+		revealed = true;
+
+		const correct = right && playedRight !== false && !showedAnswer;
+		record(
+			correct ? gradeFromPerformance(true, Math.round(performance.now() - askedAt)) : 'again',
+			correct
+		);
+		settleThen(() => nextCard());
 	}
 
 	function record(rating: ReviewRating, correct: boolean) {
@@ -432,6 +565,10 @@
 		revealed = false;
 		lastMarking = null;
 		gathered = [];
+		naming = false;
+		playedRight = null;
+		chosenName = null;
+		namedRight = null;
 		showedAnswer = false;
 		cardRecorded = false;
 		askedAt = performance.now();
@@ -453,10 +590,14 @@
 	 * exactly what the scheduler should know.
 	 */
 	function showAnswer() {
-		if (!currentCard || showedAnswer) return;
+		if (!currentCard || showedAnswer || answered) return;
 		showedAnswer = true;
 		revealed = true;
 		lessonPhase = 'play';
+		// A question that ends in a name still ends in one after being shown: the
+		// grade is already settled, and picking the name you were just told is how
+		// the answer gets connected to the sound rather than merely revealed.
+		if (needsName) naming = true;
 		record('again', false);
 	}
 
@@ -471,8 +612,11 @@
 		return answerPitchClasses.map((pc) => formatNote(spell(pc, cardContext), { unicode: true }));
 	});
 	const liveChordMarking = $derived.by(() => {
-		if (!isChordLesson || session.live.length === 0) return null;
-		return markPlayed(chordTarget, session.live);
+		// The fingers, not the room: the same reason `handleChord` marks against
+		// `held`. Reading `live` here told a pedalling player to lift four notes
+		// that no finger was on, under a chord they had in fact just played.
+		if (!isChordLesson || session.held.length === 0) return null;
+		return markPlayed(chordTarget, session.held);
 	});
 	const activeMarking = $derived(liveChordMarking ?? lastMarking);
 
@@ -575,6 +719,7 @@
 			if (lessonGuidance.mode === 'supported') return 'Again — with fewer hints';
 			return 'Now play it from memory';
 		}
+		if (naming) return playedRight ? 'Now name what you played' : 'Name what you heard';
 		if (isChordLesson) {
 			if (lessonPhase === 'watch') return 'Watch the chord land';
 			if (lessonGuidance.mode === 'guided') return 'Your turn — copy the shape';
@@ -594,6 +739,9 @@
 		return 'Listening — screen keys work now';
 	});
 	const feedbackLine = $derived.by(() => {
+		if (answered && needsName) {
+			return namedRight ? `${answerLabel} — that is the one` : `It was ${answerLabel}`;
+		}
 		if (answered && currentCard) {
 			const label = (currentCard.payload as { label: string }).label;
 			return isChordLesson ? `${label} — chord complete` : `${label} — every note found`;
@@ -604,6 +752,11 @@
 			if (isSequential && lessonGuidance.mode === 'guided') return 'Follow the moving key';
 			return 'Listen first';
 		}
+		// Said out loud because the two halves of the drill room look alike and want
+		// different things: one wants your hands, one wants an answer off the
+		// screen, and a player who has just played the right chord at a question
+		// that was never listening deserves to be told which is which.
+		if (naming) return playedRight ? 'That is the chord — now name it' : 'Choose the name';
 		if (lessonPhase === 'watch') return 'Start with a demonstration';
 		if (isSequential && gathered.length) {
 			return `${gathered.length} of ${answerNotes.length} notes found${missingNotes[0] ? ` · next, find ${missingNotes[0]}` : ''}`;
@@ -630,8 +783,25 @@
 		nextCard();
 	}
 
-	/** Pedal or spacebar: whatever "next" means for the task showing. */
-	function advanceHandsFree() {
+	/**
+	 * Pedal or spacebar: whatever "next" means for the task showing.
+	 *
+	 * **The two are no longer the same key, and that is a bug fix rather than a
+	 * preference.** Both used to land on `skipCard`, which records `again` and
+	 * moves on — so touching the sustain pedal during a question marked it wrong.
+	 * Pianists pedal continuously; one account had forty-three failed `hear_play`
+	 * answers, most of them at under three seconds, which is not somebody failing
+	 * to find a C major triad. The rung's accuracy was built out of those, and the
+	 * accuracy is what decides whether the app ever offers to move on — so the
+	 * pedal was quietly holding the ladder shut.
+	 *
+	 * A spacebar press is unambiguous: nothing about playing the piano involves
+	 * one, so it can still mean "I am stuck, show me". A pedal press is part of
+	 * playing, so while a question is waiting for your hands it means nothing at
+	 * all. Once the question is answered both mean the same thing again, which is
+	 * when hands-free actually matters.
+	 */
+	function advanceHandsFree(source: 'pedal' | 'key') {
 		if (!task || busy || finished) return;
 		if (task.kind === 'mission') {
 			// Once the band has heard an attempt, Space and the pedal follow the
@@ -646,12 +816,10 @@
 			return;
 		}
 		if (prompt && !answered) {
-			if (prompt.answerWith === 'name' && !marksPlaying && !revealed) {
-				revealed = true;
-				record('good', true);
-				return;
-			}
-			skipCard();
+			// Never a wrong answer and never a skip. Being shown it is a real
+			// `again`, which is what the scheduler should know; a pedal press is not
+			// a claim about anything.
+			if (source === 'key') showAnswer();
 			return;
 		}
 		if (currentCard) nextCard();
@@ -660,7 +828,7 @@
 	function onKeydown(event: KeyboardEvent) {
 		if (!shouldHandleSpace(event)) return;
 		event.preventDefault();
-		advanceHandsFree();
+		advanceHandsFree('key');
 	}
 
 	// ---- task transitions ---------------------------------------------------
@@ -981,22 +1149,48 @@
 						aria-describedby="new-thing-hands-free">Tried it</button
 					>
 
-					<!-- The one place "ready to move on" is said out loud. A form post
-					     rather than a fetch, because moving the ladder is a decision the
-					     server owns and the page has nothing to keep afterwards. -->
-					{#if task.novelty.kind === 'rung'}
+					<!--
+						The one place "ready to move on" is said out loud.
+
+						It used to appear only when the new thing *was* the next rung, and
+						the novelty slot has twenty-eight other things it would rather
+						show — so on an account past its first fortnight the offer was
+						simply never on screen and the ladder never moved. It rides beside
+						whatever the new thing is now, and the workout decides whether the
+						record has earned it. A form post rather than a fetch, because
+						moving the ladder is a decision the server owns and the page has
+						nothing to keep afterwards.
+					-->
+					{#if workout?.openNext}
 						<form method="POST" action="?/advance">
 							<input type="hidden" name="sessionId" value={data.workout.id} />
 							<input type="hidden" name="index" value={entry?.index} />
-							<input type="hidden" name="key" value={task.novelty.key} />
-							<input type="hidden" name="rung" value={task.novelty.rungId} />
 							<button
 								class="border-ground-line hover:border-ink-dim rounded-2xl border px-6 py-4 font-semibold transition-colors"
-								>Move the ladder here</button
 							>
+								{workout.openNext.move === 'deeper'
+									? `Open ${workout.openNext.label.toLowerCase()}`
+									: `Take it into ${glyph(workout.openNext.key)}`}
+							</button>
 						</form>
 					{/if}
 				</div>
+
+				{#if workout?.openNext}
+					<p class="open-offer">
+						{#if workout.openNext.move === 'deeper'}
+							<strong>{workout.openNext.label}</strong> is next — {workout.openNext.teaches}
+						{:else}
+							<strong>{workout.openNext.label}</strong> in {glyph(workout.openNext.key)} is next — the
+							same idea somewhere new, which is where it stops being a shape you memorised.
+						{/if}
+						<span>
+							{workout.openNext.solid
+								? `${workout.openNext.from.correct} of ${workout.openNext.from.reviews} right on ${workout.openNext.from.label.toLowerCase()}.`
+								: `You have answered ${workout.openNext.from.label.toLowerCase()} ${workout.openNext.from.reviews} times. Moving on is a suggestion, and nothing here is taken away.`}
+						</span>
+					</p>
+				{/if}
 				<span id="new-thing-hands-free" class="text-ink-dim font-mono text-[0.7rem]">
 					<kbd>Space</kbd> / pedal · next
 				</span>
@@ -1191,10 +1385,32 @@
 					<p class="audio-problem">{audioProblem}</p>
 				{/if}
 
+				{#if needsName && naming}
+					<!--
+						The naming half, with something to answer it with.
+
+						There was no control here but "Reveal the name", which recorded a
+						correct answer for pressing it — see `chooseName`. Four buttons is
+						the smallest honest replacement: the right name, and three the
+						record says you could actually confuse it with.
+					-->
+					<div class="name-choices" role="group" aria-label="What was it?">
+						{#each nameChoices as option (option)}
+							<button
+								class="name-choice"
+								class:is-picked={chosenName === option}
+								class:is-right={answered && markNamed(answerLabel, option)}
+								class:is-wrong={answered && chosenName === option && namedRight === false}
+								disabled={answered}
+								onclick={() => chooseName(option)}
+							>
+								{option}
+							</button>
+						{/each}
+					</div>
+				{/if}
+
 				<div class="question-actions">
-					{#if prompt.answerWith === 'name' && !marksPlaying && !revealed}
-						<button class="primary-action" onclick={advanceHandsFree}>Reveal the name</button>
-					{/if}
 					<button
 						class="secondary-action"
 						onclick={showAnswer}
@@ -1242,9 +1458,26 @@
 				/>
 			</footer>
 
+			<!--
+				The pedal is not named here while a question is open, because it no
+				longer does anything there — it used to mark the question wrong and
+				move on, which is not a thing to advertise. See `advanceHandsFree`.
+			-->
 			<div class="hands-free-line">
-				<span><kbd>Space</kbd> / pedal · next</span>
-				<span>{answered ? 'Moving on…' : 'Keep both hands on the piano'}</span>
+				<span>
+					{#if answered}
+						<kbd>Space</kbd> / pedal · next
+					{:else}
+						<kbd>Space</kbd> · show me
+					{/if}
+				</span>
+				<span>
+					{answered
+						? 'Moving on…'
+						: naming
+							? 'Answer on the screen'
+							: 'Keep both hands on the piano — the pedal is yours'}
+				</span>
 			</div>
 		{/if}
 
@@ -1491,7 +1724,6 @@
 	}
 
 	.hear-button,
-	.primary-action,
 	.secondary-action,
 	.quiet-action {
 		min-height: 2.75rem;
@@ -1510,28 +1742,113 @@
 		color: var(--color-ink);
 	}
 
-	.primary-action {
-		background: var(--color-ink);
-		color: var(--color-ground);
-	}
-
 	.quiet-action {
 		color: var(--color-ink-dim);
 	}
 
 	.hear-button:active,
-	.primary-action:active,
 	.secondary-action:active,
 	.quiet-action:active {
 		transform: scale(0.98);
 	}
 
 	.hear-button:focus-visible,
-	.primary-action:focus-visible,
 	.secondary-action:focus-visible,
 	.quiet-action:focus-visible {
 		outline: 2px solid var(--color-ink);
 		outline-offset: 3px;
+	}
+
+	/*
+	 * The naming answers.
+	 *
+	 * Wide targets set in the chart face, because the question is "which of these
+	 * is it" and the symbols are what is being compared — small buttons with a
+	 * label beside them would make it a reading task. Right and wrong are marked
+	 * with the same two pitch-class colours the rest of the app answers in, so the
+	 * feedback reads without being read.
+	 */
+	/*
+	 * The invitation to open more ladder.
+	 *
+	 * Under the buttons rather than above them, and set as a sentence rather than
+	 * a badge: it is a suggestion about what to do next, and a suggestion that
+	 * shouts is a demand. The second half says why it is being offered, because
+	 * "twelve of fifteen right" and "you have answered this eighty-five times" are
+	 * different invitations.
+	 */
+	.open-offer {
+		max-width: 44ch;
+		margin: 0 auto;
+		color: var(--color-ink-muted);
+		font-size: 0.9rem;
+		line-height: 1.6;
+		text-wrap: pretty;
+	}
+
+	.open-offer span {
+		display: block;
+		margin-top: 0.35rem;
+		color: var(--color-ink-dim);
+		font-family: var(--font-mono);
+		font-size: 0.75rem;
+	}
+
+	.name-choices {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(6.5rem, 1fr));
+		gap: 0.6rem;
+		width: 100%;
+		max-width: 34rem;
+		margin: 0 auto;
+	}
+
+	.name-choice {
+		min-height: 3.25rem;
+		border: 1px solid var(--color-ground-line);
+		border-radius: 12px;
+		padding: 0.7rem 0.5rem;
+		color: var(--color-ink);
+		font-size: 1.15rem;
+		font-weight: 600;
+		transition:
+			transform 120ms cubic-bezier(0.25, 1, 0.5, 1),
+			border-color 120ms linear,
+			background-color 120ms linear;
+	}
+
+	.name-choice:not(:disabled):hover {
+		border-color: var(--color-ink-dim);
+	}
+
+	.name-choice:not(:disabled):active {
+		transform: scale(0.98);
+	}
+
+	.name-choice:focus-visible {
+		outline: 2px solid var(--color-ink);
+		outline-offset: 3px;
+	}
+
+	.name-choice.is-right {
+		border-color: var(--pc-7);
+		background: color-mix(in oklab, var(--pc-7) 16%, transparent);
+	}
+
+	.name-choice.is-wrong {
+		border-color: var(--pc-0);
+		background: color-mix(in oklab, var(--pc-0) 16%, transparent);
+	}
+
+	/* Disabled only because the question is over, so nothing is dimmed to
+	   unreadable — the answer has to stay legible while it settles. */
+	.name-choice:disabled {
+		opacity: 0.75;
+	}
+
+	.name-choice.is-right:disabled,
+	.name-choice.is-picked:disabled {
+		opacity: 1;
 	}
 
 	.note-route {
@@ -1822,7 +2139,7 @@
 		.chord-note,
 		.keyboard-stage,
 		.hear-button,
-		.primary-action,
+		.name-choice,
 		.secondary-action,
 		.quiet-action {
 			transition: none;

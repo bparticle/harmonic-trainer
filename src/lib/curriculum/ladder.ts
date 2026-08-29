@@ -243,6 +243,44 @@ export function frontierFromPosition(key: string, rungId: string): Frontier | nu
 	};
 }
 
+/**
+ * The smallest well-formed frontier that holds every one of these cells.
+ *
+ * The inverse of `cellsOf`, and it exists because the card bank is a better
+ * record of what was opened than the settings row is. A card is only ever
+ * created by a cell being open — `ensureLadderCards` is the one writer — so a
+ * bank holding `rung:all-triads` in C is proof that C's first four rungs were
+ * open, whatever `prefs_json` says today.
+ *
+ * The staircase is restored rather than assumed: a rung's width is raised to at
+ * least the width of every rung below it, so a set of cells that has lost its
+ * shallow rungs comes back as a frontier and not as a scattering. Unknown keys
+ * and unknown rungs are ignored, because this reads rows written by older code.
+ */
+export function frontierCovering(cells: Array<{ key: string; rungId: string }>): Frontier {
+	const widths = RUNGS.map(() => 0);
+
+	for (const cell of cells) {
+		const r = RUNGS.findIndex((rung) => rung.id === cell.rungId);
+		const s = stageIndex(cell.key);
+		if (r < 0 || s < 0) continue;
+		widths[r] = Math.max(widths[r], s + 1);
+	}
+
+	// Non-increasing, from the bottom up: a rung open in four keys needs the rung
+	// above it open in at least four.
+	for (let r = widths.length - 2; r >= 0; r--) widths[r] = Math.max(widths[r], widths[r + 1]);
+
+	// There is always somewhere to stand.
+	widths[0] = Math.max(widths[0], 1);
+	return { widths };
+}
+
+/** The wider of two frontiers, rung by rung. Ground is never given up by a merge. */
+export function widest(a: Frontier, b: Frontier): Frontier {
+	return { widths: RUNGS.map((_, r) => Math.max(a.widths[r] ?? 0, b.widths[r] ?? 0)) };
+}
+
 /** Rungs that are open in at least one key. Depth, as opposed to breadth. */
 export function depthOf(frontier: Frontier): number {
 	return frontier.widths.filter((width) => width > 0).length;
@@ -412,6 +450,33 @@ export function nextCell(frontier: Frontier): { key: string; rungId: RungId } | 
 	const depth = depthOf(frontier);
 	if (depth >= RUNGS.length) return null;
 	return { key: STAGES[0].key, rungId: RUNGS[depth].id };
+}
+
+/** Which way the ladder would move: a new idea, or the same idea in a new key. */
+export type Move = 'deeper' | 'wider';
+
+/**
+ * The next cell the ladder would open, whichever direction is left.
+ *
+ * `nextCell` answers only for deepening and returns null once every rung is open
+ * in at least one key — which is exactly where somebody who has worked through
+ * one key ends up. From there the whole of the remaining ladder is breadth, and
+ * a function that says *nothing* there takes the offer to move on off the screen
+ * at the moment it becomes most useful: seven rungs of C finished, eleven keys
+ * untouched, and the app with no opinion about what to do next.
+ *
+ * So this asks for depth first and falls back to breadth, and says which it got.
+ * Deeper leads because a new rung is a new idea and a rung met in one more key is
+ * the same idea somewhere else. Null only when there is genuinely nowhere left.
+ */
+export function nextOpening(
+	frontier: Frontier
+): { move: Move; key: string; rungId: RungId } | null {
+	const deeper = nextCell(frontier);
+	if (deeper) return { move: 'deeper', ...deeper };
+
+	const wider = nextWidening(frontier);
+	return wider ? { move: 'wider', key: wider.stage.key, rungId: wider.rung.id } : null;
 }
 
 // ---------------------------------------------------------------------------

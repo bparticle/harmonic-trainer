@@ -15,7 +15,9 @@ import {
 	journeyProgress,
 	ladderPath,
 	ladderTotals,
+	hasOutgrown,
 	looksSolid,
+	readyToMoveOn,
 	rungOfSkill,
 	type RungRecord
 } from './journey';
@@ -213,5 +215,39 @@ describe('rungOfSkill', () => {
 	it('refuses anything that is not one', () => {
 		expect(rungOfSkill('prog:ii-V-I')).toBeNull();
 		expect(rungOfSkill('rung:nonsense')).toBeNull();
+	});
+});
+
+describe('a rung that has been worked past the point of teaching anything', () => {
+	const homeChord = RUNGS[1]; // suggested after six
+
+	/*
+	 * The account this was written for had answered the home chord eighty-five
+	 * times at forty-nine per cent. `looksSolid` was false every single morning,
+	 * so the app never once offered the next rung, and the only advice on screen
+	 * was the same rung again tomorrow. Being stuck and being unready are
+	 * different, and only one of them is a reason to wait.
+	 */
+	it('is not solid, and says so', () => {
+		expect(looksSolid(homeChord, 85, 42)).toBe(false);
+	});
+
+	it('is still worth offering the way on', () => {
+		expect(hasOutgrown(homeChord, 85)).toBe(true);
+		expect(readyToMoveOn(homeChord, 85, 42)).toBe(true);
+	});
+
+	it('does not fire while the rung is still doing its job', () => {
+		expect(hasOutgrown(homeChord, homeChord.suggestAfter)).toBe(false);
+		expect(hasOutgrown(homeChord, homeChord.suggestAfter * 3 - 1)).toBe(false);
+	});
+
+	it('agrees with looksSolid wherever looksSolid is happy', () => {
+		expect(readyToMoveOn(homeChord, 10, 9)).toBe(true);
+		expect(looksSolid(homeChord, 10, 9)).toBe(true);
+	});
+
+	it('offers nothing on a rung nobody has answered', () => {
+		expect(readyToMoveOn(homeChord, 0, 0)).toBe(false);
 	});
 });

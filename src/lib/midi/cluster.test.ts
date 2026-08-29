@@ -154,6 +154,58 @@ describe('the sustain pedal', () => {
 	});
 });
 
+describe('what a drill marks against', () => {
+	/*
+	 * The bug this covers took a fortnight to find and was invisible from a
+	 * keyboard with no pedal: every pianist pedals, the sustained notes stayed in
+	 * `notes`, and the drill therefore saw a correct triad as a triad plus
+	 * whatever was still ringing. So it was never marked right, and the only way
+	 * on was the mouse.
+	 */
+	it('separates the notes under a finger from the ones the pedal is holding', () => {
+		const chords = play(
+			[
+				pedal(true, 0),
+				on(60, 10),
+				on(64, 15),
+				on(67, 20),
+				off(60, 300),
+				off(64, 305),
+				off(67, 310),
+				on(65, 400),
+				on(69, 405),
+				on(72, 410)
+			],
+			[200, 600]
+		);
+		expect(chords).toHaveLength(2);
+		expect(chords[1].notes).toEqual([60, 64, 65, 67, 69, 72]);
+		expect(chords[1].held).toEqual([65, 69, 72]);
+	});
+
+	it('reports the same chord twice under the pedal, because the hands moved', () => {
+		const chords = play(
+			[
+				pedal(true, 0),
+				on(60, 10),
+				on(64, 15),
+				off(60, 200),
+				off(64, 205),
+				on(60, 400),
+				on(64, 405)
+			],
+			[300, 600]
+		);
+		expect(chords).toHaveLength(2);
+		expect(chords[1].held).toEqual([60, 64]);
+	});
+
+	it('is the sounding notes exactly, with no pedal in the picture', () => {
+		const chords = play([on(60, 0), on(64, 10), on(67, 20)], [200]);
+		expect(chords[0].held).toEqual(chords[0].notes);
+	});
+});
+
 describe('parsing raw messages', () => {
 	it('reads note on and note off', () => {
 		expect(parseMessage(new Uint8Array([0x90, 60, 100]), 5)).toEqual({

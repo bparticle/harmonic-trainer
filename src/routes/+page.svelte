@@ -462,7 +462,7 @@
 
 					{#if data.canWiden && data.widenTo}
 						<form method="POST" action="?/widen">
-							<button class="move-on" class:is-suggested={data.progress.looksSolid}>
+							<button class="move-on" class:is-suggested={data.progress.readyToMoveOn}>
 								Wider · {data.widenTo.rung.label.toLowerCase()} in {glyph(data.widenTo.key)} →
 							</button>
 						</form>
@@ -470,17 +470,29 @@
 
 					{#if data.canDeepen && data.deepenTo?.rung}
 						<form method="POST" action="?/deepen">
-							<button class="move-on" class:is-suggested={data.progress.looksSolid}>
+							<button class="move-on" class:is-suggested={data.progress.readyToMoveOn}>
 								Deeper · {data.deepenTo.rung.label.toLowerCase()} →
 							</button>
 						</form>
 					{/if}
 
+					<!--
+						Two ways of being ready, said differently.
+
+						`looksSolid` is the happy one and reads as praise. The other is a
+						rung answered far past the point of teaching anything, which is not
+						praise and must not be dressed as it — the honest sentence there is
+						that you have done this a great many times and the next idea is
+						available whenever you want it.
+					-->
 					<p class="move-note">
 						{#if !data.canWiden && !data.canDeepen}
 							Every rung, in all twelve keys. There is nowhere left to open.
 						{:else if data.progress.looksSolid}
 							{glyph(data.position.key)} · {data.position.rung.label.toLowerCase()} looks solid.
+						{:else if data.progress.readyToMoveOn}
+							{data.progress.reviews} questions on {data.position.rung.label.toLowerCase()}. The
+							next idea is here whenever you want it.
 						{:else}
 							Your call — nothing here is locked.
 						{/if}

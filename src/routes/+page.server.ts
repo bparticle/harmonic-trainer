@@ -8,6 +8,7 @@ import {
 	activeWorkout,
 	currentFrontier,
 	currentPosition,
+	repairFrontier,
 	deepenLadder,
 	finishWorkout,
 	ladderRecord,
@@ -85,7 +86,7 @@ export const load: PageServerLoad = async ({ parent, locals }) => {
 			},
 			deepenTo: null,
 			widenTo: null,
-			progress: { reviews: 0, correct: 0, looksSolid: false },
+			progress: { reviews: 0, correct: 0, accuracy: 0, looksSolid: false, readyToMoveOn: false },
 			stages: STAGES,
 			rungs: RUNGS,
 			progressions: PROGRESSIONS,
@@ -114,9 +115,11 @@ export const load: PageServerLoad = async ({ parent, locals }) => {
 	}
 
 	const userId = currentUserId(locals.userId);
-	const frontier = await currentFrontier(userId);
+	// Repaired rather than read: an account whose `ladderWidths` was lost has been
+	// re-deriving a legacy position on every request. See `repairFrontier`.
+	const frontier = await repairFrontier(userId);
 	const position = workingPosition(frontier);
-	const progress = await rungProgress(userId, position);
+	const progress = await rungProgress(userId, position, frontier);
 
 	const [due] = await db
 		.select({ n: sql<number>`count(*)::int` })

@@ -32,6 +32,17 @@ export const midiEventBuffers = (): MidiEventBuffers => ({
 export type ChordEvent = {
 	/** Sounding notes, low to high. */
 	notes: number[];
+	/**
+	 * The notes actually under a finger, low to high.
+	 *
+	 * `notes` is everything *sounding*, which with the sustain pedal down is the
+	 * last four chords as well as this one — the right answer for a wheel showing
+	 * what the room can hear, and the wrong one for marking a chord. A drill
+	 * comparing against `notes` told a pedalling pianist that a correct C major
+	 * had four extra notes in it, so the shape was never marked right and the
+	 * only way on was the mouse. Anything grading a gesture reads this instead.
+	 */
+	held: number[];
 	/** When the last note of the gesture landed. */
 	time: number;
 	/** Loudest note-on in the gesture, 1–127. */
@@ -54,6 +65,16 @@ export type ClusterState = {
 	peakVelocity: number;
 	/** Fixed flags for the last chord, avoiding a per-flush joined string. */
 	lastEmitted: Uint8Array;
+	/**
+	 * The same, for the notes that were under a finger.
+	 *
+	 * Two sets rather than one, because with the pedal down they diverge: playing
+	 * C–E–G, lifting, and playing C–E–G again leaves the sounding set identical
+	 * and the fingers doing something new. Comparing only the sounding set
+	 * swallowed the second gesture, so a drill asking for the same chord twice in
+	 * a row under the pedal never saw the second answer.
+	 */
+	lastEmittedHeld: Uint8Array;
 	hasLastEmitted: boolean;
 };
 
@@ -67,6 +88,7 @@ export function emptyCluster(): ClusterState {
 		dirty: false,
 		peakVelocity: 0,
 		lastEmitted: new Uint8Array(128),
+		lastEmittedHeld: new Uint8Array(128),
 		hasLastEmitted: false
 	};
 }
@@ -77,6 +99,13 @@ export function sounding(state: ClusterState): number[] {
 	for (let note = 0, index = 0; note < 128; note++) {
 		if (state.held[note] !== 0 || state.sustained[note] !== 0) notes[index++] = note;
 	}
+	return notes;
+}
+
+/** Only what a finger is on right now. What a played chord is marked against. */
+export function fingered(state: ClusterState): number[] {
+	const notes: number[] = [];
+	for (let note = 0; note < 128; note++) if (state.held[note] !== 0) notes.push(note);
 	return notes;
 }
 
@@ -155,6 +184,7 @@ export function reduce(state: ClusterState, event: MidiEvent): ClusterState {
 function clearLastEmitted(state: ClusterState): void {
 	if (!state.hasLastEmitted) return;
 	state.lastEmitted.fill(0);
+	state.lastEmittedHeld.fill(0);
 	state.hasLastEmitted = false;
 }
 
@@ -179,6 +209,7 @@ export function flush(state: ClusterState, now: number, windowMs: number): Chord
 	for (let note = 0; note < 128; note++) {
 		const active = state.held[note] !== 0 || state.sustained[note] !== 0;
 		if (active !== (state.lastEmitted[note] !== 0)) same = false;
+		if ((state.held[note] !== 0) !== (state.lastEmittedHeld[note] !== 0)) same = false;
 	}
 
 	const velocity = state.peakVelocity || 64;
@@ -188,15 +219,21 @@ export function flush(state: ClusterState, now: number, windowMs: number): Chord
 	if (same) return null;
 
 	const notes = new Array<number>(count);
+	const held: number[] = [];
 	state.lastEmitted.fill(0);
+	state.lastEmittedHeld.fill(0);
 	for (let note = 0, index = 0; note < 128; note++) {
 		if (state.held[note] !== 0 || state.sustained[note] !== 0) {
 			notes[index++] = note;
 			state.lastEmitted[note] = 1;
+			if (state.held[note] !== 0) {
+				held.push(note);
+				state.lastEmittedHeld[note] = 1;
+			}
 		}
 	}
 	state.hasLastEmitted = true;
-	return { notes, time: state.lastNoteOn, velocity };
+	return { notes, held, time: state.lastNoteOn, velocity };
 }
 
 /** Decode a raw Web MIDI message into something the reducer understands. */

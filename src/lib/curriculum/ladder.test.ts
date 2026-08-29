@@ -9,6 +9,7 @@ import {
 	depthOf,
 	directionsForItem,
 	directionsForRung,
+	frontierCovering,
 	frontierFromPosition,
 	isOpen,
 	isWellFormed,
@@ -22,6 +23,7 @@ import {
 	stageByKey,
 	widen,
 	widenNext,
+	widest,
 	workingPosition,
 	type Frontier
 } from './ladder';
@@ -432,5 +434,62 @@ describe('identity', () => {
 			ladderIdentity('C', 'tonic-triad', c, 'hear_play')
 		]);
 		expect(ids.size).toBe(3);
+	});
+});
+
+describe('reading a frontier back off the card bank', () => {
+	/*
+	 * The repair. A settings row that lost its `ladderWidths` re-derived a legacy
+	 * position on every request and sat there, while the card bank went on holding
+	 * proof of everywhere that had ever been opened. These are the rules that turn
+	 * that proof back into a staircase.
+	 */
+	it('is well formed, whatever order the cells arrive in', () => {
+		const frontier = frontierCovering([
+			{ key: 'F', rungId: 'scale' },
+			{ key: 'C', rungId: 'all-sevenths' },
+			{ key: 'G', rungId: 'scale' },
+			{ key: 'C', rungId: 'tonic-triad' }
+		]);
+		expect(isWellFormed(frontier)).toBe(true);
+	});
+
+	it('restores the rungs underneath a deep cell that lost them', () => {
+		// Only the deepest cell survives, and the four rungs it stands on must come
+		// back with it — nobody reaches the sevenths of C without its scale.
+		const frontier = frontierCovering([{ key: 'C', rungId: 'all-sevenths' }]);
+		expect(frontier.widths).toEqual([1, 1, 1, 1, 1, 1, 0]);
+	});
+
+	it('counts breadth by how far along the ladder each key sits', () => {
+		// F is the third stage, so a scale in F means the scale rung is open in
+		// three keys — the two before it were opened to get there.
+		const frontier = frontierCovering([
+			{ key: 'F', rungId: 'scale' },
+			{ key: 'C', rungId: 'tonic-triad' }
+		]);
+		expect(frontier.widths[0]).toBe(3);
+		expect(frontier.widths[1]).toBe(1);
+	});
+
+	it('round-trips every cell it was given', () => {
+		const cells = cellsOf({ widths: [4, 3, 3, 2, 1, 1, 0] });
+		expect(cellsOf(frontierCovering(cells))).toEqual(cells);
+	});
+
+	it('leaves somewhere to stand when the bank is empty', () => {
+		expect(frontierCovering([])).toEqual(FIRST_FRONTIER);
+	});
+
+	it('ignores keys and rungs it does not know', () => {
+		expect(frontierCovering([{ key: 'H', rungId: 'nonsense' }])).toEqual(FIRST_FRONTIER);
+	});
+
+	it('never takes ground away when merged with what was stored', () => {
+		const stored: Frontier = { widths: [3, 2, 1, 0, 0, 0, 0] };
+		const evidence = frontierCovering([{ key: 'C', rungId: 'all-triads' }]);
+		const merged = widest(stored, evidence);
+		expect(merged.widths).toEqual([3, 2, 1, 1, 0, 0, 0]);
+		expect(isWellFormed(merged)).toBe(true);
 	});
 });
