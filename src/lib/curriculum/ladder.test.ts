@@ -531,3 +531,21 @@ describe('which minor keys the ladder has actually opened', () => {
 		expect(relativeMinorOf('nowhere')).toBeNull();
 	});
 });
+
+describe('the scale item ascends', () => {
+	it('carries the octave where the letters wrap round', () => {
+		// G major used to come back as G4 A4 B4 C4 D4 E4 F♯4 — three notes up and
+		// then an octave down — because `scale` and `midi` between them do not
+		// carry. Nothing heard it, because `drill.ts` rebuilds the voicing from the
+		// stored root; the session's keyboard was the first thing to read it raw.
+		for (const stage of STAGES) {
+			const voicing = itemsForRung('scale', stage)[0].answerVoicing ?? [];
+			expect(voicing).toHaveLength(8);
+			for (let i = 1; i < voicing.length; i++) {
+				expect(voicing[i], `${stage.key} at ${i}`).toBeGreaterThan(voicing[i - 1]);
+			}
+			// One octave exactly, tonic to tonic.
+			expect(voicing[voicing.length - 1] - voicing[0]).toBe(12);
+		}
+	});
+});

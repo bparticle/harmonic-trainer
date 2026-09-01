@@ -215,6 +215,38 @@ export function previewTasks(workout: Workout): TaskPreview[] {
 	}));
 }
 
+/**
+ * The keys today's questions would touch, in the order they first reach them.
+ *
+ * The departure board's second row, and the whole of the answer to the oldest
+ * complaint about this page: you pin a key, and questions arrive in three of
+ * them. That is `leadWithPinned` working exactly as it was written to —
+ * *"a pinned choice does not narrow the queue, it leads it"* — and the page has
+ * never once said so. Naming the calling points turns the app's most confusing
+ * behaviour into its plainest, because nobody has ever been confused by a train
+ * that does not stop only at its origin.
+ *
+ * **The crossing task is left out, and that is not an oversight.** Its whole
+ * question is which key the music went to, so listing its keys on the board
+ * would hand over the answers before the workout starts — the same reason
+ * `previewLine` refuses to name them. Every other task's `makeup` is a summary
+ * of material, not of answers.
+ *
+ * A workout composed before `Makeup` existed contributes nothing rather than a
+ * guess, which is what every other reader of that field already does.
+ */
+export function callsAt(workout: Workout): string[] {
+	const keys: string[] = [];
+	for (const task of workout.tasks) {
+		if (task.kind === 'crossing') continue;
+		if (!('makeup' in task)) continue;
+		for (const key of task.makeup?.keys ?? []) {
+			if (!keys.includes(key)) keys.push(key);
+		}
+	}
+	return keys;
+}
+
 function previewLine(task: Task): string {
 	switch (task.kind) {
 		case 'ear':

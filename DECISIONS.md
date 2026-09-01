@@ -5367,3 +5367,267 @@ the workout composed from the date, the crossing exercises and the readiness gat
 guide-tone judging, and a record with no daily streak. They are linked from the
 landing page's nav and footer and from each other — not from the signed-in
 `AppNav`, which is a deliberate fixed five and not the place for an essay.
+
+---
+
+## Twelve stations, seven lines — Today stops naming a place that is not there
+
+The complaint was that the home page did not make sense, and the specific thing
+named was the banner: it says which scale you are "currently in", and then you
+press an exercise and get questions in three other keys. Both halves of that are
+the page's fault and neither is the scheduler's.
+
+**There is no key you are in.** The ladder holds a `Frontier` — one count per
+rung, saying how many keys that rung is open in. Eighty-four cells, some open. It
+is a _set_, and a set has no location. `workingPosition()` invents one because
+something has to fill a banner, and its own comment has said so since the
+frontier landed: _"a frontier is a set and a lesson is a place, so something has
+to answer what am I working on"_. Nothing gates on that answer. It was the
+largest object on the screen and it was the one thing on it that was not a fact.
+
+**And pinning a key was never a filter.** `leadWithPinned` puts at most half the
+questions on what you pinned and fills the rest from every open cell — _"a pinned
+choice does not narrow the queue, narrowing is the cage this milestone is
+undoing, it leads it"_. That is the right behaviour and the page had never once
+mentioned it.
+
+Two further faults fall out of the same place. The twelve keys were drawn three
+times within a screen of each other, meaning three different things: the pinned
+key in the banner, the frontier's breadth as twelve pips on every rung row, and
+the record's warmth as a strip of swatches. And three controls looked identical
+and did unrelated work — pressing a swatch set `openKey`, which only filtered a
+list; pressing a rung set `choice`, which led a queue; pressing _Wider_ posted a
+form that opened material which had not existed a second earlier. Browse,
+emphasise and build, in one vocabulary of coloured key-shaped things.
+
+### The model was already a transit network
+
+Not a metaphor laid over the data — a reading of it. A rung is a line, a key is a
+station, `isOpen` is whether that line calls there, `widths[r]` is how far the
+line has been built, `rungsOpenIn` is the size of an interchange, `widen` adds a
+stop, `deepen` opens a line, `narrower` closes one, and `Makeup.keys` is a list
+of calling points. Every one of those already existed.
+
+The app also already has a circle: Explore's wheel is the circle of fifths, and a
+second circle on Today would be two drawings of one fact. So this is Beck's
+distinction rather than a duplicate — the wheel is the geography and the network
+is what has been built on it.
+
+**The map is laid out by accidentals, not by `STAGES` order.** The curriculum's
+order is a route, and routes make bad maps: it alternates sides, so two keys
+adjacent on the page are two accidentals apart in opposite directions. Laid out
+by accidentals, C sits in the middle, one step is one accidental, and one stop is
+the dominant going one way and the subdominant going the other. The ends meet —
+G♭ is six flats, B is five sharps, and one more sharp than B is F♯, which is G♭ —
+so the last station the ladder opens is the one that closes the circle. That is
+drawn as a dotted join and it had never been sayable before.
+
+### Hue still means pitch, so the convention inverts
+
+A transit diagram's signature is coloured lines. A line here is a rung and a rung
+has no pitch, so it cannot have a hue. **The stations carry the colour and the
+lines are drawn in weight.** This is better than the convention rather than a
+compromise with it: colour now reads vertically and structure horizontally, the
+two axes stop competing, and every hue on the drawing is a tonic. The rule is
+kept without one exception, which is more than the page it replaced managed.
+
+### Borrowed chords turned out to have an address
+
+Putting the progression library on the map meant working out where each of the
+nineteen sits, and the answer is two derived facts, in `curriculum/atlas.ts`.
+**Where it opens** is the shallowest rung that builds every chord it keeps inside
+the key, raised to the relative minor for a minor-mode one because that rung is
+the only thing in this app that grants a minor key at all. That number answers a
+question the level never could — _where can I play this_ — because a progression
+on a line open in four keys is playable in four keys. **What it borrows** is
+every chord neither C nor A minor builds, paired with the nearest key that does.
+
+The pattern that fell out was not designed in and is the best argument for the
+centred layout. Every borrowed and blues chord in the library comes from the flat
+side; every secondary dominant comes from the sharp side. The ragtime circle
+borrows from A, D and G — three consecutive stations walking inward to C, so it
+is not a metaphorical journey but a literal one. The backdoor cadence approaches
+from three stops flat, which is what its name has always meant. The tritone
+substitution comes from six stops out, the far terminus, which is why it sounds
+the way it does. And two progressions borrow from nowhere — `sus-resolution` and
+`line-cliche` — because no key builds a suspended chord or a minor-major seventh
+as a diatonic one. That is the same pair `ROADMAP.md` records as _two shapes
+still taught by nothing_, arrived at from the opposite end.
+
+Ties are decided flat-first, and that is not arbitrary: F minor is diatonic to
+both E♭ and A♭, and in C it arrives as the borrowed `iv` — borrowed from C minor,
+which is three flats, which is E♭'s. The rule and the theory agree.
+
+### Travel and open, and they never share a control
+
+_Travel_ is the map: every station on the built network is one press away,
+nothing is spent, nothing advances, and pressing an intersection pins a rung in a
+key because an intersection **is** one cell of the frontier. _Open_ is a separate
+panel with the only controls that change what exists — open the next line, open a
+line at one more station, close the last stop. **Open** rather than _extend_ or
+_develop_: it is already the app's word (`isOpen` is the one question the card
+generator asks), it pairs with _close_, and _develop_ would spend a word that
+means something else at a piano.
+
+Pressing keeps itself honest. A line that does not call at the station you just
+pressed is not a departure the network can make, so the pin drops to the deepest
+line that does; pressing a line whose stops do not include the current station
+moves the departure to that line's terminus. Both are the rule the old step rows
+already kept, made visible.
+
+### The board replaces the banner because a board claims nothing
+
+A departure board does not say where you are. It says what is leaving, from
+where, on which line, and what it calls at — which is exactly and only what a
+workout is. `callsAt` in `session/progress.ts` is the second row, and it is a
+promotion rather than a new number: `describeMaterial` has been printing those
+keys in a task's sub-line all along. Said on the board, the oldest confusion in
+the app becomes its plainest sentence — you pinned E♭, the train starts at E♭ and
+calls at everything else you have opened. Nobody has ever been confused by a
+train that does not stop only at its origin.
+
+**The crossing task is left out of the calling points on purpose.** Its whole
+question is which key the music went to, so listing its keys would hand over the
+answers before the workout starts — the same reason `previewLine` already refuses
+to name them.
+
+### Four layers, and one band that answers one question
+
+Everything is on the map, switchable: _Record_ fills the station roundels from
+`chord_attempts`, _Today's run_ rings the departure and the calling points,
+_Crossings_ draws the near four where they actually are, and _Progressions_ draws
+where a chosen one borrows from. Crossings and Progressions share the band above
+the stations and turn each other off, because that band answers one question —
+where else does this key connect — and it can only answer it about one thing at a
+time. With neither on, the band carries the loop closure.
+
+The progression list did not disappear; it stopped being a rival to the map and
+became the index into a layer of it, still grouped by the seven levels
+`PROGRESSION_LEVELS` names.
+
+Both layers say their chords in the key you are actually departing from.
+`sayInKey` transposes the root by fifths and respells from the destination's own
+side of the circle, and the source station moves with it — moving the chord and
+not the station it comes from would be worse than moving neither.
+
+### What this cost, and what came out
+
+No new stored data and no new behaviour: the composer, the scheduler and the
+three frontier moves are untouched. `curriculum/atlas.ts` holds the music —
+stations, neighbours, which key builds a chord, where a progression sits — and
+`session/network.ts` turns that into coordinates, taking `ladderPath` and
+`keyStandings` as arguments rather than re-reading the frontier, so two readings
+of one frontier cannot disagree. Both are pure and tested without a browser, the
+arrangement `wheel/geometry.ts` already has with `Wheel.svelte`.
+
+Out of `+page.svelte` went the hero, the seven step rows, the eighty-four pips,
+the twelve-swatch strip, the key legend and the disclosure called _choose
+something else_. Nothing that was reachable stopped being reachable. The page's
+`journey` payload went with them — `network()` counts its own cells — while
+`totals` stayed, because _how much have I got right so far_ is the one number on
+this page that can only ever go up.
+
+`workingPosition()` survives, and only as what it was always good for: the seed
+the picker opens on. It stopped being a headline, which was the single thing it
+was ever wrong about.
+
+### The dashed station you could press and could not reach
+
+Playing the new page found four faults in one gesture, and they were all the
+same fault seen from different sides: **the map drew things the rest of the app
+would not honour.**
+
+**You could depart from a station that was not on the network.** Pressing a
+dashed roundel made it the pin, the workout was composed with that key centre,
+and the questions came from wherever the bank actually had cards. The board said
+F, the drill said G, and nothing on either page admitted the difference.
+Pressing a station is now two different things depending on the station: one on
+the network becomes the departure, one that is not is only _read_ — the panel
+opens on it, the map marks it `READING` rather than `DEPARTS`, and the run stays
+where it was. Reading a station you have not opened is a perfectly good thing to
+want; leaving from one is not a thing the network can do.
+
+**Three lines pointed a stub at F and only one of them could take it.** A
+frontier of `[2, 2, 2, 1, 1, 1, 1]` has three lines whose next key is F, and
+`widen` refuses two of them — a rung may never be open in more keys than the
+rung above it. `network()` was drawing all three. It now asks the same question
+`widen` asks, off the path rather than off a frontier, so a stub on the diagram
+is a stop that exists. A test walks sixty moves of a growing ladder and asserts
+no stub is ever drawn that `widen` would refuse.
+
+**And there was no control that took one.** `widenLadder` opens whichever line
+`nextWidening` picks — the deepest with room, which is the right default and was
+the only thing on offer. So the diagram could show a dashed stop at F on the
+scale while the only button widened the triads at G, and the way to reach F was
+to widen repeatedly until the deeper lines ran out of room. `widenLadderAt` takes
+the line by name, the `?/widen` action takes a `rung` field, and the panel under
+the map is now titled for the station you are reading and offers the one move
+that puts it on the network: **Open the scale at F**. Where nothing can reach it
+yet the panel says so and names what comes first — _the ladder does not skip_.
+
+Opening during a workout is allowed, and the first draft refused it for a reason
+that turned out to be wrong. A workout's queues are card ids, fixed when it was
+composed and stored in `plan_json`; opening a line writes a frontier and creates
+cards and touches neither. Refusing it meant noticing mid-practice that you
+wanted F and having to stop the workout to say so.
+
+### The pin led by skill and never by key
+
+The fourth fault was underneath the other three and is the one worth keeping.
+Pinning **F · the scale** and departing asked for the G scale, and that was not
+the map's fault: `earQueue` led with the pinned _skill_ across every key and
+took whichever card was ripest. `functionQueue` has never done that — its
+`spreadByKey` takes the key centre as the lane to lead with, and its comment
+gives the reason in as many words: _choosing the sevenths in F and being asked
+about the sevenths in B first would be an odd way of honouring it_. The ear queue
+simply never got the rule.
+
+It has it now. Only the pinned block is reordered, so the queue still runs on
+into every other key the frontier has opened — leading, not narrowing, exactly as
+before — but it starts where the board said it would. The board's calling points
+follow the same discipline: the departure is listed first only when the leading
+line actually calls there, which is now a guarantee rather than a hope.
+
+The session says what run it belongs to. `Task 1 of 3 · F` read as _this task is
+in F_, which is not what a key centre means; it is `Task 1 of 3 · from F · the
+scale` now, and the line over each question has always named that question's own
+key. Two true things with a sentence joining them.
+
+### Seven of the twelve scales ran off the end of the keyboard
+
+Reported as _the F♯ and the G are off screen_, and the report was generous: the
+keyboard was hard-coded to `from={48} count={29}` — C3 to E5 — while the ladder
+asks for notes from 47 to 83. B, B♭, A, A♭, G, G♭ and F all climb past the right
+edge. The window is cut to the material now, snapped to a white key and never
+narrower than the twenty-nine keys it has always been, so nothing shrinks for a
+question that already fits and nothing falls off one that does not.
+
+It is cut to what `drill.ts` **poses**, not to what the card stores, and that
+distinction turned up a second bug. `scaleItem` built its voicing as
+`scale(k).map(midi)` under a comment claiming the octave carries were already
+there. They are not: `scale` transposes intervals and `midi` reads the octave off
+the note, so G major came back as G4 A4 B4 **C4** D4 E4 F♯4 — three notes up and
+then an octave down. Nothing ever heard it, because `scaleVoicing` rebuilds the
+run from the stored root before it is posed, which is why it survived this long;
+the keyboard window was the first thing to read the array raw, and it framed the
+question a fifth too low. `scaleItem` now carries, with a test over all twelve
+keys asserting every scale ascends and spans exactly an octave. Cards already in
+the bank keep the old array, which is the other reason the window is cut to what
+is posed.
+
+### A correction, made before this shipped
+
+The first pass at the dashed station refused to depart from one. The reasoning
+looked sound — a key the ladder has not opened holds no cards, so it is not
+somewhere a train can leave from — and the premise was simply false.
+`startWorkout` calls `cardsForRung` on whatever the picker pinned _before_ it
+composes anything, so all eighty-four cells have always been startable and the
+cards are made on the way out. The README has said so since the picker existed.
+
+Refusing it would have deleted the whole of _exploring and advancing are separate
+decisions_ to fix a symptom whose cause was somewhere else entirely — the ear
+queue ignoring the pinned key. So the block came out again, and what is left in
+its place is language: a station the ladder has not reached says **ahead of the
+ladder** rather than _not open_, which is the difference between a distance and a
+refusal, and the panel that offers to open it says plainly that departing does
+not wait for that.

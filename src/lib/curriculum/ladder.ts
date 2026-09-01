@@ -583,14 +583,34 @@ function seventhItem(k: Key, degree: number, degrees: string[]): LadderItem {
 
 function scaleItem(k: Key): LadderItem {
 	const notes = scale(k);
-	const ascending = notes.map(midi);
+
+	/*
+	 * Ascending, with the octave carried where the letters wrap.
+	 *
+	 * `scale` transposes intervals from the tonic and `midi` reads the octave off
+	 * the note, and between them they do *not* carry: G major comes back as
+	 * G4 A4 B4 C4 D4 E4 F♯4, which climbs three notes and then falls back an
+	 * octave. This comment used to claim the carries were already there, which is
+	 * why nothing caught it — `drill.ts` rebuilds the voicing from the stored root
+	 * before anything is heard, so the wrong array never reached the ears and only
+	 * showed up when the session tried to size the keyboard from it.
+	 *
+	 * The repeated tonic on the end is the arrival that makes this a complete
+	 * one-octave scale.
+	 */
+	const ascending: number[] = [];
+	let previous = -1;
+	for (const note of notes.map(midi)) {
+		let carried = note;
+		while (carried <= previous) carried += 12;
+		previous = carried;
+		ascending.push(carried);
+	}
+
 	return {
 		kind: 'scale',
 		label: `${formatKey(k)} scale`,
 		answerPitchClasses: notes.map(pitchClass),
-		// Keep the octave carries computed by `scale`: forcing every note into one
-		// octave makes any scale whose tonic is above C fall partway through. The
-		// repeated tonic is the arrival that makes this a complete one-octave scale.
 		answerVoicing: [...ascending, ascending[0] + 12],
 		detail: notes.map((n) => formatNote(n, { unicode: true })).join(' ')
 	};

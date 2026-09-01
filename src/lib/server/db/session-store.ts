@@ -61,6 +61,7 @@ import {
 	rungById,
 	stageByKey,
 	STAGES,
+	widen,
 	widenNext,
 	widest,
 	workingPosition,
@@ -269,6 +270,25 @@ export async function deepenLadder(userId: string): Promise<Frontier> {
 export async function widenLadder(userId: string): Promise<Frontier> {
 	const from = await currentFrontier(userId);
 	const to = widenNext(from);
+	return to ? saveFrontier(userId, to) : from;
+}
+
+/**
+ * Go wider on a named line rather than on whichever one `nextWidening` picks.
+ *
+ * `widenLadder` opens the *deepest* line with room, which is the right default
+ * and was the only thing on offer. The map made the gap obvious: it draws a
+ * stub from every line that can take another stop, and somebody who wants the
+ * scale in F should be able to press the one pointing at F rather than widen
+ * repeatedly until the deepest line runs out of room and the shallowest becomes
+ * the default. Both write the same frontier; this one is asked a question.
+ *
+ * `widen` refuses anything that would break the staircase, so an index that has
+ * been fiddled with in a form post leaves the ladder exactly where it was.
+ */
+export async function widenLadderAt(userId: string, rungIndex: number): Promise<Frontier> {
+	const from = await currentFrontier(userId);
+	const to = widen(from, rungIndex);
 	return to ? saveFrontier(userId, to) : from;
 }
 

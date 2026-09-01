@@ -325,7 +325,7 @@ src/
   routes/
     layout.css     Design tokens as Tailwind theme
     +layout.*      Injects the database-owned palette during SSR
-    +page.*        Today: the workout previewed, and the picker that shapes it
+    +page.*        Today: the departure board, and the network you pick from
     play/          Name what you play, live
     backing/       Play along, for the player who owns the instance
     demo/          The same page, public, writing nothing
@@ -515,14 +515,22 @@ failure.
 
 ### Choosing what to practise
 
-The home screen is a picker, not a verdict. Every key, every rung and every
-progression is listed and startable, whether or not the ladder has got there —
-the ladder marks its suggestion and nothing else. Pinning one leads the
-workout's queues and takes it to that key; it gates nothing, and it leaves the
-ladder exactly where it was, because exploring and advancing are separate
-decisions and only the arrows at the bottom advance.
+The home screen is a network diagram, not a verdict. Seven lines are the seven
+rungs, twelve stations are the twelve keys, and how far each line has been built
+is the frontier drawn as a shape. Every station and every line is pressable
+whether or not the ladder has got there — the ladder marks its suggestion and
+nothing else. Pinning one leads the workout's queues and takes it to that key; it
+gates nothing, and it leaves the ladder exactly where it was, because exploring
+and advancing are separate decisions.
 
-Cards for a step you have never visited are created the moment you pick it.
+**Travel and open never share a control.** Pressing the map costs nothing and
+moves nothing. The one panel that changes what exists is named for the station
+you are reading and offers the move that reaches it — open a line one more stop,
+open the next line, or close the last stop. Nothing there is a lock.
+
+Cards for a step you have never visited are created the moment you pick it, so a
+station the ladder has not reached is still somewhere a workout can depart from —
+it simply says it is ahead of the ladder while you are there.
 
 Finishing a workout offers another one. There is no maximum, no daily streak and
 no calendar of dots: "you have practised enough today" is a sentence this app has

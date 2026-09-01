@@ -17,9 +17,10 @@ import {
 	rungProgress,
 	startWorkout,
 	stepBackLadder,
-	widenLadder
+	widenLadder,
+	widenLadderAt
 } from '$lib/server/db/session-store';
-import { journeyProgress, ladderPath, ladderTotals } from '$lib/session/journey';
+import { ladderPath, ladderTotals } from '$lib/session/journey';
 import { currentUserId } from '$lib/server/db/user';
 import {
 	deepen,
@@ -34,6 +35,7 @@ import {
 } from '$lib/curriculum/ladder';
 import { PROGRESSIONS, PROGRESSION_LEVELS } from '$lib/curriculum/progressions';
 import {
+	callsAt,
 	previewTasks,
 	readChoice,
 	readSize,
@@ -102,10 +104,10 @@ export const load: PageServerLoad = async ({ parent, locals }) => {
 			// rows asked for. The picker below it is hidden for a visitor anyway.
 			size: 'standard' as WorkoutSize,
 			previews: {} as Record<WorkoutSize, TaskPreview[]>,
+			calls: {} as Record<WorkoutSize, string[]>,
 			// A visitor has no record, so the path is drawn from the ladder alone:
 			// the frontier of a first morning, with nothing counted against it.
 			path: ladderPath(FIRST_FRONTIER, []),
-			journey: journeyProgress(FIRST_FRONTIER),
 			totals: ladderTotals([]),
 			canDeepen: true,
 			canWiden: false,
@@ -199,6 +201,7 @@ export const load: PageServerLoad = async ({ parent, locals }) => {
 					at: active.resumeAt,
 					complete: active.complete,
 					keyCenter: active.workout.keyCenter,
+					calls: callsAt(active.workout),
 					tasks: previewTasks(active.workout).map((preview, index) => ({
 						...preview,
 						finished: active.tasks[index]?.finished ?? false
@@ -213,6 +216,20 @@ export const load: PageServerLoad = async ({ parent, locals }) => {
 			short: previewTasks(previews.short),
 			standard: previewTasks(previews.standard),
 			long: previewTasks(previews.long)
+		},
+		/*
+		 * The calling points, per size, for the departure board.
+		 *
+		 * Composed before anything is pinned, which is exactly what the board says
+		 * about them: the pin leads the queue and these are what else is due. A
+		 * preview recomposed on every keystroke would be a round trip for a line
+		 * of text, and `leadWithPinned` guarantees the pin arrives first whatever
+		 * these say.
+		 */
+		calls: {
+			short: callsAt(previews.short),
+			standard: callsAt(previews.standard),
+			long: callsAt(previews.long)
 		},
 		/*
 		 * The play-along that is not on offer yet, and what would put it there.
@@ -231,7 +248,6 @@ export const load: PageServerLoad = async ({ parent, locals }) => {
 		 * already written on the twelve keys further down.
 		 */
 		path: ladderPath(frontier, record),
-		journey: journeyProgress(frontier),
 		totals: ladderTotals(record),
 		canDeepen: deeper !== null,
 		canWiden: wider !== null,
@@ -312,10 +328,24 @@ export const actions: Actions = {
 		redirect(303, '/');
 	},
 
-	/** Go wider: the same rung, one more key. More ground before the next idea. */
-	widen: async ({ locals }) => {
+	/**
+	 * Go wider: one line, one more key. More ground before the next idea.
+	 *
+	 * Takes the line by name where the map named one, and falls back to
+	 * `nextWidening`'s answer where it did not. The map draws a stub from every
+	 * line that can take another stop and each of those is now a thing you can
+	 * ask for by pressing it — which is the difference between a diagram that
+	 * shows what is possible and one you can act on. An unknown or refused rung
+	 * leaves the ladder where it was.
+	 */
+	widen: async ({ request, locals }) => {
+		const form = await request.formData();
 		const userId = currentUserId(locals.userId);
-		await widenLadder(userId);
+		const named = RUNGS.findIndex((rung) => rung.id === form.get('rung'));
+
+		if (named >= 0) await widenLadderAt(userId, named);
+		else await widenLadder(userId);
+
 		redirect(303, '/');
 	},
 

@@ -795,7 +795,13 @@ export function makeupOf(cardIds: string[], cards: Schedulable[]): Makeup {
 /** Ten aural questions, and never fewer because the deck is well run. */
 export function earQueue(
 	cards: Schedulable[],
-	options: { now: Date; day: number; coldKeys?: string[]; pinnedSkill?: string | null }
+	options: {
+		now: Date;
+		day: number;
+		coldKeys?: string[];
+		pinnedSkill?: string | null;
+		keyCenter?: string;
+	}
 ): string[] {
 	const tiered = tieredPool(cards, { ...options, directions: EAR_DIRECTIONS });
 	if (tiered.length === 0) return [];
@@ -805,7 +811,33 @@ export function earQueue(
 	// past cards that are not pinned, which leaves the pinned ones in the same
 	// order every day.
 	const pinned = rotate(withSkill(tiered, options.pinnedSkill), options.day);
-	return toQueue(leadWithPinned(tiered, pinned, pinnedShare(EAR_QUESTIONS)), EAR_QUESTIONS);
+
+	/*
+	 * A pinned rung is entered through the key it was pinned in.
+	 *
+	 * `functionQueue` has always done this — its `spreadByKey` takes the key
+	 * centre as the lane to lead with, and its comment gives the reason: choosing
+	 * *the sevenths in F* and being asked about the sevenths in B first is an odd
+	 * way of honouring it. This queue was the one that never got the rule, and
+	 * the result was found by using the app: pin **F · the scale**, press depart,
+	 * and the first question is the G scale, because G's card happened to be
+	 * riper. Nothing was wrong with the answer and everything was wrong with the
+	 * page, which had just promised F.
+	 *
+	 * Still leading and not narrowing. Only the pinned block is reordered — the
+	 * rest of the tiers keep the order `tieredPool` worked out — so the queue
+	 * still runs on into every other key the frontier has opened. What changes is
+	 * that it starts where it said it would.
+	 */
+	const enterAt = options.keyCenter;
+	const led = enterAt
+		? [
+				...pinned.filter((card) => card.keyCenter === enterAt),
+				...pinned.filter((card) => card.keyCenter !== enterAt)
+			]
+		: pinned;
+
+	return toQueue(leadWithPinned(tiered, led, pinnedShare(EAR_QUESTIONS)), EAR_QUESTIONS);
 }
 
 /**
@@ -1412,7 +1444,10 @@ export function composeWorkout(input: WorkoutInput): Workout {
 
 	// Two queues, one bank, partitioned by direction — so nothing is asked twice
 	// without either queue having to know the other exists.
-	const ear = earTask(earQueue(input.cards, { now, day, coldKeys, pinnedSkill }), input.cards);
+	const ear = earTask(
+		earQueue(input.cards, { now, day, coldKeys, pinnedSkill, keyCenter }),
+		input.cards
+	);
 	const fn = functionTask(
 		functionQueue(input.cards, { now, day, coldKeys, pinnedSkill, keyCenter }),
 		input.cards

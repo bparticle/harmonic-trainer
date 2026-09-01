@@ -24,6 +24,8 @@
 	import { describeGoal, type Verdict } from '$lib/practice/goal';
 	import { taskTags } from '$lib/session/progress';
 	import { skillLabel } from '$lib/curriculum/cards';
+	import { rungById } from '$lib/curriculum/ladder';
+	import { progressionById } from '$lib/curriculum/progressions';
 	import type { Mission } from '$lib/session/workout';
 	import type { WorkoutReport } from '$lib/session/report';
 	import { keyOverlay } from '$lib/wheel/overlays';
@@ -678,6 +680,19 @@
 	 * generated in and the skill it belongs to — so this is a label rather than a
 	 * lookup, and it says nothing at all for a card whose skill names nothing.
 	 */
+	/**
+	 * The line the run leads with, where the board pinned one.
+	 *
+	 * Read off `workout.choice`, which is what the picker actually posted, so the
+	 * header and the home page cannot describe the same run differently.
+	 */
+	const leadingLine = $derived.by(() => {
+		const choice = workout?.choice;
+		if (!choice) return null;
+		if (choice.kind === 'rung') return rungById(choice.rungId)?.label ?? null;
+		return progressionById(choice.progressionId)?.name ?? null;
+	});
+
 	const questionSource = $derived.by(() => {
 		if (!currentCard) return '';
 		/*
@@ -710,6 +725,61 @@
 		if (!currentCard || !(revealed || answered)) return [];
 		const pcs = (currentCard.payload as { answerPitchClasses: number[] }).answerPitchClasses;
 		return pcs.length ? [{ cells: cellsFor(pcs, pcs[0], config, GEOMETRY), strength: 0.9 }] : [];
+	});
+
+	/**
+	 * The stretch of keyboard this question actually needs.
+	 *
+	 * It was `from={48} count={29}` — C3 to E5 — which is a sensible-looking
+	 * window and wrong for seven of the twelve keys. A one-octave scale is
+	 * thirteen semitones starting on its own tonic, so B major runs to B5 and
+	 * falls off the right-hand end; the ladder as a whole asks for notes from 47
+	 * to 83 and this showed 48 to 76. Found by playing the G scale and watching
+	 * the F♯ and the G go missing.
+	 *
+	 * Read off the card rather than off the moment, so it does not move under the
+	 * hands while a scale is being played one note at a time — every card in a
+	 * task shares a key and a skill, so within a task the window holds still.
+	 * Snapped down to a C so the octaves read normally, and never smaller than the
+	 * twenty-nine keys this has always been, so nothing shrinks the keys for a
+	 * question that fits.
+	 */
+	const WHITE_PITCH_CLASSES = new Set([0, 2, 4, 5, 7, 9, 11]);
+
+	const keyboard = $derived.by(() => {
+		/*
+		 * The notes this question will actually put on the keyboard.
+		 *
+		 * Deliberately not `payload.answerVoicing`. `drill.ts` rebuilds a scale's
+		 * voicing from its stored root before posing it, so what sounds and what is
+		 * lit can differ from what the card has on disk — and older cards hold a
+		 * scale that wraps back an octave partway up, which dragged this window a
+		 * long way left and pushed the exercise into the right-hand half. What is
+		 * posed is what the player sees, so that is what the window is cut to.
+		 */
+		const notes = [
+			...(prompt?.audible ?? []),
+			...scaleTarget,
+			...chordTarget,
+			...targetNotes,
+			...demoNotes
+		];
+		if (notes.length === 0) return { from: 48, count: 29 };
+
+		const lowest = Math.min(...notes);
+		const highest = Math.max(...notes);
+		const needed = highest - lowest + 1;
+		const width = Math.max(29, needed + 4);
+
+		// Put the material in the middle of whatever window it gets, then let the
+		// left edge fall back to the nearest white key — a keyboard drawn from a
+		// black key has a floating sharp with no white key under half of it. The
+		// old rule snapped the edge down to a C, which threw away most of an
+		// octave and left every scale above C sitting in the right-hand half.
+		let from = lowest - Math.floor((width - needed) / 2);
+		while (!WHITE_PITCH_CLASSES.has(((from % 12) + 12) % 12)) from--;
+
+		return { from, count: Math.max(29, highest - from + 3) };
 	});
 
 	const guidanceTitle = $derived.by(() => {
@@ -1028,8 +1098,21 @@
 		<header class="mb-4 flex flex-wrap items-center justify-between gap-3">
 			<div class="flex min-w-0 flex-wrap items-baseline gap-2 sm:gap-3">
 				<h1 class="font-display text-ink text-lg font-semibold tracking-tight">{task.title}</h1>
+				<!--
+					What this run is, said the way the board that started it said it.
+
+					This used to be `Task 1 of 3 · F`, which reads as *this task is in F*
+					and is not what the key centre means: it is where the run departs
+					from and what the play-along and the crossing questions are set in,
+					while the drill queues lead there and then carry on into every other
+					key the frontier has opened. Somebody who pinned F, pressed depart
+					and was handed a G scale had two true things on screen and no
+					sentence joining them.
+				-->
 				<span class="text-ink-muted font-mono text-xs">
-					Task {progress} · {glyph(workout?.keyCenter ?? '')}
+					Task {progress} · from {glyph(workout?.keyCenter ?? '')}{leadingLine
+						? ` · ${leadingLine.toLowerCase()}`
+						: ''}
 				</span>
 				<!-- What is new here and what is coming round again, in the one place
 				     somebody is actually about to answer the questions. Composed by
@@ -1453,8 +1536,8 @@
 					labelTargets={(isSequential || isChordLesson) && lessonGuidance.showTargetLabels}
 					onnoteon={(n) => virtual('noteon', n)}
 					onnoteoff={(n) => virtual('noteoff', n)}
-					from={48}
-					count={29}
+					from={keyboard.from}
+					count={keyboard.count}
 				/>
 			</footer>
 

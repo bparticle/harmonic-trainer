@@ -300,6 +300,46 @@ describe('the ear queue never runs dry', () => {
 		const silent = [card('seen', 'see_play', 'C'), card('named', 'play_name', 'C')];
 		expect(earQueue(silent, { now: NOW, day: 0 })).toEqual([]);
 	});
+
+	/*
+	 * Found by using the app: pinning "F · the scale" and departing asked for the
+	 * G scale first, because G's card was riper. The answer was fine and the
+	 * promise was not.
+	 */
+	it('enters a pinned rung through the key it was pinned in', () => {
+		const cards = bank();
+		const byId = new Map(cards.map((c) => [c.cardId, c]));
+		const queue = earQueue(cards, {
+			now: NOW,
+			day: 4,
+			pinnedSkill: 'rung:scale',
+			keyCenter: 'F'
+		});
+
+		expect(byId.get(queue[0])!.keyCenter).toBe('F');
+		expect(byId.get(queue[0])!.skillCode).toBe('rung:scale');
+	});
+
+	it('still runs on into the other keys, because leading is not narrowing', () => {
+		const cards = bank();
+		const byId = new Map(cards.map((c) => [c.cardId, c]));
+		const queue = earQueue(cards, {
+			now: NOW,
+			day: 4,
+			pinnedSkill: 'rung:scale',
+			keyCenter: 'F'
+		});
+
+		const keys = new Set(queue.map((id) => byId.get(id)!.keyCenter));
+		expect(keys.size).toBeGreaterThan(1);
+	});
+
+	it('leaves the queue alone when nothing is pinned', () => {
+		const cards = bank();
+		expect(earQueue(cards, { now: NOW, day: 4, keyCenter: 'F' })).toEqual(
+			earQueue(cards, { now: NOW, day: 4 })
+		);
+	});
 });
 
 describe('the function queue', () => {

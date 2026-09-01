@@ -2,86 +2,71 @@
 	import { pitchClass } from '$lib/music/note';
 	import { parseKey } from '$lib/music/key';
 	import LandingPage from '$lib/components/LandingPage.svelte';
+	import NetworkMap from '$lib/components/NetworkMap.svelte';
+	import { network, stationOf } from '$lib/session/network';
+	import {
+		PROGRESSION_ANCHORS,
+		neighbours,
+		sayInKey,
+		stageAtAccidentals,
+		type Neighbour
+	} from '$lib/curriculum/atlas';
+	import { stageByKey, type RungId } from '$lib/curriculum/ladder';
 	import type { WorkoutSize } from '$lib/session/workout';
-	import type { KeyStanding } from '$lib/session/warmth';
-	import { describeTasks, describeWhen, type PathStep } from '$lib/session/journey';
+	import { describeTasks, describeWhen } from '$lib/session/journey';
 
 	/*
-	 * Today: what would you like to practise?
+	 * Today: where does this go, and what does it call at?
 	 *
-	 * This page used to answer that question for you. One button, wired to
-	 * wherever the ladder happened to be, with everything else folded away under
-	 * a tab — which is fine on the day you agree with it and a dead end on the
-	 * day you want to spend twenty minutes on the thing that went badly.
+	 * This page used to open with a banner naming the key you were "in". There is
+	 * no such key. The ladder holds a *frontier* — a set of open cells, one count
+	 * per rung — and `workingPosition()` invented a single point in it so the
+	 * banner had something to print. Nothing gated on that point. It was the
+	 * largest object on the screen and it was a fiction, and it is the reason
+	 * "change scale" never matched what the questions then did.
 	 *
-	 * The ladder is the default path now, while the complete picker remains one
-	 * deliberate step away. Every key, rung and progression is still startable;
-	 * it simply no longer competes with the recommended next lesson on first
-	 * view. Choosing something else does not move the ladder: exploring and
-	 * advancing are different decisions.
+	 * Three things replace it, and none of them needs a number that did not
+	 * already exist:
 	 *
-	 * **Why this page is colourful, and what the colour is allowed to mean.**
-	 * It was grey, and the honest reason was that most of what it says has no
-	 * pitch in it: a task, a rung, a count of reviews. Hue means pitch here, so
-	 * none of those may be coloured to cheer the screen up. What does have a
-	 * pitch is a *key*, and this page is mostly about twelve of them — so the
-	 * keys are drawn at the size the subject deserves, each wearing its tonic's
-	 * swatch, each filling with what the record actually holds in it. Twelve
-	 * saturated colours is a strong image and every one of them is information.
-	 * Everything without a pitch — the tasks, the ticks, the rung marks — stays
-	 * in weight: ink, dim ink, a dashed outline.
+	 *   - **A departure board.** A board does not claim you are anywhere. It says
+	 *     what is leaving, from where, and what it calls at — which is exactly
+	 *     what a workout is. The calling points come from `Makeup.keys`, which has
+	 *     been computed all along and printed in a task's sub-line, and promoting
+	 *     it to the second row turns the app's most confusing behaviour into its
+	 *     plainest: *you pinned E♭; the train starts at E♭ and calls at everything
+	 *     else you have opened.* `leadWithPinned` has always worked that way.
 	 *
-	 * **An empty key is an invitation.** Ten of the twelve hold nothing on a
-	 * record like this one, and they are drawn as a full-strength coloured
-	 * outline waiting to be filled rather than as a faded gap, labelled *new*
-	 * rather than 0. Nothing on this page is red, nothing counts days, and no
-	 * number here can fall while you are away from the piano.
+	 *   - **One drawing instead of three.** The banner named one key, every rung
+	 *     row carried twelve pips for the frontier's breadth, and a strip of
+	 *     twelve swatches carried the record's warmth. Three different facts in
+	 *     one visual language, within a screen of each other. The network says all
+	 *     three at once and says which is which.
+	 *
+	 *   - **Two verbs that never share a control.** *Travel* is free, unlimited
+	 *     and moves nothing: every station on the built network is one press away.
+	 *     *Open* is the only thing that changes the network. Browsing, pinning and
+	 *     advancing used to look identical — three coloured key-shaped things with
+	 *     three different consequences — and that was the whole of the confusion.
+	 *
+	 * The colour rule is unchanged and is now kept without exception: the only
+	 * hues on this page are on stations and station roundels, and a station is a
+	 * key. Tasks, lines, counts and moves are ink and weight.
 	 */
 
 	let { data } = $props();
 
-	/*
-	 * Three sizes, not three lengths.
-	 *
-	 * The 10/20/35 picker measured something no block ever obeyed — nothing ended
-	 * because a timer ran out, so the minutes were a promise the session could not
-	 * keep. A workout is three, four or five tasks and every one of them is
-	 * countable, which is why the preview beside this can be true.
-	 *
-	 * The number on each button counts the tasks that were actually composed
-	 * rather than the tasks the size is *named* for. They agree on every day but
-	 * the first one or two, when no tune is playable yet and the play-along is
-	 * held back — see `missionHeld` below. Printing `TASK_COUNT` there would put
-	 * a 4 on a button that hands you three things, which is the same kind of
-	 * promise the minutes used to make.
-	 */
-	// svelte-ignore state_referenced_locally
-	let size = $state<WorkoutSize>(data.size);
-	const preview = $derived(data.previews[size] ?? []);
-
-	/*
-	 * The play-along being kept back, and the two nearest ways to release it.
-	 *
-	 * Two rather than all of them: the list of every progression that happens to
-	 * teach a dominant seventh is a search result, and what somebody on their
-	 * second day needs is a direction. `taughtBy` already ordered them by the
-	 * library's own levels, so the first two are the gentlest.
-	 */
-	const heldMission = $derived(data.missionHeld ?? null);
-	const heldBy = $derived(
-		(heldMission?.teaches ?? [])
-			.slice(0, 2)
-			.map((id) => data.progressions.find((progression) => progression.id === id))
-			.filter((progression) => progression !== undefined)
-	);
+	/* -- What is being pinned -------------------------------------------- */
 
 	type Choice =
 		{ kind: 'rung'; key: string; rung: string } | { kind: 'progression'; id: string; key: string };
 
+	// svelte-ignore state_referenced_locally
+	let size = $state<WorkoutSize>(data.size);
+
 	/*
 	 * Starts on the ladder's own suggestion, so pressing play without touching
-	 * anything does exactly what it used to. Seeded once and owned by the picker
-	 * from then on — a reload is what changes the suggestion, not a keystroke.
+	 * anything does what it always did. Seeded once and owned by the map from
+	 * then on — a reload is what changes the suggestion, not a keystroke.
 	 */
 	// svelte-ignore state_referenced_locally
 	let choice = $state<Choice>({
@@ -90,39 +75,225 @@
 		rung: data.position.rung.id
 	});
 
-	/** Which key's rungs are open. Opens where the ladder is; then it is yours. */
+	/*
+	 * What is drawn on top of the network, and what is pinned, are separate
+	 * things. Turning a layer on shows you something; it does not decide what you
+	 * are about to practise. Pressing something does.
+	 */
+	let layers = $state({ record: true, today: true, crossings: false, progressions: false });
+
+	/** Which progression the map is drawing. Pressing one in the list also pins it. */
 	// svelte-ignore state_referenced_locally
-	let openKey = $state(data.position.key);
+	let shownProgression = $state<string>(data.progressions[0]?.id ?? '');
+
+	/*
+	 * The station being read, which is not always the station being left from.
+	 *
+	 * These were one thing and it was wrong. Pressing a station that is not on
+	 * the network made it the departure, so a workout could be composed in a key
+	 * holding no cards at all: the board said F, the questions came from C and G,
+	 * and nothing on either page admitted the difference. A station you have not
+	 * opened is a perfectly good thing to press — you want to know what it would
+	 * take — it is just not somewhere a train can leave from.
+	 */
+	// svelte-ignore state_referenced_locally
+	let selectedKey = $state<string>(
+		// Opens on wherever today leaves from, so the panel and the board agree
+		// before anything has been pressed. A workout in flight owns that answer.
+		data.stages.find(
+			(stage) =>
+				stage.key === (data.resume?.keyCenter ?? data.position.key) ||
+				stage.relativeMinor === (data.resume?.keyCenter ?? data.position.key)
+		)?.key ?? data.position.key
+	);
+
+	const preview = $derived(data.previews[size] ?? []);
+	const resuming = $derived(Boolean(data.resume));
 
 	const glyph = (s: string) => s.replace(/b/g, '♭').replace(/#/g, '♯');
 	const pcOf = (keyName: string) => pitchClass(parseKey(keyName.replace(/m$/, '')).tonic);
 	const tint = (keyName: string) => `var(--pc-${pcOf(keyName)})`;
-	/** Contrast-safe ink for text sitting on a swatch, computed from the swatch. */
 	const tintInk = (keyName: string) => `var(--pc-${pcOf(keyName)}-ink)`;
 
-	const resuming = $derived(Boolean(data.resume));
-	const reachedIndex = $derived(data.position.stageIndex);
-	const openStage = $derived(data.stages.find((s) => s.key === openKey) ?? data.stages[0]);
-	const openStanding = $derived(data.keys.find((k) => k.key === openKey) ?? data.keys[0]);
+	/* -- The network ------------------------------------------------------ */
 
-	const isHere = (key: string, rung: string) =>
-		key === data.position.key && rung === data.position.rung.id;
+	const net = $derived(network(data.path, data.keys));
 
-	const chosenRung = $derived.by(() => {
-		const c = choice;
-		return c.kind === 'rung' ? data.rungs.find((r) => r.id === c.rung) : undefined;
-	});
-	const chosenProgression = $derived.by(() => {
-		const c = choice;
-		return c.kind === 'progression' ? data.progressions.find((p) => p.id === c.id) : undefined;
-	});
+	/** The station being departed from. A workout in flight owns it; else the pin. */
+	const departure = $derived(resuming ? (data.resume?.keyCenter ?? 'C') : choice.key);
 
-	/** What the button is about to do, said in full. */
-	const summary = $derived(
-		choice.kind === 'rung'
-			? `${glyph(choice.key)} · ${chosenRung?.label ?? ''}`
-			: `${chosenProgression?.name ?? ''} in ${glyph(choice.key)}`
+	/** Whichever half of the relative pair was named, as a station. */
+	const stationKey = $derived(
+		data.stages.find((s) => s.key === departure || s.relativeMinor === departure)?.key ??
+			data.stages[0].key
 	);
+
+	/** Where today's run leaves from, as a station. Always on the network. */
+	const departureStation = $derived(stationOf(net, stationKey) ?? net.stations[6]);
+
+	/** The station being read: the panel, and what the map's overlays are about. */
+	const station = $derived(stationOf(net, selectedKey) ?? departureStation);
+
+	const anchor = $derived.by(() => {
+		const pinned: Choice = choice;
+		return pinned.kind === 'progression' ? (PROGRESSION_ANCHORS[pinned.id] ?? null) : null;
+	});
+
+	/** Which line leads the queue. A progression leads with the rung that opens it. */
+	const leadRung = $derived.by<RungId>(() => {
+		const pinned: Choice = choice;
+		if (pinned.kind === 'rung') return pinned.rung as RungId;
+		return (anchor?.opensOn ?? data.position.rung.id) as RungId;
+	});
+
+	const leadLine = $derived(net.lines.find((l) => l.rungId === leadRung) ?? net.lines[0]);
+
+	const shownAnchor = $derived(PROGRESSION_ANCHORS[shownProgression] ?? null);
+
+	const chosenProgression = $derived.by(() => {
+		const pinned: Choice = choice;
+		if (pinned.kind !== 'progression') return undefined;
+		return data.progressions.find((p) => p.id === pinned.id);
+	});
+
+	/* -- Travel: pressing the map ----------------------------------------- */
+
+	/**
+	 * Pressing a station makes it the departure — any station, always.
+	 *
+	 * **This was briefly wrong and the correction matters.** A first pass refused
+	 * to depart from a station the ladder had not opened, on the reasoning that a
+	 * key with no cards is not somewhere a train can leave from. The reasoning was
+	 * sound and the premise was false: `startWorkout` calls `cardsForRung` for
+	 * whatever the picker pinned before it composes anything, so every one of the
+	 * eighty-four cells has always been startable and the cards are made on the
+	 * way out. The README has said so since the picker existed, and refusing it
+	 * quietly deleted the whole point of *exploring and advancing are separate
+	 * decisions*.
+	 *
+	 * What was actually broken was quieter: `earQueue` led with the pinned skill
+	 * and ignored the pinned key, so pinning F and departing asked about G. That
+	 * is fixed where it lives, and the map is free to let you go anywhere again.
+	 */
+	function goTo(key: string) {
+		const pinned: Choice = choice;
+		selectedKey = key;
+
+		if (pinned.kind === 'progression') {
+			choice = { kind: 'progression', id: pinned.id, key: keyFor(pinned.id, key) };
+			return;
+		}
+
+		choice = { kind: 'rung', key, rung: pinned.rung };
+	}
+
+	/** Pressing a line leads with it, wherever the departure happens to be. */
+	function lead(rungId: RungId) {
+		choice = { kind: 'rung', key: selectedKey, rung: rungId };
+	}
+
+	/** Pressing an intersection pins both at once, which is one cell of the frontier. */
+	const goToCell = (key: string, rungId: RungId) => {
+		choice = { kind: 'rung', key, rung: rungId };
+		selectedKey = key;
+	};
+
+	/** A minor progression is practised in the relative minor, not the major. */
+	const keyFor = (id: string, stageKey: string) => {
+		const progression = data.progressions.find((p) => p.id === id);
+		if (progression?.mode !== 'minor') return stageKey;
+		return data.stages.find((s) => s.key === stageKey)?.relativeMinor ?? stageKey;
+	};
+
+	function pickProgression(id: string) {
+		shownProgression = id;
+		choice = { kind: 'progression', id, key: keyFor(id, stationKey) };
+		selectedKey = stationKey;
+	}
+
+	function toggle(layer: keyof typeof layers) {
+		layers[layer] = !layers[layer];
+		// The band above the stations answers one question at a time.
+		if (layer === 'crossings' && layers.crossings) layers.progressions = false;
+		if (layer === 'progressions' && layers.progressions) layers.crossings = false;
+	}
+
+	/* -- The board -------------------------------------------------------- */
+
+	/**
+	 * Calling points, with the pin at the front.
+	 *
+	 * The previews are composed before anything is pinned, so these are what else
+	 * is due rather than a promise about a queue that has not been built. Putting
+	 * the pinned key first is not a guess: `leadWithPinned` puts it first.
+	 */
+	const leadName = $derived(
+		choice.kind === 'progression' ? (chosenProgression?.name ?? '') : (leadLine?.label ?? '')
+	);
+
+	const leadOpenHere = $derived.by(() => {
+		if (choice.kind === 'rung') return (leadLine?.index ?? 0) < departureStation.lines;
+		const at = anchor?.lineIndex;
+		return at !== null && at !== undefined && at < departureStation.lines;
+	});
+
+	const calls = $derived.by(() => {
+		// A workout in flight knows its own calling points exactly.
+		if (resuming) return (data.resume?.calls ?? []).slice(0, 6);
+
+		/*
+		 * The departure goes first because the queue really does start there.
+		 * `startWorkout` makes the pinned cell's cards before it composes,
+		 * `earQueue` enters the pinned rung through its key and `functionQueue`
+		 * leads its round-robin with the same one — so this is a guarantee rather
+		 * than a hope, whether or not the ladder has been here yet.
+		 */
+		const listed = data.calls[size] ?? [];
+		const lead = choice.key;
+		return [lead, ...listed.filter((key: string) => key !== lead)].slice(0, 6);
+	});
+
+	const resumeAt = $derived(
+		data.resume ? Math.max(0, Math.min(data.resume.at, data.resume.tasks.length - 1)) : 0
+	);
+
+	const heldMission = $derived(data.missionHeld ?? null);
+	const heldBy = $derived(
+		(heldMission?.teaches ?? [])
+			.slice(0, 2)
+			.map((id: string) => data.progressions.find((p) => p.id === id))
+			.filter((p): p is (typeof data.progressions)[number] => p !== undefined)
+	);
+
+	/* -- The detail panel -------------------------------------------------- */
+
+	const crossingsHere = $derived.by((): Neighbour[] => {
+		const stage = stageByKey(selectedKey);
+		return stage ? neighbours(stage) : [];
+	});
+
+	/**
+	 * The line that would take the station you are reading as its next stop.
+	 *
+	 * `network()` only sets `next` where `widen` would actually allow it, so this
+	 * is a move that exists rather than one the diagram merely drew. Null when
+	 * nothing can reach this station yet, which is a different sentence and gets
+	 * one below.
+	 */
+	const opensHere = $derived(net.lines.find((line) => line.next?.key === selectedKey) ?? null);
+
+	/**
+	 * Which keys the network has to pass through before it can get here.
+	 *
+	 * The ladder opens keys in its own order and will not skip one, so a station
+	 * three steps out is three steps out. Saying *the scale gets here after B♭
+	 * and E♭* is the honest version of a dashed circle with no button under it.
+	 */
+	const reachAfter = $derived.by(() => {
+		if (station.onNetwork || opensHere) return [];
+		const first = net.lines[0];
+		return data.stages.slice(first.stops, station.stageIndex).map((stage) => stage.key);
+	});
 
 	const byLevel = $derived(
 		Object.entries(data.progressionLevels).map(([level, name]) => ({
@@ -132,105 +303,19 @@
 		}))
 	);
 
-	/** Which keys a progression offers. Reached ones first, then the rest. */
-	const progressionKeys = $derived(
-		data.stages.map((s, i) => ({ key: s.key, minor: s.relativeMinor, reached: i <= reachedIndex }))
-	);
+	const LAYERS = [
+		{ id: 'record' as const, label: 'Record' },
+		{ id: 'today' as const, label: "Today's run" },
+		{ id: 'crossings' as const, label: 'Crossings' },
+		{ id: 'progressions' as const, label: 'Progressions' }
+	];
 
-	const keyFor = (mode: string, stageKey: string) =>
-		mode === 'minor'
-			? (data.stages.find((s) => s.key === stageKey)?.relativeMinor ?? stageKey)
-			: stageKey;
-
-	// -- The banner ---------------------------------------------------------
-	//
-	// One key, at the size the subject deserves, in its own colour. Which key
-	// depends on what is about to happen: the workout in flight if there is one,
-	// otherwise whatever the picker has pinned.
-
-	const heroKey = $derived(resuming ? (data.resume?.keyCenter ?? 'C') : choice.key);
-
-	/** The stage a key belongs to, whichever half of the pair was named. */
-	const stageOf = (keyName: string) =>
-		data.stages.find((s) => s.key === keyName || s.relativeMinor === keyName);
-
-	/** The other half of the relative pair, which is the same seven notes. */
-	const pairOf = (keyName: string) => {
-		const stage = stageOf(keyName);
-		if (!stage) return null;
-		return keyName === stage.relativeMinor ? stage.key : stage.relativeMinor;
-	};
-
-	const heroStanding = $derived(
-		data.keys.find((k) => k.key === stageOf(heroKey)?.key) ?? openStanding
-	);
-
-	/** Where the workout is up to, clamped for display when every task is done. */
-	const resumeAt = $derived(
-		data.resume ? Math.max(0, Math.min(data.resume.at, data.resume.tasks.length - 1)) : 0
-	);
-
-	const heroTitle = $derived.by(() => {
-		if (data.resume) return data.resume.complete ? 'Every task is done' : 'Carry on where you were';
-		return choice.kind === 'rung' ? (chosenRung?.label ?? '') : (chosenProgression?.name ?? '');
+	const summary = $derived.by(() => {
+		const pinned: Choice = choice;
+		return pinned.kind === 'rung'
+			? `${glyph(pinned.key)} · ${leadLine?.label ?? ''}`
+			: `${chosenProgression?.name ?? ''} in ${glyph(pinned.key)}`;
 	});
-
-	const heroLine = $derived.by(() => {
-		if (data.resume) {
-			return data.resume.complete ? 'Review what changed.' : 'Finished tasks are saved.';
-		}
-		return choice.kind === 'rung'
-			? (chosenRung?.instruction ?? '')
-			: (chosenProgression?.listenFor ?? '');
-	});
-
-	const onLadder = $derived(choice.kind === 'rung' && isHere(choice.key, choice.rung));
-
-	const eyebrow = $derived(
-		resuming ? 'in progress' : onLadder ? 'today · next lesson' : 'today · your pick'
-	);
-
-	/** What a key has met of its seven, said as ground covered rather than as a mark. */
-	const metLine = (standing: KeyStanding) =>
-		standing.reached === 0 ? 'new ground' : `${standing.reached} of ${standing.rungs} met`;
-
-	const percent = (fill: number) => `${Math.round(fill * 100)}%`;
-
-	const held = (standing: KeyStanding) =>
-		standing.fresh
-			? `${glyph(standing.key)} · new`
-			: `${glyph(standing.key)} · ${standing.chords.toLocaleString()} chords`;
-
-	// -- The path -----------------------------------------------------------
-	//
-	// Seven rows, one per rung, each carrying how many keys it is open in and
-	// what the record holds across all of them. The ladder used to be one walk,
-	// so the path could be a line; a frontier moves in two directions at once and
-	// the honest picture of it is the staircase itself.
-
-	/** What a row has to say for itself, which depends on whether it is open. */
-	const stepNote = (step: PathStep) => {
-		if (step.state === 'ahead') return step.teaches;
-		if (step.reviews === 0) return `${keysLine(step)} · not asked yet`;
-		const right = `${step.correct} of ${step.reviews} right`;
-		return `${keysLine(step)} · ${step.solid ? `${right} · solid` : right}`;
-	};
-
-	const keysLine = (step: PathStep) => (step.keys === 1 ? 'in 1 key' : `in ${step.keys} keys`);
-
-	/** Pressing a row pins its rung, in the key the workout would use for it. */
-	const stepKey = (step: PathStep) => step.keyNames[step.keyNames.length - 1] ?? data.stages[0].key;
-
-	const stepAction = (step: PathStep) =>
-		step.state === 'ahead'
-			? `Look ahead to ${step.label}`
-			: `Practise ${step.label} in ${glyph(stepKey(step))}`;
-
-	const isChosen = (step: PathStep) =>
-		choice.kind === 'rung' && choice.key === stepKey(step) && choice.rung === step.rungId;
-
-	/** Which of the twelve a rung is open in, for the little strip on its row. */
-	const openIn = (step: PathStep, key: string) => step.keyNames.includes(key);
 </script>
 
 <svelte:head>
@@ -255,27 +340,8 @@
 </svelte:head>
 
 <!--
-	One key tile: the swatch, the pair of names, and what the record holds.
-
-	Rendered as a button in the picker and as a plain cell while a workout is in
-	flight, because a strip you cannot start anything from must not look like one
-	you can. Same tile either way, so the two are never drawn differently by
-	accident.
--->
-{#snippet tile(standing: KeyStanding)}
-	<span class="key-swatch"><span class="key-fill"></span></span>
-	<span class="key-name">{glyph(standing.key)}</span>
-	<span class="key-minor">{glyph(standing.relativeMinor)}</span>
-	<span class="key-count">{standing.fresh ? 'new' : standing.chords.toLocaleString()}</span>
-{/snippet}
-
-<!--
-	What a task is made of, in two or three words.
-
-	Drawn separately from the line rather than appended to it, because these are
-	labels and that is a sentence — and because a task with nothing to say hands
-	back an empty list, which has to draw as nothing at all rather than as an
-	empty row of chips. Ink and weight, never colour: none of this is a pitch.
+	What a task is made of, in two or three words. Ink and weight, never colour:
+	none of this is a pitch.
 -->
 {#snippet tags(labels: string[])}
 	{#if labels.length}
@@ -290,101 +356,162 @@
 {#if data.public}
 	<LandingPage />
 {:else}
-	<main class="mx-auto flex max-w-4xl flex-col gap-8 px-6 py-8" data-tour="today">
+	<main class="mx-auto flex max-w-5xl flex-col gap-7 px-5 py-7" data-tour="today">
 		<!--
-			The banner: the one thing on this page worth looking at first, which is
-			the thing about to be played. A whole panel of a single pitch colour,
-			because it is a key and a key wears its tonic's swatch.
+			The board.
+
+			It does not say where you are, because there is nowhere to be. It says
+			what is leaving, from which station, on which line, and what it calls at
+			on the way — every one of which is a field the composer already fills in.
 		-->
-		<section class="hero" style:--tint={tint(heroKey)} style:--tint-ink={tintInk(heroKey)}>
-			<div class="hero-key">
-				<p class="hero-name">{glyph(heroKey)}</p>
-				<p class="hero-pair">
-					{#if pairOf(heroKey)}with {glyph(pairOf(heroKey) ?? '')}{/if}
-				</p>
-				<p class="hero-met">
-					{#if data.resume}
-						task {resumeAt + 1} of {data.resume.tasks.length}
-					{:else}
-						key {reachedIndex + 1} of {data.stages.length} · step {data.position.rungIndex + 1} of
-						{data.rungs.length}
-					{/if}
-				</p>
+		<section class="board" style:--tint={tint(stationKey)} style:--tint-ink={tintInk(stationKey)}>
+			<div class="board-head">
+				<span class="label">{resuming ? 'In progress' : 'Next departure'}</span>
+				<span class="label"
+					>{resuming
+						? `task ${resumeAt + 1} of ${data.resume?.tasks.length}`
+						: `${size} · ${preview.length} stops`}</span
+				>
 			</div>
 
-			<div class="hero-body">
-				<p class="panel-title">{eyebrow}</p>
-				<h1 class="hero-title">{heroTitle}</h1>
-				<p class="hero-line">{heroLine}</p>
+			<div class="board-body">
+				<div class="board-origin">
+					<span class="origin-roundel">{glyph(stationKey)}</span>
+					<span class="origin-names">
+						<span class="origin-major">{glyph(stationKey)}</span>
+						<span class="origin-minor">with {glyph(departureStation.relativeMinor)}</span>
+					</span>
+				</div>
 
-				{#if data.resume}
-					<ol class="tasks">
-						{#each data.resume.tasks as item, i (i)}
-							<li class="task" class:is-done={item.finished} class:is-next={i === resumeAt}>
-								<span class="task-index">{item.finished ? '✓' : i + 1}</span>
-								<span class="min-w-0 flex-1">
-									<span class="task-title">{item.title}</span>
-									<span class="task-line">{item.line}</span>
-									{@render tags(item.tags)}
-								</span>
-							</li>
-						{/each}
-					</ol>
-				{:else if preview.length}
-					<ol class="tasks">
-						{#each preview as item, i (i)}
-							<li class="task">
-								<span class="task-index">{i + 1}</span>
-								<span class="min-w-0 flex-1">
-									<span class="task-title">{item.title}</span>
-									<span class="task-line">{item.line}</span>
-									{@render tags(item.tags)}
-								</span>
-							</li>
-						{/each}
-					</ol>
-					{#if data.due > 0}
-						<p class="hero-note">↻ {data.due} due</p>
+				<dl class="board-rows">
+					<div class="board-row">
+						<dt>Leading</dt>
+						<dd>
+							{leadName}
+							<!-- Ahead of the ladder is not the same as unavailable: the cards
+							     are made on the way out. The old wording read as a refusal
+							     over a button that works. -->
+							{#if !leadOpenHere}<span class="dim">· ahead of the ladder</span>{/if}
+						</dd>
+					</div>
+					<div class="board-row">
+						<dt>Calls at</dt>
+						<dd>
+							<span class="calls">
+								{#each calls as key (key)}
+									<span class="call" style:--tint={tint(key)}><i></i>{glyph(key)}</span>
+								{/each}
+							</span>
+						</dd>
+					</div>
+					{#if data.due > 0 && !resuming}
+						<div class="board-row">
+							<dt>Due</dt>
+							<dd class="dim">{data.due} questions the schedule has come round to</dd>
+						</div>
 					{/if}
-				{/if}
+				</dl>
+			</div>
 
-				<!-- No play-along yet, and why.
-				     Shown instead of a silent hole. The workout composer sets a mission
-				     only on a tune whose every chord shape has been met, so on the first
-				     day or two there is nothing honest to play along to — and the useful
-				     thing to say is not "locked" but which tune is nearest, what it wants,
-				     and where that is taught. -->
-				{#if heldMission}
-					<p class="hero-note hero-held">
-						<strong>Play-along next: {heldMission.chartName}.</strong>
-						Learn {heldMission.needs}
-						{#if heldBy.length}
-							in {heldBy.map((p) => p.name).join(' or ')}.
-						{:else}
-							on the ladder.
-						{/if}
-					</p>
+			<!-- The stops: what today is actually made of. -->
+			<ol class="stops">
+				{#each resuming ? (data.resume?.tasks ?? []) : preview as item, i (i)}
+					<li
+						class="stop"
+						class:is-done={resuming && data.resume?.tasks[i]?.finished}
+						class:is-next={resuming && i === resumeAt}
+					>
+						<span class="stop-n">{resuming && data.resume?.tasks[i]?.finished ? '✓' : i + 1}</span>
+						<span class="min-w-0 flex-1">
+							<span class="stop-title">{item.title}</span>
+							<span class="stop-line">{item.line}</span>
+							{@render tags(item.tags)}
+						</span>
+					</li>
+				{/each}
+			</ol>
+
+			<!-- No play-along yet, and why. Not a lock: a thing you have not been
+			     shown, and where to go and be shown it. -->
+			{#if heldMission && !resuming}
+				<p class="held">
+					<strong>Play-along next: {heldMission.chartName}.</strong>
+					Learn {heldMission.needs}
+					{#if heldBy.length}
+						in {heldBy.map((p) => p.name).join(' or ')}.
+					{:else}
+						on the network.
+					{/if}
+				</p>
+			{/if}
+
+			<div class="board-foot">
+				<form method="POST" action="?/start" class="flex flex-1 flex-wrap items-center gap-3">
+					<input type="hidden" name="size" value={size} />
+					<input
+						type="hidden"
+						name="progression"
+						value={choice.kind === 'progression' ? choice.id : ''}
+					/>
+					<input
+						type="hidden"
+						name="progressionKey"
+						value={choice.kind === 'progression' ? choice.key : ''}
+					/>
+					<input type="hidden" name="focusKey" value={choice.kind === 'rung' ? choice.key : ''} />
+					<input type="hidden" name="focusRung" value={choice.kind === 'rung' ? choice.rung : ''} />
+
+					<button type="submit" class="start">
+						<span class="start-verb">{resuming ? 'Carry on' : 'Depart'}</span>
+						<span class="start-what">
+							{#if resuming}
+								{glyph(data.resume?.keyCenter ?? '')} · task {resumeAt + 1} of {data.resume?.tasks
+									.length}
+							{:else}
+								{summary}
+							{/if}
+						</span>
+					</button>
+
+					{#if !resuming}
+						<div class="sizes" aria-label="How long">
+							{#each ['short', 'standard', 'long'] as const as option (option)}
+								<button
+									type="button"
+									class="size"
+									class:is-selected={size === option}
+									aria-pressed={size === option}
+									onclick={() => (size = option)}
+									>{option} · {data.previews[option]?.length ?? 0}</button
+								>
+							{/each}
+						</div>
+					{/if}
+				</form>
+
+				{#if resuming}
+					<form method="POST" action="?/end">
+						<button class="quiet">
+							{data.resume?.complete ? 'close it and start another' : 'stop this workout'}
+						</button>
+					</form>
 				{/if}
 			</div>
 		</section>
 
 		<!--
-			The path.
+			The network.
 
-			Out in the open, above the library and never folded away. What was wrong
-			with this page was not what it offered but that it offered it without a
-			before or an after: the ladder existed, the record existed, and neither
-			was on screen. Every step here is pressable — behind you it means play it
-			again, ahead of you it means look at it now — and pressing one pins the
-			workout without moving the ladder, which is the same rule the library
-			below has always kept.
+			The whole state, nothing folded away. It replaced three drawings of the
+			twelve keys that meant three different things; press anything on it to
+			move the board.
 		-->
-		<section class="path" aria-label="Your path">
+		<section class="network" aria-label="The network">
 			<div class="section-head">
-				<h2 class="panel-title">Your path</h2>
-				<p class="path-count">
-					{data.journey.depth} of {data.journey.rungs} steps · {data.journey.keys} of {data.stages
-						.length} keys
+				<h2 class="label">The network</h2>
+				<p class="stat">
+					{net.cells} of {net.total} cells open · {net.lines.filter((l) => l.stops > 0).length} of {net
+						.lines.length} lines · {net.lines[0].stops} of {data.stages.length} stations
 					{#if data.totals.reviews > 0}
 						· {data.totals.correct.toLocaleString()} of {data.totals.reviews.toLocaleString()} right so
 						far
@@ -392,126 +519,313 @@
 				</p>
 			</div>
 
-			<div
-				class="path-rail"
-				role="progressbar"
-				aria-label="How much of the ladder is open"
-				aria-valuemin="0"
-				aria-valuemax={data.journey.total}
-				aria-valuenow={data.journey.cells}
-			>
-				<span style:transform={`scaleX(${data.journey.fill})`}></span>
+			<div class="layers" aria-label="What the map shows">
+				{#each LAYERS as layer (layer.id)}
+					<button
+						type="button"
+						class="chip"
+						class:is-on={layers[layer.id]}
+						aria-pressed={layers[layer.id]}
+						onclick={() => toggle(layer.id)}>{layer.label}</button
+					>
+				{/each}
 			</div>
 
-			<!--
-				The staircase. Each row is a rung and the twelve marks beside it are
-				the keys it is open in, so depth reads down the page and breadth reads
-				across it — which is the shape of the thing rather than a summary of it.
-			-->
-			<ol class="steps">
-				{#each data.path as step (step.rungId)}
-					<li>
-						<button
-							type="button"
-							class="step"
-							class:is-open={step.state === 'open'}
-							class:is-here={step.state === 'here'}
-							class:is-ahead={step.state === 'ahead'}
-							class:is-chosen={isChosen(step)}
-							style:--tint={tint(stepKey(step))}
-							title={stepAction(step)}
-							aria-label={stepAction(step)}
-							aria-pressed={isChosen(step)}
-							onclick={() => (choice = { kind: 'rung', key: stepKey(step), rung: step.rungId })}
+			<div class="map-scroll">
+				<NetworkMap
+					{net}
+					departureKey={stationKey}
+					{selectedKey}
+					pinnedRung={leadRung}
+					{layers}
+					progression={layers.progressions ? shownAnchor : null}
+					callsAt={calls}
+					onstation={goTo}
+					online={lead}
+					oncell={goToCell}
+				/>
+			</div>
+
+			<!-- The progression list, which is now the index into a layer of the map
+			     rather than a second place to choose from. -->
+			{#if layers.progressions}
+				<div class="picker">
+					{#each byLevel as group (group.level)}
+						{#if group.items.length}
+							<div class="picker-group">
+								<span class="label">{group.name}</span>
+								<div class="picker-row">
+									{#each group.items as progression (progression.id)}
+										{@const at = PROGRESSION_ANCHORS[progression.id]}
+										<button
+											type="button"
+											class="chip"
+											class:is-on={shownProgression === progression.id}
+											aria-pressed={shownProgression === progression.id}
+											title={at.lineIndex === null
+												? 'No rung builds this one'
+												: `Opens on ${data.rungs[at.lineIndex].label.toLowerCase()}`}
+											onclick={() => pickProgression(progression.id)}>{progression.name}</button
+										>
+									{/each}
+								</div>
+							</div>
+						{/if}
+					{/each}
+				</div>
+			{/if}
+
+			<ul class="legend">
+				<li><i class="mark-track"></i>A line — one rung, one idea</li>
+				<li><i class="mark-spine"></i>A station — one key, in its tonic's colour</li>
+				<li><i class="mark-stub"></i>Not built — one stop away</li>
+				<li><i class="mark-empty"></i>Opened, never played</li>
+				<li><i class="mark-full"></i>Filled by what the record holds</li>
+			</ul>
+		</section>
+
+		<!--
+			Two panels: what is selected, and the one verb that changes the map.
+
+			Travel is the map above and costs nothing. Opening is here, on its own,
+			in its own words — which is the whole of the fix for three controls that
+			used to look identical and do different things.
+		-->
+		<div class="panels">
+			<section class="panel" aria-label="Selected">
+				{#if layers.progressions && shownAnchor}
+					{@const progression = data.progressions.find((p) => p.id === shownProgression)}
+					<div class="panel-head">
+						<span class="label">Progression</span>
+						<span class="label"
+							>{shownAnchor.lineIndex === null
+								? 'no rung builds it'
+								: net.lines[shownAnchor.lineIndex].stops === 0
+									? 'its line is not open yet'
+									: `playable at ${net.lines[shownAnchor.lineIndex].stops} of ${
+											data.stages.length
+										}`}</span
 						>
-							<span class="step-index">{step.rungIndex + 1}</span>
-							<span class="min-w-0 flex-1">
-								<span class="step-label">{step.label}</span>
-								<span class="step-note">{stepNote(step)}</span>
-							</span>
-							<span class="step-keys" aria-hidden="true">
-								{#each data.stages as stage (stage.key)}
-									<i
-										class="step-pip"
-										class:is-lit={openIn(step, stage.key)}
-										style:--tint={tint(stage.key)}
-									></i>
-								{/each}
-							</span>
-						</button>
-					</li>
-				{/each}
-			</ol>
+					</div>
+					<h3 class="panel-title">{progression?.name}</h3>
+					<p class="panel-line">{progression?.describes}</p>
+					<p class="panel-line dim">
+						{shownAnchor.lineIndex === null
+							? 'No rung on the ladder builds every chord in it.'
+							: `Opens on ${data.rungs[shownAnchor.lineIndex].label.toLowerCase()}.`}
+					</p>
+
+					<ul class="rows">
+						{#if shownAnchor.borrows.length === 0}
+							<li class="row">
+								<span>Every chord is at home</span><span class="dim">never leaves the station</span>
+							</li>
+						{:else}
+							{#each shownAnchor.borrows as borrow (borrow.symbol)}
+								<!--
+									Said in the key the departure is actually in. The anchors are
+									worked out in C, so both halves of this row have to move with
+									the station — the chord and the station it comes from. Moving
+									one and not the other would be worse than moving neither.
+								-->
+								{@const source = borrow.from
+									? stageAtAccidentals(borrow.from.accidentals + station.accidentals)
+									: null}
+								<li class="row">
+									<span class="row-key" style:--tint={source ? tint(source.key) : 'transparent'}>
+										{#if source}<i></i>{/if}{glyph(sayInKey(borrow.symbol, station.accidentals))}
+									</span>
+									<span class="dim">
+										{#if source && borrow.from}
+											from {glyph(source.key)} · {borrow.stops}
+											{borrow.stops === 1 ? 'stop' : 'stops'}
+											{borrow.from.accidentals < 0 ? 'flat' : 'sharp'}
+										{:else}
+											no key builds it
+										{/if}
+									</span>
+								</li>
+							{/each}
+						{/if}
+					</ul>
+				{:else if layers.crossings}
+					<div class="panel-head">
+						<span class="label">Crossings from {glyph(selectedKey)}</span>
+						<span class="label">the near four</span>
+					</div>
+					<ul class="rows">
+						{#each crossingsHere as crossing (crossing.relation)}
+							<li class="row">
+								<span class="row-key" style:--tint={tint(crossing.stage.key)}>
+									<i></i>the {crossing.relation} — {glyph(crossing.label)}
+								</span>
+								<span class="dim">
+									{#if crossing.stops === 0}
+										cross the platform · no note moves
+									{:else if crossing.relation === 'parallel'}
+										three stops flat · lives at {glyph(crossing.stage.key)}
+									{:else}
+										one stop {crossing.relation === 'dominant' ? 'sharp' : 'flat'}
+									{/if}
+								</span>
+							</li>
+						{/each}
+					</ul>
+					<p class="panel-line dim">
+						The parallel comes last of the four because it shares a name and not a neighbourhood.
+					</p>
+				{:else}
+					<div class="panel-head">
+						<span class="label">Station</span>
+						<span class="label"
+							>{station.onNetwork
+								? `${station.lines} of ${net.lines.length} lines`
+								: 'ahead of the ladder'}</span
+						>
+					</div>
+					<div class="board-origin">
+						<span
+							class="origin-roundel"
+							class:is-unbuilt={!station.onNetwork}
+							style:--tint={tint(selectedKey)}
+							style:--tint-ink={tintInk(selectedKey)}>{glyph(selectedKey)}</span
+						>
+						<span class="origin-names">
+							<span class="origin-major">{glyph(selectedKey)} major</span>
+							<span class="origin-minor"
+								>platform 2 · {glyph(station.relativeMinor)} — the same seven notes</span
+							>
+							<span class="origin-minor">{data.stages[station.stageIndex].note}</span>
+						</span>
+					</div>
+
+					<ul class="rows">
+						{#each net.lines as line (line.rungId)}
+							{@const open = line.index < station.lines}
+							{@const next = line.next?.key === selectedKey}
+							<li class="row" class:is-shut={!open}>
+								<span class="row-key" style:--tint={tint(selectedKey)}>
+									<i class:is-hollow={!open}></i>{line.label}
+								</span>
+								<span class="dim"
+									>{open ? 'calls here' : next ? 'one stop away' : 'ahead of the ladder'}</span
+								>
+							</li>
+						{/each}
+					</ul>
+
+					<p class="panel-line dim">
+						{station.fresh
+							? station.onNetwork
+								? 'Opened, never played.'
+								: 'The ladder has not been here. You can still depart from it — the cards are made on the way out.'
+							: `${station.chords.toLocaleString()} chords in the record.`}
+					</p>
+				{/if}
+			</section>
 
 			<!--
-				The two ways forward, next to the path they move along.
+				Opening. The only thing on this page that changes what exists.
 
-				There used to be one button called "move on", because there was one
-				walk. There are two now and neither is a prerequisite for the other:
-				wider is the same idea in one more key, deeper is the next idea — and
-				deepening widens everything above it, so it is impossible to end up
-				four rungs down in a key whose scale was never opened.
-
-				Still plain forms, still unguarded, still a suggestion.
+				Deliberately unguarded and deliberately separate: travelling anywhere
+				on the built network costs nothing and moves nothing, and this is the
+				one control that does. Nothing here is a lock — the ladder suggests.
 			-->
-			{#if !resuming}
-				<div class="path-move">
-					<form method="POST" action="?/back">
-						<button class="move-back" disabled={!data.canStepBack}>← step back</button>
-					</form>
+			<section class="panel" aria-label="Open and close">
+				<div class="panel-head">
+					<span class="label">Open · close</span>
+					<span class="label">at {glyph(selectedKey)}</span>
+				</div>
 
-					{#if data.canWiden && data.widenTo}
+				<!--
+						The move that puts the station you are reading on the network, named
+						for that station rather than for whichever line the ladder would
+						have picked. This is the control that was missing: the map drew a
+						dashed stop, there was no way to take it, and the only button on
+						offer widened somewhere else entirely.
+					-->
+				<div class="moves">
+					{#if opensHere}
 						<form method="POST" action="?/widen">
-							<button class="move-on" class:is-suggested={data.progress.readyToMoveOn}>
-								Wider · {data.widenTo.rung.label.toLowerCase()} in {glyph(data.widenTo.key)} →
+							<input type="hidden" name="rung" value={opensHere.rungId} />
+							<button class="move is-suggested">
+								Open {opensHere.label.toLowerCase()} at {glyph(selectedKey)}
+							</button>
+						</form>
+					{:else if data.canWiden && data.widenTo}
+						<form method="POST" action="?/widen">
+							<input type="hidden" name="rung" value={data.widenTo.rung.id} />
+							<button class="move" class:is-suggested={data.progress.readyToMoveOn}>
+								Open {data.widenTo.rung.label.toLowerCase()} at {glyph(data.widenTo.key)}
 							</button>
 						</form>
 					{/if}
 
 					{#if data.canDeepen && data.deepenTo?.rung}
 						<form method="POST" action="?/deepen">
-							<button class="move-on" class:is-suggested={data.progress.readyToMoveOn}>
-								Deeper · {data.deepenTo.rung.label.toLowerCase()} →
+							<button class="move" class:is-suggested={data.progress.readyToMoveOn}>
+								Open the next line — {data.deepenTo.rung.label.toLowerCase()}
 							</button>
 						</form>
 					{/if}
 
-					<!--
-						Two ways of being ready, said differently.
-
-						`looksSolid` is the happy one and reads as praise. The other is a
-						rung answered far past the point of teaching anything, which is not
-						praise and must not be dressed as it — the honest sentence there is
-						that you have done this a great many times and the next idea is
-						available whenever you want it.
-					-->
-					<p class="move-note">
-						{#if !data.canWiden && !data.canDeepen}
-							Every rung, in all twelve keys. There is nowhere left to open.
-						{:else if data.progress.looksSolid}
-							{glyph(data.position.key)} · {data.position.rung.label.toLowerCase()} looks solid.
-						{:else if data.progress.readyToMoveOn}
-							{data.progress.reviews} questions on {data.position.rung.label.toLowerCase()}. The
-							next idea is here whenever you want it.
-						{:else}
-							Your call — nothing here is locked.
-						{/if}
-					</p>
+					<form method="POST" action="?/back">
+						<button class="quiet" disabled={!data.canStepBack}>close the last stop</button>
+					</form>
 				</div>
-			{/if}
-		</section>
+
+				<p class="panel-line dim">
+					{#if reachAfter.length}
+						The ladder does not skip: {net.lines[0].label.toLowerCase()} reaches {glyph(
+							selectedKey
+						)} after {reachAfter.length > 3
+							? `${reachAfter.length} more stations`
+							: reachAfter.map((key) => glyph(key)).join(', ')}. Departing from it does not wait for
+						that.
+					{:else if opensHere}
+						{station.onNetwork
+							? `One stop away — it would put ${opensHere.label.toLowerCase()} at ${glyph(selectedKey)}.`
+							: `One stop away. Open it and ${glyph(selectedKey)} joins the network.`}
+					{:else if !data.canWiden && !data.canDeepen}
+						Every line, at all twelve stations. There is nowhere left to open.
+					{:else if data.progress.looksSolid}
+						{glyph(data.position.key)} · {data.position.rung.label.toLowerCase()} looks solid.
+					{:else if data.progress.readyToMoveOn}
+						{data.progress.reviews} questions on {data.position.rung.label.toLowerCase()}. The next
+						idea is here whenever you want it.
+					{:else}
+						Your call — nothing on the map is locked. Opening a line also adds a stop to every line
+						above it, which is why the whole shape grows.
+					{/if}
+				</p>
+
+				<!--
+						Opening during a workout is allowed, and the first draft of this
+						panel refused it on a reason that turned out to be wrong. A
+						workout's queues are card ids, decided when it was composed and
+						stored in `plan_json`; opening a line writes a frontier and creates
+						cards, and touches neither. The run in flight is unchanged and the
+						new ground is there for the next one. Refusing it meant somebody
+						who noticed mid-practice that they wanted F had to stop the
+						workout to say so.
+					-->
+				{#if resuming}
+					<p class="panel-line dim">
+						The run above is already composed, so this changes nothing in it — the new ground is
+						there for the next one.
+					</p>
+				{/if}
+			</section>
+		</div>
 
 		<!--
-			What the last few days were made of.
-
-			Not a streak, not a calendar, and nothing here can fall while you are
-			away from the piano — the same rule the twelve key swatches keep. It is
-			one answer to one question: does this thing know what I did.
+			What the last few days were made of. Not a streak, and nothing here can
+			fall while you are away from the piano.
 		-->
 		<section class="history" aria-label="Recent practice">
 			<div class="section-head">
-				<h2 class="panel-title">Recently practised</h2>
-				<a class="history-more" href="/profile">the whole record →</a>
+				<h2 class="label">Recently practised</h2>
+				<a class="stat hover:text-ink transition-colors" href="/profile">the whole record →</a>
 			</div>
 
 			{#if data.history.length}
@@ -528,493 +842,190 @@
 					{/each}
 				</ol>
 			{:else}
-				<p class="text-ink-dim text-[0.78rem] leading-relaxed">
-					Nothing yet. Whatever you start below will be the first thing here.
+				<p class="panel-line dim">
+					Nothing yet. Whatever departs from the board above will be the first thing here.
 				</p>
-			{/if}
-		</section>
-
-		<details class="practice-library" open={resuming}>
-			<summary>
-				<span>
-					<strong>{resuming ? 'Your twelve-key journey' : 'Choose something else'}</strong>
-					<small>
-						{resuming
-							? `${metLine(heroStanding)} across the current key`
-							: 'All keys, topics and chord progressions'}
-					</small>
-				</span>
-				<span class="library-toggle" aria-hidden="true">+</span>
-			</summary>
-
-			<div class="library-content">
-				<!-- The twelve keys ----------------------------------------------------- -->
-				<section class="flex flex-col gap-3">
-					<div class="section-head">
-						<h2 class="panel-title">The twelve keys</h2>
-						<p
-							class="key-legend"
-							aria-label="Filled swatches show chords played; outlines are new keys"
-						>
-							<span><i class="legend-fill"></i>chords</span>
-							<span><i class="legend-outline"></i>new</span>
-						</p>
-					</div>
-
-					{#if resuming}
-						<ul class="keys">
-							{#each data.keys as standing (standing.key)}
-								<li
-									class="key is-static"
-									class:is-fresh={standing.fresh}
-									class:is-here={standing.here}
-									style:--tint={tint(standing.key)}
-									style:--fill={percent(standing.fill)}
-									title={held(standing)}
-								>
-									{@render tile(standing)}
-								</li>
-							{/each}
-						</ul>
-					{:else}
-						<!-- Every key, always. Nothing here is gated; the ladder only suggests. -->
-						<ul class="keys">
-							{#each data.keys as standing (standing.key)}
-								<li>
-									<button
-										type="button"
-										class="key w-full"
-										class:is-open={standing.key === openKey}
-										class:is-fresh={standing.fresh}
-										class:is-here={standing.here}
-										style:--tint={tint(standing.key)}
-										style:--fill={percent(standing.fill)}
-										title={held(standing)}
-										onclick={() => (openKey = standing.key)}
-										aria-pressed={standing.key === openKey}
-									>
-										{@render tile(standing)}
-									</button>
-								</li>
-							{/each}
-						</ul>
-
-						<p class="text-ink-dim text-[0.78rem] leading-relaxed">
-							<span class="text-ink-muted">{glyph(openStage.key)}:</span>
-							{openStage.note}
-							{#if data.stages.indexOf(openStage) > reachedIndex}
-								<span class="text-ink-muted">· beyond the suggestion</span>
-							{/if}
-						</p>
-
-						<!-- The rungs of whichever key is open ----------------------------- -->
-						<h3 class="panel-title mt-3">
-							Steps in {glyph(openKey)} · {openStanding.reached}/{openStanding.rungs}
-						</h3>
-						<ol class="grid gap-1.5 sm:grid-cols-2">
-							{#each data.rungs as rung, i (rung.id)}
-								{@const selected =
-									choice.kind === 'rung' && choice.key === openKey && choice.rung === rung.id}
-								{@const here = isHere(openKey, rung.id)}
-								<li>
-									<button
-										type="button"
-										class="rung w-full"
-										class:is-selected={selected}
-										class:is-met={i < openStanding.reached}
-										style:--tint={tint(openKey)}
-										onclick={() => (choice = { kind: 'rung', key: openKey, rung: rung.id })}
-										aria-pressed={selected}
-									>
-										<span class="rung-index">{i + 1}</span>
-										<span class="min-w-0 flex-1">
-											<span class="rung-label">{rung.label}</span>
-											<span class="rung-teaches">{rung.teaches}</span>
-										</span>
-										{#if here}
-											<span class="badge">you are here</span>
-										{/if}
-									</button>
-								</li>
-							{/each}
-						</ol>
-					{/if}
-				</section>
-
-				<!-- Progressions, as their own thing ------------------------------------ -->
-				{#if !resuming}
-					<section class="border-ground-line flex flex-col gap-3 border-t pt-6">
-						<h2 class="panel-title">Chord progressions</h2>
-
-						{#each byLevel as group (group.level)}
-							<div>
-								<h3
-									class="text-ink-dim mt-2 mb-1 font-mono text-[0.65rem] tracking-widest uppercase"
-								>
-									{group.name}
-								</h3>
-								<ul class="grid gap-1 sm:grid-cols-2">
-									{#each group.items as progression (progression.id)}
-										{@const chosen = choice.kind === 'progression' && choice.id === progression.id}
-										<li class="rounded-lg px-2.5 py-2" class:is-open-row={chosen}>
-											<div class="flex items-baseline justify-between gap-3">
-												<button
-													type="button"
-													class="text-left"
-													onclick={() =>
-														(choice = {
-															kind: 'progression',
-															id: progression.id,
-															key: keyFor(progression.mode, openKey)
-														})}
-												>
-													<span
-														class="font-display text-sm font-semibold"
-														style:color={chosen ? 'var(--color-ink)' : 'var(--color-ink-muted)'}
-														>{progression.name}</span
-													>
-													<span class="text-ink-dim block text-[0.72rem] leading-snug"
-														>{progression.describes}</span
-													>
-												</button>
-											</div>
-
-											{#if chosen}
-												<div class="mt-2 flex flex-wrap gap-1">
-													{#each progressionKeys as k (k.key)}
-														{@const value = keyFor(progression.mode, k.key)}
-														<button
-															type="button"
-															class="key-pill"
-															class:is-selected={choice.kind === 'progression' &&
-																choice.key === value}
-															style:--tint={tint(k.key)}
-															onclick={() =>
-																(choice = { kind: 'progression', id: progression.id, key: value })}
-															>{glyph(value)}</button
-														>
-													{/each}
-												</div>
-											{/if}
-										</li>
-									{/each}
-								</ul>
-							</div>
-						{/each}
-					</section>
-				{/if}
-			</div>
-		</details>
-
-		<!-- Do it --------------------------------------------------------------- -->
-		<section
-			class="border-ground-line bg-ground/95 sticky bottom-0 flex flex-col items-center gap-3 border-t pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] backdrop-blur"
-		>
-			<form method="POST" action="?/start" class="flex w-full flex-col items-center gap-3">
-				<input type="hidden" name="size" value={size} />
-				<input
-					type="hidden"
-					name="progression"
-					value={choice.kind === 'progression' ? choice.id : ''}
-				/>
-				<input
-					type="hidden"
-					name="progressionKey"
-					value={choice.kind === 'progression' ? choice.key : ''}
-				/>
-				<input type="hidden" name="focusKey" value={choice.kind === 'rung' ? choice.key : ''} />
-				<input type="hidden" name="focusRung" value={choice.kind === 'rung' ? choice.rung : ''} />
-
-				<button type="submit" class="start" style:--tint={tint(heroKey)}>
-					<span class="start-verb"
-						>{resuming ? 'Carry on' : onLadder ? 'Continue path' : 'Practise'}</span
-					>
-					<span class="start-what">
-						<span class="start-dot"></span>
-						{#if data.resume}
-							{glyph(data.resume.keyCenter)} · task {resumeAt + 1} of {data.resume.tasks.length}
-						{:else}
-							{summary}
-						{/if}
-					</span>
-				</button>
-
-				{#if !resuming}
-					<div class="flex gap-1" aria-label="Workout size">
-						{#each ['short', 'standard', 'long'] as const as option (option)}
-							<button
-								type="button"
-								class="minutes"
-								class:is-selected={size === option}
-								onclick={() => (size = option)}
-								>{option} · {data.previews[option]?.length ?? 0}</button
-							>
-						{/each}
-					</div>
-				{/if}
-			</form>
-
-			<!-- The way out, without having to go in first.
-			     An open workout replaces the start button and hides the picker, so
-			     without this the only way to be rid of one was to enter it and play
-			     it to the end. -->
-			{#if resuming}
-				<form method="POST" action="?/end">
-					<button class="text-ink-dim hover:text-ink font-mono text-[0.7rem] transition-colors">
-						{data.resume?.complete ? 'close it and start another' : 'stop this workout'}
-					</button>
-				</form>
-			{/if}
-
-			<!-- Where the ladder is standing, said once more beside the button that
-			     is about to start something. Moving it lives up in the path now,
-			     next to the steps it moves along. -->
-			{#if !resuming}
-				<span class="text-ink-dim font-mono text-[0.68rem]">
-					Ladder · {glyph(data.position.key)} · {data.position.rung.label.toLowerCase()}
-					{#if data.progress.reviews > 0}
-						· {data.progress.correct}/{data.progress.reviews} right here
-					{/if}
-				</span>
 			{/if}
 		</section>
 	</main>
 {/if}
 
 <style>
-	.panel-title {
+	.label {
 		font-family: var(--font-mono);
-		font-size: 0.7rem;
-		letter-spacing: 0.09em;
+		font-size: 0.66rem;
+		letter-spacing: 0.14em;
 		text-transform: uppercase;
 		color: var(--color-ink-dim);
 	}
 
-	.practice-library {
-		border-block: 1px solid var(--color-ground-line);
-	}
-
-	.practice-library > summary {
-		display: flex;
-		min-height: 4.5rem;
-		cursor: pointer;
-		list-style: none;
-		align-items: center;
-		justify-content: space-between;
-		gap: 1rem;
-		padding: 0.85rem 0.25rem;
-		color: var(--color-ink);
-	}
-
-	.practice-library > summary::-webkit-details-marker {
-		display: none;
-	}
-
-	.practice-library > summary:focus-visible {
-		outline: 2px solid var(--color-ink);
-		outline-offset: 3px;
-		border-radius: 8px;
-	}
-
-	.practice-library > summary strong,
-	.practice-library > summary small {
-		display: block;
-	}
-
-	.practice-library > summary strong {
-		font-family: var(--font-display);
-		font-size: 1.05rem;
-		font-weight: 600;
-	}
-
-	.practice-library > summary small {
-		margin-top: 0.15rem;
+	.dim {
 		color: var(--color-ink-dim);
-		font-size: 0.82rem;
-		line-height: 1.4;
-	}
-
-	.library-toggle {
-		display: grid;
-		width: 2.25rem;
-		height: 2.25rem;
-		flex: none;
-		place-items: center;
-		border: 1px solid var(--color-ground-line);
-		border-radius: 999px;
-		font-family: var(--font-mono);
-		font-size: 1.2rem;
-		transition: transform 200ms cubic-bezier(0.25, 1, 0.5, 1);
-	}
-
-	.practice-library[open] .library-toggle {
-		transform: rotate(45deg);
-	}
-
-	.library-content {
-		display: flex;
-		flex-direction: column;
-		gap: 2rem;
-		padding-block: 1rem 1.5rem;
-	}
-
-	.section-head,
-	.key-legend,
-	.key-legend span {
-		display: flex;
-		align-items: center;
 	}
 
 	.section-head {
-		justify-content: space-between;
+		display: flex;
 		flex-wrap: wrap;
-		gap: 1rem;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 0.5rem 1rem;
 	}
 
-	.key-legend {
-		gap: 0.8rem;
-		color: var(--color-ink-dim);
+	.stat {
 		font-family: var(--font-mono);
-		font-size: 0.62rem;
+		font-size: 0.68rem;
+		color: var(--color-ink-dim);
+		font-variant-numeric: tabular-nums;
 	}
 
-	.key-legend span {
-		gap: 0.3rem;
-	}
-
-	.key-legend i {
-		display: block;
-		width: 0.85rem;
-		height: 0.85rem;
-		border: 1px solid var(--color-ink-dim);
-		border-radius: 3px;
-	}
-
-	.legend-fill {
-		background: var(--color-ink-dim);
-	}
-
-	.legend-outline {
-		background: transparent;
-	}
-
-	/*
-	 * The banner.
+	/* ---------------------------------------------------------------------
+	 * The board
 	 *
-	 * The one large field of colour on the page, and it is a key — so it is the
-	 * one thing here entitled to a full-strength swatch. Text on it uses the
-	 * contrast-safe ink derived from that swatch, which is why the colour editor
-	 * cannot make this unreadable.
-	 */
-	.hero {
-		display: grid;
-		grid-template-columns: minmax(0, 9.5rem) minmax(0, 1fr);
-		overflow: hidden;
+	 * The one large object on the page, and it makes no claim about where you
+	 * are. The only colour on it is the origin roundel, because that is a key.
+	 * ------------------------------------------------------------------- */
+	.board {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+		padding: 1rem 1.15rem 1.15rem;
 		border: 1px solid var(--color-ground-line);
-		border-radius: 18px;
+		border-radius: 16px;
 		background: var(--color-ground-raised);
 	}
 
-	@media (max-width: 640px) {
-		.hero {
-			grid-template-columns: minmax(0, 1fr);
-		}
+	.board-head {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 1rem;
+		padding-bottom: 0.6rem;
+		border-bottom: 1px solid var(--color-ground-line);
 	}
 
-	.hero-key {
+	.board-body {
 		display: flex;
-		flex-direction: column;
-		gap: 0.1rem;
-		padding: 1.1rem 1.2rem 1.15rem;
+		flex-wrap: wrap;
+		align-items: flex-start;
+		gap: 1rem 1.6rem;
+	}
+
+	.board-origin {
+		display: flex;
+		align-items: center;
+		gap: 0.85rem;
+	}
+
+	.origin-roundel {
+		display: grid;
+		width: 3.6rem;
+		height: 3.6rem;
+		flex: none;
+		place-items: center;
+		border-radius: 50%;
 		background: var(--tint);
 		color: var(--tint-ink);
-	}
-
-	.hero-name {
 		font-family: var(--font-display);
-		font-size: clamp(2.8rem, 8vw, 3.75rem);
+		font-size: 1.35rem;
 		font-weight: 600;
-		line-height: 0.92;
 		letter-spacing: -0.03em;
 	}
 
-	.hero-pair,
-	.hero-met {
+	.origin-roundel.is-unbuilt {
+		background: transparent;
+		border: 2px dashed var(--tint);
+		color: var(--tint);
+	}
+
+	.origin-names {
+		display: flex;
+		min-width: 0;
+		flex-direction: column;
+		gap: 0.1rem;
+	}
+
+	.origin-major {
+		font-family: var(--font-display);
+		font-size: 1.4rem;
+		font-weight: 600;
+		letter-spacing: -0.025em;
+		line-height: 1.05;
+		color: var(--color-ink);
+	}
+
+	.origin-minor {
 		font-family: var(--font-mono);
-		font-size: 0.68rem;
-		opacity: 0.78;
+		font-size: 0.7rem;
+		color: var(--color-ink-dim);
 	}
 
-	.hero-met {
-		margin-top: auto;
-		padding-top: 0.6rem;
+	.board-rows {
+		display: flex;
+		min-width: 15rem;
+		flex: 1;
+		flex-direction: column;
+		margin: 0;
 	}
 
-	.hero-body {
+	.board-row {
+		display: grid;
+		grid-template-columns: 4.6rem minmax(0, 1fr);
+		gap: 0.75rem;
+		align-items: baseline;
+		padding: 0.32rem 0;
+		border-bottom: 1px solid color-mix(in oklab, var(--color-ground-line) 55%, transparent);
+	}
+
+	.board-row:last-child {
+		border-bottom: 0;
+	}
+
+	.board-row dt {
+		font-family: var(--font-mono);
+		font-size: 0.6rem;
+		letter-spacing: 0.13em;
+		text-transform: uppercase;
+		color: var(--color-ink-dim);
+	}
+
+	.board-row dd {
+		margin: 0;
+		min-width: 0;
+		font-family: var(--font-mono);
+		font-size: 0.78rem;
+		color: var(--color-ink);
+	}
+
+	.calls {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.35rem 0.6rem;
+	}
+
+	.call {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		color: var(--color-ink-muted);
+	}
+
+	.call i {
+		display: block;
+		width: 0.5rem;
+		height: 0.5rem;
+		border-radius: 50%;
+		background: var(--tint);
+	}
+
+	/* The stops of today's run. Ink and weight: a task is not a pitch. */
+	.stops {
 		display: flex;
 		flex-direction: column;
-		gap: 0.35rem;
-		padding: 1.05rem 1.25rem 1.2rem;
-	}
-
-	.hero-title {
-		font-family: var(--font-display);
-		font-size: clamp(1.4rem, 4vw, 1.95rem);
-		font-weight: 600;
-		letter-spacing: -0.02em;
-		line-height: 1.1;
-		color: var(--color-ink);
-	}
-
-	.hero-line {
-		max-width: 52ch;
-		color: var(--color-ink-muted);
-		font-size: 0.88rem;
-		line-height: 1.5;
-	}
-
-	.hero-note {
-		margin-top: 0.35rem;
-		color: var(--color-ink-dim);
-		font-size: 0.72rem;
-		line-height: 1.45;
-	}
-
-	/*
-	 * The held-back play-along.
-	 *
-	 * A rule and a step of indent, in weight rather than in colour — this page's
-	 * hues mean pitch and a missing tune has none. Deliberately not styled as a
-	 * warning: nothing has gone wrong, there is simply a thing you have not been
-	 * shown yet, and the sentence says where to go and be shown it.
-	 */
-	.hero-held {
-		margin-top: 0.6rem;
-		padding-left: 0.6rem;
-		border-left: 2px solid color-mix(in oklab, var(--color-ground-line) 90%, transparent);
-		color: var(--color-ink-muted);
-	}
-
-	.hero-held strong {
-		color: var(--color-ink);
-		font-weight: 600;
-	}
-
-	.tasks {
-		margin-top: 0.5rem;
 		border-top: 1px solid color-mix(in oklab, var(--color-ground-line) 60%, transparent);
 	}
 
-	/*
-	 * A task in the preview.
-	 *
-	 * Drawn in weight and not in colour: a task is not a pitch, so it does not get
-	 * one. The keys below carry their tonics' swatches and these deliberately do
-	 * not, which is what keeps the colours on this page meaning one thing. A
-	 * finished task is dimmed and ticked rather than crossed out or coloured —
-	 * done and not-done are the only two states, and neither is a verdict.
-	 */
-	.task {
+	.stop {
 		display: flex;
 		align-items: baseline;
 		gap: 0.7rem;
@@ -1022,18 +1033,36 @@
 		border-bottom: 1px solid color-mix(in oklab, var(--color-ground-line) 60%, transparent);
 	}
 
-	.task-index {
+	.stop-n {
+		width: 1rem;
+		flex: none;
 		font-family: var(--font-mono);
 		font-size: 0.68rem;
 		color: var(--color-ink-dim);
 		font-variant-numeric: tabular-nums;
 	}
 
-	.task-title {
+	.stop-title {
 		display: block;
 		font-family: var(--font-display);
 		font-size: 0.85rem;
 		font-weight: 600;
+		color: var(--color-ink);
+	}
+
+	.stop-line {
+		display: block;
+		font-size: 0.72rem;
+		line-height: 1.35;
+		color: var(--color-ink-dim);
+	}
+
+	.stop.is-done .stop-title {
+		color: var(--color-ink-dim);
+		font-weight: 500;
+	}
+
+	.stop.is-next .stop-title {
 		color: var(--color-ink);
 	}
 
@@ -1055,220 +1084,315 @@
 		white-space: nowrap;
 	}
 
-	.task-line {
-		display: block;
-		font-size: 0.72rem;
-		line-height: 1.35;
-		color: var(--color-ink-dim);
-	}
-
-	.task.is-done .task-title {
-		color: var(--color-ink-dim);
-		font-weight: 500;
-	}
-
-	.task.is-done .task-index {
+	.held {
+		padding-left: 0.6rem;
+		border-left: 2px solid color-mix(in oklab, var(--color-ground-line) 90%, transparent);
+		font-size: 0.76rem;
+		line-height: 1.5;
 		color: var(--color-ink-muted);
 	}
 
-	.task.is-next .task-title {
+	.held strong {
 		color: var(--color-ink);
-	}
-
-	.task.is-next .task-index {
-		color: var(--color-ink);
-	}
-
-	/* ---------------------------------------------------------------------
-	 * The path
-	 *
-	 * A vertical run of steps rather than a horizontal one, because a step's
-	 * label is a sentence and sentences do not fit in a twelfth of a screen —
-	 * the twelve keys below get the horizontal strip because a key is a letter.
-	 *
-	 * Colour follows the house rule exactly: the only tinted thing in a step is
-	 * the key's own letter, because a key is a pitch. Where you are, what is
-	 * behind and what is ahead are drawn in weight — ink, dim ink, and an
-	 * outline — because none of those three is a pitch and nothing here is
-	 * allowed to go red.
-	 * ------------------------------------------------------------------- */
-	.path {
-		display: flex;
-		flex-direction: column;
-		gap: 0.55rem;
-	}
-
-	.path-count {
-		font-family: var(--font-mono);
-		font-size: 0.66rem;
-		color: var(--color-ink-dim);
-		font-variant-numeric: tabular-nums;
-		text-align: right;
-	}
-
-	.path-rail {
-		height: 3px;
-		border-radius: 2px;
-		background: var(--color-ground-line);
-		overflow: hidden;
-	}
-
-	.path-rail span {
-		display: block;
-		height: 100%;
-		background: var(--color-ink-dim);
-		transform-origin: left;
-		transition: transform 350ms var(--ease-wheel);
-	}
-
-	.steps {
-		display: flex;
-		flex-direction: column;
-		gap: 0.2rem;
-	}
-
-	.step {
-		display: flex;
-		width: 100%;
-		align-items: center;
-		gap: 0.7rem;
-		padding: 0.5rem 0.7rem;
-		border-radius: 10px;
-		border: 1px solid transparent;
-		text-align: left;
-		transition:
-			background 120ms ease,
-			border-color 120ms ease;
-	}
-
-	.step:hover {
-		background: var(--color-ground-raised);
-	}
-
-	.step.is-chosen {
-		background: color-mix(in oklab, var(--tint) 16%, var(--color-ground-raised));
-		border-color: var(--tint);
-	}
-
-	/* The rung's number. Weight, not colour — a step is not a pitch. */
-	.step-index {
-		width: 1.2rem;
-		flex: none;
-		font-family: var(--font-mono);
-		font-size: 0.72rem;
-		color: var(--color-ink-dim);
-		font-variant-numeric: tabular-nums;
-		text-align: right;
-	}
-
-	.step.is-here .step-index,
-	.step.is-open .step-index {
-		color: var(--color-ink);
-	}
-
-	/*
-	 * Twelve pips: which keys this rung is open in.
-	 *
-	 * The breadth axis, drawn where breadth actually lives. Each pip wears its
-	 * own key's colour when it is open and an ink outline when it is not, so the
-	 * staircase is legible as a shape from across the room and every hue on it is
-	 * a pitch — the house rule, kept.
-	 */
-	.step-keys {
-		display: flex;
-		flex: none;
-		gap: 0.14rem;
-		align-items: center;
-	}
-
-	.step-pip {
-		width: 0.34rem;
-		height: 0.9rem;
-		border-radius: 2px;
-		background: transparent;
-		box-shadow: inset 0 0 0 1px var(--color-ground-line);
-	}
-
-	.step-pip.is-lit {
-		background: var(--tint);
-		box-shadow: none;
-	}
-
-	@media (max-width: 640px) {
-		.step-keys {
-			display: none;
-		}
-	}
-
-	.step-label {
-		display: block;
-		font-family: var(--font-display);
-		font-size: 0.88rem;
 		font-weight: 600;
-		color: var(--color-ink-muted);
 	}
 
-	.step.is-here .step-label {
-		color: var(--color-ink);
-	}
-
-	/* Where the ladder is deepest. A hairline, because being here is not a pitch. */
-	.step.is-here {
-		border-color: var(--color-ground-line);
-		background: var(--color-ground-raised);
-	}
-
-	.step.is-here.is-chosen {
-		background: color-mix(in oklab, var(--tint) 16%, var(--color-ground-raised));
-		border-color: var(--tint);
-	}
-
-	.step-note {
-		display: block;
-		font-size: 0.72rem;
-		line-height: 1.3;
-		color: var(--color-ink-dim);
-	}
-
-	.path-move {
+	.board-foot {
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
-		gap: 0.6rem 0.9rem;
-		padding-top: 0.35rem;
+		gap: 0.75rem 1rem;
+		padding-top: 0.6rem;
+		border-top: 1px solid var(--color-ground-line);
 	}
 
-	.move-back {
+	.start {
+		display: flex;
+		flex-direction: column;
+		gap: 0.1rem;
+		padding: 0.6rem 1.4rem;
+		border-radius: 11px;
+		background: var(--color-ink);
+		color: var(--color-ground);
+		text-align: left;
+		transition: opacity 120ms ease;
+	}
+
+	.start:hover {
+		opacity: 0.9;
+	}
+
+	.start-verb {
+		font-family: var(--font-display);
+		font-size: 1rem;
+		font-weight: 600;
+		letter-spacing: -0.015em;
+	}
+
+	.start-what {
+		font-family: var(--font-mono);
+		font-size: 0.66rem;
+		opacity: 0.75;
+	}
+
+	.sizes {
+		display: flex;
+		gap: 0.3rem;
+	}
+
+	.size,
+	.chip,
+	.move {
+		padding: 0.35rem 0.7rem;
+		border-radius: 8px;
+		border: 1px solid var(--color-ground-line);
+		font-family: var(--font-mono);
+		font-size: 0.7rem;
+		color: var(--color-ink-muted);
+		transition:
+			background 120ms ease,
+			border-color 120ms ease,
+			color 120ms ease;
+	}
+
+	.size:hover,
+	.chip:hover,
+	.move:hover:not(:disabled) {
+		border-color: var(--color-ink-dim);
+		color: var(--color-ink);
+	}
+
+	.size.is-selected,
+	.chip.is-on {
+		background: var(--color-ground-overlay);
+		border-color: var(--color-ink-dim);
+		color: var(--color-ink);
+	}
+
+	.quiet {
 		font-family: var(--font-mono);
 		font-size: 0.7rem;
 		color: var(--color-ink-dim);
 		transition: color 120ms ease;
 	}
 
-	.move-back:hover:not(:disabled) {
+	.quiet:hover:not(:disabled) {
 		color: var(--color-ink);
 	}
 
-	.move-on {
-		padding: 0.35rem 0.75rem;
-		border-radius: 9px;
-		border: 1px solid var(--color-ground-line);
-		font-family: var(--font-mono);
-		font-size: 0.72rem;
-		color: var(--color-ink-muted);
-		transition:
-			border-color 120ms ease,
-			color 120ms ease;
+	.quiet:disabled {
+		opacity: 0.4;
 	}
 
-	.move-on:hover {
+	/* ---------------------------------------------------------------------
+	 * The network
+	 * ------------------------------------------------------------------- */
+	.network {
+		display: flex;
+		flex-direction: column;
+		gap: 0.7rem;
+	}
+
+	.layers,
+	.picker-row {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.3rem;
+	}
+
+	/* The drawing is one shape and does not reflow. On a narrow screen it
+	   scrolls sideways inside its own box rather than squeezing the twelve
+	   stations into something unreadable. */
+	.map-scroll {
+		overflow-x: auto;
+		overflow-y: hidden;
+		padding: 0.6rem 0.2rem;
+		border: 1px solid var(--color-ground-line);
+		border-radius: 14px;
+		background: var(--color-ground-raised);
+	}
+
+	.picker {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		padding-top: 0.3rem;
+	}
+
+	.picker-group {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+	}
+
+	.legend {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem 1.1rem;
+		font-family: var(--font-mono);
+		font-size: 0.62rem;
+		color: var(--color-ink-dim);
+	}
+
+	.legend li {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+	}
+
+	.legend i {
+		display: block;
+		flex: none;
+	}
+
+	.mark-track {
+		width: 1.4rem;
+		height: 3px;
+		border-radius: 2px;
+		background: var(--color-ground-line);
+	}
+
+	.mark-stub {
+		width: 1.4rem;
+		height: 3px;
+		border-radius: 2px;
+		background: repeating-linear-gradient(
+			to right,
+			var(--color-ground-line) 0 2px,
+			transparent 2px 6px
+		);
+	}
+
+	.mark-spine {
+		width: 0.4rem;
+		height: 0.9rem;
+		border-radius: 2px;
+		background: var(--pc-7);
+	}
+
+	.mark-empty,
+	.mark-full {
+		width: 0.8rem;
+		height: 0.8rem;
+		border-radius: 50%;
+	}
+
+	.mark-empty {
+		border: 2px solid var(--pc-5);
+	}
+
+	.mark-full {
+		background: var(--pc-0);
+	}
+
+	/* ---------------------------------------------------------------------
+	 * The two panels
+	 * ------------------------------------------------------------------- */
+	.panels {
+		display: grid;
+		gap: 0.9rem;
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	@media (min-width: 860px) {
+		.panels {
+			grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+		}
+	}
+
+	.panel {
+		display: flex;
+		flex-direction: column;
+		gap: 0.6rem;
+		padding: 0.9rem 1rem 1rem;
+		border: 1px solid var(--color-ground-line);
+		border-radius: 14px;
+	}
+
+	.panel-head {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 1rem;
+		padding-bottom: 0.55rem;
+		border-bottom: 1px solid var(--color-ground-line);
+	}
+
+	.panel-title {
+		font-family: var(--font-display);
+		font-size: 1.1rem;
+		font-weight: 600;
+		letter-spacing: -0.02em;
+		color: var(--color-ink);
+	}
+
+	.panel-line {
+		font-size: 0.78rem;
+		line-height: 1.5;
+		color: var(--color-ink-muted);
+	}
+
+	.rows {
+		display: flex;
+		flex-direction: column;
+	}
+
+	.row {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		gap: 0.6rem;
+		align-items: baseline;
+		padding: 0.3rem 0;
+		border-bottom: 1px solid color-mix(in oklab, var(--color-ground-line) 45%, transparent);
+		font-size: 0.8rem;
+		color: var(--color-ink-muted);
+	}
+
+	.row:last-child {
+		border-bottom: 0;
+	}
+
+	.row.is-shut {
+		color: var(--color-ink-dim);
+	}
+
+	.row .dim {
+		font-family: var(--font-mono);
+		font-size: 0.64rem;
+		white-space: nowrap;
+	}
+
+	.row-key {
+		display: inline-flex;
+		min-width: 0;
+		align-items: center;
+		gap: 0.45rem;
+	}
+
+	.row-key i {
+		display: block;
+		width: 0.5rem;
+		height: 0.5rem;
+		flex: none;
+		border-radius: 50%;
+		background: var(--tint);
+	}
+
+	.row-key i.is-hollow {
+		background: transparent;
+		border: 1px dashed var(--color-ground-line);
+	}
+
+	.moves {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.5rem 0.8rem;
+	}
+
+	.move.is-suggested {
 		border-color: var(--color-ink-dim);
 		color: var(--color-ink);
-	}
-
-	.move-note {
-		font-size: 0.72rem;
-		color: var(--color-ink-dim);
 	}
 
 	/* ---------------------------------------------------------------------
@@ -1278,17 +1402,6 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
-	}
-
-	.history-more {
-		font-family: var(--font-mono);
-		font-size: 0.66rem;
-		color: var(--color-ink-dim);
-		transition: color 120ms ease;
-	}
-
-	.history-more:hover {
-		color: var(--color-ink);
 	}
 
 	.days {
@@ -1350,278 +1463,6 @@
 	@media (max-width: 520px) {
 		.day-what {
 			display: none;
-		}
-	}
-
-	/* The twelve keys, in the order the ladder meets them. */
-	.keys {
-		display: grid;
-		gap: 0.4rem;
-		grid-template-columns: repeat(12, minmax(0, 1fr));
-	}
-
-	@media (max-width: 760px) {
-		.keys {
-			grid-template-columns: repeat(6, minmax(0, 1fr));
-		}
-	}
-
-	.key {
-		display: flex;
-		width: 100%;
-		flex-direction: column;
-		align-items: center;
-		gap: 0.2rem;
-		padding: 0.35rem 0.2rem 0.4rem;
-		border-radius: 10px;
-		border: 1px solid transparent;
-		transition:
-			background 120ms ease,
-			border-color 120ms ease;
-	}
-
-	.key:not(.is-static):hover {
-		background: var(--color-ground-raised);
-	}
-
-	.key.is-open {
-		background: color-mix(in oklab, var(--tint) 18%, var(--color-ground-raised));
-		border-color: var(--tint);
-	}
-
-	/*
-	 * A key's swatch: a column that fills from the bottom with what the record
-	 * holds in it. The same figure the profile draws, on purpose — one fact, one
-	 * picture of it, in both places.
-	 *
-	 * The outline is full-strength colour whether or not anything is inside it,
-	 * which is the whole trick: a key you have never played reads as an empty
-	 * glass rather than as a grey absence. Dashed, because a dashed fill is how
-	 * this app has always drawn "nothing here yet", and never dimmed — the ladder
-	 * suggests an order and this strip refuses to make the other eleven look
-	 * unavailable.
-	 */
-	.key-swatch {
-		display: flex;
-		align-items: flex-end;
-		width: 100%;
-		height: 4.1rem;
-		border: 2px solid var(--tint);
-		border-radius: 7px;
-		background: color-mix(in oklab, var(--tint) 9%, var(--color-ground));
-		overflow: hidden;
-	}
-
-	.key-fill {
-		width: 100%;
-		height: var(--fill);
-		background: var(--tint);
-		transition: height 300ms var(--ease-wheel);
-	}
-
-	.key.is-fresh .key-swatch {
-		border-style: dashed;
-	}
-
-	.key-name {
-		font-family: var(--font-display);
-		font-size: 1rem;
-		font-weight: 600;
-		line-height: 1.1;
-		color: var(--color-ink);
-	}
-
-	.key-minor {
-		font-family: var(--font-mono);
-		font-size: 0.56rem;
-		color: var(--color-ink-dim);
-	}
-
-	.key-count {
-		font-family: var(--font-mono);
-		font-size: 0.58rem;
-		color: var(--color-ink-dim);
-		font-variant-numeric: tabular-nums;
-	}
-
-	/* "new" is the invitation, so it is not dimmer than the number beside it. */
-	.key.is-fresh .key-count {
-		color: var(--color-ink-muted);
-		letter-spacing: 0.04em;
-	}
-
-	/* Where the ladder is standing. Ink, because standing somewhere is not a pitch. */
-	.key.is-here .key-name::after {
-		content: '';
-		display: block;
-		width: 1.1rem;
-		height: 2px;
-		margin: 0.15rem auto 0;
-		border-radius: 2px;
-		background: var(--color-ink);
-	}
-
-	.rung {
-		display: flex;
-		align-items: baseline;
-		gap: 0.7rem;
-		padding: 0.55rem 0.75rem;
-		border-radius: 9px;
-		border: 1px solid transparent;
-		text-align: left;
-		transition:
-			background 120ms ease,
-			border-color 120ms ease;
-	}
-
-	.rung:hover {
-		background: var(--color-ground-raised);
-	}
-
-	.rung.is-selected {
-		background: color-mix(in oklab, var(--tint) 16%, var(--color-ground-raised));
-		border-color: var(--tint);
-	}
-
-	.rung-index {
-		font-family: var(--font-mono);
-		font-size: 0.68rem;
-		color: var(--color-ink-dim);
-		font-variant-numeric: tabular-nums;
-	}
-
-	/* Met before, and startable exactly like the rest. Weight, never a colour. */
-	.rung.is-met .rung-index {
-		color: var(--color-ink);
-	}
-
-	.rung-label {
-		display: block;
-		font-family: var(--font-display);
-		font-size: 0.85rem;
-		font-weight: 600;
-		color: var(--color-ink);
-	}
-
-	.rung-teaches {
-		display: block;
-		font-size: 0.72rem;
-		line-height: 1.3;
-		color: var(--color-ink-dim);
-	}
-
-	.badge {
-		flex: none;
-		padding: 0.1rem 0.4rem;
-		border-radius: 999px;
-		background: var(--color-ground-overlay);
-		font-family: var(--font-mono);
-		font-size: 0.58rem;
-		color: var(--color-ink-muted);
-		white-space: nowrap;
-	}
-
-	.key-pill {
-		padding: 0.2rem 0.5rem;
-		border-radius: 6px;
-		border: 1px solid var(--color-ground-line);
-		font-family: var(--font-mono);
-		font-size: 0.66rem;
-		color: var(--color-ink-muted);
-	}
-
-	.key-pill.is-selected {
-		background: color-mix(in oklab, var(--tint) 30%, var(--color-ground-raised));
-		border-color: var(--tint);
-		color: var(--color-ink);
-	}
-
-	.is-open-row {
-		background: var(--color-ground-raised);
-	}
-
-	/* The one big target, kept in view while you scroll the picker. */
-	.start {
-		display: flex;
-		width: 100%;
-		max-width: 30rem;
-		flex-direction: column;
-		align-items: center;
-		gap: 0.1rem;
-		border-radius: 16px;
-		background: var(--color-ink);
-		padding: 0.95rem 2rem;
-		color: var(--color-ground);
-		transition: transform 120ms ease;
-	}
-
-	.start:active {
-		transform: scale(0.985);
-	}
-
-	.start-verb {
-		font-family: var(--font-display);
-		font-size: 1.35rem;
-		font-weight: 600;
-		letter-spacing: -0.01em;
-	}
-
-	.start-what {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.4rem;
-		font-family: var(--font-mono);
-		font-size: 0.72rem;
-		opacity: 0.78;
-	}
-
-	/* The key this is about to start in, wearing its tonic's colour. */
-	.start-dot {
-		width: 0.55rem;
-		height: 0.55rem;
-		border-radius: 2px;
-		background: var(--tint);
-	}
-
-	.minutes {
-		border: 1px solid var(--color-ground-line);
-		border-radius: 6px;
-		padding: 0.25rem 0.55rem;
-		font-family: var(--font-mono);
-		font-size: 0.7rem;
-		color: var(--color-ink-muted);
-		transition: border-color 120ms ease;
-	}
-
-	.minutes:hover {
-		border-color: var(--color-ink-dim);
-	}
-
-	.minutes.is-selected {
-		background: var(--color-ground-overlay);
-		border-color: var(--color-ink-dim);
-		color: var(--color-ink);
-	}
-
-	/*
-	 * "Ready for the next one" used to be drawn in --pc-5, which is F. Being
-	 * ready is not a pitch, and a green that means "go" is exactly the colour
-	 * standing for nothing the house rule refuses. It is weight now.
-	 */
-	.is-suggested {
-		border-color: var(--color-ink);
-		color: var(--color-ink);
-	}
-
-	button:disabled {
-		opacity: 0.3;
-	}
-
-	@media (prefers-reduced-motion: reduce) {
-		.key-fill,
-		.library-toggle,
-		.path-rail span {
-			transition: none;
 		}
 	}
 </style>
