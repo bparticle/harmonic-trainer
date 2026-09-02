@@ -503,14 +503,52 @@ export function demandOfGrid(grid: string[][], mode: 'major' | 'minor'): Demand 
  * it unlocks in the same edit. Read on the C stage because, again, a shape is a
  * shape in all twelve — the relative minor's triads are minor triads whether
  * the stage is C or G♭.
+ *
+ * **A rung that builds one chord teaches nothing, and that is the whole of the
+ * pacing fix.** `tonic-triad` builds C and `tonic-seventh` builds Cmaj7; both
+ * used to grant their shape outright, so the morning somebody learned the C
+ * chord the gate cleared eight tunes — every one of them asking for F and G as
+ * well, chords the ladder does not build until the rung after. That is the same
+ * fault the crossing questions had, one axis over: the *answer* was inside the
+ * vocabulary and the *question* was not.
+ *
+ * The rule is a count rather than a list of exceptions, because it describes
+ * how this ladder is actually built. It alternates: a single chord to meet a
+ * sound, then the rung that builds the same sound somewhere else. Meeting one
+ * is meeting a chord; building it on a root you were not shown is owning the
+ * shape, and owning the shape is what a chart asks for. So a rung grants what
+ * it builds only when it builds more than one thing.
+ *
+ * It bites exactly twice — at `tonic-triad` and `tonic-seventh` — and changes
+ * nothing from `all-triads` down: the same thirteen tunes there, the same
+ * fourteen at the sevenths, the same twenty at the relative minor. Counted, not
+ * assumed. And a one-off shape inside a larger rung is untouched, which matters
+ * for the diminished triad: `all-triads` builds exactly one, and a rule phrased
+ * per-shape rather than per-rung would have locked it away forever.
  */
 export function shapesForRung(rungId: RungId): Shape[] {
-	return sortShapes(
-		itemsForRung(rungId, STAGES[0])
-			.map((item) => item.chord)
-			.filter((chord): chord is AbstractChord => Boolean(chord))
-			.map(shapeOf)
-	);
+	const chords = itemsForRung(rungId, STAGES[0])
+		.map((item) => item.chord)
+		.filter((chord): chord is AbstractChord => Boolean(chord));
+
+	return chords.length < 2 ? [] : sortShapes(chords.map(shapeOf));
+}
+
+/**
+ * The first rung that teaches a shape, for a page saying how to reach a tune.
+ *
+ * The board can say *learn the major triad* on its own; what it could not say
+ * is **where**, and the answer it reached for instead was `taughtBy`, which
+ * only knows the progression library. That library grants shapes the same way
+ * the ladder does and is gated by the same comparison, so a shape nothing has
+ * taught yet came back as *learn major in I – IV – V – I* — a progression that
+ * needs the very shape it was being offered to teach. Advice you cannot take.
+ *
+ * The ladder is the thing that actually teaches a shape from nothing, so this
+ * asks the ladder, in its own order, and returns the first rung that builds it.
+ */
+export function rungTeaching(shape: Shape): RungId | null {
+	return RUNGS.find((rung) => shapesForRung(rung.id).includes(shape))?.id ?? null;
 }
 
 /** Everything a set of reached rungs teaches. Keys do not come into it. */

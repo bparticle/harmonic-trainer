@@ -6065,3 +6065,122 @@ and making it card-dependent would flicker it on and off within a single ear tas
 as progression and chord questions alternate. Whether a pinned line should stay
 named through a question about it is a decision about the header, and it should
 be made as one rather than as a side effect of this.
+
+## Three departures, one exercise — the ladder that never moved
+
+Reported after a real first run: _I clicked Depart three times and did the
+exercises but it was three times the same exercise: play the C scale... It just
+feels like the application is glitching and makes me do the same thing over and
+over._ Composed six workouts from a fresh frontier and got six identical ones,
+so the report was exact rather than impressionistic.
+
+**Nothing moved the ladder.** `openLadder` is reached from one place — the
+`?/advance` form on the new-thing task — and that button had two problems at
+once. It was the bordered secondary control, sitting beside a black primary
+reading **Tried it** which finishes the task and forgets; and it only appears
+when `openNext` is set, which waits for the standing rung to look solid, which
+needs six answers, which a first workout has not yet given. So on the morning it
+mattered most the only control on screen that could move the ladder was not on
+the screen, and the one that was there kept you still.
+
+Everything else followed from that. The workout is composed from what the
+frontier holds; the frontier held one rung; one rung makes two cards; so every
+departure drilled the C scale and offered the home chord, forever. The report
+also asked which control was meant to be the way forward, which is the same
+finding said from the other side: there wasn't one.
+
+### The button now does what the screen describes
+
+When the new thing **is** a rung — _the home chord, in C_ — opening it is the
+primary action, and it says which rung it opens. Finishing without it stays,
+quietly, as _Not yet_. This is not auto-advance: nothing happens behind anybody,
+the ladder is still a suggestion, and the record still decides what gets
+offered. The difference is that the button doing the thing the screen has just
+described is now the one that looks like it.
+
+The two cannot name different rungs, which is worth writing down because it is
+what makes the label safe. `chooseNovelty` builds a rung novelty out of
+`nextCell`; `nextCell` returns the cell `deepen` opens; `?/advance` calls
+`openLadder`, which is `deepen ?? widenNext`. One cell, three names for it.
+
+The pedal deliberately does not reach this one. Hands-free means the pedal
+follows the primary control, and everywhere else that control ends a task;
+here it opens ground that outlives the workout, and a foot resting on a sustain
+pedal should not be able to. `advanceHandsFree` stops at finishing.
+
+Because the novelty slot prefers a rung only when nothing else is new or the
+standing rung looks solid, this paces itself without a rule saying so: the first
+two departures open a rung each, and by the third there are tunes and
+progressions to be new instead, so the ladder waits for the record again.
+
+### A rung that builds one chord was granting the whole shape
+
+The same walk turned up a second fault, and the report had asked for the thing
+it was blocking: _we want to be presented with a very easy song to play along as
+soon as possible... a two or three chord song, when we have learned those
+chords._
+
+Counted against the songbook, **all eight of the first tunes opened on
+`tonic-triad`** — the rung that builds exactly one chord, C — and every one of
+them asks for F and G as well. `primary-triads`, the rung whose entire job is I,
+IV and V, opened **nothing**, because everything it could have opened had
+already been cleared one rung earlier for a reason that was not true.
+
+`shapesForRung` reads a rung's shapes off the chords it builds, and the fold it
+uses is right and load-bearing: _a shape is a shape in all twelve_. What was
+missing is that meeting one chord is not owning a shape. This ladder alternates
+— a single chord to meet a sound, then the rung that builds the same sound
+somewhere else — so **a rung grants what it builds only when it builds more than
+one thing**. A count, not a list of exceptions, which is what keeps the
+diminished triad reachable: `all-triads` builds exactly one and a per-shape rule
+would have locked it away forever.
+
+It bites exactly twice and changes nothing below: the same thirteen tunes at
+`all-triads`, fourteen at the sevenths, twenty at the relative minor. Counted
+before it was written, and `walk.test.ts` pins the new shape of the climb.
+
+### The first tune was chosen by the calendar
+
+Two smaller things stood between that and a good first play-along, both found by
+walking the fixed ladder rather than by reading the code.
+
+**It was offered in the wrong key.** Deepening widens — opening the home chord
+in C also opens the scale in G — so a second-day account has G among its reached
+keys with nothing in it but seven notes. `vocabulary` is the union over every
+cell, which is the right question for _may this tune be set_ and the wrong one
+for _where_, and the mission went to G: three chords, in a key the ladder had
+taught none of them in. Each key is now asked about its own cells. **A
+preference and never a gate** — an empty answer changes nothing, because
+refusing somebody a tune in B for want of a formal visit is exactly the gate
+this project keeps refusing to build.
+
+**And it was chosen by the day.** `reachOf` cannot separate eight tunes that ask
+for the same single shape, so the day's rotation decided which one a person met
+first — _Go Tell It on the Mountain_ at 108, on the morning it was measured. Two
+changes: among tunes demanding the same thing the tempo breaks the tie, because
+a floor of 76 gives a beginner time to find the chord and 132 does not; and the
+rotation now waits for a record to rotate. It exists so a pool of nine tunes is
+not handed out one-a-day forever, which is real — but on an account that has
+played _nothing_ there is no sameness to break up, and it was throwing away an
+ordering that had just put the gentlest tune at the front.
+
+The board's promise was sorted differently from the pool it promises, so it
+named one tune and the composer set another. Same ordering now, and the line
+above Depart stops being circular as well: it used to say _learn major in I – IV
+– V – I_, naming a progression that needs the very shape it was offered to
+teach, because `taughtBy` only knows the progression library. The ladder is what
+teaches a shape from nothing, so `rungTeaching` names the step instead.
+
+### What a first week is now
+
+Walked in the app, on a throwaway database, with a fresh account:
+
+1. **Depart** — the C scale at sight and by ear, then _the home chord_, and one
+   button: **Open the home chord**.
+2. **Depart** — scale and home chord drilled, then _the three main chords_, and
+   **Open the three main chords**.
+3. **Depart** — and the board says **Swing Low, Sweet Chariot · C · ballad ·
+   ≥76 BPM. First time on this tune.**
+
+Three departures, three different mornings, and a slow three-chord song on the
+third, in the key the chords were learned in.

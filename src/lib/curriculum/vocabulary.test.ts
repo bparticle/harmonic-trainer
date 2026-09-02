@@ -165,9 +165,8 @@ describe('what the drill room teaches', () => {
 	});
 
 	it('reads each rung off the chords it actually builds', () => {
-		expect(shapesForRung('tonic-triad')).toEqual(['major']);
+		expect(shapesForRung('primary-triads')).toEqual(['major']);
 		expect(shapesForRung('all-triads')).toEqual(['diminished', 'major', 'minor']);
-		expect(shapesForRung('tonic-seventh')).toEqual(['major seventh']);
 		expect(shapesForRung('all-sevenths')).toEqual([
 			'dominant seventh',
 			'half-diminished',
@@ -175,6 +174,27 @@ describe('what the drill room teaches', () => {
 			'minor seventh'
 		]);
 		expect(shapesForRung('relative-minor')).toEqual(['minor']);
+	});
+
+	/*
+	 * A rung that builds one chord is an introduction to a sound, not a grant of
+	 * the shape. `tonic-triad` builds C and `tonic-seventh` builds Cmaj7, and
+	 * granting on those cleared eight tunes to somebody who had been taught one
+	 * chord — every one of them asking for F and G as well.
+	 */
+	it('gives a single-chord rung no shape, because one chord is not a shape', () => {
+		expect(shapesForRung('tonic-triad')).toEqual([]);
+		expect(shapesForRung('tonic-seventh')).toEqual([]);
+	});
+
+	/*
+	 * And the rule is a count rather than a list of exceptions, which is what
+	 * keeps the diminished triad reachable: `all-triads` builds exactly one, and
+	 * a rule phrased per-shape would have locked it away forever.
+	 */
+	it('still grants a one-off shape that arrives inside a larger rung', () => {
+		expect(shapesForRung('all-triads')).toContain('diminished');
+		expect(shapesForRung('all-sevenths')).toContain('half-diminished');
 	});
 
 	it('never leaves the key anywhere on the ladder', () => {
@@ -342,7 +362,12 @@ describe('saying what is missing', () => {
 	});
 
 	it('names the shape when it is a shape that is missing', () => {
-		const gap = shortfall(chartsBySlug.get('four-chord-loop')!.demand, knowing('C', 'tonic-triad'));
+		// From the three main chords, where the major triad is granted; the home
+		// chord alone now grants nothing, and the gap there would name both.
+		const gap = shortfall(
+			chartsBySlug.get('four-chord-loop')!.demand,
+			knowing('C', 'primary-triads')
+		);
 		expect(gap.shapes).toEqual(['minor']);
 		expect(gap.devices).toEqual([]);
 		expect(describeShortfall(gap)).toBe('minor');
@@ -385,7 +410,10 @@ describe('a shape is a shape in all twelve keys', () => {
 							.map(shapeOf)
 					)
 				].sort();
-				expect(shapes, `${rung.id} in ${stage.key}`).toEqual(shapesForRung(rung.id));
+				// Against what the rung *builds*, not what it grants: the grant waits
+				// for a second chord, and that rule is tested on its own above.
+				const granted = shapes.length < 2 && itemsForRung(rung.id, stage).length < 2 ? [] : shapes;
+				expect(granted, `${rung.id} in ${stage.key}`).toEqual(shapesForRung(rung.id));
 			}
 		}
 	});

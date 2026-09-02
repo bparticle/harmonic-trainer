@@ -434,10 +434,23 @@
 			<!-- No play-along yet, and why. Not a lock: a thing you have not been
 			     shown, and where to go and be shown it. -->
 			{#if heldMission && !resuming}
+				<!--
+					The nearest tune, and the one step between here and it.
+
+					It used to end *learn major in I – IV – V – I or I – V – vi – IV*,
+					naming progressions that need the same shape they were offered to
+					teach — advice nobody could take, on the one line a new player reads
+					before pressing Depart. The ladder is what teaches a shape from
+					nothing, so where a rung teaches it the rung is named, and the
+					progressions are what is left for a gap the ladder has already
+					covered.
+				-->
 				<p class="held">
 					<strong>Play-along next: {heldMission.chartName}.</strong>
 					Learn {heldMission.needs}
-					{#if heldBy.length}
+					{#if heldMission.opens}
+						— that is <strong>{heldMission.opens.label.toLowerCase()}</strong>, the next step below.
+					{:else if heldBy.length}
 						in {heldBy.map((p) => p.name).join(' or ')}.
 					{:else}
 						on the network.

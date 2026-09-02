@@ -865,6 +865,22 @@
 		}
 	);
 
+	/**
+	 * The rung this new thing would open, when the new thing is a rung.
+	 *
+	 * `chooseNovelty` builds a rung novelty out of `nextCell`, and `nextCell` is
+	 * by construction the cell `deepen` opens — the same cell `?/advance` reaches
+	 * through `openLadder`. So the two cannot name different rungs, and the
+	 * primary button can say *Open the home chord* and be telling the truth about
+	 * what pressing it does. Null for a progression or a groove, which leave the
+	 * ladder where it is.
+	 */
+	const opensRung = $derived.by((): { rungId: string; label: string } | null => {
+		if (task?.kind !== 'new_thing' || task.novelty.kind !== 'rung') return null;
+		const rung = rungById(task.novelty.rungId);
+		return rung ? { rungId: rung.id, label: rung.label } : null;
+	});
+
 	/** The chord currently sounding, lit on the wheel so the ear has somewhere to look. */
 	const noveltyHighlights = $derived.by((): Highlight[] => {
 		const chord = noveltyChords[soundingChord];
@@ -1111,8 +1127,14 @@
 			// The same rule the mission keeps: the pedal follows the primary control
 			// on screen. While there is something to hear, hearing it is what the
 			// screen is offering, and claiming to have tried it is not.
+			//
+			// Where the primary control opens a rung it is a form post, and the
+			// pedal deliberately does *not* reach it: moving the ladder is the one
+			// decision on this screen that outlives the workout, and a foot resting
+			// on a sustain pedal should not be able to make it. Hands-free stops at
+			// finishing the task, which is what it has always meant here.
 			if (noveltyChords.length && !noveltyHeard) void playNovelty();
-			else void finishTask({ tried: true });
+			else if (!opensRung) void finishTask({ tried: true });
 			return;
 		}
 		if (prompt && !answered) {
@@ -1486,6 +1508,27 @@
 					<p class="audio-problem">{audioProblem}</p>
 				{/if}
 
+				<!--
+					The controls, and which of them is the big one.
+
+					**This is where the ladder stopped moving.** The new thing was the
+					next rung — *the home chord, in C* — and the primary button under it
+					said **Tried it**, which finishes the task and forgets. Opening the
+					rung was a bordered afterthought beside it, and on a first workout it
+					was not on the screen at all, because `openNext` waits for the
+					standing rung to look solid and nothing had been answered yet. So the
+					obvious path was the one that stood still: depart, meet the home
+					chord, press the black button, and arrive back at an identical
+					workout. Three times over, which is how it was reported.
+
+					So when the new thing is a rung, **opening it is the primary
+					action**. The button says which rung, it is the same form post that
+					has always moved the ladder, and finishing without it is still there,
+					quietly, for somebody who wants to sit on a rung longer. Nothing has
+					become automatic and nothing is a gate: the difference is that the
+					button doing what the screen describes is now the one that looks like
+					it.
+				-->
 				<div class="flex flex-wrap items-center justify-center gap-3">
 					{#if noveltyChords.length && !noveltyHeard}
 						<button
@@ -1496,6 +1539,18 @@
 						>
 							{playingNovelty ? 'Playing…' : 'Hear it'}
 						</button>
+					{:else if opensRung}
+						<form method="POST" action="?/advance">
+							<input type="hidden" name="sessionId" value={data.workout.id} />
+							<input type="hidden" name="index" value={entry?.index} />
+							<button
+								class="bg-ink text-ground rounded-2xl px-8 py-4 text-lg font-semibold disabled:opacity-40"
+								disabled={busy}
+								aria-describedby="new-thing-hands-free"
+							>
+								Open {opensRung.label.toLowerCase()}
+							</button>
+						</form>
 					{:else}
 						<button
 							class="bg-ink text-ground rounded-2xl px-8 py-4 text-lg font-semibold disabled:opacity-40"
@@ -1515,6 +1570,14 @@
 						</button>
 					{/if}
 
+					{#if opensRung && noveltyHeard}
+						<button
+							class="text-ink-dim hover:text-ink rounded-2xl px-4 py-4 font-semibold transition-colors disabled:opacity-40"
+							onclick={() => finishTask({ tried: true })}
+							disabled={busy}>Not yet</button
+						>
+					{/if}
+
 					{#if task.novelty.kind === 'groove'}
 						<a
 							class="border-ground-line text-ink rounded-2xl border px-6 py-4 font-semibold"
@@ -1523,18 +1586,14 @@
 					{/if}
 
 					<!--
-						The one place "ready to move on" is said out loud.
-
-						It used to appear only when the new thing *was* the next rung, and
-						the novelty slot has twenty-eight other things it would rather
-						show — so on an account past its first fortnight the offer was
-						simply never on screen and the ladder never moved. It rides beside
-						whatever the new thing is now, and the workout decides whether the
-						record has earned it. A form post rather than a fetch, because
-						moving the ladder is a decision the server owns and the page has
-						nothing to keep afterwards.
+						The other way on: the same offer, for a new thing that is not a
+						rung. A progression or a groove leaves the ladder where it is, so
+						on those the invitation to open more still rides beside them —
+						which is what it was written for. Suppressed when the primary
+						button above is already this exact move, or the screen would offer
+						it twice.
 					-->
-					{#if workout?.openNext}
+					{#if workout?.openNext && !opensRung}
 						<form method="POST" action="?/advance">
 							<input type="hidden" name="sessionId" value={data.workout.id} />
 							<input type="hidden" name="index" value={entry?.index} />
@@ -1565,7 +1624,11 @@
 					</p>
 				{/if}
 				<span id="new-thing-hands-free" class="text-ink-dim font-mono text-[0.7rem]">
-					<kbd>Space</kbd> / pedal · {noveltyChords.length && !noveltyHeard ? 'hear it' : 'next'}
+					<kbd>Space</kbd> / pedal · {noveltyChords.length && !noveltyHeard
+						? 'hear it'
+						: opensRung
+							? 'opening a rung is a button, not a pedal'
+							: 'next'}
 				</span>
 			</section>
 

@@ -14,6 +14,8 @@ import {
 	emptyVocabulary,
 	isReady,
 	reachOf,
+	rungTeaching,
+	vocabularyOf,
 	shortfall,
 	taughtBy,
 	type Demand,
@@ -324,6 +326,18 @@ export type MissionHeld = {
 	needs: string;
 	/** Progression ids that would teach one of those, nearest first. */
 	teaches: string[];
+	/**
+	 * The rung that would teach the missing shape, where a rung teaches it.
+	 *
+	 * Added because the answer this carried was unusable on the mornings it
+	 * mattered most. `teaches` knows only the progression library, and the
+	 * library grants shapes through the same gate it is measured against — so an
+	 * account that had not been taught a major triad was told to *learn major in
+	 * I – IV – V – I*, a progression needing the very shape it was offered to
+	 * teach. The ladder is what teaches a shape from nothing, so the board can
+	 * now name the step instead of a circle.
+	 */
+	opens: { rungId: RungId; label: string } | null;
 };
 
 // ---------------------------------------------------------------------------
@@ -1061,6 +1075,8 @@ export function crossingQueue(
 function composeMission(input: {
 	charts: MissionChart[];
 	vocabulary: Vocabulary;
+	/** Every cell the frontier holds, so a key can be asked what *it* was taught. */
+	reached: Array<{ key: string; rungId: RungId }>;
 	keyCenter: string;
 	coldKeys: string[];
 	coldSpots: ColdSpot[];
@@ -1085,6 +1101,60 @@ function composeMission(input: {
 	 * that qualifies rather than whichever happened to sort first. The day still
 	 * rotates below; it now rotates a pool that is near where you are.
 	 */
+	/*
+	 * The keys a mission may be set in, in the order it prefers them.
+	 *
+	 * The workout's own key leads, because that is where the drills have just
+	 * been; the cold keys follow, because that is what the rotation was always
+	 * for; and every other reached key is behind them so a tune is never refused
+	 * for want of somewhere to put it when somewhere exists.
+	 */
+	const keyOrder = unique(
+		[input.keyCenter, ...input.coldKeys, ...input.reached.map((cell) => cell.key)],
+		(key) => key
+	);
+
+	/*
+	 * What each key on its own has been taught.
+	 *
+	 * `input.vocabulary` is the union over every cell the frontier holds, which
+	 * is the right question for *may this tune be set at all* and the wrong one
+	 * for *where*. Deepening widens — opening the home chord in C also opens the
+	 * scale in G — so a second-day account has G among its reached keys with
+	 * nothing but a scale in it, and the union happily reported that the major
+	 * triad was known. The tune then went to G: three chords, in a key where the
+	 * ladder had taught none of them.
+	 *
+	 * A key is asked about its own cells instead. On a mature frontier almost
+	 * every key answers yes and the ordering below is untouched; on a new one
+	 * exactly the key that was practised answers yes, which is the whole point.
+	 */
+	const taughtIn = new Map<string, Vocabulary>();
+	const vocabularyIn = (key: string): Vocabulary => {
+		const known = taughtIn.get(key);
+		if (known) return known;
+		const derived = vocabularyOf({
+			rungs: input.reached.filter((cell) => cell.key === key).map((cell) => cell.rungId)
+		});
+		taughtIn.set(key, derived);
+		return derived;
+	};
+
+	/**
+	 * The keys that could host this tune, in the order the caller prefers them.
+	 *
+	 * **A preference and never a gate**, which is the difference between fixing
+	 * the beginner's first tune and breaking the app's oldest rule. *A shape is a
+	 * shape in all twelve* — somebody who has built the major triad on C, F and G
+	 * has learned to move it, and refusing them a tune in B because the ladder
+	 * has not formally called there would be the gate this project has always
+	 * refused to build. So an empty answer here changes nothing: the tune goes
+	 * where it was going to go anyway. A non-empty one only decides *which* of
+	 * the keys already on offer it lands in.
+	 */
+	const hostsFor = (chart: MissionChart): string[] =>
+		keyOrder.filter((key) => isReady(chart.demand, vocabularyIn(key)));
+
 	const ready = input.charts
 		.filter((chart) => isReady(chart.demand, input.vocabulary))
 		/*
@@ -1097,7 +1167,24 @@ function composeMission(input: {
 		 * key to put it in is the bug this whole pass is about.
 		 */
 		.filter((chart) => chart.mode !== 'minor' || input.minorKeys.length > 0)
-		.sort((a, b) => reachOf(a.demand) - reachOf(b.demand) || a.slug.localeCompare(b.slug));
+		/*
+		 * Plainest first, and then slowest.
+		 *
+		 * `reachOf` cannot separate the eight tunes that arrive together on the
+		 * three main chords — they ask for the same one shape — so the day's
+		 * rotation was deciding which of them somebody met first, and on the
+		 * morning it was measured that was *Go Tell It on the Mountain* at 108.
+		 * Among tunes that demand exactly the same thing the gentler one is the
+		 * slower one: a tempo floor of 76 gives a beginner time to find the chord,
+		 * and 132 does not. So the tempo breaks the tie, and *Swing Low* is what a
+		 * first play-along is.
+		 */
+		.sort(
+			(a, b) =>
+				reachOf(a.demand) - reachOf(b.demand) ||
+				a.defaultBpm - b.defaultBpm ||
+				a.slug.localeCompare(b.slug)
+		);
 
 	if (ready.length === 0) return null;
 
@@ -1135,8 +1222,23 @@ function composeMission(input: {
 	 * is the next chart along and never the first one again.
 	 */
 	const playsOf = (chart: MissionChart) => input.plays[chart.slug] ?? 0;
+	/*
+	 * The rotation waits for a record to vary.
+	 *
+	 * It exists so a pool of nine tunes does not hand the same one to every
+	 * workout of the same day, which is a real thing that happened and worth
+	 * keeping. But on an account that has played *nothing*, there is no sameness
+	 * to break up and the rotation is not variety, it is a coin toss — and it was
+	 * tossing away the ordering directly above, which had just put the plainest
+	 * and slowest tune at the front. A first play-along came out as *Go Tell It
+	 * on the Mountain* at 108 because of the day it happened to be.
+	 *
+	 * So the first tune anybody meets is the one the curriculum chose, and the
+	 * rotation starts once there is a record for it to rotate.
+	 */
+	const everPlayed = Object.values(input.plays).some((count) => count > 0);
 	const byNeed = (group: MissionChart[]) =>
-		[...rotate(group, input.day)].sort((a, b) => playsOf(a) - playsOf(b));
+		[...(everPlayed ? rotate(group, input.day) : group)].sort((a, b) => playsOf(a) - playsOf(b));
 
 	// Two halves rather than one list, or the ordering would walk straight past
 	// the charts the cold quality just steered towards.
@@ -1146,10 +1248,21 @@ function composeMission(input: {
 	];
 	const chart = pool[input.nth % pool.length];
 
-	// A second mission goes somewhere else, so a long workout is not the same
-	// tune twice in a row in the same key.
+	/*
+	 * A second mission goes somewhere else, so a long workout is not the same
+	 * tune twice in a row in the same key — and then the answer is checked
+	 * against what that key has actually been taught.
+	 *
+	 * The preference is unchanged and the check is new. Where the preferred key
+	 * can host the tune, which on any developed frontier it can, this picks
+	 * exactly what it picked before. Where it cannot, the tune moves to the
+	 * nearest key that can rather than being set somewhere its chords have never
+	 * been built.
+	 */
 	const keys = input.coldKeys.length ? input.coldKeys : [input.keyCenter];
-	const major = input.nth === 0 ? input.keyCenter : rotate(keys, input.day + input.nth)[0];
+	const preferred = input.nth === 0 ? input.keyCenter : rotate(keys, input.day + input.nth)[0];
+	const hosts = hostsFor(chart);
+	const major = hosts.includes(preferred) ? preferred : (hosts[0] ?? preferred);
 	const keyCenter = chart.mode === 'minor' ? minorKeyFor(major, input) : major;
 
 	/*
@@ -1645,6 +1758,7 @@ export function composeWorkout(input: WorkoutInput): Workout {
 		const mission = composeMission({
 			charts,
 			vocabulary,
+			reached: input.reached,
 			keyCenter,
 			coldKeys,
 			coldSpots,
@@ -1759,16 +1873,30 @@ function openOffer(input: WorkoutInput): OpenOffer | null {
  * there is no chart list at all, which is a state no real caller is in.
  */
 function heldBack(charts: MissionChart[], vocabulary: Vocabulary): MissionHeld | null {
+	// The same ordering the ready pool uses, so the tune the board promises is the
+	// tune the composer will actually set. Sorted differently, the board named
+	// "She'll Be Coming Round the Mountain" and the mission that arrived two
+	// workouts later was "Swing Low, Sweet Chariot".
 	const nearest = [...charts].sort(
-		(a, b) => reachOf(a.demand) - reachOf(b.demand) || a.slug.localeCompare(b.slug)
+		(a, b) =>
+			reachOf(a.demand) - reachOf(b.demand) ||
+			a.defaultBpm - b.defaultBpm ||
+			a.slug.localeCompare(b.slug)
 	)[0];
 	if (!nearest) return null;
 
 	const gap = shortfall(nearest.demand, vocabulary);
+	// The first missing shape is the one to name: the shortfall is already in the
+	// curriculum's own order, so the shallowest thing standing in the way leads.
+	const wanted = gap.shapes[0];
+	const teaching = wanted ? rungTeaching(wanted) : null;
+	const rung = teaching ? rungById(teaching) : undefined;
+
 	return {
 		chartSlug: nearest.slug,
 		chartName: nearest.name,
 		needs: describeShortfall(gap),
-		teaches: taughtBy(gap)
+		teaches: taughtBy(gap),
+		opens: rung ? { rungId: rung.id, label: rung.label } : null
 	};
 }

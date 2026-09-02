@@ -85,9 +85,20 @@ describe('the climb through the songbook', () => {
 		expect(walk[0].count).toBe(0);
 	});
 
-	it('has something playable by the second rung of the first key', () => {
-		// The home chord, and a tune of nothing but major triads to use it on.
-		expect(walk[1].count).toBeGreaterThan(0);
+	/*
+	 * Nor on the second, and that is the correction rather than a regression.
+	 * The home chord builds one chord; the eight tunes that used to arrive on it
+	 * every one asked for F and G as well. A rung that builds a single chord is
+	 * an introduction to a sound and no longer grants the shape, so the songbook
+	 * opens where the chords it needs are actually taught.
+	 */
+	it('opens nothing on the home chord either, which teaches one chord', () => {
+		expect(walk[1].count).toBe(0);
+	});
+
+	it('has something playable by the three main chords', () => {
+		// I, IV and V — and a tune of nothing but major triads to use them on.
+		expect(walk[2].count).toBeGreaterThan(0);
 	});
 
 	/*

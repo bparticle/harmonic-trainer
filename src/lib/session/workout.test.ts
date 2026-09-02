@@ -974,7 +974,14 @@ describe('a brand-new account', () => {
 		expect(first.missionHeld!.teaches.length).toBeGreaterThan(0);
 	});
 
-	it('has a play-along by the time the home chord is met', () => {
+	/*
+	 * **The third rung, and it used to be the second.** Meeting the home chord
+	 * cleared eight tunes, every one of them asking for F and G as well — chords
+	 * the ladder does not build until the rung after. The songbook now opens
+	 * where the chords it needs are actually taught, which is one workout later
+	 * and the difference between a first play-along and a first wall.
+	 */
+	it('has no play-along on the home chord alone, which teaches one chord', () => {
 		const second = cellsOf(frontierFromPosition('C', 'tonic-triad')!);
 		const workout = composeWorkout({
 			cards: firstCards,
@@ -982,8 +989,39 @@ describe('a brand-new account', () => {
 			vocabulary: vocabularyOf({ rungs: second.map((cell) => cell.rungId) }),
 			now: NOW
 		});
+		expect(taskKinds(workout)).not.toContain('mission');
+	});
+
+	it('has a play-along by the time the three main chords are met', () => {
+		const third = cellsOf(frontierFromPosition('C', 'primary-triads')!);
+		const workout = composeWorkout({
+			cards: firstCards,
+			reached: third,
+			vocabulary: vocabularyOf({ rungs: third.map((cell) => cell.rungId) }),
+			now: NOW
+		});
 		expect(taskKinds(workout)).toContain('mission');
 		expect(workout.missionHeld).toBeNull();
+	});
+
+	/*
+	 * And it is the gentlest of the eight, in the key they were learned in. The
+	 * ordering picks the plainest tune and then the slowest, and the day's
+	 * rotation — which used to overrule both — now waits until there is a record
+	 * to rotate.
+	 */
+	it('makes the first tune the slowest of the ones that just opened', () => {
+		const third = cellsOf(frontierFromPosition('C', 'primary-triads')!);
+		const workout = composeWorkout({
+			cards: firstCards,
+			reached: third,
+			vocabulary: vocabularyOf({ rungs: third.map((cell) => cell.rungId) }),
+			now: NOW
+		});
+		const [mission] = missions(workout);
+		expect(mission.chartSlug).toBe('swing-low');
+		expect(mission.keyCenter).toBe('C');
+		expect(mission.bpmFloor).toBeLessThanOrEqual(76);
 	});
 
 	it('has an ear task even though it owns one aural card', () => {
@@ -1032,9 +1070,16 @@ describe('the mission only lands on a tune you have been taught', () => {
 		}
 	});
 
+	/*
+	 * With a play record, because the rotation this walks now waits for one — and
+	 * an account that has met every chromatic device is not an account that has
+	 * never opened the play-along page. One run of the plainest tune is enough to
+	 * say the songbook has been started.
+	 */
 	it('reaches the cycles once the chromatic devices have been met', () => {
 		const far = input({
 			charts: MISSION_CHARTS,
+			plays: { 'swing-low': 1 },
 			vocabulary: vocabularyOf({
 				rungs: ALL_RUNGS,
 				progressions: PROGRESSIONS.map((progression) => progression.id)
@@ -1263,7 +1308,11 @@ describe('the mission goes where the record has not been', () => {
 	 * one step a day, which hands the same tune to every workout started before
 	 * midnight and comes back round every nine days.
 	 */
-	const early = cellsOf(frontierFromPosition('C', 'tonic-triad')!);
+	// The three main chords rather than the home chord: a rung that builds one
+	// chord is an introduction to a shape and no longer grants it, so this is now
+	// the first place the songbook opens at all. These tests are about the
+	// play-count ordering, not about where tunes unlock.
+	const early = cellsOf(frontierFromPosition('C', 'primary-triads')!);
 	const taughtHere = vocabularyOf({ rungs: early.map((cell) => cell.rungId) });
 	const readyTunes = MISSION_CHARTS.filter((chart) =>
 		chart.demand.shapes.every((shape) => taughtHere.shapes.includes(shape))
@@ -1304,10 +1353,37 @@ describe('the mission goes where the record has not been', () => {
 		expect(after).not.toBe(before);
 	});
 
+	/*
+	 * The old behaviour, and it has to survive: where the counts cannot separate
+	 * two tunes, the day's rotation is what orders the pool.
+	 *
+	 * "Nothing to choose between" now means *equal counts*, which is what the
+	 * sentence always meant and no longer includes the one case where there is no
+	 * record at all. An account that has played nothing is not an account whose
+	 * record is balanced; it is an account meeting the songbook for the first
+	 * time, and it gets the tune the curriculum chose rather than the tune the
+	 * calendar did. The test below this one covers that.
+	 */
 	it('still walks the whole list when the record has nothing to choose between', () => {
-		// The old behaviour, and it has to survive: with every count at zero the
-		// day's rotation is the only thing ordering the pool.
+		const evenly = Object.fromEntries(readyTunes.map((slug) => [slug, 3]));
 		const seen = new Set<string>();
+		for (let d = 0; d < 12; d++) {
+			const workout = composeWorkout(
+				input({
+					reached: early,
+					vocabulary: taughtHere,
+					charts: MISSION_CHARTS,
+					plays: evenly,
+					now: new Date(NOW.getTime() + d * DAY)
+				})
+			);
+			for (const mission of missions(workout)) seen.add(mission.chartSlug);
+		}
+		expect(seen.size).toBeGreaterThan(1);
+	});
+
+	it('offers the same first tune whatever day the account starts on', () => {
+		const first = new Set<string>();
 		for (let d = 0; d < 12; d++) {
 			const workout = composeWorkout(
 				input({
@@ -1317,9 +1393,9 @@ describe('the mission goes where the record has not been', () => {
 					now: new Date(NOW.getTime() + d * DAY)
 				})
 			);
-			for (const mission of missions(workout)) seen.add(mission.chartSlug);
+			for (const mission of missions(workout)) first.add(mission.chartSlug);
 		}
-		expect(seen.size).toBeGreaterThan(1);
+		expect([...first]).toEqual(['swing-low']);
 	});
 });
 
