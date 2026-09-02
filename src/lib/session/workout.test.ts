@@ -95,7 +95,7 @@ function bank(options: { dueInDays?: number; reps?: number } = {}): Schedulable[
 		}
 	}
 	for (const key of REACHED_KEYS) {
-		out.push(card(`${key}-key-centre`, 'key_hear', key, { ...options, skillCode: CROSSING_SKILL }));
+		out.push(card(`${key}-pivot`, 'pivot_play', key, { ...options, skillCode: CROSSING_SKILL }));
 	}
 	return out;
 }
@@ -513,9 +513,85 @@ describe('one new thing', () => {
 			playedGrooves: [],
 			rungLooksSolid: false,
 			yesterday: null,
+			vocabulary: KNOWS_EVERYTHING,
+			canPlayAlong: true,
 			day: 0
 		});
 		expect(novelty?.kind).not.toBe('rung');
+	});
+
+	/*
+	 * The first morning, and the whole of what this slot got wrong.
+	 *
+	 * An account one rung deep was offered the twelve-bar blues — *every chord is
+	 * a dominant seventh*, five rungs before the ladder builds one — because the
+	 * slot asked whether a progression had been *seen* and never whether it could
+	 * be *played*. With nothing ready and no tune to play over, the only honest
+	 * new thing left is the next step on the ladder, which is exactly what a first
+	 * week should be made of.
+	 */
+	it('offers the next rung, and only that, to somebody who has learned one scale', () => {
+		const novelty = chooseNovelty({
+			keyCenter: 'C',
+			nextCell: { key: 'C', rungId: 'tonic-triad' },
+			playedProgressions: [],
+			playedGrooves: [],
+			rungLooksSolid: false,
+			yesterday: null,
+			vocabulary: vocabularyOf({ rungs: ['scale'] }),
+			canPlayAlong: false,
+			day: 0
+		});
+		expect(novelty).toEqual({ kind: 'rung', key: 'C', rungId: 'tonic-triad' });
+	});
+
+	it('refuses a progression whose chords the ladder has not built', () => {
+		const blues = chooseNovelty({
+			keyCenter: 'C',
+			nextCell: null,
+			playedProgressions: [],
+			playedGrooves: [],
+			rungLooksSolid: false,
+			yesterday: null,
+			// Two rungs: the scale and the home chord. No seventh anywhere.
+			vocabulary: vocabularyOf({ rungs: ['scale', 'tonic-triad'] }),
+			canPlayAlong: false,
+			day: 0
+		});
+		expect(blues?.kind === 'progression' ? blues.progressionId : null).not.toBe('blues-basic');
+	});
+
+	/*
+	 * A groove is a thing you play over, and on a morning when the composer has
+	 * already worked out that no tune is playable it is a rhythm section offered
+	 * to nobody.
+	 */
+	it('holds a groove back until some tune is playable', () => {
+		const nothingToPlay = chooseNovelty({
+			keyCenter: 'C',
+			nextCell: null,
+			playedProgressions: PROGRESSIONS.map((p) => p.id),
+			playedGrooves: [],
+			rungLooksSolid: false,
+			yesterday: null,
+			vocabulary: KNOWS_EVERYTHING,
+			canPlayAlong: false,
+			day: 0
+		});
+		expect(nothingToPlay).toBeNull();
+
+		const somethingToPlay = chooseNovelty({
+			keyCenter: 'C',
+			nextCell: null,
+			playedProgressions: PROGRESSIONS.map((p) => p.id),
+			playedGrooves: [],
+			rungLooksSolid: false,
+			yesterday: null,
+			vocabulary: KNOWS_EVERYTHING,
+			canPlayAlong: true,
+			day: 0
+		});
+		expect(somethingToPlay?.kind).toBe('groove');
 	});
 
 	it('does not offer a progression or a groove the record already holds', () => {
@@ -526,6 +602,8 @@ describe('one new thing', () => {
 			playedGrooves: ['swing'],
 			rungLooksSolid: false,
 			yesterday: null,
+			vocabulary: KNOWS_EVERYTHING,
+			canPlayAlong: true,
 			day: 0
 		});
 		expect(noveltyId(novelty!)).not.toBe('progression|C|I-IV-V-I');
@@ -1041,7 +1119,7 @@ describe('the crossing task', () => {
 		const workout = composeWorkout(input({ size: 'long' }));
 		const asked = new Set(crossing(workout)!.cardIds);
 		const bankById = new Map(bank().map((c) => [c.cardId, c]));
-		for (const id of asked) expect(bankById.get(id)!.direction).toBe('key_hear');
+		for (const id of asked) expect(bankById.get(id)!.direction).toBe('pivot_play');
 	});
 
 	it('never hands the same card to two tasks', () => {
@@ -1057,8 +1135,8 @@ describe('the crossing task', () => {
 	});
 
 	it('falls through rather than leaving a hole when no key card exists', () => {
-		// An account whose skill row has not been seeded yet owns no key cards.
-		const withoutKeys = bank().filter((c) => c.direction !== 'key_hear');
+		// An account that has not reached the sevenths anywhere owns no pivots.
+		const withoutKeys = bank().filter((c) => c.direction !== 'pivot_play');
 		const workout = composeWorkout(input({ size: 'long', cards: withoutKeys }));
 		expect(taskKinds(workout)).not.toContain('crossing');
 		expect(workout.tasks.length).toBeGreaterThan(0);
@@ -1312,6 +1390,8 @@ describe('a minor progression is placed the same way', () => {
 			rungLooksSolid: false,
 			yesterday: null,
 			minorKeys,
+			vocabulary: KNOWS_EVERYTHING,
+			canPlayAlong: true,
 			day: 0
 		});
 
@@ -1342,6 +1422,8 @@ describe('a minor progression is placed the same way', () => {
 			rungLooksSolid: false,
 			yesterday: null,
 			minorKeys: ['A'],
+			vocabulary: KNOWS_EVERYTHING,
+			canPlayAlong: true,
 			day: 0
 		});
 		if (chosen?.kind !== 'progression') return;

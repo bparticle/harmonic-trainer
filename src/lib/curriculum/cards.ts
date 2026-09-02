@@ -1,14 +1,7 @@
 import type { CardDirection } from '$lib/server/db/schema';
 import { formatKey, key as makeKey } from '$lib/music/key';
 import { midi, pitchClass } from '$lib/music/note';
-import {
-	CADENCE_NAME,
-	NEAR_RELATIONS,
-	RELATION_LABELS,
-	cadenceIn,
-	crossingsWithRelation,
-	describeCrossing
-} from './crossing';
+import { NEAR_RELATIONS, crossingsWithRelation } from './crossing';
 import {
 	RUNGS,
 	STAGES,
@@ -66,13 +59,19 @@ export const rungSkillCode = (rungId: string) => `rung:${rungId}`;
 export const progressionSkillCode = (progressionId: string) => `prog:${progressionId}`;
 
 /**
- * Hearing where the music is, as one skill rather than twelve.
+ * Moving between keys, as one skill rather than twelve.
  *
  * Every other skill code names a thing to be learned — a rung, a progression.
  * This one names a *question*, and the twelve keys are its instances, carried
  * on the card's own `key_center` exactly as they are for every other card. One
- * code rather than one per key, because "can you hear which key this is" is a
+ * code rather than one per key, because "can you get from here to there" is a
  * single ability that happens to be tested in twelve places.
+ *
+ * The string still says `key-centre` because rows say it: this code is written
+ * into `skills` and pointed at by every crossing card ever made, including the
+ * withdrawn ones whose reviews are still on the record. Renaming it would be
+ * renaming history to match the present, which is the one thing a record must
+ * not do.
  */
 export const CROSSING_SKILL = 'crossing:key-centre';
 
@@ -112,10 +111,11 @@ export function cardsForRung(rungId: RungId, stage: Stage): GeneratedCard[] {
 /**
  * Cards for a list of places already reached.
  *
- * Two kinds now. The rungs give what they always gave, and every *key* the
- * frontier has opened at all also gets one key-centre card — because the
- * question "which key is this" belongs to the key rather than to any rung of
- * it, and there is exactly one of it per key however deep the ladder goes there.
+ * The rungs give what they always gave, and a key deep enough to have been
+ * taught its sevenths also gets its pivots. Nothing here is made for a key
+ * merely because the frontier has touched it — that rule is what put six
+ * cadence questions in front of an account whose whole vocabulary was the C
+ * scale, and it left with them.
  */
 export function cardsForReached(reached: Array<{ key: string; rungId: RungId }>): GeneratedCard[] {
 	const rungs = reached.flatMap(({ key, rungId }) => {
@@ -123,130 +123,30 @@ export function cardsForReached(reached: Array<{ key: string; rungId: RungId }>)
 		return stage ? cardsForRung(rungId, stage) : [];
 	});
 
-	const keys = [...new Set(reached.map((cell) => cell.key))];
-
 	/*
 	 * The pivot question asks for a diatonic seventh, which is a chord rather
-	 * than a note — so unlike the other two it has to wait for the rung that
-	 * teaches sevenths in that key. The rest of the crossing family is answered
-	 * with a single note and is open from the first morning.
+	 * than a note, so it waits for the rung that teaches sevenths in that key.
+	 *
+	 * **It is the only crossing card left, and that is the point.** The two that
+	 * were answered with a single note — a cadence and the note it came home to,
+	 * two cadences and where the second landed — were made for every key the
+	 * frontier had opened, from the first morning, on the argument that a
+	 * one-note answer is inside everybody's vocabulary. The argument was about
+	 * the *answer* and the difficulty was in the *question*: three triads nobody
+	 * had been taught, no key written down, and a first workout that opened with
+	 * six of them. See DECISIONS.md. What is left waits for a rung, which is what
+	 * the rest of this file has always done.
 	 */
 	const sevenths = new Set(
 		reached.filter((cell) => cell.rungId === 'all-sevenths').map((cell) => cell.key)
 	);
 
-	return [
-		...rungs,
-		...keys.flatMap(cardsForKeyCentre),
-		...keys.flatMap(cardsForKeyMoved),
-		...keys.filter((key) => sevenths.has(key)).flatMap(cardsForPivots)
-	];
+	return [...rungs, ...[...sevenths].flatMap(cardsForPivots)];
 }
 
 // ---------------------------------------------------------------------------
-// Where are we, where did it go, and what was the hinge
+// The hinge
 // ---------------------------------------------------------------------------
-
-/**
- * One card per key: a cadence, and the note it came home to.
- *
- * **The stimulus is allowed to be richer than the vocabulary, and that is the
- * point.** Every other card in this file asks you to produce something the
- * ladder has shown you; this one asks you to *recognise* something, and what it
- * plays — three triads — may be more than a first-morning account could play
- * back. That is not the gate leaking. Tillmann, Bharucha and Bigand's account of
- * tonal knowledge is that it is acquired by exposure, and the readiness rule
- * this app keeps has always been about what it asks you to play. The answer here
- * is a single note, and a single note is inside everybody's vocabulary from the
- * first minute.
- *
- * The key is never written down. That is the whole exercise: twelve keys are a
- * set of highly confusable categories, and telling them apart is what
- * interleaving is for — see the note at the top of `crossing.ts`.
- */
-export function cardsForKeyCentre(keyName: string): GeneratedCard[] {
-	const k = makeKey(keyName);
-	const cadence = cadenceIn(k);
-	const tonic = k.tonic;
-
-	const payload: CardPayload = {
-		kind: 'key-centre',
-		// Shown only once the answer is out. Unicode, because it is read by a
-		// person rather than written to a column.
-		label: formatKey(k, true),
-		answerPitchClasses: [pitchClass(tonic)],
-		answerVoicing: [midi(tonic)],
-		detail: CADENCE_NAME,
-		steps: cadence.map((chord) => ({
-			numeral: chord.numeral,
-			symbol: chord.symbol,
-			pitchClasses: chord.pitchClasses,
-			voicing: chord.voicing
-		}))
-	};
-
-	return [
-		{
-			skillCode: CROSSING_SKILL,
-			keyCenter: keyName,
-			direction: 'key_hear',
-			payload,
-			identity: `crossing|key-centre|${keyName}|key_hear`
-		}
-	];
-}
-
-/**
- * Two cadences, and the question is where the second one landed.
- *
- * The harder sibling of `cardsForKeyCentre`, and harder for a reason worth
- * naming: identifying a key from silence is one job, and *holding* one key while
- * another arrives is another. Krumhansl and Kessler measured exactly this —
- * modulations between close keys are established by the listener sooner than
- * distant ones — so the four near relations are what this asks about, and the
- * queue meets them near-first because `crossingsWithRelation` returns them in
- * the curriculum's own order.
- *
- * The answer is still one note: the tonic of the key it moved to. The
- * *relation* — the dominant, the relative — is what actually transposes and is
- * the thing worth learning, so it is named in the reveal rather than demanded as
- * an answer. Grading a relation would need a multiple choice this app does not
- * have, and an honour-system reveal that always records "correct" would put a
- * number in the record that means nothing.
- */
-export function cardsForKeyMoved(keyName: string): GeneratedCard[] {
-	const from = makeKey(keyName);
-
-	return crossingsWithRelation(from, NEAR_RELATIONS).map((crossing) => {
-		const to = crossing.to;
-		const tonic = to.tonic;
-		const relation = RELATION_LABELS[crossing.relation];
-
-		const payload: CardPayload = {
-			kind: 'key-moved',
-			// The reveal names both halves: where it went, and what that move is
-			// called. The name is the half that survives being transposed.
-			label: `${formatKey(to, true)} — ${relation}`,
-			answerPitchClasses: [pitchClass(tonic)],
-			answerVoicing: [midi(tonic)],
-			detail: describeCrossing(crossing),
-			steps: [...cadenceIn(from), ...cadenceIn(to)].map((chord) => ({
-				numeral: chord.numeral,
-				symbol: chord.symbol,
-				pitchClasses: chord.pitchClasses,
-				voicing: chord.voicing
-			}))
-		};
-
-		return {
-			skillCode: CROSSING_SKILL,
-			keyCenter: keyName,
-			direction: 'key_moved' as const,
-			payload,
-			identity: `crossing|moved|${keyName}|${formatKey(to)}|key_moved`
-		};
-	});
-}
 
 /**
  * One chord, named by what it does in two keys at once.
@@ -354,7 +254,7 @@ export function skillLabel(code: string): string | null {
 	if (code.startsWith('prog:')) {
 		return PROGRESSIONS.find((p) => progressionSkillCode(p.id) === code)?.name ?? null;
 	}
-	if (code === CROSSING_SKILL) return 'Where are we?';
+	if (code === CROSSING_SKILL) return 'The hinge';
 	return null;
 }
 
@@ -404,19 +304,23 @@ export function skillSeeds(): SkillSeed[] {
 	}));
 
 	/*
-	 * The key-centre question, as one skill.
+	 * The crossing question, as one skill.
 	 *
-	 * Level zero and no prerequisites, because it is answerable on the first
-	 * morning: the cadence does the teaching and the answer is one note.
+	 * Level six rather than zero, and the number is the whole correction. It was
+	 * answerable on the first morning while the cadence questions were in it —
+	 * the cadence did the teaching and the answer was one note — and that was the
+	 * argument that put six of them in front of somebody who had learned a scale.
+	 * What is left is a pivot, which needs a diatonic seventh, which is the sixth
+	 * rung. The level now says so.
 	 */
 	const crossings: SkillSeed[] = [
 		{
 			code: CROSSING_SKILL,
-			name: 'Where are we?',
-			level: 0,
+			name: 'The hinge',
+			level: 6,
 			category: 'keys',
-			description: 'A cadence, no key written down, and the note it comes home to.',
-			prereqs: []
+			description: 'One chord, doing a job in each of two keys.',
+			prereqs: [rungSkillCode('all-sevenths')]
 		}
 	];
 

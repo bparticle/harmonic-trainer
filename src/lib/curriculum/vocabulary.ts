@@ -4,7 +4,7 @@ import { keyChangesIn } from '$lib/music/analyse';
 import { pitchClass } from '$lib/music/note';
 import { itemsForRung, RUNGS, STAGES, type RungId } from './ladder';
 import { chordFromNumeral, PROGRESSIONS, progressionById } from './progressions';
-import { NEAR_RELATIONS, RELATION_ORDER, relationBetween, type Relation } from './crossing';
+import { RELATION_ORDER, relationBetween, type Relation } from './crossing';
 
 /**
  * What a tune asks of you, and what you have been shown.
@@ -75,11 +75,12 @@ import { NEAR_RELATIONS, RELATION_ORDER, relationBetween, type Relation } from '
  *   - **The progressions** teach devices. Levels one to three are movement
  *     inside the key; from level four each one is the first place a particular
  *     way out of the key is met.
- *   - **The crossing exercises** teach relations — `key_hear`, `key_moved`,
- *     `pivot_play` — and they teach all four near relations from the first
- *     morning of an account, the moment any key at all is reached. See the note
- *     on `vocabularyOf` below for why that is the right rule and not a hole in
- *     the gate.
+ *   - **Nothing teaches relations.** The crossing exercises did — all four near
+ *     relations, from the first morning of an account — and two of the three
+ *     have been withdrawn for asking far too much far too early. What is left
+ *     teaches a pivot chord rather than the crossing it turns. See the note on
+ *     `vocabularyOf` below, including the measurement that says no tune is lost
+ *     by this.
  *   - **The relative minor rung** teaches the minor tonality, and is the only
  *     thing that does. A progression written in the minor is *material* in a
  *     minor key rather than a teacher of one — it has to be placed in a minor
@@ -563,26 +564,28 @@ export function vocabularyFromProgressions(ids: Iterable<string>): Vocabulary {
 /**
  * The halves of the drill room, added up.
  *
- * The near relations are folded straight in here rather than earned through a
- * third `vocabularyFrom...` function, and that needs justifying because it
- * looks like a shortcut.
+ * **The near relations used to be granted here and are not any more.** The
+ * grant was honest while it lasted: `cardsForKeyMoved` made a card for all four
+ * near relations in every key the frontier had opened, from the first morning,
+ * so "which relations has this account been taught" had one answer and
+ * modelling it as a lookup would have dressed up a constant. That exercise has
+ * been withdrawn — see DECISIONS.md — and with it the teaching. A vocabulary
+ * that kept claiming the relations would be claiming them on behalf of a lesson
+ * nobody gives.
  *
- * `cardsForKeyMoved` — the exercise that teaches a relation — creates a card
- * for **all four** near relations from **every** key the frontier has opened,
- * unconditionally, from the first morning of an account (see the note in
- * `curriculum/cards.ts`). So "which relations has this account been taught"
- * has only one honest answer once any key at all is open, which — since the
- * ladder always starts with the C scale — is always. Modelling that as a
- * derivation over reached keys would compute a constant and dress it up as a
- * lookup.
+ * **This costs no tune, and that is a measurement rather than a hope.** Of the
+ * forty-five charts, two demand a crossing at all, and both of them also demand
+ * `other` — the relation nothing has ever taught — so both were refused before
+ * this changed and are refused for the same reason after. The count of ready
+ * charts at every one of the seven rung depths is identical with the grant and
+ * without it.
  *
- * What this is not is a hole in the gate. `other` — the relations nothing
- * teaches — is never in this set, so a tune that modulates somewhere the
- * crossing exercises do not reach stays exactly as blocked as it should.
- * That is the entire fix pass four makes: a modulation to a near relation
- * stops being misfiled as `chromatic` colour and reads as what it is, while a
- * modulation to a genuinely distant key keeps being refused, honestly, for
- * being one.
+ * So `crossings` now comes from the progression library alone, which today
+ * supplies none: nothing in the app teaches a key change, and the gate says so
+ * instead of pretending otherwise. `pivot_play` survives as an exercise but it
+ * teaches a *chord* — the hinge two keys share — rather than the crossing it
+ * hinges, and granting a relation for having spelled its pivot would be the
+ * same overreach one size smaller.
  */
 export function vocabularyOf(input: {
 	rungs: Iterable<RungId>;
@@ -591,12 +594,11 @@ export function vocabularyOf(input: {
 	const rungIds = [...input.rungs];
 	const ladder = vocabularyFromRungs(rungIds);
 	const library = vocabularyFromProgressions(input.progressions ?? []);
-	const crossings = rungIds.length > 0 ? NEAR_RELATIONS : [];
 
 	return {
 		shapes: sortShapes([...ladder.shapes, ...library.shapes]),
 		devices: sortDevices([...ladder.devices, ...library.devices]),
-		crossings: sortCrossings([...crossings, ...library.crossings]),
+		crossings: sortCrossings(library.crossings),
 		tonalities: ladder.tonalities
 	};
 }

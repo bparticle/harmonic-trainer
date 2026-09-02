@@ -292,9 +292,12 @@ describe('the gate, against the material the app actually ships', () => {
 		});
 		const stuck = MISSION_CHARTS.filter((chart) => !isReady(chart.demand, everything));
 		expect(stuck.map((chart) => chart.slug).sort()).toEqual(['bird-blues', 'indiana']);
-		// And for the reason claimed above, not some other one.
+		// And for the reason claimed above, not some other one: both land somewhere
+		// no exercise reaches. `bird-blues` is also short the relative, which is
+		// not a second reason so much as the same one twice — nothing teaches any
+		// crossing now that the cadence questions are gone.
 		for (const chart of stuck) {
-			expect(shortfall(chart.demand, everything).crossings, chart.slug).toEqual(['other']);
+			expect(shortfall(chart.demand, everything).crossings, chart.slug).toContain('other');
 		}
 	});
 
@@ -542,13 +545,27 @@ describe('crossings: whether a tune actually changes key', () => {
 });
 
 describe('what the crossing exercises teach', () => {
+	/*
+	 * **Nothing, now.** The near relations used to be granted the moment any rung
+	 * was reached, on the argument that `cardsForKeyMoved` made all four in every
+	 * open key from the first morning — which was true of that exercise and is
+	 * the reason it had to go: it asked a beginner to hear a modulation before
+	 * they could play a triad. With it withdrawn the grant has no teacher behind
+	 * it, so it is gone too rather than left standing as a claim about a lesson
+	 * nobody gives.
+	 *
+	 * The cost is measured rather than assumed — see the chart test above and the
+	 * note on `vocabularyOf`. Two charts in the book demand a crossing, both also
+	 * demand `other`, and both were refused before this and are refused now.
+	 */
 	it('teaches nothing before any key has been reached', () => {
 		expect(vocabularyFromRungs([]).crossings).toEqual([]);
 		expect(vocabularyOf({ rungs: [] }).crossings).toEqual([]);
 	});
 
-	it('teaches the four near relations the moment any rung is reached', () => {
-		expect(vocabularyOf({ rungs: ['scale'] }).crossings.sort()).toEqual([...NEAR_RELATIONS].sort());
+	it('teaches nothing after every key has been reached either', () => {
+		expect(vocabularyOf({ rungs: ['scale'] }).crossings).toEqual([]);
+		expect(vocabularyOf({ rungs: ALL_RUNGS }).crossings).toEqual([]);
 	});
 
 	it('never teaches the far relation, however much is known', () => {
@@ -570,9 +587,15 @@ describe('the crossing gate', () => {
 	// failing on the crossing axis specifically, not on an unrelated shape.
 	const near = vocabularyOf({ rungs: rungsTo('C', 'all-sevenths') });
 
-	it('lets a near modulation through once any key is reached', () => {
+	/*
+	 * It used to let this through, and the exercise that paid for it has been
+	 * withdrawn. A tune that genuinely changes key is now refused on the crossing
+	 * axis whatever the ladder holds — honestly, because nothing teaches one.
+	 */
+	it('refuses a near modulation, because nothing teaches a crossing any more', () => {
 		const demand = demandOfNumerals(['I', 'vi7', 'II7', 'Vmaj7'], 'major');
-		expect(isReady(demand, near)).toBe(true);
+		expect(demand.crossings).not.toEqual([]);
+		expect(isReady(demand, near)).toBe(false);
 	});
 
 	it('refuses a modulation nothing has taught', () => {

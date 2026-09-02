@@ -59,12 +59,12 @@ const bytea = customType<{ data: Uint8Array; driverData: Buffer }>({
  *
  * `key_hear`, `key_moved` and `pivot_play` are the sixth, seventh and eighth,
  * and they are the first directions whose subject is a *key* rather than a
- * chord. A cadence sounds and the answer is the note it came home to; two
- * cadences sound and the answer is where the second one landed; a chord is named
- * by its function in two keys at once and the answer is the chord. Between them
- * they are the questions this app could never ask, because every other direction
- * hands you the key in the prompt. Appended for the same reason `degree_play`
- * was, below.
+ * chord. **Two of the three are retired** — see `RETIRED_DIRECTIONS` at the
+ * bottom of this file. They are listed here because the type has to describe
+ * what the column holds and old rows hold them; nothing generates, schedules or
+ * poses one. `pivot_play` survives: a chord named by its function in two keys at
+ * once, answered with the hands rather than the ear, and it waits on the rung
+ * that teaches sevenths. Appended for the same reason `degree_play` was, below.
  *
  * `degree_play` is the fifth and arrived last: the stimulus is a Roman numeral
  * and a key rather than a symbol, because seeing "A♭" and producing A♭ is
@@ -738,6 +738,40 @@ export type BadgeRow = typeof badges.$inferSelect;
 export type RateLimitEvent = typeof rateLimitEvents.$inferSelect;
 export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
 
-export type CardDirection = (typeof cardDirection.enumValues)[number];
+/**
+ * Every value the column can hold, including the two nothing asks any more.
+ *
+ * Distinct from `CardDirection` below, and the distinction is the whole of how
+ * a direction gets retired without rewriting history. A row written in August
+ * still says `key_hear`; the type that describes *the column* has to admit that,
+ * and the type the app reasons with does not.
+ */
+export type StoredDirection = (typeof cardDirection.enumValues)[number];
+
+/**
+ * The two cadence questions, withdrawn.
+ *
+ * `key_hear` played a cadence and asked for the note it came home to;
+ * `key_moved` played two and asked where the second landed. Both are gone —
+ * see the note in DECISIONS.md — and both are still in the enum above, because
+ * Postgres cannot drop an enum value while rows hold it and those rows are
+ * somebody's practice record. Retiring is therefore a *reading* rule rather
+ * than a schema change: the two seams that load cards drop them, so nothing
+ * downstream ever sees one, and the reviews they earned stay exactly where they
+ * are.
+ */
+export const RETIRED_DIRECTIONS = ['key_hear', 'key_moved'] as const;
+
+export type RetiredDirection = (typeof RETIRED_DIRECTIONS)[number];
+
+/** A direction the app still asks. Everything but this reads `StoredDirection`. */
+export type CardDirection = Exclude<StoredDirection, RetiredDirection>;
+
+const RETIRED = new Set<string>(RETIRED_DIRECTIONS);
+
+export function isRetiredDirection(direction: string): direction is RetiredDirection {
+	return RETIRED.has(direction);
+}
+
 export type SrsStateKind = (typeof srsStateKind.enumValues)[number];
 export type ReviewRating = (typeof reviewRating.enumValues)[number];

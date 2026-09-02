@@ -18,19 +18,25 @@
 		request?: number;
 	} = $props();
 
-	type TourStep = {
-		path: string;
-		target: string | null;
-	};
+	type TourStep = { path: string };
 
+	/**
+	 * Where each step stands, and nothing else.
+	 *
+	 * Every step used to carry a `target` as well — a `data-tour` attribute on
+	 * some page's `<main>` — and the tour cut a hole in the scrim around it. The
+	 * hole was the whole page, so what it actually communicated was *here is a
+	 * live thing, do something with it*, and people sat waiting to be told what.
+	 * They are being shown around; the page is the illustration, not the task.
+	 */
 	const STEPS: TourStep[] = [
-		{ path: '/', target: null },
-		{ path: '/', target: null },
-		{ path: '/', target: 'today' },
-		{ path: '/play', target: 'play' },
-		{ path: '/backing', target: 'backing' },
-		{ path: '/songbook', target: 'songbook' },
-		{ path: '/explore', target: 'explore' }
+		{ path: '/' },
+		{ path: '/' },
+		{ path: '/' },
+		{ path: '/play' },
+		{ path: '/backing' },
+		{ path: '/songbook' },
+		{ path: '/explore' }
 	];
 
 	type PageCopy = {
@@ -62,9 +68,6 @@
 	let hits = $state<NoteHit[]>([]);
 	const uniqueNotes = $derived(new Set(hits.map((hit) => hit.note)).size);
 	const inputConfirmed = $derived(hasConfirmedInput(hits.map((hit) => hit.note)));
-
-	type Spotlight = { left: number; top: number; width: number; height: number };
-	let spotlight = $state<Spotlight | null>(null);
 
 	const NAMES = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
 	const current = $derived(STEPS[step]);
@@ -194,13 +197,6 @@
 		);
 	});
 
-	$effect(() => {
-		if (!open) return;
-		void page.url.pathname;
-		void step;
-		void measure();
-	});
-
 	async function start(isFirstRun: boolean) {
 		firstRun = isFirstRun;
 		settingsApplied = false;
@@ -296,10 +292,24 @@
 		}
 	}
 
+	/**
+	 * Close the tour, and land on Today.
+	 *
+	 * **The going home is the fix.** The tour ends on `/explore`, because that is
+	 * the last page it shows, and the button that ended it said *Start
+	 * practising* — so the one instruction the whole tour finishes on pointed at
+	 * a page for taking the wheel apart. Whether you finish or skip, this leaves
+	 * you where practice starts, which is the page the tour opened on and the
+	 * page every sentence in it has been building towards.
+	 *
+	 * The navigation is not awaited: closing is instant either way, and a tour
+	 * that hung on a route transition before it would let go of the screen would
+	 * be a worse thing than a moment of the explore page.
+	 */
 	function finish() {
 		open = false;
-		spotlight = null;
 		firstRun = false;
+		if (page.url.pathname !== '/') void goto('/');
 		// Fire-and-forget: closing the tour is instant either way, and a failed
 		// write costs no more than the tour offering to run once more next time
 		// — not a locked-out user, not lost data.
@@ -313,33 +323,6 @@
 	async function focusCard() {
 		await tick();
 		card?.focus({ preventScroll: true });
-	}
-
-	async function measure() {
-		if (!open || !current.target || typeof document === 'undefined') {
-			spotlight = null;
-			return;
-		}
-		await tick();
-		requestAnimationFrame(() => {
-			const target = document.querySelector<HTMLElement>(`[data-tour="${current.target}"]`);
-			if (!target) {
-				spotlight = null;
-				return;
-			}
-			const rect = target.getBoundingClientRect();
-			const gap = 8;
-			const left = Math.max(gap, rect.left - gap);
-			const top = Math.max(gap, rect.top - gap);
-			const right = Math.min(window.innerWidth - gap, rect.right + gap);
-			const bottom = Math.min(window.innerHeight - gap, rect.bottom + gap);
-			spotlight = {
-				left,
-				top,
-				width: Math.max(0, right - left),
-				height: Math.max(0, bottom - top)
-			};
-		});
 	}
 
 	function virtual(type: 'noteon' | 'noteoff', note: number) {
@@ -357,21 +340,20 @@
 	}
 </script>
 
-<svelte:window onresize={measure} onscroll={measure} onkeydown={onWindowKeydown} />
+<svelte:window onkeydown={onWindowKeydown} />
 
 {#if open}
 	<div class="tour-layer">
-		{#if spotlight}
-			<div
-				class="spotlight"
-				style:left={`${spotlight.left}px`}
-				style:top={`${spotlight.top}px`}
-				style:width={`${spotlight.width}px`}
-				style:height={`${spotlight.height}px`}
-			></div>
-		{:else}
-			<div class="scrim"></div>
-		{/if}
+		<!--
+			One scrim, over everything, and it swallows the clicks.
+
+			The layer used to let every press through to the page behind it, which
+			is the other half of why a tour that only wanted to show you around
+			read as a tour that wanted something from you: the page was live, so of
+			course you tried to use it. Now the only live thing on screen is the
+			card, and the card has one button on it.
+		-->
+		<div class="scrim"></div>
 
 		<div
 			class="tour-card"
@@ -574,10 +556,18 @@
 					<ul>
 						{#each copy.points as point (point)}<li>{point}</li>{/each}
 					</ul>
-					<p class="pedal-reminder">
-						<span></span>{inputMode === 'midi'
-							? 'Pedal works as Next during this tour.'
-							: 'Space works as Next during this tour.'}
+					<!--
+						Said once, on every page step, in the plainest words available.
+
+						The tour walks through five pages and asks for nothing on any of
+						them, and it had never said so — so people read a live page behind
+						a card and reasonably concluded they were being tested on it. One
+						sentence costs less than the confusion did.
+					-->
+					<p class="page-note">
+						Nothing to do here — this is a look around. {inputMode === 'midi'
+							? 'Next, or the pedal, moves on.'
+							: 'Next, or Space, moves on.'}
 					</p>
 				</div>
 			{/if}
@@ -664,26 +654,14 @@
 		pointer-events: none;
 	}
 
-	.scrim,
-	.spotlight {
-		position: fixed;
-		pointer-events: none;
-	}
-
+	/* Enough fade that the page reads as an illustration and not as a form, and
+	   `pointer-events: auto` so it is one: a press lands here and stops. The
+	   layer above it stays `none`, so only the card takes input. */
 	.scrim {
+		position: fixed;
 		inset: 0;
-		background: color-mix(in oklab, var(--color-ground) 76%, transparent);
-	}
-
-	.spotlight {
-		border: 1px solid var(--color-ink-dim);
-		border-radius: 12px;
-		box-shadow: 0 0 0 9999px color-mix(in oklab, var(--color-ground) 78%, transparent);
-		transition:
-			left 220ms var(--ease-wheel),
-			top 220ms var(--ease-wheel),
-			width 220ms var(--ease-wheel),
-			height 220ms var(--ease-wheel);
+		pointer-events: auto;
+		background: color-mix(in oklab, var(--color-ground) 82%, transparent);
 	}
 
 	.tour-card {
@@ -767,7 +745,7 @@
 	}
 
 	.intro-copy > p:last-child,
-	.page-copy > p:not(.eyebrow):not(.pedal-reminder) {
+	.page-copy > p:not(.eyebrow):not(.page-note) {
 		max-width: 38rem;
 		margin-top: 0.75rem;
 		color: var(--color-ink-muted);
@@ -928,8 +906,7 @@
 		color: var(--color-ink-muted);
 	}
 
-	.listening i,
-	.pedal-reminder span {
+	.listening i {
 		display: block;
 		width: 7px;
 		height: 7px;
@@ -1096,14 +1073,15 @@
 		content: '';
 	}
 
-	.pedal-reminder {
-		display: flex;
-		align-items: center;
-		gap: 0.45rem;
+	/* Reads as an aside rather than as an instruction, because it is the one
+	   line on the card saying that no instruction is coming. */
+	.page-note {
 		margin-top: 1.15rem;
+		padding-top: 0.7rem;
+		border-top: 1px solid var(--color-ground-line);
 		color: var(--color-ink-dim);
-		font-family: var(--font-mono);
-		font-size: 0.64rem;
+		font-size: 0.78rem;
+		line-height: 1.5;
 	}
 
 	.tour-footer {
@@ -1145,18 +1123,33 @@
 		font-size: 0.66rem;
 	}
 
+	/* The one live control on the screen, sized like it.
+
+	   With the page inert behind a scrim there is exactly one thing to press,
+	   and a 42px chip in the corner did not look like the whole of what was on
+	   offer — which is part of why people went looking for something to do on
+	   the page instead. It is bigger, it is warmer, and on a page step it takes
+	   the full width of the card. */
 	.next {
 		display: flex;
-		min-height: 42px;
+		min-height: 48px;
 		align-items: center;
 		justify-content: center;
 		gap: 0.6rem;
-		padding: 0 1rem;
-		border-radius: 8px;
+		padding: 0 1.35rem;
+		border-radius: 9px;
 		background: var(--color-ink);
 		color: var(--color-ground);
-		font-size: 0.82rem;
+		font-size: 0.9rem;
 		font-weight: 600;
+	}
+
+	.tour-card.is-page .footer-actions {
+		flex: 1;
+	}
+
+	.tour-card.is-page .next {
+		width: 100%;
 	}
 
 	.next:disabled {
@@ -1266,7 +1259,6 @@
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.spotlight,
 		.pedal,
 		.tour-footer nav button {
 			transition: none;

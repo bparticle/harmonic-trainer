@@ -12,9 +12,10 @@ import {
 	sessions,
 	skills,
 	srsState,
+	isRetiredDirection,
 	userPrefs
 } from './schema';
-import type { ReviewRating, WorkoutBlockType } from './schema';
+import type { CardDirection, ReviewRating, WorkoutBlockType } from './schema';
 import { initialState, schedule, type Schedulable, type SrsState } from '$lib/srs/scheduler';
 import {
 	coldSpotsFrom,
@@ -346,21 +347,31 @@ async function schedulableCards(userId: string): Promise<Schedulable[]> {
 		.innerJoin(skills, eq(skills.id, cards.skillId))
 		.where(eq(cards.userId, userId));
 
-	const schedulable: Schedulable[] = scheduled.map((row) => ({
-		cardId: row.cardId,
-		direction: row.direction,
-		keyCenter: row.keyCenter,
-		skillCode: row.skillCode,
-		state: {
-			stability: row.stability,
-			difficulty: row.difficulty,
-			dueAt: row.dueAt,
-			reps: row.reps,
-			lapses: row.lapses,
-			state: row.state,
-			lastReviewedAt: row.lastReviewedAt
-		}
-	}));
+	/*
+	 * One of the two places a retired direction stops.
+	 *
+	 * Nothing downstream would pick one anyway — no queue lists them — but a
+	 * composer that never sees a withdrawn card cannot accidentally count one,
+	 * and "the app does not know these exist" is a smaller thing to keep true
+	 * than "every reader remembers to skip them".
+	 */
+	const schedulable: Schedulable[] = scheduled
+		.filter((row) => !isRetiredDirection(row.direction))
+		.map((row) => ({
+			cardId: row.cardId,
+			direction: row.direction as CardDirection,
+			keyCenter: row.keyCenter,
+			skillCode: row.skillCode,
+			state: {
+				stability: row.stability,
+				difficulty: row.difficulty,
+				dueAt: row.dueAt,
+				reps: row.reps,
+				lapses: row.lapses,
+				state: row.state,
+				lastReviewedAt: row.lastReviewedAt
+			}
+		}));
 
 	return schedulable;
 }
@@ -1333,8 +1344,20 @@ export async function loadCards(userId: string, cardIds: string[]) {
 		.innerJoin(skills, eq(skills.id, cards.skillId))
 		.where(and(eq(cards.userId, userId), inArray(cards.id, cardIds)));
 
-	const byId = new Map(rows.map((r) => [r.id, r]));
-	return cardIds.map((id) => byId.get(id)).filter((r): r is (typeof rows)[number] => Boolean(r));
+	/*
+	 * The other place a retired direction stops.
+	 *
+	 * A workout composed before the cadence questions were withdrawn is still
+	 * sitting in somebody's `plan_json` with their card ids in it, and one of
+	 * those ids resolving to a question nothing can pose any more would break the
+	 * page rather than the task. Dropped here instead: the task comes back
+	 * shorter, which is what a queue over a smaller pool has always looked like.
+	 */
+	const byId = new Map(rows.filter((r) => !isRetiredDirection(r.direction)).map((r) => [r.id, r]));
+	return cardIds
+		.map((id) => byId.get(id))
+		.filter((r): r is (typeof rows)[number] => Boolean(r))
+		.map((r) => ({ ...r, direction: r.direction as CardDirection }));
 }
 
 export { rungById, stageByKey };

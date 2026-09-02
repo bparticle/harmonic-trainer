@@ -69,8 +69,6 @@
 		['hear_name', 'Here is the sound — name it.', 1.15],
 		['play_name', 'You played it — now name it.', 1.6],
 		['degree_play', '“IV in E♭” — play the chord.', 1.3],
-		['key_hear', 'A cadence, no key written — play its tonic.', 1.5],
-		['key_moved', 'Two cadences — where did the second land?', 1.7],
 		['pivot_play', 'One chord in two keys — play the cadence out.', 1.55]
 	];
 
@@ -395,7 +393,7 @@
 					<svg
 						viewBox="0 0 480 230"
 						role="img"
-						aria-label="A bar chart of the direction weights. key_moved is heaviest at 1.7, then play_name at 1.6, pivot_play 1.55, key_hear 1.5, degree_play 1.3, hear_name 1.15, and see_play and hear_play tied at 1.0."
+						aria-label="A bar chart of the direction weights. play_name is heaviest at 1.6, then pivot_play at 1.55, degree_play 1.3, hear_name 1.15, and see_play and hear_play tied at 1.0."
 					>
 						{#each WEIGHTS as d, i (d.name)}
 							<text x="0" y={20 + i * 26} class="f-mono" font-size="10">{d.name}</text>
@@ -464,8 +462,8 @@
 							>
 						</tr>
 						<tr>
-							<td><strong>Where are we?</strong></td>
-							<td>Six key questions: where the music is, where it went, and what turned it.</td>
+							<td><strong>The hinge</strong></td>
+							<td>Six key questions: one chord, doing a job in each of two keys.</td>
 						</tr>
 						<tr>
 							<td><strong>Mission</strong></td>
@@ -557,13 +555,18 @@
 			</figure>
 
 			<p>
-				Three exercises come out of it. <strong>Where are we?</strong> plays a IV–V–I cadence in an
-				unnamed key and asks you to play its tonic — the probe-tone experiment turned into a drill.
-				<strong>What changed?</strong>
-				plays two cadences with a modulation between and asks for the <em>relation</em>, not the
-				destination, because the relation is the half that transposes.
-				<strong>Turn the corner</strong> gives you a chord that belongs to both keys and asks you to play
-				the cadence that lands in the new one.
+				Three exercises came out of it and <strong>one of them is left</strong>. Two played cadences
+				in an unnamed key and asked you to play the note they came home to — the probe-tone
+				experiment turned into a drill, and a drill that turned out to be nobody&rsquo;s first
+				morning. A single note is inside everyone&rsquo;s vocabulary, which was the argument for
+				opening them on day one; but the <em>question</em> was three triads a beginner had never
+				been shown, and a first workout that led with six of them taught nothing except that this
+				app is too hard. They are withdrawn.
+				<strong>Turn the corner</strong> survives: it gives you a chord that belongs to both keys
+				and asks you to play the cadence that lands in the new one. It is read rather than heard,
+				and it waits for the rung that teaches sevenths — because a pivot chord <em>is</em> a seventh,
+				and an exercise that cannot arrive before its material is the rule the rest of this ladder has
+				always kept.
 			</p>
 
 			<div class="evidence">
@@ -573,7 +576,7 @@
 						>discrimination</strong
 					> — putting two similar things side by side so the difference becomes visible. Twelve keys are
 					about as confusable as categories get, which is why the crossing task spreads its six questions
-					across as many keys as it can rather than asking &ldquo;still C?&rdquo; six times.
+					across as many keys as it can rather than asking about one key six times.
 				</p>
 			</div>
 

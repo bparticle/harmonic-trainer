@@ -163,7 +163,7 @@
 <svelte:head><title>Play · Harmonic Trainer</title></svelte:head>
 <svelte:window onkeydown={onKeydown} />
 
-<main class="mx-auto flex min-h-dvh max-w-[1400px] flex-col px-5 py-6" data-tour="play">
+<main class="mx-auto flex min-h-dvh max-w-[1400px] flex-col px-5 py-6">
 	<!-- Device management lives in the header's cog, on every page. -->
 	<section class="mb-5 flex items-center gap-3">
 		{#if session.unavailableReason}

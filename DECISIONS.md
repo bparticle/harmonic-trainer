@@ -5631,3 +5631,131 @@ its place is language: a station the ladder has not reached says **ahead of the
 ladder** rather than _not open_, which is the difference between a distance and a
 refusal, and the panel that offers to open it says plainly that departing does
 not wait for that.
+
+## The first workout was the hardest one
+
+A new student was onboarded and the morning went badly. Every complaint turned
+out to be a real fault with a name, and the record had them all written down
+before anybody said anything.
+
+Here is the first workout that account was actually given, from `plan_json`:
+
+1. **Where are we?** — six crossing questions. A cadence sounds, no key is
+   written down, play the note it comes home to.
+2. **Ear** — three questions, the C major scale, the same card three times.
+3. **One new thing** — the twelve-bar blues in C, and one button: _Tried it_.
+
+The account was forty seconds old. Its entire vocabulary was the C major scale.
+It answered the crossing task 2/6, took it again, and answered 0/6.
+
+### The question was never the answer's size
+
+`cardsForKeyCentre` and `cardsForKeyMoved` made a card for every key the
+frontier had opened at all, from the first morning, and the comment defending
+that is worth quoting because it is a good argument for the wrong thing:
+
+> The stimulus is allowed to be richer than the vocabulary, and that is the
+> point... The answer here is a single note, and a single note is inside
+> everybody's vocabulary from the first minute.
+
+Every clause of that is true and it measures the wrong end of the exercise. The
+answer is one note; the **question** is three triads in an unnamed key, and the
+whole of the task is telling twelve highly confusable categories apart by ear.
+Tillmann, Bharucha and Bigand really do say tonal knowledge is acquired by
+exposure — over years of listening, not over six questions on a Tuesday with a
+score attached to each one. What the readiness rule was protecting was the
+hands. Nothing was protecting the ear.
+
+So both are withdrawn. `pivot_play` survives, because it is the one crossing
+question that is read rather than heard — two numerals, one chord, find it — and
+because it already waited for the rung that builds a diatonic seventh. The task
+is renamed **The hinge**, which is what it now asks, and its skill row moves from
+level zero to level six with the sevenths rung as its prerequisite. That number
+was the bug in miniature: a skill declaring itself answerable before anything had
+been taught.
+
+The two directions stay in the `card_direction` enum and the rows stay in the
+table. Postgres cannot drop an enum value while rows hold it, and those rows are
+somebody's practice record — twelve reviews, two of them right, on the morning
+this is about. Retiring is a _reading_ rule instead: `RETIRED_DIRECTIONS` in the
+schema, `CardDirection` narrowed to exclude them so the compiler finds every call
+site, and two filters at the only two seams that load cards. The app cannot see
+them; the record still says what happened.
+
+**Removing the near-relation grant costs no tune, and that is measured rather
+than hoped.** `vocabularyOf` used to hand out all four near relations the moment
+any rung was reached, on the honest grounds that `cardsForKeyMoved` taught all
+four from day one — so with that exercise gone the grant had no teacher behind
+it. Walking the book: of forty-five charts, **two** demand a crossing at all,
+and both of them also demand `other`, which nothing has ever taught. The count of
+ready charts at every one of the seven rung depths is identical with the grant
+and without it. The gate now says nothing teaches a key change, which is true,
+where before it said the opposite, which was true only while an exercise nobody
+could answer was propping it up.
+
+### A new thing you cannot do is not a new thing
+
+The novelty slot asked two questions about a progression — _have you seen it_,
+and _is there a minor key to put it in_ — and never the one the mission has
+asked all along, which is whether the chords have been built. So the blues went
+to an account five rungs before its first dominant seventh. Walking the library
+against the ladder: at rung one, **no** progression in the library is playable;
+the first becomes available at the home chord, and there are five by the fourth
+rung. The slot now runs the same `isReady` check the mission does, over the same
+vocabulary, sorted by the same `reachOf` — so the first progression to arrive is
+the plainest one that qualifies rather than whichever the day's rotation landed
+on.
+
+Grooves get a smaller version of the same rule. _New groove · reggae. Turn
+comping on._ was offered on a morning when the composer had already worked out
+that no tune in the book was playable and had said so, on the same screen, in
+`missionHeld`. A groove is a thing you play over. It waits for something to play
+over.
+
+What falls out is the shape a first week should have had from the start. With
+nothing ready and nothing to play over, the only honest new thing left is the
+next step on the ladder — so the first workout is now **three ear questions on
+the C scale, and the home chord of C**, and the ladder is what the novelty slot
+offers until the ladder has taught enough for anything else to exist.
+
+### Tried it, in the past tense, about something that never happened
+
+The new-thing screen was a sentence, a wheel drawn in the workout's key, and one
+control reading _Tried it_. For a progression there was nothing on it to try:
+the novelty never became cards, so "twelve-bar blues in C" was a description of
+music that appeared nowhere on the page. The button was a receipt for an event
+the app had not staged.
+
+The chords come first now — a rung's shapes, a progression's steps, in order,
+each lighting on the wheel as it sounds — and the primary control is **Hear it**.
+_Tried it_ moves behind it and appears once there is something it could honestly
+be about. The pedal follows the same rule the mission taught it: the hands-free
+key does whatever the primary button says, so it hears the thing first and
+confirms second.
+
+### The tour was showing pages and reading as a test
+
+Two faults, one cause. The tour cut a spotlight out of the scrim around each
+page's `<main>` — the _whole page_ — and left the layer click-through, so what a
+first-time user met was a live, fully interactive page with a hole cut around it
+and a card in the corner. That is the grammar of _do something here_. Nobody was
+being asked to do anything.
+
+So: one scrim over everything, `pointer-events: auto` so presses land on it and
+stop, the `data-tour` attributes deleted from all five pages, and the Next button
+grown to the full width of the card, because with the page inert there is
+precisely one live control on the screen and it should look like it. And the
+thing that was never said, said: _Nothing to do here — this is a look around._
+
+The tour also ended wherever it happened to be standing, which was `/explore`,
+under a button reading _Start practising_. It lands on Today now — finished or
+skipped, both — which is the page it opened on, the page every sentence in it
+builds towards, and the only page in the app with a Depart button on it.
+
+### What is still open
+
+`cadenceIn`, `CADENCE_NAME` and `describeCrossing` in `crossing.ts` now have no
+caller but their own tests. They are left where they are: they describe key
+relations rather than the exercise that was built on them, and the next crossing
+exercise will want all three. Deleting a correct, tested model because the thing
+standing on it fell over is how a codebase forgets what it knows.

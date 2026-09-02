@@ -356,7 +356,7 @@
 {#if data.public}
 	<LandingPage />
 {:else}
-	<main class="mx-auto flex max-w-5xl flex-col gap-7 px-5 py-7" data-tour="today">
+	<main class="mx-auto flex max-w-5xl flex-col gap-7 px-5 py-7">
 		<!--
 			The board.
 

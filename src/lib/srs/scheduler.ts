@@ -160,9 +160,10 @@ export function isDue(state: SrsState, now = new Date()): boolean {
  * FSRS's intervals to favour a direction would corrupt its model of your
  * memory; changing which due card gets picked does not.
  *
- * The three crossing questions lead, because nothing is written down and the
- * answer is one note out of twelve — no other direction asks anything like it,
- * and until M17 the app could not ask it at all.
+ * The pivot leads, because it is the one question with two keys in it and the
+ * only direction whose answer is a chord you have to find rather than a chord
+ * you were shown. Its two siblings — a cadence and the note it came home to —
+ * used to lead ahead of it and have been withdrawn; see DECISIONS.md.
  *
  * Play-to-name comes next: it is the weakest link among the chord directions and
  * the one the whole app exists to fix — being able to play a thing you cannot
@@ -172,13 +173,9 @@ export function isDue(state: SrsState, now = new Date()): boolean {
  * chart shows symbols and never numbers.
  */
 export const DIRECTION_WEIGHT: Record<CardDirection, number> = {
-	// The heaviest three, and they earn it: nothing is written down, the answer
-	// is one note out of twelve, and no other direction asks any of it. `key_moved`
-	// leads them because holding one key while another arrives is harder than
-	// naming a key that is standing still.
-	key_moved: 1.7,
+	// The heaviest, and it earns it: two keys, no chord name, and a shape that
+	// has to be found from what it does rather than from what it is called.
 	pivot_play: 1.55,
-	key_hear: 1.5,
 	// Then the chord directions, play-to-name first — see the note above.
 	play_name: 1.6,
 	degree_play: 1.3,

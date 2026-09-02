@@ -9,6 +9,7 @@ import {
 } from '$lib/curriculum/ladder';
 import { PROGRESSIONS } from '$lib/curriculum/progressions';
 import {
+	demandOfNumerals,
 	describeShortfall,
 	emptyVocabulary,
 	isReady,
@@ -561,21 +562,27 @@ const EAR_DIRECTIONS: CardDirection[] = ['hear_play', 'hear_name'];
 const FUNCTION_DIRECTIONS: CardDirection[] = ['degree_play'];
 
 /**
- * The three key questions, in their own partition.
+ * The key question, in its own partition.
  *
- * Where are we, where did it go, and what was the hinge. They must not be folded
- * into the ear task: its whole instruction is "listen, then play or name *it*" —
- * a chord, a thing with a symbol. These ask where you are, which is a different
- * question with a different answer, and mixing them would make one task that
- * could not say what it wanted.
+ * **This was three and is one.** The two that were heard rather than read — a
+ * cadence and the note it came home to, two cadences and where the second
+ * landed — have been withdrawn, so what is left is the hinge: one chord, named
+ * by what it does in two keys at once, answered with the hands.
  *
- * Together rather than three tasks, because they are three ways of asking one
- * thing and a workout with three key-drills in it would be a workout about
- * nothing else.
+ * It stays out of the function task even though both are now read rather than
+ * heard, because the two ask different things of the same numeral. `degree_play`
+ * gives one numeral in one key and asks for the spelling; this gives two
+ * numerals in two keys and asks you to notice they are the same place. Folding
+ * them together would make one task that could not say what it wanted.
+ *
+ * A pivot needs a diatonic seventh, so these exist only where the ladder has
+ * taught the sevenths. On an account that has not got there the task cannot be
+ * built at all, which is the correct amount of this question for somebody who
+ * has just met their first triad.
  */
-const CROSSING_DIRECTIONS: CardDirection[] = ['key_hear', 'key_moved', 'pivot_play'];
+const CROSSING_DIRECTIONS: CardDirection[] = ['pivot_play'];
 
-/** Six keys is enough to be a discrimination and short enough to finish. */
+/** Six is enough to be a discrimination and short enough to finish. */
 const CROSSING_QUESTIONS = 6;
 
 /**
@@ -941,19 +948,14 @@ export function crossingQueue(
 	if (tiered.length === 0) return [];
 
 	/*
-	 * Interleaved by *direction* first, and this is not a preference.
+	 * A lane per direction, spread across keys, and the day rotates which leads.
 	 *
-	 * The three questions do not have equal numbers of cards and never will: one
-	 * key-centre card per key, four modulations per key, and a pivot for every
-	 * near relation that has one. Spreading by key alone let the ratio decide the
-	 * task, and six questions came back as four modulations and two key centres
-	 * with the pivot never appearing at all — a task named "where are we?" that
-	 * mostly asked something else.
-	 *
-	 * So each direction is a lane, each lane is spread across keys the way the
-	 * function task spreads, and the lanes are taken in turn. The day rotates
-	 * which lane leads, so the same three questions do not arrive in the same
-	 * order every morning.
+	 * There is one lane now that the cadence questions are gone, so the
+	 * interleave is the identity and the rotation rotates a list of one. Kept
+	 * rather than unwound: the shape is what made the mix honest when there were
+	 * three of them, it costs nothing while there is one, and a second crossing
+	 * question would otherwise arrive to find the same bug waiting — six
+	 * questions that are all whichever direction happens to own the most cards.
 	 */
 	const lanes = CROSSING_DIRECTIONS.map((direction) =>
 		spreadByKey(
@@ -1160,6 +1162,22 @@ export function chooseNovelty(input: {
 	yesterday: string | null;
 	/** The minor keys the ladder has opened, as bare tonics. Often empty. */
 	minorKeys?: string[];
+	/**
+	 * What the drill room has taught, so a new thing is a thing you could do.
+	 *
+	 * The input this slot was missing, and the omission had a name on it: an
+	 * account whose entire vocabulary was the C scale was offered the twelve-bar
+	 * blues as its one new thing, because the only questions asked of a
+	 * progression were *have you seen it* and *is there a minor key for it*.
+	 * Every chord in that answer is a dominant seventh and the ladder teaches its
+	 * first one five rungs later.
+	 *
+	 * Absent means nothing has been taught, which refuses every progression — the
+	 * conservative reading, and the same default `composeWorkout` takes.
+	 */
+	vocabulary?: Vocabulary;
+	/** Whether any tune at all is playable, for the slot that offers a groove. */
+	canPlayAlong?: boolean;
 	day: number;
 }): Novelty | null {
 	const next = input.nextCell ?? null;
@@ -1169,6 +1187,7 @@ export function chooseNovelty(input: {
 
 	const seenProgressions = new Set(input.playedProgressions);
 	const minorKeys = input.minorKeys ?? [];
+	const known = input.vocabulary ?? emptyVocabulary();
 	/*
 	 * A progression written in the minor is held back and then placed, on exactly
 	 * the terms a minor tune is — and for the same reason, because
@@ -1176,27 +1195,51 @@ export function chooseNovelty(input: {
 	 * – v – i` offered "in C" is Cm, Fm, Gm: the parallel minor, three flats, and
 	 * a new thing in a key nobody has opened. The library is a third minor by
 	 * level one, so this was reachable in the first week of an account.
+	 *
+	 * And then the gate the mission has had all along, asked of the same
+	 * material by the same function. A progression is a set of chords; if the
+	 * ladder has not built them, it is not a new thing, it is a new problem.
+	 * Sorted by reach afterwards, so the *first* progression to become available
+	 * is the plainest one that qualifies rather than whichever the day lands on —
+	 * the identical rule, and the identical sentence, that orders ready tunes.
 	 */
 	const progressions: Novelty[] = PROGRESSIONS.filter(
 		(p) => !seenProgressions.has(p.id) && (p.mode !== 'minor' || minorKeys.length > 0)
-	).map((p) => ({
-		kind: 'progression',
-		progressionId: p.id,
-		keyCenter:
-			p.mode === 'minor'
-				? minorKeyFor(input.keyCenter, { minorKeys, day: input.day, nth: 0 })
-				: input.keyCenter
-	}));
+	)
+		.map((p) => ({ progression: p, demand: demandOfNumerals(p.numerals, p.mode) }))
+		.filter(({ demand }) => isReady(demand, known))
+		.sort(
+			(a, b) =>
+				reachOf(a.demand) - reachOf(b.demand) || a.progression.id.localeCompare(b.progression.id)
+		)
+		.map(({ progression: p }) => ({
+			kind: 'progression',
+			progressionId: p.id,
+			keyCenter:
+				p.mode === 'minor'
+					? minorKeyFor(input.keyCenter, { minorKeys, day: input.day, nth: 0 })
+					: input.keyCenter
+		}));
 
+	/*
+	 * A groove is a thing you play *over*, so it waits for something to play over.
+	 *
+	 * "New groove · reggae. Turn comping on." was offered on a morning when the
+	 * composer had already worked out that no tune in the book was playable yet
+	 * and said so on the same screen. A rhythm section and nothing to put on top
+	 * of it is not a new thing; it is the app talking to itself.
+	 */
 	const seenGrooves = new Set(input.playedGrooves);
-	const grooves: Novelty[] = GROOVES.filter((g) => !seenGrooves.has(g.id)).map((g) => ({
-		kind: 'groove',
-		groove: g.id
-	}));
+	const grooves: Novelty[] =
+		(input.canPlayAlong ?? false)
+			? GROOVES.filter((g) => !seenGrooves.has(g.id)).map((g) => ({ kind: 'groove', groove: g.id }))
+			: [];
 
 	const rest = rotate([...progressions, ...grooves], input.day);
 	// The rung is either the head or the last resort: offered first when it looks
-	// solid, and still offered when there is nothing else left to be new.
+	// solid, and still offered when there is nothing else left to be new. Early on
+	// the rest of the list is empty and the rung is the whole of it, which is the
+	// right shape for a first week: the new thing is the next thing on the ladder.
 	const ranked = input.rungLooksSolid
 		? [...(nextRung ? [nextRung] : []), ...rest]
 		: [...rest, ...(nextRung ? [nextRung] : [])];
@@ -1236,8 +1279,8 @@ function crossingTask(cardIds: string[], cards: Schedulable[]): CrossingTask | n
 	if (cardIds.length === 0) return null;
 	return {
 		kind: 'crossing',
-		title: 'Where are we?',
-		instruction: `${cardIds.length} questions · where the music is, where it went, and what turned it.`,
+		title: 'The hinge',
+		instruction: `${cardIds.length} questions · one chord doing two jobs. Play it.`,
 		goal: { kind: 'questions', count: cardIds.length },
 		cardIds,
 		makeup: makeupOf(cardIds, cards)
@@ -1426,6 +1469,28 @@ export function composeWorkout(input: WorkoutInput): Workout {
 	 */
 	const minorKeys = minorKeysReached(input.reached);
 
+	const openNext = openOffer(input);
+
+	const charts = input.charts ?? MISSION_CHARTS;
+	const chartBySlug = new Map(charts.map((c) => [c.slug, c]));
+	const vocabulary = input.vocabulary ?? emptyVocabulary();
+
+	/*
+	 * Whether there is a tune to play at all, on the mission's own terms.
+	 *
+	 * Asked here rather than inside the novelty slot so both readers get the same
+	 * answer from the same predicate: a groove offered on a morning when no chart
+	 * is playable and `missionHeld` is about to say so is two halves of one screen
+	 * disagreeing.
+	 */
+	const canPlayAlong = charts.some(
+		(chart) => isReady(chart.demand, vocabulary) && (chart.mode !== 'minor' || minorKeys.length > 0)
+	);
+
+	/*
+	 * The novelty is chosen after the vocabulary rather than before it, and the
+	 * order is the fix: it now needs to know what has been taught.
+	 */
 	const novelty = chooseNovelty({
 		keyCenter,
 		nextCell: input.nextCell ?? null,
@@ -1434,13 +1499,10 @@ export function composeWorkout(input: WorkoutInput): Workout {
 		rungLooksSolid: input.rungLooksSolid ?? false,
 		yesterday: input.yesterdaysNovelty ?? null,
 		minorKeys,
+		vocabulary,
+		canPlayAlong,
 		day
 	});
-	const openNext = openOffer(input);
-
-	const charts = input.charts ?? MISSION_CHARTS;
-	const chartBySlug = new Map(charts.map((c) => [c.slug, c]));
-	const vocabulary = input.vocabulary ?? emptyVocabulary();
 
 	// Two queues, one bank, partitioned by direction — so nothing is asked twice
 	// without either queue having to know the other exists.

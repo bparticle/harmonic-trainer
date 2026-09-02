@@ -1687,7 +1687,7 @@
 
 <svelte:head><title>Play along · Harmonic</title></svelte:head>
 
-<main class="mx-auto max-w-[1500px] px-5 py-7" data-tour="backing">
+<main class="mx-auto max-w-[1500px] px-5 py-7">
 	<header class="mb-5 flex flex-wrap items-start justify-between gap-3">
 		<div class="flex items-center gap-2">
 			<h1

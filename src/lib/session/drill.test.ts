@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { CardPayload } from '$lib/curriculum/cards';
 import { STAGES, itemsForRung } from '$lib/curriculum/ladder';
-import { cardsForKeyCentre, cardsForKeyMoved, cardsForPivots } from '$lib/curriculum/cards';
+import { cardsForPivots } from '$lib/curriculum/cards';
 import {
 	choicesFor,
 	diatonicNames,
@@ -103,92 +103,6 @@ describe('posing a question', () => {
 	});
 });
 
-describe('asking where we are', () => {
-	const [card] = cardsForKeyCentre('Eb');
-	const prompt = pose('key_hear', card.payload, 60, 'Eb');
-
-	/*
-	 * The whole exercise, asserted. Every other direction hands the key over in
-	 * the prompt; this one must not, because naming it is the question. A single
-	 * leak here — the label, the key, the tonic's name anywhere on screen —
-	 * turns a listening test into a reading test.
-	 */
-	it('writes nothing down at all', () => {
-		expect(prompt.visible).toBeNull();
-	});
-
-	it('sounds the cadence rather than a chord', () => {
-		expect(prompt.audible).toBeNull();
-		expect(prompt.sequence).toHaveLength(3);
-		for (const chord of prompt.sequence ?? []) expect(chord).toHaveLength(3);
-	});
-
-	it('is answered by playing, and the answer is one note', () => {
-		expect(prompt.answerWith).toBe('play');
-		expect(card.payload.answerPitchClasses).toHaveLength(1);
-	});
-
-	it('accepts the tonic in any octave and refuses a second note', () => {
-		const tonic = card.payload.answerPitchClasses;
-		expect(markPlayed(tonic, [51]).correct).toBe(true);
-		expect(markPlayed(tonic, [63]).correct).toBe(true);
-		expect(markPlayed(tonic, [51, 55]).correct).toBe(false);
-		expect(markPlayed(tonic, [52]).correct).toBe(false);
-	});
-
-	it('falls back to sounding the tonic when a stored card has lost its steps', () => {
-		const stripped = { ...card.payload, steps: undefined };
-		const fallback = pose('key_hear', stripped, 60, 'Eb');
-		expect(fallback.sequence).toBeNull();
-		expect(fallback.audible).not.toBeNull();
-	});
-
-	/*
-	 * The leak this exercise has to be guarded against, asserted at the one place
-	 * a test can see it. The page had a second way to say the key — a header line
-	 * naming the card's key and skill, added for the other drills — and it printed
-	 * "G · where are we?" above a cadence in G. That one is guarded in the page;
-	 * this guards the prompt itself, which is where anybody adding a seventh
-	 * direction will look.
-	 */
-	it('puts the key nowhere a reader could find it', () => {
-		const written = [prompt.visible, prompt.instruction].filter(Boolean).join(' ');
-		for (const spelling of ['Eb', 'E♭', 'E-flat']) {
-			expect(written, spelling).not.toContain(spelling);
-		}
-		expect(written).not.toContain(card.payload.label);
-	});
-
-	it('gives every direction a sequence field, so the page never guesses', () => {
-		for (const direction of ['hear_name', 'hear_play', 'see_play', 'play_name'] as const) {
-			expect(pose(direction, cmaj7).sequence, direction).toBeNull();
-		}
-	});
-});
-
-describe('asking what changed', () => {
-	const [, dominant] = cardsForKeyMoved('C');
-	const prompt = pose('key_moved', dominant.payload, 60, 'C');
-
-	it('writes nothing down, exactly as the key question does not', () => {
-		expect(prompt.visible).toBeNull();
-		const written = [prompt.visible, prompt.instruction].filter(Boolean).join(' ');
-		expect(written).not.toContain('G');
-		expect(written).not.toContain('dominant');
-	});
-
-	it('sounds six chords: one cadence, then another somewhere else', () => {
-		expect(prompt.sequence).toHaveLength(6);
-	});
-
-	it('is answered by playing where it landed', () => {
-		expect(prompt.answerWith).toBe('play');
-		expect(markPlayed(dominant.payload.answerPitchClasses, [67]).correct).toBe(true);
-		// The key it left is the obvious wrong answer, so it has to be wrong.
-		expect(markPlayed(dominant.payload.answerPitchClasses, [60]).correct).toBe(false);
-	});
-});
-
 describe('turning the corner', () => {
 	const pivot = cardsForPivots('C').find((card) => card.identity.includes('|G|'))!;
 	const prompt = pose('pivot_play', pivot.payload, 60, 'C');
@@ -205,7 +119,6 @@ describe('turning the corner', () => {
 
 	it('sounds nothing: this one is for the hands', () => {
 		expect(prompt.audible).toBeNull();
-		expect(prompt.sequence).toBeNull();
 	});
 
 	it('is answered by playing the chord both numerals name', () => {

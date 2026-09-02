@@ -5,7 +5,7 @@
 	import Wheel from '$lib/wheel/Wheel.svelte';
 	import { midi as session } from '$lib/midi/shared.svelte';
 	import type { MidiEvent } from '$lib/midi/cluster';
-	import { playChord, playProgression, playSequence, startAudio, stopAll } from '$lib/audio/engine';
+	import { playChord, playSequence, startAudio, stopAll } from '$lib/audio/engine';
 	import {
 		choicesFor,
 		diatonicNames,
@@ -24,8 +24,8 @@
 	import { describeGoal, type Verdict } from '$lib/practice/goal';
 	import { taskTags } from '$lib/session/progress';
 	import { skillLabel } from '$lib/curriculum/cards';
-	import { rungById } from '$lib/curriculum/ladder';
-	import { progressionById } from '$lib/curriculum/progressions';
+	import { itemsForRung, rungById, stageByKey } from '$lib/curriculum/ladder';
+	import { progressionById, realiseProgression } from '$lib/curriculum/progressions';
 	import type { Mission } from '$lib/session/workout';
 	import type { WorkoutReport } from '$lib/session/report';
 	import { keyOverlay } from '$lib/wheel/overlays';
@@ -145,6 +145,10 @@
 	// svelte-ignore state_referenced_locally
 	let lessonPhase = $state<'watch' | 'play'>(openingPhase(data.workout?.resumeAt ?? 0, 0));
 	let demoNotes = $state<number[]>([]);
+	/* The new thing: whether it has been sounded, and which chord is sounding. */
+	let playingNovelty = $state(false);
+	let noveltyHeard = $state(false);
+	let soundingChord = $state(-1);
 	let demoRun = 0;
 	let cardRun = 0;
 	let reviewSequence = 0;
@@ -252,24 +256,18 @@
 	);
 
 	/**
-	 * The three questions whose subject is a key rather than a chord.
+	 * The question whose subject is a key rather than a chord.
 	 *
-	 * They share one rule: **the page must not answer them anywhere.** The
-	 * wheel's key overlay and the header line that names a card's key are both
-	 * written for the other drills and both give the game away here — see the
-	 * note on `questionSource`. So the whole family is treated together, and a
-	 * fourth crossing direction inherits the discipline by existing.
+	 * One rule: **the page must not answer it anywhere.** The wheel's key overlay
+	 * and the header line that names a card's key are both written for the other
+	 * drills, and a pivot is a chord you have to find from what it *does* — a
+	 * wheel with the workout's key drawn on it in degrees does half of that for
+	 * you. See the note on `questionSource`.
+	 *
+	 * There were three of these and two were withdrawn; the family kept its shape
+	 * so that a second crossing direction inherits the discipline by existing.
 	 */
-	const isCrossingQuestion = $derived(
-		prompt?.direction === 'key_hear' ||
-			prompt?.direction === 'key_moved' ||
-			prompt?.direction === 'pivot_play'
-	);
-
-	/** The two that are heard rather than read, and so get a "hear it" button. */
-	const isHeardKeyQuestion = $derived(
-		prompt?.direction === 'key_hear' || prompt?.direction === 'key_moved'
-	);
+	const isCrossingQuestion = $derived(prompt?.direction === 'pivot_play');
 
 	/**
 	 * Whether what you play is marked against the card.
@@ -325,15 +323,12 @@
 		};
 		return payload.answerVoicing ?? toVoicing(payload.answerPitchClasses);
 	});
-	/** Chords to play in turn, for a question that is a passage rather than a sound. */
-	const questionSequence = $derived(prompt?.sequence ?? null);
-
 	const questionAudio = $derived(
 		prompt?.audible ?? (isChordLesson && lessonGuidance.mode === 'guided' ? chordTarget : null)
 	);
 
-	/** Whether this question has anything to sound at all, chord or passage. */
-	const hasQuestionAudio = $derived(Boolean(questionAudio || questionSequence));
+	/** Whether this question has anything to sound at all. */
+	const hasQuestionAudio = $derived(Boolean(questionAudio));
 
 	/**
 	 * A question that is only a name is waiting for one from the moment it is posed.
@@ -379,7 +374,6 @@
 		if (!hasQuestionAudio || !currentCard || !promptKey || playingQuestion) return;
 		const thisPromptKey = promptKey;
 		const audible = questionAudio ?? [];
-		const sequence = questionSequence;
 		playedPromptKey = thisPromptKey;
 		playingQuestion = true;
 		audioProblem = null;
@@ -391,16 +385,7 @@
 			 * cluster nobody could identify, and then demanded all seven back
 			 * simultaneously, which is not playable.
 			 */
-			if (sequence) {
-				/*
-				 * A cadence: chords in turn, and nothing lit on the keyboard while it
-				 * plays. Showing the notes would answer the question — the whole of
-				 * this one is that the key is never written down.
-				 */
-				const chordSeconds = 1.05;
-				await playProgression(sequence, chordSeconds);
-				await wait(sequence.length * chordSeconds * 1000);
-			} else if (isSequential) {
+			if (isSequential) {
 				const playing = playSequence(audible, 0.4);
 				const demonstration =
 					lessonGuidance.mode === 'guided'
@@ -716,6 +701,93 @@
 	});
 
 	/**
+	 * The chords the new thing is made of, so it can be seen and heard.
+	 *
+	 * Derived from the same material the instruction is written from, and by the
+	 * same functions the drill room builds cards with — a rung's items, a
+	 * progression's realised steps. Nothing new is invented here; what was
+	 * missing was not the notes but anywhere to show them.
+	 *
+	 * A groove has none, which is why it keeps a different offer: there is no
+	 * chord to sound, only a rhythm section to go and play over.
+	 */
+	const noveltyChords = $derived.by(
+		(): Array<{ label: string; degree?: string; notes: number[] }> => {
+			if (task?.kind !== 'new_thing') return [];
+			const novelty = task.novelty;
+
+			if (novelty.kind === 'rung') {
+				const stage = stageByKey(novelty.key);
+				if (!stage) return [];
+				return itemsForRung(novelty.rungId, stage).map((item) => ({
+					label: item.label,
+					degree: item.degree,
+					notes: item.answerVoicing ?? toVoicing(item.answerPitchClasses)
+				}));
+			}
+
+			if (novelty.kind === 'progression') {
+				const progression = progressionById(novelty.progressionId);
+				if (!progression) return [];
+				return realiseProgression(progression, novelty.keyCenter).steps.map((step) => ({
+					label: step.symbol,
+					degree: step.numeral,
+					notes: step.voicing
+				}));
+			}
+
+			return [];
+		}
+	);
+
+	/** The chord currently sounding, lit on the wheel so the ear has somewhere to look. */
+	const noveltyHighlights = $derived.by((): Highlight[] => {
+		const chord = noveltyChords[soundingChord];
+		if (!chord) return [];
+		const pcs = [...new Set(chord.notes.map((n) => ((n % 12) + 12) % 12))];
+		return pcs.length ? [{ cells: cellsFor(pcs, pcs[0], config, GEOMETRY), strength: 0.9 }] : [];
+	});
+
+	/**
+	 * Play the new thing, one chord at a time.
+	 *
+	 * Chord by chord rather than through `playProgression`, because this is the
+	 * one place the *shape* is the lesson: each one lights on the wheel as it
+	 * sounds, which is the whole difference between hearing a progression and
+	 * being shown one. A scale arrives as a single item of seven notes and is
+	 * spread the same way, so the rung that opens an account demonstrates itself.
+	 */
+	async function playNovelty() {
+		if (playingNovelty || noveltyChords.length === 0) return;
+		const chords = noveltyChords;
+		playingNovelty = true;
+		audioProblem = null;
+		try {
+			await startAudio();
+			audioUnlocked = true;
+			const single = chords.length === 1 && chords[0].notes.length > 3;
+			if (single) {
+				// One item made of many notes: a scale. Heard as a line.
+				soundingChord = 0;
+				await playSequence(chords[0].notes, 0.4);
+				await wait(chords[0].notes.length * 400);
+			} else {
+				for (let i = 0; i < chords.length; i++) {
+					soundingChord = i;
+					await playChord(chords[i].notes, 1.15);
+					await wait(1150);
+				}
+			}
+			noveltyHeard = true;
+		} catch (error) {
+			audioProblem = error instanceof Error ? error.message : 'Audio could not start.';
+		} finally {
+			soundingChord = -1;
+			playingNovelty = false;
+		}
+	}
+
+	/**
 	 * What the wheel shows during a key question: nothing, until it is answered.
 	 *
 	 * The same rule as the prompt — no key, no degrees, no scale outline — and
@@ -882,7 +954,11 @@
 			return;
 		}
 		if (task.kind === 'new_thing') {
-			void finishTask({ tried: true });
+			// The same rule the mission keeps: the pedal follows the primary control
+			// on screen. While there is something to hear, hearing it is what the
+			// screen is offering, and claiming to have tried it is not.
+			if (noveltyChords.length && !noveltyHeard) void playNovelty();
+			else void finishTask({ tried: true });
 			return;
 		}
 		if (prompt && !answered) {
@@ -937,6 +1013,9 @@
 			if (next >= total) await endWorkout();
 			else {
 				index = next;
+				// A new task has a new new-thing, which nobody has heard yet.
+				noveltyHeard = false;
+				soundingChord = -1;
 				await invalidateAll();
 			}
 		} catch (e) {
@@ -1214,23 +1293,80 @@
 			<!-- One new thing ---------------------------------------------------- -->
 		{:else if task.kind === 'new_thing'}
 			<section class="flex flex-1 flex-col items-center justify-center gap-7 text-center">
+				<!--
+					What the new thing actually is, before anyone is asked whether they
+					tried it.
+
+					This used to be a sentence, a wheel drawn in the workout's key, and a
+					button saying **Tried it** — which reads as a receipt for something
+					that never happened. Somebody meeting the app for the first time was
+					shown the words "twelve-bar blues in C" and one control, in the past
+					tense, claiming they had played it.
+
+					So the chords come first. A rung's are the shapes it teaches, a
+					progression's are its steps in order, and both can be sounded. The
+					confirmation waits behind the offer instead of standing in for it.
+				-->
+				{#if noveltyChords.length}
+					<ol class="novelty-chords">
+						{#each noveltyChords as chord, i (`${chord.label}-${i}`)}
+							<li class:is-sounding={soundingChord === i}>
+								<span class="novelty-symbol">{chord.label}</span>
+								{#if chord.degree}<span class="novelty-degree">{chord.degree}</span>{/if}
+							</li>
+						{/each}
+					</ol>
+				{/if}
+
 				<Wheel
 					{config}
 					active={keyView.pitchClasses}
 					degrees={keyView.degrees}
-					{highlights}
+					highlights={noveltyHighlights.length ? noveltyHighlights : highlights}
 					lit={session.live.map((n) => n % 12)}
 					size={340}
 					interactive={false}
 				/>
 
+				{#if audioProblem}
+					<p class="audio-problem">{audioProblem}</p>
+				{/if}
+
 				<div class="flex flex-wrap items-center justify-center gap-3">
-					<button
-						class="bg-ink text-ground rounded-2xl px-8 py-4 text-lg font-semibold disabled:opacity-40"
-						onclick={() => finishTask({ tried: true })}
-						disabled={busy}
-						aria-describedby="new-thing-hands-free">Tried it</button
-					>
+					{#if noveltyChords.length && !noveltyHeard}
+						<button
+							class="bg-ink text-ground rounded-2xl px-8 py-4 text-lg font-semibold disabled:opacity-40"
+							onclick={playNovelty}
+							disabled={busy || playingNovelty}
+							aria-describedby="new-thing-hands-free"
+						>
+							{playingNovelty ? 'Playing…' : 'Hear it'}
+						</button>
+					{:else}
+						<button
+							class="bg-ink text-ground rounded-2xl px-8 py-4 text-lg font-semibold disabled:opacity-40"
+							onclick={() => finishTask({ tried: true })}
+							disabled={busy}
+							aria-describedby="new-thing-hands-free">Tried it</button
+						>
+					{/if}
+
+					{#if noveltyChords.length && noveltyHeard}
+						<button
+							class="border-ground-line text-ink rounded-2xl border px-6 py-4 font-semibold disabled:opacity-40"
+							onclick={playNovelty}
+							disabled={busy || playingNovelty}
+						>
+							{playingNovelty ? 'Playing…' : 'Hear it again'}
+						</button>
+					{/if}
+
+					{#if task.novelty.kind === 'groove'}
+						<a
+							class="border-ground-line text-ink rounded-2xl border px-6 py-4 font-semibold"
+							href="/backing">Open play along</a
+						>
+					{/if}
 
 					<!--
 						The one place "ready to move on" is said out loud.
@@ -1275,7 +1411,7 @@
 					</p>
 				{/if}
 				<span id="new-thing-hands-free" class="text-ink-dim font-mono text-[0.7rem]">
-					<kbd>Space</kbd> / pedal · next
+					<kbd>Space</kbd> / pedal · {noveltyChords.length && !noveltyHeard ? 'hear it' : 'next'}
 				</span>
 			</section>
 
@@ -1371,25 +1507,6 @@
 							<p class="prompt-name">{prompt.visible}</p>
 						{:else if revealed}
 							<p class="prompt-name">{(currentCard.payload as { label: string }).label}</p>
-							{#if isHeardKeyQuestion}
-								<p class="chord-context">
-									{(currentCard.payload as { detail?: string }).detail ?? ''}
-								</p>
-							{/if}
-						{:else if isHeardKeyQuestion}
-							<p class="prompt-kicker">
-								{prompt.direction === 'key_moved' ? 'What changed?' : 'Where are we?'}
-							</p>
-							<p class="prompt-copy">{prompt.instruction}</p>
-							<button class="hear-button" onclick={playQuestion} disabled={playingQuestion}>
-								{playingQuestion
-									? 'Playing…'
-									: audioUnlocked
-										? 'Hear it again'
-										: prompt.direction === 'key_moved'
-											? 'Hear both cadences'
-											: 'Hear the cadence'}
-							</button>
 						{:else}
 							<p class="prompt-copy">{prompt.instruction}</p>
 							<button class="hear-button" onclick={playQuestion} disabled={playingQuestion}>
@@ -1860,6 +1977,67 @@
 	 * "twelve of fifteen right" and "you have answered this eighty-five times" are
 	 * different invitations.
 	 */
+	/* The new thing, laid out as chords rather than described as one.
+
+	   A row, in reading order, because a progression *is* an order and a rung's
+	   shapes are read the same way. The chord sounding lights up, which is the
+	   whole reason the notes are on screen: hearing four symbols go past teaches
+	   nothing, watching the one you are hearing teaches which is which. */
+	.novelty-chords {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: center;
+		gap: 0.5rem;
+		max-width: 40rem;
+		margin: 0 auto;
+		padding: 0;
+		list-style: none;
+	}
+
+	.novelty-chords li {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.15rem;
+		min-width: 4.5rem;
+		padding: 0.55rem 0.8rem;
+		border: 1px solid var(--color-ground-line);
+		border-radius: 10px;
+		background: var(--color-ground-raised);
+		transition:
+			border-color 160ms var(--ease-wheel),
+			transform 160ms var(--ease-wheel);
+	}
+
+	.novelty-chords li.is-sounding {
+		border-color: var(--color-ink-dim);
+		transform: translateY(-2px);
+	}
+
+	.novelty-symbol {
+		font-family: var(--font-display);
+		font-size: 1.2rem;
+		font-weight: 600;
+		letter-spacing: -0.01em;
+		color: var(--color-ink);
+	}
+
+	.novelty-degree {
+		font-family: var(--font-mono);
+		font-size: 0.68rem;
+		color: var(--color-ink-dim);
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.novelty-chords li {
+			transition: none;
+		}
+
+		.novelty-chords li.is-sounding {
+			transform: none;
+		}
+	}
+
 	.open-offer {
 		max-width: 44ch;
 		margin: 0 auto;

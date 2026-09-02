@@ -50,11 +50,7 @@
 
 		<!-- The links scroll rather than push: a fourth destination was enough to
 		     make the whole page slide sideways on a narrow screen. -->
-		<nav
-			class="no-scrollbar flex min-w-0 items-center gap-1 overflow-x-auto"
-			aria-label="Main"
-			data-tour="navigation"
-		>
+		<nav class="no-scrollbar flex min-w-0 items-center gap-1 overflow-x-auto" aria-label="Main">
 			{#each LINKS as link (link.href)}
 				<a
 					href={link.href}
