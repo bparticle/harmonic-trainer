@@ -43,18 +43,21 @@ import { isRetiredIntroduction, selectDue, type Schedulable } from '$lib/srs/sch
  * neighbourhood of the ladder position, the record's cold spots, and one novelty
  * slot.
  *
- * The four task kinds are the ones the play-along page cannot ask, plus the page
- * itself. The ear and the function are questions no chart poses; the mission
- * *is* the chart, under a constraint, with a goal. `Goal` itself, the line that
- * describes one and the bar a guide-tone goal is set at now live in
- * `practice/goal.ts` beside the evaluator that answers them — see the note there
- * for why they had to move out of this module.
+ * The task kinds are the ones the play-along page cannot ask, plus the page
+ * itself. On sight, the ear, the function and the hinge are questions no chart
+ * poses; the mission *is* the chart, under a constraint, with a goal. `Goal`
+ * itself, the line that describes one and the bar a guide-tone goal is set at
+ * now live in `practice/goal.ts` beside the evaluator that answers them — see
+ * the note there for why they had to move out of this module.
  *
- * Both drill tasks are queues of card ids over one bank, and they partition it
- * by direction — the ear takes `hear_play` and `hear_name`, the function takes
- * `degree_play` — which is what "one pool per workout, nothing asked twice"
- * amounts to in practice. The fallthrough in `composeWorkout` hands each built
- * task out once, so a workout of four tasks is four tasks.
+ * Every drill task is a queue of card ids over one bank, and together they
+ * partition it by direction — on sight takes `see_play`, the ear takes
+ * `hear_play` and `hear_name`, the function takes `degree_play`, and the hinge
+ * takes `pivot_play` — which is what "one pool per workout, nothing asked twice"
+ * amounts to in practice. The partition has to be a real one: a direction in no
+ * pool is a card generated, scheduled, and never once asked, and the app carried
+ * two of those. The fallthrough in `composeWorkout` hands each built task out
+ * once, so a workout of four tasks is four tasks.
  *
  * Three things the plan left open, decided here and open to being overruled by
  * the record later:
@@ -108,9 +111,18 @@ export function dayNumber(now: Date): number {
 /** Tasks, not minutes. Minutes were always an estimate; tasks are countable. */
 export type WorkoutSize = 'short' | 'standard' | 'long';
 
+/**
+ * How much work a size asks for.
+ *
+ * A floor rather than an exact count, and only since the introduction started
+ * riding in front of it: on a day the ladder has opened something, the workout
+ * is this many tasks *plus* the shapes that arrived, and on every other day it
+ * is exactly this many. Meeting the material is not one of the day's exercises
+ * and must not eat one — see `slotsFor`.
+ */
 export const TASK_COUNT: Record<WorkoutSize, number> = { short: 3, standard: 4, long: 6 };
 
-export type TaskKind = 'ear' | 'function' | 'crossing' | 'mission' | 'new_thing';
+export type TaskKind = 'sight' | 'ear' | 'function' | 'crossing' | 'mission' | 'new_thing';
 
 /**
  * A mission: the real play-along page under a constraint.
@@ -216,13 +228,14 @@ type TaskBase = {
 	goal: Goal;
 };
 
+export type SightTask = TaskBase & { kind: 'sight'; cardIds: string[]; makeup?: Makeup };
 export type EarTask = TaskBase & { kind: 'ear'; cardIds: string[]; makeup?: Makeup };
 export type CrossingTask = TaskBase & { kind: 'crossing'; cardIds: string[]; makeup?: Makeup };
 export type FunctionTask = TaskBase & { kind: 'function'; cardIds: string[]; makeup?: Makeup };
 export type MissionTask = TaskBase & { kind: 'mission'; mission: Mission };
 export type NewThingTask = TaskBase & { kind: 'new_thing'; novelty: Novelty };
 
-export type Task = EarTask | FunctionTask | CrossingTask | MissionTask | NewThingTask;
+export type Task = SightTask | EarTask | FunctionTask | CrossingTask | MissionTask | NewThingTask;
 
 export type Workout = {
 	/**
@@ -545,6 +558,16 @@ const MAX_PASSES = 3;
 const FUNCTION_QUESTIONS = 8;
 
 /**
+ * Fewest of all, because meeting a shape is not practising it.
+ *
+ * This task is added to a day rather than taken out of one — see `slotsFor` — so
+ * its size is the size of the imposition it makes on a morning where the ladder
+ * has just moved. Six is a rung's worth of new chords with a little repetition,
+ * and it is over before it feels like homework.
+ */
+const SIGHT_QUESTIONS = 6;
+
+/**
  * How much of a queue a pinned choice may take.
  *
  * Half, and this is the whole difference between honouring a choice and obeying
@@ -556,6 +579,22 @@ const FUNCTION_QUESTIONS = 8;
 const pinnedShare = (count: number) => Math.ceil(count / 2);
 
 const MISSION_CHORUSES = 2;
+
+/**
+ * The introduction, in its own partition, because it is not a test.
+ *
+ * `see_play` is the only direction that puts the symbol and its notes in front
+ * of you at once — the first round of a shape is `guided`, and guided means the
+ * keyboard shows the answer. Everything else the app asks about a chord assumes
+ * somebody has already done that, and for a long time nobody had: this direction
+ * was generated for every rung and asked by nothing, so a chord's first meeting
+ * with a player was an exam.
+ *
+ * Not folded into the ear pool, for the reason the hinge is not folded into it
+ * either: "listen, then play or name" is false of a question that makes no
+ * sound. This one is read, not heard, and says so.
+ */
+const SIGHT_DIRECTIONS: CardDirection[] = ['see_play'];
 
 const EAR_DIRECTIONS: CardDirection[] = ['hear_play', 'hear_name'];
 
@@ -584,6 +623,25 @@ const CROSSING_DIRECTIONS: CardDirection[] = ['pivot_play'];
 
 /** Six is enough to be a discrimination and short enough to finish. */
 const CROSSING_QUESTIONS = 6;
+
+/**
+ * Every direction some task actually asks.
+ *
+ * The four pools laid end to end, exported so the one rule holding them together
+ * can be tested rather than believed: **a direction `cards.ts` can generate and
+ * this does not contain is a card made, scheduled, and never once put in front
+ * of anybody.** The app carried two of those without noticing, because a pool is
+ * defined by what it takes and nothing was defined by what was left over.
+ *
+ * The lists are also disjoint, which is the other half of it — one bank, four
+ * queues, nothing asked twice — and that is asserted in the same place.
+ */
+export const ASKED_DIRECTIONS: CardDirection[] = [
+	...SIGHT_DIRECTIONS,
+	...EAR_DIRECTIONS,
+	...FUNCTION_DIRECTIONS,
+	...CROSSING_DIRECTIONS
+];
 
 /**
  * Which form a cold quality is most at home in.
@@ -711,8 +769,11 @@ function tieredPool(
 
 	// Graduated introductions are dropped here and nowhere else in the app: a
 	// symbol you can already play is a question the chart asks all day with a
-	// band behind it. `plan.ts` does not ask for this, so the six-block session
-	// keeps its warm-up until the page that replaces it exists.
+	// band behind it. This decides the whole shape of the sight pool and nothing
+	// at all in the other three, which hold no introductions to retire — and it
+	// decided nothing anywhere until the sight task existed to ask for them.
+	// Failing one hands it back, which is how the introduction returns to a
+	// morning where it is needed again. See `isRetiredIntroduction`.
 	const due = selectDue(reviewed, {
 		now: options.now,
 		coldKeys: options.coldKeys,
@@ -799,20 +860,25 @@ export function makeupOf(cardIds: string[], cards: Schedulable[]): Makeup {
 	return { keys, skills, fresh, seen };
 }
 
-/** Ten aural questions, and never fewer because the deck is well run. */
-export function earQueue(
-	cards: Schedulable[],
-	options: {
-		now: Date;
-		day: number;
-		coldKeys?: string[];
-		pinnedSkill?: string | null;
-		keyCenter?: string;
-	}
-): string[] {
-	const tiered = tieredPool(cards, { ...options, directions: EAR_DIRECTIONS });
-	if (tiered.length === 0) return [];
+/** What every drill queue is given, whatever it does with it. */
+type QueueOptions = {
+	now: Date;
+	day: number;
+	coldKeys?: string[];
+	pinnedSkill?: string | null;
+	keyCenter?: string;
+};
 
+/**
+ * A tiered pool turned into a queue that leads with what was pinned.
+ *
+ * Written once because two queues want exactly this: the sight task and the ear
+ * task both take their pool in the order the tiers left it, and both have to
+ * honour a choice made on the home page without narrowing to it. The function
+ * task does not use this — its round-robin has already reordered the pinned
+ * cards, so they do not sit still the way these would.
+ */
+function ledQueue(tiered: Schedulable[], options: QueueOptions, count: number): string[] {
 	// The pinned cards are rotated on their own account, because a pinned skill
 	// large enough to fill the queue would otherwise freeze it: the tiers rotate
 	// past cards that are not pinned, which leaves the pinned ones in the same
@@ -844,7 +910,29 @@ export function earQueue(
 			]
 		: pinned;
 
-	return toQueue(leadWithPinned(tiered, led, pinnedShare(EAR_QUESTIONS)), EAR_QUESTIONS);
+	return toQueue(leadWithPinned(tiered, led, pinnedShare(count)), count);
+}
+
+/**
+ * The symbols that have not been met yet, six of them.
+ *
+ * Empty on almost every morning, and that is the design rather than a shortfall:
+ * `tieredPool` retires a graduated introduction, so a shape you have shown you
+ * can play leaves this pool and does not come back until you fail it. The queue
+ * is therefore exactly "what has arrived and is not yet yours", which is the
+ * only honest content for a task that goes first.
+ */
+export function sightQueue(cards: Schedulable[], options: QueueOptions): string[] {
+	const tiered = tieredPool(cards, { ...options, directions: SIGHT_DIRECTIONS });
+	if (tiered.length === 0) return [];
+	return ledQueue(tiered, options, SIGHT_QUESTIONS);
+}
+
+/** Ten aural questions, and never fewer because the deck is well run. */
+export function earQueue(cards: Schedulable[], options: QueueOptions): string[] {
+	const tiered = tieredPool(cards, { ...options, directions: EAR_DIRECTIONS });
+	if (tiered.length === 0) return [];
+	return ledQueue(tiered, options, EAR_QUESTIONS);
 }
 
 /**
@@ -893,7 +981,7 @@ function interleave<T>(lanes: T[][]): T[] {
 /**
  * Eight degrees, spread over as many keys as the ladder has reached.
  *
- * The same tiers as the ear queue over the other half of the bank, and then the
+ * The same tiers as the ear queue over its own share of the bank, and then the
  * round-robin — the one thing the function task does that the ear task does not,
  * because a numeral is the app's one piece of knowledge that transposes for
  * free and asking it eight times in one key throws that away.
@@ -902,16 +990,7 @@ function interleave<T>(lanes: T[][]): T[] {
  * entered through today's key: choosing "the sevenths in F" and being asked
  * about the sevenths in B first would be an odd way of honouring it.
  */
-export function functionQueue(
-	cards: Schedulable[],
-	options: {
-		now: Date;
-		day: number;
-		coldKeys?: string[];
-		pinnedSkill?: string | null;
-		keyCenter?: string;
-	}
-): string[] {
+export function functionQueue(cards: Schedulable[], options: QueueOptions): string[] {
 	const tiered = tieredPool(cards, { ...options, directions: FUNCTION_DIRECTIONS });
 	if (tiered.length === 0) return [];
 
@@ -1251,6 +1330,26 @@ export function chooseNovelty(input: {
 // Building the tasks
 // ---------------------------------------------------------------------------
 
+/**
+ * The material, before anything asks for it back.
+ *
+ * *On sight* rather than *new shapes*, because that is the question and not the
+ * pedagogy: the symbol is written down and the answer is under your hands. It
+ * makes the pair the rest of the app is built on — by ear, and on sight — and
+ * `Ear` has been sitting on one half of it on its own since the workout existed.
+ */
+function sightTask(cardIds: string[], cards: Schedulable[]): SightTask | null {
+	if (cardIds.length === 0) return null;
+	return {
+		kind: 'sight',
+		title: 'On sight',
+		instruction: `${cardIds.length} symbols · read it, play it.`,
+		goal: { kind: 'questions', count: cardIds.length },
+		cardIds,
+		makeup: makeupOf(cardIds, cards)
+	};
+}
+
 function earTask(cardIds: string[], cards: Schedulable[]): EarTask | null {
 	if (cardIds.length === 0) return null;
 	return {
@@ -1394,15 +1493,24 @@ function noveltyLine(novelty: Novelty): string {
  * The mission and the new thing survive at every size, since a short day that
  * never plays with anyone and never meets anything is not a short workout, it
  * is a shrug.
+ *
+ * **The sight slot leads every size and takes nothing from any of them.** It is
+ * the only slot that does not fall through to another task, so on the ordinary
+ * morning — everything met, nothing failed — it builds nothing and the day is
+ * the same length it always was. On the morning after the ladder moved it is a
+ * fourth, fifth or seventh task, and it comes first, because an exercise must
+ * not arrive before its material and this is the material. Paying for that with
+ * one of the day's questions would be the app introducing a chord by taking away
+ * the chance to use it.
  */
 function slotsFor(size: WorkoutSize, day: number): TaskKind[] {
 	switch (size) {
 		case 'short':
-			return [DRILLS[day % DRILLS.length], 'mission', 'new_thing'];
+			return ['sight', DRILLS[day % DRILLS.length], 'mission', 'new_thing'];
 		case 'standard':
-			return ['ear', day % 2 === 0 ? 'function' : 'crossing', 'mission', 'new_thing'];
+			return ['sight', 'ear', day % 2 === 0 ? 'function' : 'crossing', 'mission', 'new_thing'];
 		case 'long':
-			return ['ear', 'function', 'crossing', 'mission', 'new_thing', 'mission'];
+			return ['sight', 'ear', 'function', 'crossing', 'mission', 'new_thing', 'mission'];
 	}
 }
 
@@ -1504,8 +1612,12 @@ export function composeWorkout(input: WorkoutInput): Workout {
 		day
 	});
 
-	// Two queues, one bank, partitioned by direction — so nothing is asked twice
-	// without either queue having to know the other exists.
+	// Four queues, one bank, partitioned by direction — so nothing is asked twice
+	// without any queue having to know the others exist.
+	const sight = sightTask(
+		sightQueue(input.cards, { now, day, coldKeys, pinnedSkill, keyCenter }),
+		input.cards
+	);
 	const ear = earTask(
 		earQueue(input.cards, { now, day, coldKeys, pinnedSkill, keyCenter }),
 		input.cards
@@ -1564,21 +1676,33 @@ export function composeWorkout(input: WorkoutInput): Workout {
 
 	const tasks: Task[] = [];
 	for (const slot of slotsFor(size, day)) {
-		// Falling through in this order and no other: the ear and the function are
-		// the questions nothing else in the app can pose, and the mission is the
-		// one that can always be posed.
+		/*
+		 * Falling through in this order and no other: the ear and the function are
+		 * the questions nothing else in the app can pose, and the mission is the
+		 * one that can always be posed.
+		 *
+		 * The sight slot is the exception at both ends. Nothing falls *into* it,
+		 * because an introduction handed out to fill a gap would be a workout
+		 * teaching you something for want of anything better to do; and it falls
+		 * through to nothing itself, because there being nothing to introduce is
+		 * the ordinary state of an account and not a hole to be plugged. It does
+		 * appear at the end of the other chains — a day with new material and an
+		 * empty due pile should meet the material rather than shrug.
+		 */
 		const built =
-			slot === 'ear'
-				? (take(ear) ?? take(fn) ?? take(crossing) ?? nextMission())
-				: slot === 'function'
-					? (take(fn) ?? take(crossing) ?? take(ear) ?? nextMission())
-					: slot === 'crossing'
-						? (take(crossing) ?? take(fn) ?? take(ear) ?? nextMission())
-						: slot === 'new_thing'
-							? novelty
-								? newThingTask(novelty)
-								: (nextMission() ?? take(ear) ?? take(fn) ?? take(crossing))
-							: (nextMission() ?? take(ear) ?? take(fn) ?? take(crossing));
+			slot === 'sight'
+				? take(sight)
+				: slot === 'ear'
+					? (take(ear) ?? take(fn) ?? take(crossing) ?? take(sight) ?? nextMission())
+					: slot === 'function'
+						? (take(fn) ?? take(crossing) ?? take(ear) ?? take(sight) ?? nextMission())
+						: slot === 'crossing'
+							? (take(crossing) ?? take(fn) ?? take(ear) ?? take(sight) ?? nextMission())
+							: slot === 'new_thing'
+								? novelty
+									? newThingTask(novelty)
+									: (nextMission() ?? take(ear) ?? take(fn) ?? take(crossing) ?? take(sight))
+								: (nextMission() ?? take(ear) ?? take(fn) ?? take(crossing) ?? take(sight));
 
 		if (built) tasks.push(built);
 	}

@@ -67,8 +67,7 @@
 		['see_play', 'Here is the symbol — play it.', 1.0],
 		['hear_play', 'Here is the sound — play it back.', 1.0],
 		['hear_name', 'Here is the sound — name it.', 1.15],
-		['play_name', 'You played it — now name it.', 1.6],
-		['degree_play', '“IV in E♭” — play the chord.', 1.3],
+		['degree_play', '“IV — E♭” — play it, then name what you played.', 1.6],
 		['pivot_play', 'One chord in two keys — play the cadence out.', 1.55]
 	];
 
@@ -393,7 +392,7 @@
 					<svg
 						viewBox="0 0 480 230"
 						role="img"
-						aria-label="A bar chart of the direction weights. play_name is heaviest at 1.6, then pivot_play at 1.55, degree_play 1.3, hear_name 1.15, and see_play and hear_play tied at 1.0."
+						aria-label="A bar chart of the direction weights. degree_play is heaviest at 1.6, then pivot_play at 1.55, hear_name 1.15, and see_play and hear_play tied at 1.0."
 					>
 						{#each WEIGHTS as d, i (d.name)}
 							<text x="0" y={20 + i * 26} class="f-mono" font-size="10">{d.name}</text>
@@ -416,9 +415,10 @@
 					</svg>
 				</div>
 				<figcaption>
-					The three key-centre questions lead because nothing is written down and the answer is one
-					note out of twelve — no other direction asks anything like it. Play-to-name comes next:
-					being able to play a thing you cannot name is the problem the whole app exists to fix.
+					Play-to-name leads, because being able to play a thing you cannot name is the problem the
+					whole app exists to fix, and a numeral with its key beside it is the question that asks
+					it. The hinge is just behind: the only direction with two keys in it, and the only one
+					whose answer is a chord you have to find rather than one you were shown.
 				</figcaption>
 			</figure>
 
@@ -431,7 +431,7 @@
 
 		<section class="note-section">
 			<p class="note-label">The workout</p>
-			<h2>Three to five tasks, composed fresh from the date</h2>
+			<h2>Three to seven tasks, composed fresh from the date</h2>
 
 			<p>
 				Today is a workout, not a timer. Each task ends because its goal is met — ten questions
@@ -444,12 +444,28 @@
 				One rule decides what is in it: <strong>if the band can ask it, the band asks it.</strong>
 			</p>
 
+			<p>
+				That rule is why the first task disappears. Reading a chord symbol and playing it is exactly
+				what the play-along page asks all day with a rhythm section behind it — so it is worth
+				asking here only while the symbol is still new, and a shape you have shown you can play
+				drops out of the pool and does not come back until you fail it. On the morning after the
+				ladder moves, the new shapes arrive first and the rest of the workout is unchanged: meeting
+				the material is not one of the day's exercises, so it does not take one away.
+			</p>
+
 			<div class="table-wrap">
 				<table>
 					<thead>
 						<tr><th>Task</th><th>What it asks</th></tr>
 					</thead>
 					<tbody>
+						<tr>
+							<td><strong>On sight</strong></td>
+							<td
+								>Six symbols, read and played. Only shapes you have not shown you can play yet, so
+								most mornings there are none.</td
+							>
+						</tr>
 						<tr>
 							<td><strong>Ear</strong></td>
 							<td>Ten questions: listen and play it back, or listen and name it.</td>

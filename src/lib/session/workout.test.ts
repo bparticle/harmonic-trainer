@@ -11,14 +11,20 @@ import {
 	type Frontier,
 	type RungId
 } from '$lib/curriculum/ladder';
-import { cardsForRung, CROSSING_SKILL } from '$lib/curriculum/cards';
-import { STAGES } from '$lib/curriculum/ladder';
+import {
+	cardsForProgression,
+	cardsForReached,
+	cardsForRung,
+	CROSSING_SKILL
+} from '$lib/curriculum/cards';
+import { RUNGS, STAGES } from '$lib/curriculum/ladder';
 import { PROGRESSIONS } from '$lib/curriculum/progressions';
 import { MISSION_CHARTS, chartDemand } from '$lib/curriculum/charts';
 import { ALL_RUNGS, vocabularyOf } from '$lib/curriculum/vocabulary';
 import { describeGoal } from '$lib/practice/goal';
 import { suggestLadder, type HeldRun } from '$lib/practice/tempo';
 import {
+	ASKED_DIRECTIONS,
 	TASK_COUNT,
 	chooseNovelty,
 	coldSpotsFrom,
@@ -29,6 +35,7 @@ import {
 	functionQueue,
 	makeupOf,
 	noveltyId,
+	sightQueue,
 	describeAcquaintance,
 	type MissionChart,
 	type Novelty,
@@ -74,13 +81,7 @@ const card = (
  * instead of the thing under test.
  */
 function bank(options: { dueInDays?: number; reps?: number } = {}): Schedulable[] {
-	const directions: CardDirection[] = [
-		'hear_name',
-		'hear_play',
-		'see_play',
-		'play_name',
-		'degree_play'
-	];
+	const directions: CardDirection[] = ['hear_name', 'hear_play', 'see_play', 'degree_play'];
 	const out: Schedulable[] = [];
 	for (const { key, rungId } of REACHED) {
 		for (const direction of directions) {
@@ -251,6 +252,107 @@ describe('deciding itself, and deciding the same way twice', () => {
 		expect(dayNumber(new Date('2026-02-11T00:00:00Z'))).toBe(
 			dayNumber(new Date('2026-02-10T00:00:00Z')) + 1
 		);
+	});
+});
+
+describe('one bank, four queues, and nothing left out of all of them', () => {
+	/*
+	 * The invariant this milestone exists to restore.
+	 *
+	 * `cards.ts` generated `see_play` and `play_name` for every triad and every
+	 * seventh, and no queue asked for either — so both accumulated in the bank
+	 * with SRS rows that were permanently due and permanently unreachable. A pool
+	 * is defined by what it takes, and nothing was ever defined by what was
+	 * left over.
+	 */
+	it('asks every direction the curriculum can generate', () => {
+		const everywhere = STAGES.flatMap((stage) =>
+			RUNGS.map((rung) => ({ key: stage.key, rungId: rung.id }))
+		);
+		const generated = new Set(cardsForReached(everywhere).map((c) => c.direction));
+		for (const progression of PROGRESSIONS) {
+			for (const made of cardsForProgression(progression, 'C')) generated.add(made.direction);
+		}
+
+		expect(generated.size).toBeGreaterThan(0);
+		for (const direction of generated) {
+			expect(ASKED_DIRECTIONS, direction).toContain(direction);
+		}
+	});
+
+	it('puts each direction in one pool and no more, so nothing is asked twice', () => {
+		expect(new Set(ASKED_DIRECTIONS).size).toBe(ASKED_DIRECTIONS.length);
+	});
+});
+
+describe('the sight task, where the material arrives', () => {
+	/** A symbol that has been opened and never yet answered. */
+	const unmet = (id: string, keyCenter = 'C'): Schedulable => ({
+		cardId: id,
+		direction: 'see_play',
+		keyCenter,
+		skillCode: 'rung:all-sevenths',
+		state: { ...initialState(NOW), reps: 0 }
+	});
+
+	it('asks the one direction that shows you the answer', () => {
+		const cards = [...bank(), unmet('new-one'), unmet('new-two', 'G')];
+		const byId = new Map(cards.map((c) => [c.cardId, c]));
+		for (const id of sightQueue(cards, { now: NOW, day: 2 })) {
+			expect(byId.get(id)!.direction, id).toBe('see_play');
+		}
+	});
+
+	it('has nothing to say once every symbol has been played back', () => {
+		// The whole of `bank()` has graduated, and a symbol you can already play is
+		// one the play-along page asks all day with a band behind it.
+		expect(sightQueue(bank(), { now: NOW, day: 0 })).toEqual([]);
+	});
+
+	it('hands the introduction back to a shape that graduated and was then failed', () => {
+		const failed: Schedulable = {
+			cardId: 'lapsed',
+			direction: 'see_play',
+			keyCenter: 'C',
+			skillCode: 'rung:all-sevenths',
+			state: {
+				...initialState(NOW),
+				state: 'relearning',
+				reps: 6,
+				dueAt: new Date(NOW.getTime() - DAY)
+			}
+		};
+		expect(sightQueue([failed], { now: NOW, day: 0 })).toContain('lapsed');
+	});
+
+	it('leads the day, because an exercise must not arrive before its material', () => {
+		const workout = composeWorkout(input({ cards: [...bank(), unmet('new-one')] }));
+		expect(taskKinds(workout)[0]).toBe('sight');
+	});
+
+	it('is added to the day rather than taken out of it', () => {
+		const ordinary = composeWorkout(input({ size: 'standard' }));
+		const arriving = composeWorkout(
+			input({ size: 'standard', cards: [...bank(), unmet('new-one')] })
+		);
+
+		expect(taskKinds(ordinary)).toEqual(['ear', 'function', 'mission', 'new_thing']);
+		expect(taskKinds(arriving)).toEqual(['sight', 'ear', 'function', 'mission', 'new_thing']);
+	});
+
+	it('leaves its slot empty rather than borrowing a task to fill it', () => {
+		// Nothing falls into the sight slot. An introduction handed out for want of
+		// anything better would be the app teaching you something to pass the time.
+		const workout = composeWorkout(input({ size: 'long' }));
+		expect(taskKinds(workout)).not.toContain('sight');
+		expect(workout.tasks).toHaveLength(TASK_COUNT.long);
+	});
+
+	it('says what it is made of, like every other drill', () => {
+		const workout = composeWorkout(input({ cards: [...bank(), unmet('new-one')] }));
+		const sight = workout.tasks.find((t) => t.kind === 'sight');
+		expect(sight?.makeup?.keys).toContain('C');
+		expect(sight?.instruction).toMatch(/symbols/);
 	});
 });
 
@@ -838,7 +940,7 @@ describe('a brand-new account', () => {
 	});
 
 	/*
-	 * Two tasks on the very first day, and this is the fix rather than a
+	 * Three tasks on the very first day, and this is the fix rather than a
 	 * regression.
 	 *
 	 * Day one owns one rung — the seven notes of C major — and therefore no chord
@@ -852,9 +954,18 @@ describe('a brand-new account', () => {
 	 * composed and `missionHeld` names the tune that is nearest and what it wants.
 	 * By the second rung — the home chord — a major triad is a shape you have met
 	 * and the first play-along appears.
+	 *
+	 * What it does open with is the scale, written down and played from the page,
+	 * before anything asks for it back by ear. That ordering is the build-up rule
+	 * at the scale of one morning, and until the sight task existed the very first
+	 * question this app ever asked anybody was an exam.
 	 */
 	it('is short on day one, because there is nothing honest to fill it with', () => {
-		expect(taskKinds(first)).toEqual(['ear', 'new_thing']);
+		expect(taskKinds(first)).toEqual(['sight', 'ear', 'new_thing']);
+	});
+
+	it('shows the material before asking for it back', () => {
+		expect(taskKinds(first).indexOf('sight')).toBeLessThan(taskKinds(first).indexOf('ear'));
 	});
 
 	it('says which tune is nearest and what it is waiting for', () => {

@@ -195,12 +195,26 @@ describe('directions', () => {
 		// A scale has no chord shape to name, and a wrong answer to an impossible
 		// question still counts against you.
 		expect(directionsForRung('scale')).not.toContain('hear_name');
-		expect(directionsForRung('scale')).not.toContain('play_name');
 	});
 
 	it('asks everything of a chord rung', () => {
-		expect(directionsForRung('all-sevenths')).toHaveLength(5);
-		expect(directionsForRung('all-sevenths')).toContain('degree_play');
+		expect(directionsForRung('all-sevenths')).toEqual([
+			'see_play',
+			'hear_play',
+			'hear_name',
+			'degree_play'
+		]);
+	});
+
+	it('makes no card in a direction nothing asks for', () => {
+		// The rule this list is under, and the one it broke from the day the ladder
+		// was written: `play_name`
+		// was generated for every triad and every seventh and queued by nothing, so
+		// the bank filled with permanently-due rows that could not be reached. A
+		// direction belongs here only if a task partition contains it.
+		for (const rung of RUNGS) {
+			expect(directionsForRung(rung.id), rung.id).not.toContain('play_name');
+		}
 	});
 
 	it('never asks a scale which numeral it is', () => {

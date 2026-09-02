@@ -167,26 +167,19 @@ describe('choosing what to ask next', () => {
 	});
 
 	it('weights play-to-name above the others, being the weakest link', () => {
-		expect(DIRECTION_WEIGHT.play_name).toBeGreaterThan(DIRECTION_WEIGHT.hear_name);
-		expect(DIRECTION_WEIGHT.play_name).toBeGreaterThan(DIRECTION_WEIGHT.see_play);
-		expect(DIRECTION_WEIGHT.play_name).toBeGreaterThan(DIRECTION_WEIGHT.hear_play);
+		// `degree_play` is the direction that asks it: play the chord the numeral
+		// asks for, then name what you played. The weight used to sit on
+		// `play_name`, which posed the same question with the key left off and was
+		// asked by nothing at all.
+		expect(DIRECTION_WEIGHT.degree_play).toBeGreaterThan(DIRECTION_WEIGHT.hear_name);
+		expect(DIRECTION_WEIGHT.degree_play).toBeGreaterThan(DIRECTION_WEIGHT.see_play);
+		expect(DIRECTION_WEIGHT.degree_play).toBeGreaterThan(DIRECTION_WEIGHT.hear_play);
 
 		const cards = [
 			card('see', 'see_play', 'C', { dueAt: at(-2) }),
-			card('name', 'play_name', 'C', { dueAt: at(-2) })
+			card('name', 'degree_play', 'C', { dueAt: at(-2) })
 		];
 		expect(selectDue(cards, { now: at(0) })[0].cardId).toBe('name');
-	});
-
-	it('weights the numeral just behind the name, being the other half of it', () => {
-		expect(DIRECTION_WEIGHT.degree_play).toBeLessThan(DIRECTION_WEIGHT.play_name);
-		expect(DIRECTION_WEIGHT.degree_play).toBeGreaterThan(DIRECTION_WEIGHT.hear_name);
-
-		const cards = [
-			card('see', 'see_play', 'C', { dueAt: at(-2) }),
-			card('degree', 'degree_play', 'C', { dueAt: at(-2) })
-		];
-		expect(selectDue(cards, { now: at(0) })[0].cardId).toBe('degree');
 	});
 
 	it('pulls neglected keys forward', () => {
@@ -239,14 +232,14 @@ describe('retiring the introduction', () => {
 	});
 
 	it('retires nothing at all unless it is asked to', () => {
-		// The six-block session still draws its warm-up from `see_play`, and it
-		// keeps every card it has until the page that replaces it exists.
+		// Retiring a question is a claim about where else it gets asked, and this
+		// module is not the one in a position to make it.
 		const cards = [shown('known', 'review')];
 		expect(selectDue(cards, { now: at(0) })).toHaveLength(1);
 	});
 
 	it('retires only the direction the chart can ask instead', () => {
-		const graduated = ['hear_name', 'hear_play', 'play_name', 'degree_play'] as const;
+		const graduated = ['hear_name', 'hear_play', 'degree_play'] as const;
 		for (const direction of graduated) {
 			const one = card(direction, direction, 'C', { dueAt: at(-1) });
 			expect(isRetiredIntroduction(one), direction).toBe(false);
@@ -335,12 +328,12 @@ describe('simulated review histories', () => {
 	it('schedules the four directions of one item independently', () => {
 		// The whole reason directions are separate cards: you can hear a chord you
 		// cannot name, and the scheduler has to be able to say so.
-		const directions: CardDirection[] = ['hear_name', 'hear_play', 'see_play', 'play_name'];
+		const directions: CardDirection[] = ['hear_name', 'hear_play', 'see_play', 'degree_play'];
 		const outcomes: Record<string, ReviewRating> = {
 			hear_name: 'easy',
 			hear_play: 'good',
 			see_play: 'good',
-			play_name: 'again'
+			degree_play: 'again'
 		};
 
 		const states = directions.map((direction) => {
@@ -354,9 +347,9 @@ describe('simulated review histories', () => {
 		});
 
 		const byDirection = Object.fromEntries(states.map((s) => [s.direction, s.state]));
-		expect(byDirection.play_name.dueAt.getTime()).toBeLessThan(
+		expect(byDirection.degree_play.dueAt.getTime()).toBeLessThan(
 			byDirection.hear_name.dueAt.getTime()
 		);
-		expect(byDirection.play_name.lapses).toBeGreaterThan(byDirection.hear_name.lapses);
+		expect(byDirection.degree_play.lapses).toBeGreaterThan(byDirection.hear_name.lapses);
 	});
 });

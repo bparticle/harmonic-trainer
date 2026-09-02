@@ -181,11 +181,7 @@
 	 * both from the same number, and reading it off the cards keeps the progress on
 	 * screen honest if a card ever fails to load.
 	 */
-	const asks = $derived(
-		task && (task.kind === 'ear' || task.kind === 'function' || task.kind === 'crossing')
-			? task.cardIds.length
-			: 0
-	);
+	const asks = $derived(task && 'cardIds' in task ? task.cardIds.length : 0);
 	const goalLine = $derived(task ? describeGoal(task.goal) : '');
 
 	/** The last thing a mission said about itself, kept on the block that set it. */
@@ -1636,8 +1632,10 @@
 
 		<!-- Every task whose answer is played needs somewhere to play it. The
 		     crossing task was missed when it was added, which on a machine with no
-		     MIDI keyboard made its questions unanswerable. -->
-		{#if task.kind === 'ear' || task.kind === 'function' || task.kind === 'crossing'}
+		     MIDI keyboard made its questions unanswerable — so this asks whether the
+		     task holds cards rather than naming the kinds that do, and the next one
+		     added inherits a keyboard by existing. -->
+		{#if 'cardIds' in task}
 			<footer class="keyboard-stage" class:is-success={answered}>
 				<div class="keyboard-status">
 					<p><span class="listening-dot"></span>{listeningLine}</p>

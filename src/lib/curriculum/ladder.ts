@@ -656,11 +656,21 @@ export function itemsForRung(rungId: RungId, stage: Stage): LadderItem[] {
  * except the scale. It is on the relative minor too: `i`, `iv` and `v` are
  * degrees like any other, and the minor numerals are the ones least likely to
  * be met anywhere else.
+ *
+ * **`play_name` is not made any more, and there is no rung it would be honest
+ * on.** `pose` shows it `detail ?? degree ?? label`, and a triad or a seventh
+ * carries no `detail` — so on the only items that ever had it, the whole
+ * question was a bare numeral with no key attached. `degree_play` is that
+ * question asked properly, with the key travelling beside the numeral, and this
+ * list has been two questions with one answer since the day that arrived. The
+ * relative minor was the rung that noticed first: it dropped `play_name` and
+ * kept `degree_play`, because its numerals belong to A minor and a bare `iv`
+ * would have been a wrong question with a right answer behind it. That was true
+ * of every other rung as well the moment a workout began crossing keys.
  */
 export function directionsForRung(rungId: RungId): CardDirection[] {
 	if (rungId === 'scale') return ['see_play', 'hear_play'];
-	if (rungId === 'relative-minor') return ['see_play', 'hear_play', 'hear_name', 'degree_play'];
-	return ['see_play', 'hear_play', 'hear_name', 'play_name', 'degree_play'];
+	return ['see_play', 'hear_play', 'hear_name', 'degree_play'];
 }
 
 /**

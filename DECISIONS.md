@@ -5759,3 +5759,196 @@ caller but their own tests. They are left where they are: they describe key
 relations rather than the exercise that was built on them, and the next crossing
 exercise will want all three. Deleting a correct, tested model because the thing
 standing on it fell over is how a codebase forgets what it knows.
+
+## Two directions the app made and never asked
+
+The workout composes cards in five directions per chord and queued three of
+them. `EAR_DIRECTIONS` takes `hear_play` and `hear_name`, `FUNCTION_DIRECTIONS`
+takes `degree_play`, `CROSSING_DIRECTIONS` takes what is left of the key
+questions, and `tieredPool` is called with one of those three lists and nothing
+else. Nowhere in the app asked for `see_play` or `play_name`. `directionsForItem`
+made both, for every triad and every seventh in every key the ladder had opened,
+so they accumulated in the `cards` table with SRS rows that were due the moment
+they existed and could never be reached. Confirmed on the live database before
+anything was changed: an account there holds `rung:tonic-triad` cards in all five
+directions, and every review written against that rung is in a direction some
+pool asks for.
+
+The header comment at the top of `workout.ts` said the two drill queues
+"partition" the bank by direction. They did not partition it; they covered part
+of it, and a pool is defined by what it takes, so nothing in the app was ever
+defined by what was left over. That is the whole of how this survived: no test
+could fail, no screen could look wrong, and the only symptom was a table filling
+up with questions nobody would ever be asked.
+
+The two directions turned out to be unasked for opposite reasons, and they get
+opposite answers.
+
+### `play_name` was `degree_play` with the key taken out
+
+`pose` shows it `detail ?? degree ?? label`. A triad or a seventh carries no
+`detail` — `toPayload` names the fields it copies and `triadItem` sets none — so
+on the only items that ever had this direction, the whole question was
+`payload.degree`: a bare numeral, no key, _play it and name it_. Which is
+`degree_play`, minus the half that makes it answerable.
+
+This file already contains the argument that condemns it. Under _`play_name` was
+already asking the degree question_, written when `degree_play` was added: **"The
+key travels with the question. A workout's function task crosses keys by design,
+so `IV` on its own is not a question. `IV — E♭` is."** That sentence was published
+as the reason `degree_play` earns its place, and it is equally the reason its
+predecessor did not. The same entry claimed the two were "two questions with
+different answers about the same chord, and the scheduler now knows that" — and
+the scheduler never got the chance to know anything, because no `play_name` card
+has passed through `selectDue` in the life of the app.
+
+The relative-minor rung had already worked this out on its own. It listed
+`see_play`, `hear_play`, `hear_name`, `degree_play` and stopped, dropping
+`play_name` because its numerals belong to A minor and a bare `iv` would be a
+wrong question with a right answer behind it. That is true of every other rung as
+well, from the moment a workout began crossing keys; the relative minor only
+noticed first because its numerals are somebody else's. With `play_name` gone the
+special case goes with it, and `directionsForRung` is two lines: a scale, and
+everything else.
+
+Neither of the other two answers was available. The ear task cannot take it — its
+whole instruction is _listen, then play or name_, and this question makes no
+sound. A fourth task built on it would be the function task with the key removed.
+So it is not generated any more.
+
+The weight moved house rather than changing size. `DIRECTION_WEIGHT` had
+`play_name` at 1.6, above every other chord direction, under a comment calling it
+"the weakest link among the chord directions and the one the whole app exists to
+fix — being able to play a thing you cannot name is the problem statement". That
+reasoning is right, and it describes `degree_play` exactly: _play the chord the
+numeral asks for, then name what you played_. So `degree_play` is 1.6 now and
+carries the comment, and the number is the same number on the direction that
+spends it. It changes no behaviour today — the function pool holds one direction,
+and a weight discriminates only between directions in the same pool — and saying
+that out loud is the point, since a weight that decides nothing is what this
+entry is about. The `play_name` entry stays because `Record<CardDirection, …>` has
+to be total and the enum is a database type. It is left at 1.6 with a tombstone
+comment, because a tombstone that has been edited reads as a live decision.
+
+### `see_play` was the introduction, and nothing was introducing anything
+
+The opposite finding, and the more serious one. `see_play` shows you a symbol and
+asks you to play it, and in `guided` mode — which is any shape's first round — the
+keyboard shows the notes. It is the only question in the app that puts a chord's
+name and its notes in front of you at the same time. Every other question about a
+chord assumes somebody has done that.
+
+Nobody had. With `see_play` in no pool, a chord's first meeting with a player was
+`hear_play` or `hear_name` — and `hear_name` is deliberately kept out of
+`guidanceKey`'s shape grouping, precisely so an ear question is never handed its
+own answer. So the first time this app ever mentioned a C major seventh to you,
+it played one and asked what it was. That is an exercise arriving before its
+material, which is the rule `cards.ts` opens with and the rule the whole first
+milestone was built around.
+
+The machinery for asking it was already written and already unreachable.
+`INTRODUCTION`, `isRetiredIntroduction` and the `retireIntroductions` option
+exist for exactly one purpose — drop a `see_play` card once it has graduated,
+because a symbol you can already play is one the play-along page asks all day
+with a band behind it — and `tieredPool` passes `retireIntroductions: true` under
+a comment reading "graduated introductions are dropped here and nowhere else in
+the app". Nothing was ever dropped, because nothing was ever picked up. Two
+comments in that neighbourhood still explained themselves by reference to
+`plan.ts`, which was deleted when the six-block session died.
+
+So the fourth drill task exists and it is built on `see_play`. **On sight** —
+named for the question rather than the pedagogy, like every other task, and
+because it completes the pair the whole app runs on. `Ear` has been holding one
+half of _by ear, on sight_ on its own since the workout was written.
+
+### It leads the day, and it does not cost a question
+
+Two rules, and the second is the one worth defending.
+
+It **leads**, because material before exercise is the rule at the scale of a
+morning as much as at the scale of the curriculum: if today opens a rung and also
+asks you to name its chords by ear, being shown them has to come first. The
+guidance fade already carries across the two — `guidanceKey` groups a shape over
+`see_play`, `hear_play` and `degree_play` — so meeting a chord on sight and
+meeting it again by numeral twenty minutes later is round one and round two of
+one shape, demonstrated and then recalled. That is what `lesson.ts` was written
+for, and it has only ever had three of its four inputs.
+
+It **adds**, rather than replacing. The sight slot is the only slot that falls
+through to nothing: with nothing to introduce it builds nothing, and the day is
+exactly the length it always was. On the morning after the ladder moves it is one
+task more. Paying for an introduction by dropping one of the day's questions
+would be the app teaching you a chord by taking away the chance to use it. Six
+questions, the smallest of the four counts, because meeting a shape is not
+practising it, and the size of this task is the size of the imposition it makes
+on a morning where something new has already arrived.
+
+Nothing falls _into_ the slot either. An introduction handed out to fill a gap
+would be the app teaching you something for want of anything better to do. The
+sight task does appear at the end of the other drills' fallthrough chains, where
+it means something different: a day with new material and an empty due pile
+should meet the material rather than shrug.
+
+The first workout an account ever sees is three tasks now instead of two —
+**On sight**, **Ear**, **One new thing** — and it opens by showing you the C major
+scale, written down, before anything asks for it back by ear. That is _the first
+workout was the hardest one_ reaching the direction that was always supposed to
+carry it.
+
+### Existing accounts have a backlog, and it burns down one morning at a time
+
+Every `see_play` card ever generated is sitting at `reps: 0`, because nothing has
+ever asked one. On the next workout every established account will find the sight
+task at the front of the day, and will keep finding it for a while: an account at
+E♭ · all sevenths owns hundreds of never-shown symbols and the queue takes six a
+morning.
+
+That is not a backlog in the punishing sense, and the scheduler's own
+configuration is why. `enable_short_term` is off — see the note above the FSRS
+parameters — so a new card rated anything but `again` goes straight to `review`,
+and `isRetiredIntroduction` retires it there. One correct answer and a symbol is
+out of this pool for good. Six a morning, each asked once, and the task takes
+itself off the screen as the account catches up with material it was never shown.
+Failing one hands it back, which is the behaviour `isRetiredIntroduction` was
+written for and has until now had no way of exhibiting.
+
+### The rows already in the table are left where they lie
+
+`ensureCards` only ever inserts. Nothing here deletes a card, and the `play_name`
+rows on existing accounts stay exactly where they are: permanently due, in no
+pool, selectable by nothing. They were already inert — that is the finding — and
+deleting somebody's rows to tidy a table nobody reads is a worse trade than
+leaving them. `pose` keeps its `play_name` case for the same reason: a row in
+somebody's bank has to pose as something rather than throw.
+
+### The invariant, written down as a test rather than as a hope
+
+`ASKED_DIRECTIONS` is the four pools laid end to end, exported so the rule can be
+asserted: **every direction `cards.ts` can generate is in some pool, and no
+direction is in two.** The test walks every rung of every stage and every
+progression, collects the directions actually generated, and requires each one to
+be asked by something. The second half — the lists are disjoint — is the "one
+bank, four queues, nothing asked twice" claim the composer has always made in
+prose and never once checked.
+
+This is the shape of test that was missing. Every direction had a weight, a
+prompt, a marking rule and a comment explaining its purpose, and not one of those
+things can tell you whether anybody is ever asked it.
+
+### What this does not fix
+
+A progression card poses badly, and now does so in two directions instead of one.
+`cardsForProgression` makes `see_play` and `hear_play` over a payload whose
+`answerPitchClasses` is the union of every chord's notes, and `pose` has no way
+to say _these chords, in order_ — the `sequence` field that could was removed
+along with the two cadence questions that used it, in the commit immediately
+before this one. So a ii–V–I sounds as one cluster and is marked against all of
+it at once, which is not a chord anybody can play.
+
+The bug predates both changes and is reachable today through `hear_play`;
+`see_play` doubles how often it can be met. That is an argument for fixing it,
+not for leaving progressions out of the introduction they need most — but the fix
+is bigger than it was a commit ago, because the affordance it wants no longer
+exists. `payload.steps` still carries the chords in order, so nothing has been
+lost from the data; what has to come back is a prompt that can express a passage
+and a marking rule that checks one chord at a time.

@@ -165,23 +165,36 @@ export function isDue(state: SrsState, now = new Date()): boolean {
  * you were shown. Its two siblings — a cadence and the note it came home to —
  * used to lead ahead of it and have been withdrawn; see DECISIONS.md.
  *
- * Play-to-name comes next: it is the weakest link among the chord directions and
- * the one the whole app exists to fix — being able to play a thing you cannot
- * name is the problem statement. Degree-to-play sits behind it, for the same
- * reason from the other end: knowing that the chord under the numeral IV in E♭
- * is A♭ is the half of that statement the play-along page never asks, because a
- * chart shows symbols and never numbers.
+ * Play-to-name comes next, and `degree_play` is the direction that asks it:
+ * *play the chord that numeral asks for, then name what you played*. It is the
+ * weakest link among the chord directions and the one the whole app exists to
+ * fix — being able to play a thing you cannot name is the problem statement —
+ * and it is the half the play-along page never asks, because a chart shows
+ * symbols and never numbers.
+ *
+ * The weight used to sit on `play_name`, which posed the same question with the
+ * key left off and was never asked by anything. It has moved house rather than
+ * changed size: the number is the same number, on the direction that spends it.
  */
 export const DIRECTION_WEIGHT: Record<CardDirection, number> = {
 	// The heaviest, and it earns it: two keys, no chord name, and a shape that
 	// has to be found from what it does rather than from what it is called.
 	pivot_play: 1.55,
 	// Then the chord directions, play-to-name first — see the note above.
-	play_name: 1.6,
-	degree_play: 1.3,
+	degree_play: 1.6,
 	hear_name: 1.15,
 	see_play: 1.0,
-	hear_play: 1.0
+	hear_play: 1.0,
+	/*
+	 * Retired, and kept only because the enum and the old rows are.
+	 *
+	 * Nothing generates `play_name` any more — see `directionsForRung` — so this
+	 * entry decides nothing and cannot: the cards that carry it were never in any
+	 * pool, which is how a weight this heavy went its whole life unspent. Left at
+	 * the number it had rather than zeroed, because a tombstone that has been
+	 * edited reads as a live decision.
+	 */
+	play_name: 1.6
 };
 
 export type Schedulable = {
@@ -200,6 +213,11 @@ export type Schedulable = {
  * what a chart does, all day, with a rhythm section behind it. It earns its
  * place the first few times, while the symbol is still new, and after that it
  * is the one question the band already asks better.
+ *
+ * It is also the only direction that *hands over* material rather than testing
+ * it, which is why the workout's fourth drill is built on it and why that drill
+ * leads the day: nothing else in the app shows you a symbol and its notes at the
+ * same time, and every other question about a chord assumes somebody has.
  */
 const INTRODUCTION: CardDirection = 'see_play';
 
@@ -225,10 +243,12 @@ export type SelectionOptions = {
 	/**
 	 * Drop graduated introductions from the pile.
 	 *
-	 * Opt-in, and off by default, because the six-block session still draws its
-	 * warm-up straight from `see_play` and would quietly empty out. What asks for
-	 * it is workout composition, where the same question has somewhere better to
-	 * be asked.
+	 * Opt-in, and off by default, because retiring a question is a claim about
+	 * where else it gets asked and only the caller is in a position to make it.
+	 * Workout composition is the caller that makes it: the symbol you can already
+	 * play is one the play-along page asks all day with a band behind it. The
+	 * six-block session used to be the reason for the default; it is gone, and the
+	 * default stays because the claim is still not this module's to make.
 	 */
 	retireIntroductions?: boolean;
 };

@@ -33,6 +33,13 @@ const MISSION: Mission = {
 const questions = (count: number): Goal => ({ kind: 'questions', count });
 
 const TASKS: Record<string, Task> = {
+	sight: {
+		kind: 'sight',
+		title: 'On sight',
+		instruction: '2 symbols · read it, play it.',
+		goal: questions(6),
+		cardIds: ['s', 't']
+	},
 	ear: {
 		kind: 'ear',
 		title: 'Ear',
@@ -63,7 +70,12 @@ const TASKS: Record<string, Task> = {
 	}
 };
 
-const workout = (tasks: Task[] = Object.values(TASKS)): Workout => ({
+// The four the default fixture has always held, named rather than swept up out
+// of `TASKS`, so adding a task kind above does not silently renumber every
+// assertion that reads a task by its position.
+const workout = (
+	tasks: Task[] = [TASKS.ear, TASKS.fn, TASKS.mission, TASKS.newThing]
+): Workout => ({
 	version: 2,
 	day: 20_493,
 	size: 'standard',
@@ -232,6 +244,12 @@ describe('previewing today’s tasks', () => {
 
 	it('leaves the mission’s key out, because a pinned choice moves it', () => {
 		expect(preview[2].line).not.toContain('Eb');
+	});
+
+	it('says a sight task is read rather than heard, and counts it', () => {
+		const [line] = previewTasks(workout([TASKS.sight]));
+		expect(line.kind).toBe('sight');
+		expect(line.line).toContain('2 symbols at sight');
 	});
 });
 

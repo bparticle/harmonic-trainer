@@ -457,7 +457,7 @@ whoever builds the rest.
 
 ## The daily workout
 
-**Today** is a workout: three to five tasks, composed fresh each morning, each
+**Today** is a workout: three to seven tasks, composed fresh each morning, each
 one ending because its goal was met rather than because a clock ran out.
 
 One rule decides what is in it. **If the band can ask it, the band asks it** —
@@ -466,12 +466,22 @@ behind it and chord-by-chord judging in front, rather than in a thinner copy of
 it somewhere else. What is left is the handful of questions a chart cannot ask,
 plus the chart itself under a constraint:
 
-| Task              | What it asks                                                                                           |
-| ----------------- | ------------------------------------------------------------------------------------------------------ |
-| **Ear**           | Ten questions: listen and play it back, or listen and name it                                          |
-| **Function**      | Eight degrees, spread across keys: "IV — E♭", played and then named                                    |
-| **Mission**       | The play-along page itself, with a key, a tempo floor, a groove and a bar to clear                     |
-| **One new thing** | A single unseen item: the next rung, a progression, a groove never played over. Shown once, tried once |
+| Task              | What it asks                                                                                            |
+| ----------------- | ------------------------------------------------------------------------------------------------------- |
+| **On sight**      | Six symbols, read and played. Only shapes not yet shown to be playable, so most mornings there are none |
+| **Ear**           | Ten questions: listen and play it back, or listen and name it                                           |
+| **Function**      | Eight degrees, spread across keys: "IV — E♭", played and then named                                     |
+| **The hinge**     | Six pivots: one chord doing two jobs, named by its function in two keys at once                         |
+| **Mission**       | The play-along page itself, with a key, a tempo floor, a groove and a bar to clear                      |
+| **One new thing** | A single unseen item: the next rung, a progression, a groove never played over. Shown once, tried once  |
+
+**On sight** is the one task the band could ask, and it is here anyway for as
+long as the symbol is new: it is the only question that shows you a chord's name
+and its notes at once, so it is where the material arrives. A shape you have
+shown you can play leaves the pool and comes back only if you fail it. It leads
+the workout when there is anything in it, and takes nothing from the rest of the
+day — meeting a chord is not one of the day's exercises, so it does not cost
+one.
 
 The tasks are composed from four inputs — what spaced repetition says is due,
 where the ladder has got to, the keys and chord qualities the record shows you

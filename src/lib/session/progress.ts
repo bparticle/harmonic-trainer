@@ -72,7 +72,7 @@ export function taskIndexOf(blockType: string): number | null {
 	return Number(position);
 }
 
-const KINDS = new Set<string>(['ear', 'function', 'crossing', 'mission', 'new_thing']);
+const KINDS = new Set<string>(['sight', 'ear', 'function', 'crossing', 'mission', 'new_thing']);
 
 // ---------------------------------------------------------------------------
 // Reading a stored plan
@@ -249,6 +249,8 @@ export function callsAt(workout: Workout): string[] {
 
 function previewLine(task: Task): string {
 	switch (task.kind) {
+		case 'sight':
+			return joinLine(`${task.cardIds.length} symbols at sight`, describeMaterial(task.makeup));
 		case 'ear':
 			return joinLine(`${task.cardIds.length} ear questions`, describeMaterial(task.makeup));
 		case 'function':
@@ -317,6 +319,7 @@ const glyph = (name: string) => name.replace(/b/g, '♭').replace(/#/g, '♯');
  */
 export function taskTags(task: Task): string[] {
 	switch (task.kind) {
+		case 'sight':
 		case 'ear':
 		case 'function':
 			return makeupTags(task.makeup);

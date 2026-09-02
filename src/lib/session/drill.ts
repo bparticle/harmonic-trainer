@@ -70,6 +70,16 @@ export function pose(
 				answerWith: 'play',
 				instruction: 'Play it.'
 			};
+		/*
+		 * Retired, and kept only for the rows that already carry it.
+		 *
+		 * Nothing generates `play_name` any more and no queue asks for it — see
+		 * `directionsForRung`. A triad or a seventh has no `detail`, so this fell
+		 * through to `payload.degree` and posed a bare numeral with no key beside
+		 * it, which is `degree_play` with the half that makes it a question taken
+		 * out. The case stays because the enum does and because a card left in
+		 * somebody's bank must pose as something rather than throw.
+		 */
 		case 'play_name':
 			return {
 				direction,
