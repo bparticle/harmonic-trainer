@@ -6234,3 +6234,80 @@ One thing fell out of the counts getting small: _"1 questions"_. While every
 drill cycled a pool that sentence was unreachable, and a task that cannot count
 to one reads as precisely the glitch this milestone was reported as. Both the
 composer and the board preview now agree with their own numbers.
+
+## The button that meant "do not make me choose" was at the bottom
+
+Reported plainly: _the Depart button sits behind the types of exercises it will
+launch, and it's not clear what to do if I just want to continue without any
+conscious choices._ Both halves are true and they are the same fault seen from
+two sides.
+
+The board was composed as a description that ended in a control. Head, station,
+three rows naming what leads and where it calls, four rows naming the exercises,
+and then — underneath all of it — the black button. Read top to bottom it asks
+you to take in eleven lines about a workout before it offers to start one, which
+is a form. The one player who needs the least from that screen, the one who
+opened the app to practise and not to plan, had the furthest to scroll.
+
+**Nothing about what the button does was wrong.** `startWorkout` composes from
+the frontier and the schedule, mixing something new with what has come round
+again, and the picker seeds itself from `workingPosition()` so an untouched page
+already holds the ladder's own answer. Pressing it without touching anything has
+always been the right move. It just did not look like the right move, because it
+looked like the last step of a form somebody had not filled in.
+
+### The control comes first and the description comes on request
+
+The go row is now the first thing under the board's own name: the station
+roundel, and beside it a button that takes the width that is left. It says
+**Continue**, and its second line says what that means today — `G · The relative
+minor` — which is the sentence the _Leading_ row used to carry one inch above
+it. That row is gone rather than duplicated. A fact about a press belongs on the
+press.
+
+The stops fold into a disclosure, `the 4 stops`, at the far end of the row of
+small choices. This is the part of the report that took the most arguing with,
+because the four task rows are the most informative thing on the page and
+hiding good information is usually the wrong instinct. What settles it is what
+the list is _for_: it describes what the button will do. Nobody reads it and
+then decides differently — there is no control on it, and the only thing it can
+change is which of three sizes you pick, which the sizes already say in counts.
+It is a receipt printed before the purchase.
+
+It opens by default in exactly one case, which is the case where it stops being
+a description: while a workout is in flight it is a record of how far you got,
+the ticks are the answer to _where was I_, and that is worth the height.
+
+**The calling points stayed out.** _Calls at_ is the second row of a departure
+board and the argument for promoting it holds — you pinned E♭, the train starts
+at E♭ and calls at everything else you have opened. That is one line, it is the
+thing about a workout most likely to surprise, and it is not a list of tasks.
+Folding it away to win half an inch would have been tidying rather than fixing.
+
+### Pressing the map was a one-way door
+
+Found while moving the button rather than reported, and worth the small control
+it cost. The seed and the pin are one object: `choice` starts on
+`workingPosition()`'s answer and the map owns it from the first press. So
+pressing a station out of curiosity silently replaced the day the ladder had
+composed, nothing on the page said the pin had moved, and a reload was the only
+way back.
+
+That was survivable while the button was a summary at the foot of a form and is
+not survivable now that it is the first thing on the page and says **Continue**.
+`suggested` compares the pin against `data.position`, and when they differ a
+quiet **back to the suggestion** appears beside the sizes. It is the smallest
+possible answer: no new state, no memory of where you had been, one press back
+to the composed day. Travel stays free, the map keeps every station one press
+away, and the way home stopped being a reload.
+
+### What did not change
+
+No server work, no new fields, no change to what a workout is made of. The same
+five hidden inputs post to the same `?/start`, the composer is untouched, and
+the three frontier moves in the panel below are where they were. Out of the
+board went the `board-foot` and the `Leading` row; in came `.go`, `.choices` and
+one disclosure. The verb is the only wording change — **Depart** became
+**Continue**, because the metaphor was never the problem and a first-time reader
+should not have to hold a train in their head to know that the black button
+carries on with the lessons.

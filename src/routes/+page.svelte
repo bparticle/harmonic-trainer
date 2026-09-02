@@ -110,6 +110,21 @@
 	const preview = $derived(data.previews[size] ?? []);
 	const resuming = $derived(Boolean(data.resume));
 
+	/*
+	 * Whether the stops are on show.
+	 *
+	 * Open while a workout is in flight, because there the list is a record of
+	 * how far you have got and the ticks are the whole of the answer to *where
+	 * was I*. Shut before one starts, because there it is a description of what
+	 * the button does and reading it is not a step on the way to pressing it.
+	 */
+	// svelte-ignore state_referenced_locally
+	let showStops = $state(Boolean(data.resume));
+
+	const stopCount = $derived(
+		resuming ? (data.resume?.tasks.length ?? 0) : (data.previews[size]?.length ?? 0)
+	);
+
 	const glyph = (s: string) => s.replace(/b/g, '♭').replace(/#/g, '♯');
 	const pcOf = (keyName: string) => pitchClass(parseKey(keyName.replace(/m$/, '')).tonic);
 	const tint = (keyName: string) => `var(--pc-${pcOf(keyName)})`;
@@ -211,6 +226,29 @@
 		selectedKey = stationKey;
 	}
 
+	/**
+	 * Whether the pin is still the one the ladder made.
+	 *
+	 * The seed and the pin are the same object, so nothing recorded which of the
+	 * two you were looking at — press a station out of curiosity and the button
+	 * quietly stopped offering the day the ladder had composed, with no way back
+	 * short of a reload. This is the flag that says so, and `followSuggestion` is
+	 * the way back.
+	 */
+	const suggested = $derived(
+		choice.kind === 'rung' &&
+			choice.key === data.position.key &&
+			choice.rung === data.position.rung.id
+	);
+
+	function followSuggestion() {
+		choice = { kind: 'rung', key: data.position.key, rung: data.position.rung.id };
+		selectedKey =
+			data.stages.find(
+				(stage) => stage.key === data.position.key || stage.relativeMinor === data.position.key
+			)?.key ?? data.position.key;
+	}
+
 	function toggle(layer: keyof typeof layers) {
 		layers[layer] = !layers[layer];
 		// The band above the stations answers one question at a time.
@@ -310,11 +348,18 @@
 		{ id: 'progressions' as const, label: 'Progressions' }
 	];
 
+	/*
+	 * What the button is about to do, in one line.
+	 *
+	 * It says the same thing the *Leading* row said, which is why that row is
+	 * gone: a fact about the press belongs on the press, and printing it twice
+	 * within an inch of itself was half of why the board read as a form.
+	 */
 	const summary = $derived.by(() => {
 		const pinned: Choice = choice;
 		return pinned.kind === 'rung'
-			? `${glyph(pinned.key)} · ${leadLine?.label ?? ''}`
-			: `${chosenProgression?.name ?? ''} in ${glyph(pinned.key)}`;
+			? `${glyph(pinned.key)} · ${leadName}`
+			: `${leadName} in ${glyph(pinned.key)}`;
 	});
 </script>
 
@@ -374,7 +419,15 @@
 				>
 			</div>
 
-			<div class="board-body">
+			<!--
+				The go row: the one thing to press, and the station it leaves from.
+
+				This used to be the last thing on the board, under four rows naming the
+				exercises. A player who only wants to carry on had to read a menu to
+				find the control that means *do not make me choose* — so the control
+				comes first now, and the menu is one press away below it.
+			-->
+			<div class="go">
 				<div class="board-origin">
 					<span class="origin-roundel">{glyph(stationKey)}</span>
 					<span class="origin-names">
@@ -383,53 +436,137 @@
 					</span>
 				</div>
 
-				<dl class="board-rows">
-					<div class="board-row">
-						<dt>Leading</dt>
-						<dd>
-							{leadName}
-							<!-- Ahead of the ladder is not the same as unavailable: the cards
-							     are made on the way out. The old wording read as a refusal
-							     over a button that works. -->
-							{#if !leadOpenHere}<span class="dim">· ahead of the ladder</span>{/if}
-						</dd>
-					</div>
-					<div class="board-row">
-						<dt>Calls at</dt>
-						<dd>
-							<span class="calls">
-								{#each calls as key (key)}
-									<span class="call" style:--tint={tint(key)}><i></i>{glyph(key)}</span>
-								{/each}
+				<form method="POST" action="?/start" class="go-form">
+					<input type="hidden" name="size" value={size} />
+					<input
+						type="hidden"
+						name="progression"
+						value={choice.kind === 'progression' ? choice.id : ''}
+					/>
+					<input
+						type="hidden"
+						name="progressionKey"
+						value={choice.kind === 'progression' ? choice.key : ''}
+					/>
+					<input type="hidden" name="focusKey" value={choice.kind === 'rung' ? choice.key : ''} />
+					<input type="hidden" name="focusRung" value={choice.kind === 'rung' ? choice.rung : ''} />
+
+					<button type="submit" class="start">
+						<span class="start-text">
+							<span class="start-verb">{resuming ? 'Carry on' : 'Continue'}</span>
+							<span class="start-what">
+								{#if resuming}
+									{glyph(data.resume?.keyCenter ?? '')} · task {resumeAt + 1} of {data.resume?.tasks
+										.length}
+								{:else}
+									{summary}
+									<!-- Ahead of the ladder is not the same as unavailable: the
+									     cards are made on the way out. Said on the button rather
+									     than in a row above it, because it is a fact about the
+									     press and about nothing else. -->
+									{#if !leadOpenHere}· ahead of the ladder{/if}
+								{/if}
 							</span>
-						</dd>
-					</div>
-					{#if data.due > 0 && !resuming}
-						<div class="board-row">
-							<dt>Due</dt>
-							<dd class="dim">{data.due} questions the schedule has come round to</dd>
-						</div>
-					{/if}
-				</dl>
+						</span>
+						<span class="start-go" aria-hidden="true">→</span>
+					</button>
+				</form>
 			</div>
 
-			<!-- The stops: what today is actually made of. -->
-			<ol class="stops">
-				{#each resuming ? (data.resume?.tasks ?? []) : preview as item, i (i)}
-					<li
-						class="stop"
-						class:is-done={resuming && data.resume?.tasks[i]?.finished}
-						class:is-next={resuming && i === resumeAt}
-					>
-						<span class="stop-n">{resuming && data.resume?.tasks[i]?.finished ? '✓' : i + 1}</span>
-						<span class="min-w-0 flex-1">
-							<span class="stop-title">{item.title}</span>
-							<span class="stop-line">{item.line}</span>
-							{@render tags(item.tags)}
+			<dl class="board-rows">
+				<div class="board-row">
+					<dt>Calls at</dt>
+					<dd>
+						<span class="calls">
+							{#each calls as key (key)}
+								<span class="call" style:--tint={tint(key)}><i></i>{glyph(key)}</span>
+							{/each}
 						</span>
-					</li>
-				{/each}
-			</ol>
+					</dd>
+				</div>
+				{#if data.due > 0 && !resuming}
+					<div class="board-row">
+						<dt>Due</dt>
+						<dd class="dim">{data.due} questions the schedule has come round to</dd>
+					</div>
+				{/if}
+			</dl>
+
+			<!--
+				The small choices, under the big one.
+
+				How long, how to get back to the suggestion once the map has been
+				pressed, and whether to read the stops at all. None of them has to be
+				touched for the button above to do something sensible.
+			-->
+			<div class="choices">
+				{#if resuming}
+					<form method="POST" action="?/end">
+						<button class="quiet">
+							{data.resume?.complete ? 'close it and start another' : 'stop this workout'}
+						</button>
+					</form>
+				{:else}
+					<div class="sizes" aria-label="How long">
+						{#each ['short', 'standard', 'long'] as const as option (option)}
+							<button
+								type="button"
+								class="size"
+								class:is-selected={size === option}
+								aria-pressed={size === option}
+								onclick={() => (size = option)}
+								>{option} · {data.previews[option]?.length ?? 0}</button
+							>
+						{/each}
+					</div>
+
+					<!--
+						The way back out of a choice, which the map had no way of undoing.
+
+						Pressing a station or a line pins it and the button above changes
+						with it, which is the point of the map. What was missing was the
+						other direction: nothing said the pin had moved off the ladder's
+						own suggestion, and only a reload put it back.
+					-->
+					{#if !suggested}
+						<button type="button" class="quiet" onclick={followSuggestion}
+							>back to the suggestion</button
+						>
+					{/if}
+				{/if}
+
+				<button
+					type="button"
+					class="disclose"
+					aria-expanded={showStops}
+					onclick={() => (showStops = !showStops)}
+				>
+					{showStops ? 'hide the stops' : `the ${stopCount} stops`}
+					<span class="caret" class:is-open={showStops}>▾</span>
+				</button>
+			</div>
+
+			<!-- The stops: what today is actually made of. Folded away because it is
+			     a description of the press above and not a decision to be taken. -->
+			{#if showStops}
+				<ol class="stops">
+					{#each resuming ? (data.resume?.tasks ?? []) : preview as item, i (i)}
+						<li
+							class="stop"
+							class:is-done={resuming && data.resume?.tasks[i]?.finished}
+							class:is-next={resuming && i === resumeAt}
+						>
+							<span class="stop-n">{resuming && data.resume?.tasks[i]?.finished ? '✓' : i + 1}</span
+							>
+							<span class="min-w-0 flex-1">
+								<span class="stop-title">{item.title}</span>
+								<span class="stop-line">{item.line}</span>
+								{@render tags(item.tags)}
+							</span>
+						</li>
+					{/each}
+				</ol>
+			{/if}
 
 			<!-- No play-along yet, and why. Not a lock: a thing you have not been
 			     shown, and where to go and be shown it. -->
@@ -440,7 +577,7 @@
 					It used to end *learn major in I – IV – V – I or I – V – vi – IV*,
 					naming progressions that need the same shape they were offered to
 					teach — advice nobody could take, on the one line a new player reads
-					before pressing Depart. The ladder is what teaches a shape from
+					before pressing Continue. The ladder is what teaches a shape from
 					nothing, so where a rung teaches it the rung is named, and the
 					progressions are what is left for a gap the ladder has already
 					covered.
@@ -457,59 +594,6 @@
 					{/if}
 				</p>
 			{/if}
-
-			<div class="board-foot">
-				<form method="POST" action="?/start" class="flex flex-1 flex-wrap items-center gap-3">
-					<input type="hidden" name="size" value={size} />
-					<input
-						type="hidden"
-						name="progression"
-						value={choice.kind === 'progression' ? choice.id : ''}
-					/>
-					<input
-						type="hidden"
-						name="progressionKey"
-						value={choice.kind === 'progression' ? choice.key : ''}
-					/>
-					<input type="hidden" name="focusKey" value={choice.kind === 'rung' ? choice.key : ''} />
-					<input type="hidden" name="focusRung" value={choice.kind === 'rung' ? choice.rung : ''} />
-
-					<button type="submit" class="start">
-						<span class="start-verb">{resuming ? 'Carry on' : 'Depart'}</span>
-						<span class="start-what">
-							{#if resuming}
-								{glyph(data.resume?.keyCenter ?? '')} · task {resumeAt + 1} of {data.resume?.tasks
-									.length}
-							{:else}
-								{summary}
-							{/if}
-						</span>
-					</button>
-
-					{#if !resuming}
-						<div class="sizes" aria-label="How long">
-							{#each ['short', 'standard', 'long'] as const as option (option)}
-								<button
-									type="button"
-									class="size"
-									class:is-selected={size === option}
-									aria-pressed={size === option}
-									onclick={() => (size = option)}
-									>{option} · {data.previews[option]?.length ?? 0}</button
-								>
-							{/each}
-						</div>
-					{/if}
-				</form>
-
-				{#if resuming}
-					<form method="POST" action="?/end">
-						<button class="quiet">
-							{data.resume?.complete ? 'close it and start another' : 'stop this workout'}
-						</button>
-					</form>
-				{/if}
-			</div>
 		</section>
 
 		<!--
@@ -916,11 +1000,24 @@
 		border-bottom: 1px solid var(--color-ground-line);
 	}
 
-	.board-body {
+	/*
+	 * The go row.
+	 *
+	 * The station is what is leaving from, the button is the leaving, and they
+	 * sit on one line so that the first thing under the board's own name is the
+	 * thing to press. The button takes the space that is left and stops growing
+	 * before it turns into a banner.
+	 */
+	.go {
 		display: flex;
 		flex-wrap: wrap;
-		align-items: flex-start;
-		gap: 1rem 1.6rem;
+		align-items: center;
+		gap: 0.9rem 1.6rem;
+	}
+
+	.go-form {
+		flex: 1 1 17rem;
+		max-width: 30rem;
 	}
 
 	.board-origin {
@@ -974,8 +1071,7 @@
 
 	.board-rows {
 		display: flex;
-		min-width: 15rem;
-		flex: 1;
+		min-width: 0;
 		flex-direction: column;
 		margin: 0;
 	}
@@ -1110,36 +1206,52 @@
 		font-weight: 600;
 	}
 
-	.board-foot {
+	.choices {
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
-		gap: 0.75rem 1rem;
+		gap: 0.6rem 1rem;
 		padding-top: 0.6rem;
 		border-top: 1px solid var(--color-ground-line);
 	}
 
 	.start {
 		display: flex;
-		flex-direction: column;
-		gap: 0.1rem;
-		padding: 0.6rem 1.4rem;
-		border-radius: 11px;
+		width: 100%;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		padding: 0.8rem 1.1rem 0.8rem 1.3rem;
+		border-radius: 12px;
 		background: var(--color-ink);
 		color: var(--color-ground);
 		text-align: left;
-		transition: opacity 120ms ease;
+		transition:
+			opacity 120ms ease,
+			transform 120ms ease;
 	}
 
 	.start:hover {
 		opacity: 0.9;
 	}
 
+	.start:active {
+		transform: translateY(1px);
+	}
+
+	.start-text {
+		display: flex;
+		min-width: 0;
+		flex-direction: column;
+		gap: 0.1rem;
+	}
+
 	.start-verb {
 		font-family: var(--font-display);
-		font-size: 1rem;
+		font-size: 1.15rem;
 		font-weight: 600;
 		letter-spacing: -0.015em;
+		line-height: 1.15;
 	}
 
 	.start-what {
@@ -1148,9 +1260,50 @@
 		opacity: 0.75;
 	}
 
+	/* The one mark on the page that is not a station, a line or a word. It is
+	   here because a control this large has to say which way it goes. */
+	.start-go {
+		flex: none;
+		font-size: 1.1rem;
+		line-height: 1;
+		opacity: 0.65;
+		transition: transform 120ms ease;
+	}
+
+	.start:hover .start-go {
+		transform: translateX(2px);
+	}
+
 	.sizes {
 		display: flex;
 		gap: 0.3rem;
+	}
+
+	/* The stops, on request. Pushed to the far end because it is the last thing
+	   on the row that anybody needs. */
+	.disclose {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		margin-left: auto;
+		font-family: var(--font-mono);
+		font-size: 0.7rem;
+		color: var(--color-ink-dim);
+		transition: color 120ms ease;
+	}
+
+	.disclose:hover {
+		color: var(--color-ink);
+	}
+
+	.caret {
+		display: block;
+		font-size: 0.6rem;
+		transition: transform 140ms ease;
+	}
+
+	.caret.is-open {
+		transform: rotate(180deg);
 	}
 
 	.size,
