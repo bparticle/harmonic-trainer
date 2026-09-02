@@ -307,16 +307,38 @@
 			/>
 		{/if}
 
+		<!-- The open stops, drawn. Not pressable themselves: the hit circles below
+		     cover every crossing at one size, open or not. -->
 		{#each net.lines.slice(0, station.lines) as line (line.rungId)}
+			<circle class="stop" cx={x} cy={yOf(line.index)} r="4.6" style:--tint={tint(station.pc)} />
+		{/each}
+
+		<!--
+			Every crossing of a line and a station, pressable.
+
+			**Only the open ones used to be.** A crossing with nothing drawn on it
+			had no target of its own, so a press there fell through to the line's
+			full-width row and pinned the line while leaving the key alone — and if
+			that line was already leading, the press did nothing whatsoever. Which
+			is the same fault `Line.next` was written to fix, one level out: a place
+			on the diagram that looks like a thing to press, and is not.
+
+			Pressing an unopened crossing is a perfectly good question — *what would
+			it take to work on the home chord in F* — and the panel below answers it,
+			with the control that opens it where the ladder can reach it. The cards
+			are made on the way out, so it is also somewhere a train can leave from.
+		-->
+		{#each net.lines as line (line.rungId)}
+			{@const open = line.index < station.lines}
 			<circle
-				class="stop"
+				class="cell-hit"
+				class:is-shut={!open}
 				cx={x}
 				cy={yOf(line.index)}
-				r="4.6"
-				style:--tint={tint(station.pc)}
+				r="17"
 				role="button"
 				tabindex="-1"
-				aria-label="{glyph(station.key)}, {line.label}"
+				aria-label="{glyph(station.key)}, {line.label}{open ? '' : ' — not open yet'}"
 				onclick={(event) => {
 					event.stopPropagation();
 					oncell(station.key, line.rungId);
@@ -503,7 +525,40 @@
 		fill: var(--tint);
 		stroke: var(--color-ground-raised);
 		stroke-width: 2;
+		pointer-events: none;
+	}
+
+	/*
+	 * One hit area per crossing, the same size whether or not anything is drawn
+	 * there. Transparent rather than `none`, because `none` is not paintable and
+	 * a shape that is not painted is not pressed either.
+	 *
+	 * The shut ones show a dashed ring on hover. That is the whole of the answer
+	 * to *how would I know I could press this*: the diagram says so under the
+	 * cursor, in the same dashes it already uses for a station the ladder has not
+	 * reached.
+	 */
+	.cell-hit {
+		fill: transparent;
 		cursor: pointer;
+	}
+
+	/*
+	 * No focus ring on a crossing. It is `tabindex="-1"` and unreachable by
+	 * keyboard — the roundel and the line's own row are what tab to, and pressing
+	 * one of each reaches the same cell — so the ring a click leaves behind marks
+	 * nothing a keyboard user can act on. At a hit radius of seventeen it is a
+	 * large square drawn over the diagram for no reason.
+	 */
+	.cell-hit:focus,
+	.cell-hit:focus-visible {
+		outline: none;
+	}
+
+	.cell-hit.is-shut:hover {
+		stroke: var(--color-ink-dim);
+		stroke-width: 1;
+		stroke-dasharray: 3 3;
 	}
 
 	.halo {

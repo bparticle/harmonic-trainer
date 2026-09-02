@@ -20,6 +20,7 @@ import {
 	narrower,
 	nextCell,
 	nextWidening,
+	openedCell,
 	positionOf,
 	rungsOpenIn,
 	stageByKey,
@@ -561,5 +562,38 @@ describe('the scale item ascends', () => {
 			// One octave exactly, tonic to tonic.
 			expect(voicing[voicing.length - 1] - voicing[0]).toBe(12);
 		}
+	});
+});
+
+describe('which cell a move opened', () => {
+	/*
+	 * The board has to be able to send you to the thing you just pressed, and
+	 * only the frontiers know whether the press did anything. Asked of the pair
+	 * rather than of the form, because both moves refuse what would break the
+	 * staircase.
+	 */
+	it('names the new line, at the first key, when the ladder deepens', () => {
+		const from = FIRST_FRONTIER;
+		const to = deepen(from) as Frontier;
+		expect(openedCell(from, to)).toEqual({ key: 'C', rungId: RUNGS[1].id });
+	});
+
+	it('names the key a widening reached, on the line that reached it', () => {
+		// The scale is open in C alone, so widening it opens the second stage.
+		const from = FIRST_FRONTIER;
+		const to = widen(from, 0) as Frontier;
+		expect(openedCell(from, to)).toEqual({ key: STAGES[1].key, rungId: RUNGS[0].id });
+	});
+
+	it('prefers the line that was shut over the ones deepening widened', () => {
+		// Deepening also drags every rung above it one key wider. The move was
+		// about the idea, not about the extra ground underneath it.
+		const from = deepen(FIRST_FRONTIER) as Frontier;
+		const to = deepen(from) as Frontier;
+		expect(openedCell(from, to)).toEqual({ key: 'C', rungId: RUNGS[2].id });
+	});
+
+	it('is null when nothing moved', () => {
+		expect(openedCell(FIRST_FRONTIER, FIRST_FRONTIER)).toBeNull();
 	});
 });

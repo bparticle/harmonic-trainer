@@ -27,11 +27,13 @@ import {
 	FIRST_FRONTIER,
 	narrower,
 	nextCell,
+	openedCell,
 	RUNGS,
 	rungById,
 	STAGES,
 	nextWidening,
-	workingPosition
+	workingPosition,
+	type RungId
 } from '$lib/curriculum/ladder';
 import { PROGRESSIONS, PROGRESSION_LEVELS } from '$lib/curriculum/progressions';
 import {
@@ -45,6 +47,39 @@ import {
 import type { WorkoutSize } from '$lib/session/workout';
 import { keyStandings } from '$lib/session/warmth';
 import { saveSettings, loadSettings } from '$lib/server/db/settings';
+
+/**
+ * Home again, saying where the move landed.
+ *
+ * A refused move opens nothing and the plain address is right for it: the
+ * ladder did not budge, so neither should the board. Everything else names the
+ * cell, and `openedFrom` reads it back on the other side.
+ */
+function backTo(cell: { key: string; rungId: RungId } | null) {
+	return cell ? `/?at=${encodeURIComponent(cell.key)}&on=${cell.rungId}` : '/';
+}
+
+/**
+ * Where a move just left you, named in the redirect that followed it.
+ *
+ * The three ladder actions redirect to this page, and a redirect carries
+ * nothing. Without this the board re-seeded from `workingPosition()` — the
+ * deepest rung's newest key — so pressing *open the home chord at F* moved the
+ * ladder, came back, and departed from somewhere else entirely. The move had
+ * worked and the screen disagreed, which reads as the button being broken.
+ *
+ * Validated against `STAGES` and `RUNGS` rather than trusted: it arrives in a
+ * query string, and a query string is somebody's address bar.
+ */
+function openedFrom(url: URL): { key: string; rungId: RungId } | null {
+	const key = url.searchParams.get('at');
+	const rung = url.searchParams.get('on');
+	if (!key || !rung) return null;
+
+	const stage = STAGES.find((s) => s.key === key);
+	const named = RUNGS.find((r) => r.id === rung);
+	return stage && named ? { key: stage.key, rungId: named.id } : null;
+}
 
 /**
  * Home: where you are, and what today is made of.
@@ -65,7 +100,7 @@ import { saveSettings, loadSettings } from '$lib/server/db/settings';
  * and reviews-this-week was a number that can only fall, printed on the page you
  * open when you have come to practise.
  */
-export const load: PageServerLoad = async ({ parent, locals }) => {
+export const load: PageServerLoad = async ({ parent, locals, url }) => {
 	const { settings, authed } = await parent();
 
 	// The project presentation must not depend on a working personal database.
@@ -112,6 +147,7 @@ export const load: PageServerLoad = async ({ parent, locals }) => {
 			canDeepen: true,
 			canWiden: false,
 			canStepBack: false,
+			opened: null,
 			history: []
 		};
 	}
@@ -252,6 +288,12 @@ export const load: PageServerLoad = async ({ parent, locals }) => {
 		canDeepen: deeper !== null,
 		canWiden: wider !== null,
 		canStepBack: narrower(frontier) !== null,
+		/*
+		 * The cell the last press opened, so the board can go there rather than
+		 * back to whatever `workingPosition()` now says. Null on every ordinary
+		 * load, which is every load that did not follow a move.
+		 */
+		opened: openedFrom(url),
 		history: history.map((workout) => ({
 			id: workout.id,
 			startedAt: workout.startedAt,
@@ -324,8 +366,9 @@ export const actions: Actions = {
 	 */
 	deepen: async ({ locals }) => {
 		const userId = currentUserId(locals.userId);
-		await deepenLadder(userId);
-		redirect(303, '/');
+		const before = await currentFrontier(userId);
+		const after = await deepenLadder(userId);
+		redirect(303, backTo(openedCell(before, after)));
 	},
 
 	/**
@@ -343,10 +386,10 @@ export const actions: Actions = {
 		const userId = currentUserId(locals.userId);
 		const named = RUNGS.findIndex((rung) => rung.id === form.get('rung'));
 
-		if (named >= 0) await widenLadderAt(userId, named);
-		else await widenLadder(userId);
+		const before = await currentFrontier(userId);
+		const after = named >= 0 ? await widenLadderAt(userId, named) : await widenLadder(userId);
 
-		redirect(303, '/');
+		redirect(303, backTo(openedCell(before, after)));
 	},
 
 	/**

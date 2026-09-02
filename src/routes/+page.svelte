@@ -64,16 +64,24 @@
 	let size = $state<WorkoutSize>(data.size);
 
 	/*
-	 * Starts on the ladder's own suggestion, so pressing play without touching
-	 * anything does what it always did. Seeded once and owned by the map from
-	 * then on — a reload is what changes the suggestion, not a keystroke.
+	 * What the board departs from, before anything on this page is pressed.
+	 *
+	 * Two answers, and which one applies is the difference between a control that
+	 * works and one that looks broken. Ordinarily it is the ladder's own
+	 * suggestion, so pressing Continue without touching anything does what it
+	 * always did. **After a ladder move it is the cell that move opened** — you
+	 * pressed *open the home chord at F* and the board leaves from the home chord
+	 * at F, rather than from wherever `workingPosition()` now points.
+	 *
+	 * Seeded once and owned by the map from then on; a reload is what changes the
+	 * suggestion, not a keystroke.
 	 */
 	// svelte-ignore state_referenced_locally
-	let choice = $state<Choice>({
-		kind: 'rung',
-		key: data.position.key,
-		rung: data.position.rung.id
-	});
+	let choice = $state<Choice>(
+		data.opened
+			? { kind: 'rung', key: data.opened.key, rung: data.opened.rungId }
+			: { kind: 'rung', key: data.position.key, rung: data.position.rung.id }
+	);
 
 	/*
 	 * What is drawn on top of the network, and what is pinned, are separate
@@ -96,15 +104,17 @@
 	 * opened is a perfectly good thing to press — you want to know what it would
 	 * take — it is just not somewhere a train can leave from.
 	 */
+	/** Whichever half of a relative pair was named, as the station holding it. */
+	const stationHolding = (key: string) =>
+		data.stages.find((stage) => stage.key === key || stage.relativeMinor === key)?.key ?? key;
+
 	// svelte-ignore state_referenced_locally
 	let selectedKey = $state<string>(
 		// Opens on wherever today leaves from, so the panel and the board agree
-		// before anything has been pressed. A workout in flight owns that answer.
-		data.stages.find(
-			(stage) =>
-				stage.key === (data.resume?.keyCenter ?? data.position.key) ||
-				stage.relativeMinor === (data.resume?.keyCenter ?? data.position.key)
-		)?.key ?? data.position.key
+		// before anything has been pressed. A workout in flight owns that answer,
+		// unless a ladder move has just named a cell — then it is that cell's key,
+		// and the panel below is already reading the station you asked about.
+		stationHolding(data.opened?.key ?? data.resume?.keyCenter ?? data.position.key)
 	);
 
 	const preview = $derived(data.previews[size] ?? []);
@@ -473,6 +483,24 @@
 				</form>
 			</div>
 
+			<!--
+				What the map has pinned, while a run in flight owns the board.
+
+				The board belongs to the workout that is open — `departure` reads
+				`resume.keyCenter` and the button says *Carry on* — so pressing the map
+				changed the panels below and nothing at the top, which is the report
+				*clicking doesn't affect the button above* almost word for word. It is
+				not a bug in the map and it is not something to silently allow: the run
+				was composed already and its queues are card ids. So the press is
+				answered where it was made, and the way to act on it is named.
+			-->
+			{#if resuming && !suggested}
+				<p class="pinned">
+					The map is pinned to <strong>{summary}</strong>. The run above was composed already — stop
+					it, and that is what departs next.
+				</p>
+			{/if}
+
 			<dl class="board-rows">
 				<div class="board-row">
 					<dt>Calls at</dt>
@@ -615,6 +643,22 @@
 					{/if}
 				</p>
 			</div>
+
+			<!--
+				What pressing it does, said once, above it.
+
+				The board is now a single button and reads as the whole of the page's
+				offer, so the map underneath had to say that it is a control and not a
+				diagram. Three sentences because there are exactly three gestures, and
+				the third is the one nobody found: a crossing is pressable whether or
+				not the ladder has been there.
+			-->
+			<p class="how">
+				Press a <strong>station</strong> to depart from that key, a
+				<strong>line</strong> to lead with that idea, or a
+				<strong>crossing</strong> of the two for both at once — open or not. Nothing here is locked; the
+				cards are made on the way out.
+			</p>
 
 			<div class="layers" aria-label="What the map shows">
 				{#each LAYERS as layer (layer.id)}
@@ -1191,6 +1235,34 @@
 		letter-spacing: 0.03em;
 		color: var(--color-ink-dim);
 		white-space: nowrap;
+	}
+
+	/* The press the board could not act on, answered where it was made. */
+	.pinned {
+		padding-left: 0.6rem;
+		border-left: 2px solid color-mix(in oklab, var(--color-ground-line) 90%, transparent);
+		font-size: 0.76rem;
+		line-height: 1.5;
+		color: var(--color-ink-muted);
+	}
+
+	.pinned strong {
+		font-family: var(--font-mono);
+		font-size: 0.72rem;
+		color: var(--color-ink);
+	}
+
+	/* What the three gestures on the map are. Prose, because it is a sentence. */
+	.how {
+		max-width: 46rem;
+		font-size: 0.78rem;
+		line-height: 1.55;
+		color: var(--color-ink-dim);
+	}
+
+	.how strong {
+		font-weight: 600;
+		color: var(--color-ink-muted);
 	}
 
 	.held {

@@ -408,6 +408,37 @@ export function widen(frontier: Frontier, rungIndex: number): Frontier | null {
 }
 
 /**
+ * Which cell a move actually opened, read off the two frontiers.
+ *
+ * Asked so that a page can send you to the thing you just asked for. Pressing
+ * *open the home chord at F* and landing back on a board still departing from
+ * somewhere else is the same complaint as a stop nobody could reach, one level
+ * out: the control worked, the ladder moved, and nothing on the screen agreed
+ * that anything had happened.
+ *
+ * Read from the frontiers rather than from the form that asked, because `widen`
+ * and `deepen` both refuse moves that would break the staircase. What was asked
+ * for and what opened are different questions, and only the second one may move
+ * the board — which is why this takes a before and an after and returns null
+ * when they are the same.
+ *
+ * Deepening opens a line that was shut, always at the first key; widening adds
+ * one key to a line already open, and the key it adds is the one at the width
+ * it had. Deepening also widens every rung above it, so the newly open line is
+ * checked first: it is the idea that move was about.
+ */
+export function openedCell(from: Frontier, to: Frontier): { key: string; rungId: RungId } | null {
+	const opened = to.widths.findIndex((width, r) => width > 0 && (from.widths[r] ?? 0) === 0);
+	if (opened >= 0 && RUNGS[opened]) return { key: STAGES[0].key, rungId: RUNGS[opened].id };
+
+	const wider = to.widths.findIndex((width, r) => width > (from.widths[r] ?? 0));
+	if (wider < 0 || !RUNGS[wider]) return null;
+
+	const stage = STAGES[from.widths[wider] ?? 0];
+	return stage ? { key: stage.key, rungId: RUNGS[wider].id } : null;
+}
+
+/**
  * The rung a plain "wider" means, and the key it would add.
  *
  * The **deepest rung that can take another key**, which is not always the

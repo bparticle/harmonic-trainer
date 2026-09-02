@@ -6311,3 +6311,60 @@ one disclosure. The verb is the only wording change — **Depart** became
 **Continue**, because the metaphor was never the problem and a first-time reader
 should not have to hold a train in their head to know that the black button
 carries on with the lessons.
+
+### Three ways to choose, and two of them did nothing
+
+Reported straight after the button moved: _I can't see how I can open new lines
+or practise different things, because clicking on a new spot that wasn't open
+yet, or clicking a button that says "open the home chord at F", doesn't affect
+the button above._ Three separate faults, and the report caught all three at
+once because they all end the same way — a press, and a board that does not
+move.
+
+**A crossing that was not open had nothing to press.** The station dots were
+drawn with `net.lines.slice(0, station.lines)`, so a cell the ladder had not
+reached had no target of its own, and a press there fell through to the line's
+full-width row. That pinned the line and left the key alone — and where the line
+was already leading, it did nothing whatsoever. Which is `Line.next`'s bug one
+level out, and worth naming as a pattern: **this diagram has now twice drawn
+somewhere you can point at and not press.** Every crossing of a line and a
+station now carries a hit circle of the same size whether or not anything is
+drawn on it, and the shut ones answer the hover with a dashed ring — in the same
+dashes the map already uses for a station the ladder has not reached.
+
+**Opening a cell did not go to it.** The three ladder actions redirect to `/`,
+a redirect carries nothing, and the board re-seeded from `workingPosition()` —
+the deepest rung's newest key, which has no relationship to what you just asked
+for. So _open the home chord at F_ moved the ladder, came back, and departed
+from somewhere else. `openedCell` reads the move off the two frontiers and the
+action names it in the redirect, `/?at=F&on=tonic-triad`, which the page
+validates against `STAGES` and `RUNGS` and uses as the seed.
+
+Read off the frontiers rather than off the form on purpose. `widen` and `deepen`
+both refuse moves that would break the staircase, so _what was asked for_ and
+_what opened_ are different questions, and only the second one may move the
+board. A refused move returns the plain address and the board stays where it
+was, which is the truth about what happened.
+
+**And the board belongs to the run in flight.** `departure` reads
+`resume.keyCenter` while a workout is open, so pressing the map moved the panels
+below and nothing at the top. That is not a bug — the run was composed already
+and its queues are card ids — but silence about it is, and it is most of why the
+report reads as _nothing works_. The press is now answered where it was made:
+_the map is pinned to F · the home chord; the run above was composed already —
+stop it, and that is what departs next_, with `stop this workout` an inch below.
+
+### The map had to say it was a control
+
+The board is a single button now and reads as the whole of the page's offer, so
+the diagram under it had to stop reading as an illustration. One line above it,
+because there are exactly three gestures and the third is the one nobody found:
+press a station to depart from that key, a line to lead with that idea, or a
+crossing of the two for both at once — **open or not**.
+
+That last clause is the part that was missing everywhere. `startWorkout` calls
+`cardsForRung` for whatever the picker pinned before it composes anything, so
+all eighty-four cells have always been startable and the cards are made on the
+way out. The README has said so since the picker existed, the map had never once
+said it, and the two ways to find out were reading the source or pressing a
+station the diagram drew in dashes.
