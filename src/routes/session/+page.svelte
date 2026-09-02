@@ -5,12 +5,13 @@
 	import Wheel from '$lib/wheel/Wheel.svelte';
 	import { midi as session } from '$lib/midi/shared.svelte';
 	import type { MidiEvent } from '$lib/midi/cluster';
-	import { playChord, playSequence, startAudio, stopAll } from '$lib/audio/engine';
+	import { playChord, playProgression, playSequence, startAudio, stopAll } from '$lib/audio/engine';
 	import {
 		choicesFor,
 		diatonicNames,
 		markGathered,
 		markNamed,
+		markPassage,
 		markPlayed,
 		nameNeighbours,
 		pose,
@@ -123,6 +124,10 @@
 	let revealed = $state(false);
 	/** Pitch classes played since this card was posed, for the ones built up over time. */
 	let gathered = $state<number[]>([]);
+	/** Chords of a passage already played, for the ones answered in order. */
+	let passageDone = $state(0);
+	/** Which chord of a passage is sounding, while the question plays. */
+	let soundingStep = $state(-1);
 	/**
 	 * The naming half of a question, once the playing half is out of the way.
 	 *
@@ -230,6 +235,8 @@
 			revealed = false;
 			lastMarking = null;
 			gathered = [];
+			passageDone = 0;
+			soundingStep = -1;
 			naming = false;
 			playedRight = null;
 			chosenName = null;
@@ -250,6 +257,37 @@
 	const isSequential = $derived(
 		(currentCard?.payload as { kind?: string } | undefined)?.kind === 'scale'
 	);
+
+	/*
+	 * The questions whose answer is a movement rather than a shape.
+	 *
+	 * A progression, and so far only a progression. `pose` hands the chords over
+	 * in order; everything below reads them from there rather than from the
+	 * payload's `answerPitchClasses`, which for one of these is the union of every
+	 * chord in it — the cluster this page used to sound and then demand back all at
+	 * once. For a ii–V–I that union is the whole major scale.
+	 *
+	 * Kept apart from `isSequential`, which means *one note at a time*: a scale
+	 * gathers notes in any order and forgives repeats, and a passage is a series
+	 * of chords each of which has to be held together and in turn. The two look
+	 * alike from a distance and mark nothing alike.
+	 */
+	const passage = $derived(prompt?.sequence ?? null);
+	const isPassage = $derived((passage?.length ?? 0) > 0);
+
+	/** The chord of the passage being asked for, clamped so the last one survives the finish. */
+	const passageChord = $derived(
+		passage ? (passage[Math.min(passageDone, passage.length - 1)] ?? null) : null
+	);
+
+	/**
+	 * Whether the passage is sounded before the answer.
+	 *
+	 * The rule `pose` states: a question with nothing written down is one for the
+	 * ear. `see_play` shows the numerals and stays silent, because playing it
+	 * would be reading out the answer to the question printed above it.
+	 */
+	const soundsPassage = $derived(isPassage && prompt?.visible === null);
 
 	/**
 	 * The question whose subject is a key rather than a chord.
@@ -324,7 +362,7 @@
 	);
 
 	/** Whether this question has anything to sound at all. */
-	const hasQuestionAudio = $derived(Boolean(questionAudio));
+	const hasQuestionAudio = $derived(Boolean(questionAudio) || soundsPassage);
 
 	/**
 	 * A question that is only a name is waiting for one from the moment it is posed.
@@ -366,6 +404,29 @@
 		if (run === demoRun) demoNotes = [];
 	}
 
+	/** How long each chord of a passage is held, sounding and on screen. */
+	const PASSAGE_SECONDS = 1.15;
+
+	/**
+	 * Walk the marker along the passage while it sounds.
+	 *
+	 * Position and nothing else. `animateScale` lights the *key* each note is on,
+	 * because a scale demonstration is teaching where the notes are — but this
+	 * runs for `hear_play`, where which notes they are is the question, so all
+	 * that moves is which box is glowing. Three chords going past with no way to
+	 * tell which one you are hearing is a worse question than it needs to be; the
+	 * count and the pulse are not the answer.
+	 */
+	async function animatePassage(count: number, chordMilliseconds: number) {
+		const run = ++demoRun;
+		for (let i = 0; i < count; i++) {
+			if (run !== demoRun) return;
+			soundingStep = i;
+			await wait(chordMilliseconds);
+		}
+		if (run === demoRun) soundingStep = -1;
+	}
+
 	async function playQuestion() {
 		if (!hasQuestionAudio || !currentCard || !promptKey || playingQuestion) return;
 		const thisPromptKey = promptKey;
@@ -380,8 +441,20 @@
 			 * A scale is not a chord. Sounding all seven notes at once produced a tone
 			 * cluster nobody could identify, and then demanded all seven back
 			 * simultaneously, which is not playable.
+			 *
+			 * Neither is a progression, and that one was worse: the union of a ii–V–I
+			 * is the whole major scale, so the cluster was bigger and what came back
+			 * was a question no hand could answer. It is heard the way it is played —
+			 * one chord after another, in time — which is `playProgression`, the same
+			 * function the chart editor auditions changes with.
 			 */
-			if (isSequential) {
+			if (soundsPassage && passage) {
+				await playProgression(
+					passage.map((chord) => chord.voicing),
+					PASSAGE_SECONDS
+				);
+				await animatePassage(passage.length, PASSAGE_SECONDS * 1000);
+			} else if (isSequential) {
 				const playing = playSequence(audible, 0.4);
 				const demonstration =
 					lessonGuidance.mode === 'guided'
@@ -455,6 +528,28 @@
 		 */
 		const played = chord.held ?? chord.notes;
 		if (played.length === 0) return;
+
+		/*
+		 * A passage is marked where it stands, not all at once.
+		 *
+		 * `expected` above is the payload's `answerPitchClasses`, and for a
+		 * progression that is the union of every chord in it — so this line used to
+		 * ask for every note of a ii–V–I at once and never marked one right. The
+		 * chords are in the prompt, in order; each is checked as a chord, and a
+		 * right one moves the question along.
+		 */
+		if (isPassage && passage) {
+			const marking = markPassage(
+				passage.map((step) => step.pitchClasses),
+				passageDone,
+				played
+			);
+			lastMarking = marking;
+			passageDone = marking.done;
+			if (marking.complete) completeAnswer();
+			return;
+		}
+
 		const marking = markPlayed(toVoicing(expected), played);
 		lastMarking = marking;
 		if (marking.correct) completeAnswer();
@@ -486,7 +581,7 @@
 			() => {
 				if (run === cardRun) go();
 			},
-			isSequential ? 1150 : isChordLesson ? 950 : 650
+			isSequential || isPassage ? 1150 : isChordLesson ? 950 : 650
 		);
 	}
 
@@ -548,6 +643,8 @@
 		revealed = false;
 		lastMarking = null;
 		gathered = [];
+		passageDone = 0;
+		soundingStep = -1;
 		naming = false;
 		playedRight = null;
 		chosenName = null;
@@ -601,7 +698,12 @@
 		if (!isChordLesson || session.held.length === 0) return null;
 		return markPlayed(chordTarget, session.held);
 	});
-	const activeMarking = $derived(liveChordMarking ?? lastMarking);
+	/** The same live reading for a passage, against the one chord it is waiting on. */
+	const livePassageMarking = $derived.by(() => {
+		if (!isPassage || answered || !passageChord || session.held.length === 0) return null;
+		return markPlayed(passageChord.pitchClasses, session.held);
+	});
+	const activeMarking = $derived(liveChordMarking ?? livePassageMarking ?? lastMarking);
 
 	/** What is still missing, as note names rather than a bare count. */
 	const missingNotes = $derived(
@@ -617,7 +719,18 @@
 	const scaleRouteNotes = $derived.by(() => {
 		return scaleTarget.map((note) => formatNote(spell(note, cardContext), { unicode: true }));
 	});
+	/**
+	 * The chord a passage puts on the keyboard, and only once it has been asked for.
+	 *
+	 * Never while the question is open. On `see_play` the numerals are printed and
+	 * the spelling is the exercise; on `hear_play` nothing is written down at all,
+	 * so lighting the keys would answer both halves at once.
+	 */
+	const passageTarget = $derived(
+		isPassage && (showedAnswer || answered) ? (passageChord?.voicing ?? []) : []
+	);
 	const targetNotes = $derived.by(() => {
+		if (isPassage) return passageTarget;
 		if (isSequential && (lessonGuidance.showTarget || showedAnswer || answered)) return scaleTarget;
 		if (
 			isChordLesson &&
@@ -631,6 +744,11 @@
 		return [];
 	});
 	const foundTargetNotes = $derived.by(() => {
+		if (isPassage) {
+			if (passageTarget.length === 0) return [];
+			const missing = new Set(answered ? [] : (activeMarking?.missing ?? []));
+			return passageTarget.filter((note) => !missing.has(((note % 12) + 12) % 12));
+		}
 		if (isSequential)
 			return scaleTarget.filter((note) => gathered.includes(((note % 12) + 12) % 12));
 		if (!isChordLesson || (!activeMarking && !answered)) return [];
@@ -691,8 +809,19 @@
 		 * is not asking that.
 		 */
 		if (isCrossingQuestion) return '';
-		const topic = skillLabel(currentCard.skillCode)?.toLowerCase();
 		const key = glyph(currentCard.keyCenter);
+		/*
+		 * And silent about the topic for a progression that is *heard*, for the
+		 * same reason.
+		 *
+		 * A progression's skill is named after its numerals — `prog:ii-V-I` reads
+		 * back as "ii7 – V7 – Imaj7" — so this line would print the answer to a
+		 * `hear_play` question in the corner above it. The key stays, because every
+		 * other ear question shows the key and the key is not what is being asked.
+		 * `see_play` keeps the whole line: it has the numerals in the prompt.
+		 */
+		if (soundsPassage) return key;
+		const topic = skillLabel(currentCard.skillCode)?.toLowerCase();
 		return topic ? `${key} · ${topic}` : key;
 	});
 
@@ -830,7 +959,11 @@
 			...scaleTarget,
 			...chordTarget,
 			...targetNotes,
-			...demoNotes
+			...demoNotes,
+			// The whole passage, not the chord being asked for, so the keyboard does
+			// not slide sideways between one chord and the next. A window is a range
+			// and says nothing about which notes are in it.
+			...(passage?.flatMap((chord) => chord.voicing) ?? [])
 		];
 		if (notes.length === 0) return { from: 48, count: 29 };
 
@@ -851,6 +984,13 @@
 	});
 
 	const guidanceTitle = $derived.by(() => {
+		if (isPassage && passage) {
+			if (answered) return 'All the way through';
+			if (playingQuestion) return 'Listen to the whole thing';
+			return passageDone === 0
+				? (prompt?.instruction ?? '')
+				: `Chord ${passageDone + 1} of ${passage.length}`;
+		}
 		if (isSequential) {
 			if (lessonPhase === 'watch') return 'Watch the scale move';
 			if (lessonGuidance.mode === 'guided') return 'Your turn — follow the lights';
@@ -879,6 +1019,24 @@
 	const feedbackLine = $derived.by(() => {
 		if (answered && needsName) {
 			return namedRight ? `${answerLabel} — that is the one` : `It was ${answerLabel}`;
+		}
+		/*
+		 * A passage counts in chords, because that is the unit it is answered in.
+		 *
+		 * It has to come before the lines below, which are written for a single
+		 * shape: "every note found" over a ii–V–I would be counting the union
+		 * again, in words this time.
+		 */
+		if (isPassage && passage) {
+			const total = passage.length;
+			if (answered) return `${answerLabel} — all ${total} chords, in order`;
+			if (playingQuestion) return 'Listen — the whole progression first';
+			const at = `Chord ${Math.min(passageDone + 1, total)} of ${total}`;
+			const wanted = passageChord?.symbol ?? '';
+			if (extraNotes.length) return `${at} · lift ${extraNotes.join(' ')}`;
+			if (missingNotes.length) return `${at} · add ${missingNotes.join(' ')}`;
+			if (showedAnswer && wanted) return `${at} · ${wanted}`;
+			return passageDone === 0 ? `${at} · play when you are ready` : `${at} · keep going`;
 		}
 		if (answered && currentCard) {
 			const label = (currentCard.payload as { label: string }).label;
@@ -1495,6 +1653,35 @@
 											: 'Hear the chord again'}
 								</button>
 							{/if}
+						{:else if isPassage && passage}
+							<!--
+								A progression, posed as the movement it is.
+
+								Two questions share this branch and differ in one line. `see_play`
+								prints the numerals, which is the progression's own name, and asks
+								for the spelling; `hear_play` prints nothing and plays it. Both are
+								answered chord by chord on the route beside this panel.
+							-->
+							<p class="prompt-kicker">
+								{prompt.visible ? 'Read it. Play it through.' : 'Hear it. Play it back.'}
+							</p>
+							{#if prompt.visible}
+								<p class="prompt-name prompt-passage">{prompt.visible}</p>
+							{:else if revealed}
+								<p class="prompt-name prompt-passage">
+									{(currentCard.payload as { label: string }).label}
+								</p>
+							{/if}
+							<p class="prompt-copy">{prompt.instruction}</p>
+							{#if soundsPassage}
+								<button class="hear-button" onclick={playQuestion} disabled={playingQuestion}>
+									{playingQuestion
+										? 'Playing the progression…'
+										: audioUnlocked
+											? 'Hear it again'
+											: 'Hear the progression'}
+								</button>
+							{/if}
 						{:else if prompt.direction === 'pivot_play'}
 							<p class="prompt-kicker">Turn the corner</p>
 							<p class="pivot-functions">{prompt.visible}</p>
@@ -1554,6 +1741,36 @@
 								<p>Listen to the shape in your head, then put it under your hand.</p>
 							</div>
 						{/if}
+					{:else if isPassage && passage}
+						<!--
+							Where you are in the progression, and how far there is to go.
+
+							The same job `note-route` does for a scale, in chords. What each box
+							says depends on what the question has already given away: the numeral
+							when it is printed above anyway, its position when nothing is, and the
+							chord symbol once the answer is out — which is the moment a numeral
+							and a spelling are worth seeing side by side.
+						-->
+						<ol class="passage-route" aria-label="Chords in order">
+							{#each passage as step, stepIndex (stepIndex)}
+								<li
+									class:is-done={stepIndex < passageDone}
+									class:is-current={stepIndex === passageDone && !answered}
+									class:is-sounding={soundingStep === stepIndex}
+								>
+									<span class="passage-symbol">
+										{showedAnswer || answered
+											? step.symbol
+											: prompt.visible
+												? step.numeral
+												: stepIndex + 1}
+									</span>
+									{#if showedAnswer || answered}
+										<span class="passage-numeral">{step.numeral}</span>
+									{/if}
+								</li>
+							{/each}
+						</ol>
 					{:else}
 						<!--
 							The wheel, and for a key question a *blank* one.
@@ -1914,6 +2131,16 @@
 		line-height: 1.55;
 	}
 
+	/* A progression's name is a phrase, not a symbol, so it does not get the size
+	   a single chord name gets — `ii7 – V7 – Imaj7` at four rem wraps to three
+	   lines and stops reading as one movement. */
+	.prompt-passage {
+		font-size: clamp(1.6rem, 4vw, 2.4rem);
+		letter-spacing: -0.02em;
+		line-height: 1.15;
+		text-wrap: balance;
+	}
+
 	.chord-context {
 		color: var(--color-ink-dim);
 		font-family: var(--font-mono);
@@ -2231,6 +2458,76 @@
 		transform: translateY(-0.35rem);
 	}
 
+	/*
+	 * The progression, as a row of chords with a place in it.
+	 *
+	 * Built like `.novelty-chords` on the new-thing screen, because it is the same
+	 * object seen twice — there to be heard, here to be answered — and a player
+	 * who has just been shown a ii–V–I should recognise the shape of the thing
+	 * they are being asked for. What it adds is a state: chords behind you, the
+	 * one being asked for, and the one sounding while the question plays.
+	 */
+	.passage-route {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: center;
+		gap: 0.5rem;
+		width: 100%;
+		max-width: 28rem;
+		justify-self: center;
+		padding: 0;
+		list-style: none;
+	}
+
+	.passage-route li {
+		display: flex;
+		min-width: 4rem;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.15rem;
+		padding: 0.55rem 0.7rem;
+		border: 1px solid var(--color-ground-line);
+		border-radius: 10px;
+		background: var(--color-ground-raised);
+		color: var(--color-ink-dim);
+		transition:
+			border-color 160ms cubic-bezier(0.25, 1, 0.5, 1),
+			color 160ms linear,
+			transform 160ms cubic-bezier(0.25, 1, 0.5, 1);
+	}
+
+	/* Done in full ink and pending dimmed, which is the same weight-not-hue rule
+	   the verdict keeps: a chord you have not reached yet is not a mistake. */
+	.passage-route li.is-done {
+		border-color: var(--color-ink-muted);
+		color: var(--color-ink);
+	}
+
+	.passage-route li.is-current {
+		border-color: var(--color-ink);
+		color: var(--color-ink);
+	}
+
+	.passage-route li.is-sounding {
+		border-color: var(--color-ink-dim);
+		color: var(--color-ink);
+		transform: translateY(-2px);
+	}
+
+	.passage-symbol {
+		color: inherit;
+		font-family: var(--font-display);
+		font-size: 1.15rem;
+		font-weight: 600;
+		letter-spacing: -0.01em;
+	}
+
+	.passage-numeral {
+		color: var(--color-ink-dim);
+		font-family: var(--font-mono);
+		font-size: 0.68rem;
+	}
+
 	.memory-cue {
 		display: flex;
 		max-width: 23rem;
@@ -2375,6 +2672,15 @@
 			gap: 0.35rem;
 		}
 
+		.passage-route {
+			gap: 0.35rem;
+		}
+
+		.passage-route li {
+			min-width: 3.25rem;
+			padding: 0.45rem 0.5rem;
+		}
+
 		.chord-note {
 			width: 3.25rem;
 			font-size: 1rem;
@@ -2395,6 +2701,7 @@
 		.question-progress span,
 		.note-route li,
 		.chord-shape li,
+		.passage-route li,
 		.chord-note,
 		.keyboard-stage,
 		.hear-button,
@@ -2406,6 +2713,7 @@
 
 		.note-route li.is-demo,
 		.chord-shape li.is-demo,
+		.passage-route li.is-sounding,
 		.keyboard-stage.is-success {
 			transform: none;
 		}

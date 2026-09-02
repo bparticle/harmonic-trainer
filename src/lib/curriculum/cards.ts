@@ -41,7 +41,12 @@ export type CardPayload = {
 	/** The key the degree is counted from, when the card's own key is not it. */
 	degreeOf?: string;
 	detail?: string;
-	/** Progressions only: the chords in order. */
+	/**
+	 * Progressions only: the chords in order, and the answer to the card.
+	 *
+	 * `answerPitchClasses` beside it is the union of all of them, which is a fact
+	 * about the material rather than anything to play. See `cardsForProgression`.
+	 */
 	steps?: Array<{ numeral: string; symbol: string; pitchClasses: number[]; voicing: number[] }>;
 };
 
@@ -209,6 +214,16 @@ export function cardsForPivots(keyName: string): GeneratedCard[] {
  * It is played as a sequence, checked chord by chord, because the thing worth
  * practising is the movement between them — three separate chord cards would
  * test the chords and miss the point entirely.
+ *
+ * **`steps` is the answer, and `answerPitchClasses` is not.** For every other
+ * card those pitch classes are the whole of what to play; here they are the
+ * union of every chord's notes, which is the material the passage touches and
+ * nothing anybody could hold at once. `pose` and `markPassage` read `steps` and
+ * never the union, and the union stays because cards are insert-only: an
+ * account that pinned a progression last month holds a row with this exact
+ * payload, and changing what is written here would split the population into two
+ * shapes wearing one identity while fixing nothing for the older half. Both
+ * halves already carry the steps, so both are answerable.
  */
 export function cardsForProgression(progression: Progression, keyName: string): GeneratedCard[] {
 	const realised = realiseProgression(progression, keyName);

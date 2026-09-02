@@ -5952,3 +5952,116 @@ is bigger than it was a commit ago, because the affordance it wants no longer
 exists. `payload.steps` still carries the chords in order, so nothing has been
 lost from the data; what has to come back is a prompt that can express a passage
 and a marking rule that checks one chord at a time.
+
+**Fixed in the entry below**, which is where the argument for the shape it came
+back in is written down.
+
+## A progression is a movement, and it was being asked as a chord
+
+The entry above found it and could not fix it in the same commit. This is the
+fix.
+
+`cardsForProgression` builds two cards over one payload, and that payload's
+`answerPitchClasses` is `[...new Set(realised.steps.flatMap((s) => s.pitchClasses))]`
+— the union of every chord in the progression. For a ii–V–I in C that union is
+D F A C, G B D F, C E G B, deduplicated: **seven pitch classes, which is the
+whole of the C major scale.** `pose` handed it to `toVoicing` and sounded it as
+one seven-note chord; `handleChord` then marked whatever you played against the
+same seven and asked for all of them under two hands at once. Both directions did
+this. No ii–V–I card has ever been answerable in the life of the app.
+
+It was hard to meet and easy to miss. Progression cards are made by
+`ensureProgressionCards`, which runs only when the board pins a progression on
+the way into a workout — but once made they stay in the bank like any other card,
+so a pin in August leaves a permanently unanswerable question in somebody's
+rotation for as long as the account exists.
+
+### `sequence` comes back, and means more than it did
+
+There was a field for this and it was deleted a commit ago. The old
+`Prompt.sequence` was `number[][]`, and it was the _preamble_ to a question: the
+cadence directions sounded a passage and then asked for a single note back, so
+all it had to carry was what to play through the speakers. That question is
+retired and the field went with it.
+
+What comes back is the same name over a bigger idea. `sequence` is now
+`PromptChord[]` and it is the _answer_ — the chords in order, each with its own
+pitch classes to mark, its own voicing to sound, its symbol and its numeral. A
+progression is a movement, and the whole of the movement is what is being asked
+for.
+
+`audible` and `sequence` are never both set, and that is the invariant worth
+stating: `audible` means _these notes, together_, which is the one thing a
+progression must not be asked as. Whether a passage is heard at all needs no
+third field, because `visible` already answers it — _empty when the question is
+purely aural_ has been in that type since it was written. `hear_play` prints
+nothing and plays the chords in turn through `playProgression`, the same function
+the chart editor auditions changes with. `see_play` prints the numerals, which
+are the progression's own name, and stays silent: playing it would be reading out
+the answer to the question printed above it.
+
+### The unit is the chord, and a wrong one costs the attempt and nothing else
+
+`markPassage` is `markGathered`'s correction one level up. A scale is not a chord
+and is marked note by note; a progression is not a chord either, and is marked
+chord by chord. Within a chord nothing is relaxed — it is `markPlayed`, so
+octaves and inversions and doublings are free and a note that does not belong is
+still an error, because a chord _is_ notes held together.
+
+What changes is only which chord is being asked for. A right one moves you along;
+a wrong one leaves you exactly where you were. **It never sends you back to the
+top**, and that is a decision rather than a convenience: the movement between the
+chords is the thing being practised, and you cannot practise a movement by
+restarting it every time a finger misses. The grade still comes from the same
+place it always did — whether you got there without pressing _Show the notes_.
+
+### The union stays in the payload, and it is not the answer
+
+The obvious tidy-up is to stop storing it, and it is the wrong one. `ensureCards`
+only ever inserts: a card is written once, keyed by its identity, and never
+rewritten. An account that pinned the jazz cadence last month holds a row with
+this exact payload, and changing what new rows carry would split the population
+into two shapes wearing one identity while fixing nothing for the older half.
+
+Both halves already carry `steps`, which is why this works on rows that predate
+it. So the union stays, with a comment saying what it is — the material the
+passage touches, a true fact about a progression and nothing anybody can play —
+and `pose` and `markPassage` read `steps` and never look at it. A payload with no
+steps at all falls back to the old single-cluster question, which is a poor
+question rather than a crash, and is the right failure for a row written before
+the shape existed.
+
+### The route, and the one line that was giving the answer away
+
+Where a scale gets `note-route` and a chord gets `chord-shape`, a progression
+gets `passage-route`: a box per chord, built like the row of chords the new-thing
+screen already shows, because it is the same object seen twice — there to be
+heard, here to be answered. Chords behind you are drawn in full ink and the ones
+ahead are dimmed, which is the verdict's weight-not-hue rule: a chord you have
+not reached yet is not a mistake.
+
+What each box says is decided by what the question has already given away. The
+numeral where it is printed above anyway, the position where nothing is, and the
+chord symbol once the answer is out — which is the one moment a numeral and a
+spelling are worth seeing side by side. Nothing lights on the keyboard while a
+heard passage is playing; the marker moves and that is all, because which notes
+they are is the question.
+
+Found by reading rather than by playing: `questionSource` prints _key · topic_
+over every question, and a progression's topic is `skillLabel('prog:ii-V-I')`,
+which is the string `ii7 – V7 – Imaj7`. So the corner of a listening question was
+printing its own answer in lower case. It is silent about the topic for a heard
+passage now, for exactly the reason it is already silent for the hinge, and keeps
+the key, because every other ear question shows the key and the key is not what is
+being asked.
+
+### What this does not fix
+
+The run header still says _Task 2 of 4 · from C · ii7 – v7 – imaj7_ while a heard
+progression question is on screen, because progression cards only exist where a
+progression was pinned and the header names what the board pinned. That is a real
+leak and it is left alone on purpose: the header describes the run, not the card,
+and making it card-dependent would flicker it on and off within a single ear task
+as progression and chord questions alternate. Whether a pinned line should stay
+named through a question about it is a decision about the header, and it should
+be made as one rather than as a side effect of this.

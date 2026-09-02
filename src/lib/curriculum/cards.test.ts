@@ -5,10 +5,12 @@ import {
 	CROSSING_SKILL,
 	allSkillCodes,
 	cardsForPivots,
+	cardsForProgression,
 	cardsForReached,
 	skillSeeds
 } from './cards';
 import { RUNGS, STAGES } from './ladder';
+import { progressionById } from './progressions';
 
 describe('cards for everything the frontier holds', () => {
 	const reached = [
@@ -89,5 +91,52 @@ describe('the pivot card', () => {
 		);
 		// The relative shares all seven; one card, not seven.
 		expect(cardsForPivots('C').filter((c) => c.identity.includes('|Am|'))).toHaveLength(1);
+	});
+});
+
+describe('a progression, as one card in two directions', () => {
+	const cards = cardsForProgression(progressionById('ii-V-I')!, 'C');
+
+	it('makes one card per direction and no more', () => {
+		expect(cards.map((card) => card.direction)).toEqual(['see_play', 'hear_play']);
+		expect(new Set(cards.map((card) => card.identity)).size).toBe(2);
+	});
+
+	/*
+	 * The field the answer actually lives in. `answerPitchClasses` beside it is
+	 * the union of all three chords, which is a fact about the material and not
+	 * anything a hand can do — see the note on `cardsForProgression`.
+	 */
+	it('carries the chords in order, each with its own notes and voicing', () => {
+		for (const card of cards) {
+			const steps = card.payload.steps!;
+			expect(
+				steps.map((step) => step.numeral),
+				card.direction
+			).toEqual(['ii7', 'V7', 'Imaj7']);
+			expect(
+				steps.map((step) => step.symbol),
+				card.direction
+			).toEqual(['Dm7', 'G7', 'Cmaj7']);
+			expect(
+				steps.every((step) => step.pitchClasses.length === 4 && step.voicing.length === 4),
+				card.direction
+			).toBe(true);
+		}
+	});
+
+	it('holds a union no chord of it matches', () => {
+		const [card] = cards;
+		const union = card.payload.answerPitchClasses;
+		expect(union).toHaveLength(7);
+		expect(card.payload.steps!.some((step) => step.pitchClasses.length === union.length)).toBe(
+			false
+		);
+	});
+
+	it('keeps its identity stable, so re-seeding keeps the review history', () => {
+		expect(cardsForProgression(progressionById('ii-V-I')!, 'C').map((c) => c.identity)).toEqual(
+			cards.map((c) => c.identity)
+		);
 	});
 });

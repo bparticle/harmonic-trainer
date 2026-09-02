@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { CardPayload } from '$lib/curriculum/cards';
 import { STAGES, itemsForRung } from '$lib/curriculum/ladder';
-import { cardsForPivots } from '$lib/curriculum/cards';
+import { cardsForPivots, cardsForProgression } from '$lib/curriculum/cards';
+import { progressionById } from '$lib/curriculum/progressions';
 import {
 	choicesFor,
 	diatonicNames,
 	markGathered,
 	markNamed,
+	markPassage,
 	markPlayed,
 	nameNeighbours,
 	pose,
@@ -134,6 +136,94 @@ describe('turning the corner', () => {
 	});
 });
 
+/*
+ * The bug these exist for, in one sentence: a progression card's
+ * `answerPitchClasses` is the union of every chord in it, and both of its
+ * directions posed that union as a single chord — sounded as one cluster on
+ * `hear_play`, and marked against all of it at once on both. Nobody
+ * met it often, because progression cards only exist for a progression somebody
+ * has pinned, but no ii–V–I card has ever been answerable.
+ */
+describe('a progression is a movement, not a chord', () => {
+	const jazzCadence = progressionById('ii-V-I')!;
+	const [onSight, byEar] = cardsForProgression(jazzCadence, 'C');
+	const chords = [
+		[2, 5, 9, 0],
+		[7, 11, 2, 5],
+		[0, 4, 7, 11]
+	];
+
+	it('hands the chords over in order rather than as one heap', () => {
+		for (const card of [onSight, byEar]) {
+			const prompt = pose(card.direction, card.payload, 60, card.keyCenter);
+			expect(prompt.sequence, card.direction).not.toBeNull();
+			expect(
+				prompt.sequence!.map((step) => step.pitchClasses),
+				card.direction
+			).toEqual(chords);
+		}
+	});
+
+	it('never sounds the whole progression as one chord', () => {
+		const prompt = pose('hear_play', byEar.payload, 60, 'C');
+		expect(prompt.audible).toBeNull();
+		// The union it used to sound: seven pitch classes — the whole C major scale,
+		// which is neither a chord nor a hand.
+		expect(byEar.payload.answerPitchClasses).toHaveLength(7);
+		expect(prompt.sequence!.every((step) => step.pitchClasses.length === 4)).toBe(true);
+	});
+
+	it('shows the numerals on sight and stays silent, because the spelling is the question', () => {
+		const prompt = pose('see_play', onSight.payload, 60, 'C');
+		expect(prompt.visible).toBe('ii7 – V7 – Imaj7');
+		expect(prompt.audible).toBeNull();
+		expect(prompt.answerWith).toBe('play');
+		// Silent, but still a passage: it is answered chord by chord either way.
+		expect(prompt.sequence).toHaveLength(3);
+	});
+
+	it('carries what each chord is called as well as what it does', () => {
+		const prompt = pose('hear_play', byEar.payload, 60, 'C');
+		expect(prompt.sequence!.map((step) => step.numeral)).toEqual(['ii7', 'V7', 'Imaj7']);
+		expect(prompt.sequence!.map((step) => step.symbol)).toEqual(['Dm7', 'G7', 'Cmaj7']);
+	});
+
+	it('gives every chord something playable to sound', () => {
+		const prompt = pose('hear_play', byEar.payload, 60, 'C');
+		for (const step of prompt.sequence!) {
+			expect(step.voicing).toHaveLength(4);
+			expect(step.voicing.map((n) => ((n % 12) + 12) % 12).sort()).toEqual(
+				[...step.pitchClasses].sort()
+			);
+		}
+	});
+
+	/*
+	 * Cards are written once and never rewritten, so a row from before the steps
+	 * were stored has to pose as something. It falls back to the old question,
+	 * which is a poor one rather than a crash.
+	 */
+	it('falls back to the old single chord for a payload with no steps', () => {
+		const stepless = { ...byEar.payload, steps: undefined };
+		const prompt = pose('hear_play', stepless, 60, 'C');
+		expect(prompt.sequence).toBeNull();
+		expect(prompt.audible).not.toBeNull();
+	});
+
+	it('leaves every other question alone', () => {
+		for (const direction of [
+			'hear_name',
+			'hear_play',
+			'see_play',
+			'play_name',
+			'degree_play',
+			'pivot_play'
+		] as const) {
+			expect(pose(direction, cmaj7, 60, 'C').sequence, direction).toBeNull();
+		}
+	});
+});
+
 describe('spreading pitch classes into a voicing', () => {
 	it('ascends', () => {
 		const voicing = toVoicing([0, 4, 7, 11], 60);
@@ -227,6 +317,94 @@ describe('marking something played over time', () => {
 			return markGathered(C_MAJOR, gathered).correct;
 		});
 		expect(results).toEqual([false, false, false, false, false, false, true]);
+	});
+});
+
+describe('marking a passage', () => {
+	const II_V_I = [
+		[2, 5, 9, 0],
+		[7, 11, 2, 5],
+		[0, 4, 7, 11]
+	];
+
+	/** Play the chords in turn, the way the room does, and report where it ends. */
+	const playThrough = (chords: number[][]) =>
+		chords.reduce(
+			(state, chord) => markPassage(II_V_I, state.done, chord),
+			markPassage(II_V_I, 0, [])
+		);
+
+	it('accepts the chords played one after another', () => {
+		const end = playThrough([
+			[62, 65, 69, 72],
+			[67, 71, 74, 77],
+			[60, 64, 67, 71]
+		]);
+		expect(end.correct).toBe(true);
+		expect(end.complete).toBe(true);
+		expect(end.done).toBe(3);
+	});
+
+	/*
+	 * The regression. Every note of all three chords together is what the page
+	 * used to demand, and for this progression it is the entire major scale.
+	 */
+	it('refuses the whole progression played at once', () => {
+		const union = [...new Set(II_V_I.flat())].map((pc) => 60 + pc);
+		const marking = markPassage(II_V_I, 0, union);
+		expect(marking.correct).toBe(false);
+		expect(marking.complete).toBe(false);
+		expect(marking.done).toBe(0);
+	});
+
+	it('advances one chord at a time and finishes on the last', () => {
+		const played = [
+			[62, 65, 69, 72],
+			[67, 71, 74, 77],
+			[60, 64, 67, 71]
+		];
+		let done = 0;
+		const progress = played.map((chord) => {
+			const marking = markPassage(II_V_I, done, chord);
+			done = marking.done;
+			return marking.complete;
+		});
+		expect(progress).toEqual([false, false, true]);
+	});
+
+	/*
+	 * A wrong chord costs the attempt and nothing else. Sending somebody back to
+	 * the top would make the movement — which is the whole exercise — impossible
+	 * to practise.
+	 */
+	it('leaves a wrong chord where it found it', () => {
+		const marking = markPassage(II_V_I, 1, [67, 71, 74]);
+		expect(marking.correct).toBe(false);
+		expect(marking.done).toBe(1);
+		expect(marking.missing).toEqual([5]);
+	});
+
+	it('says what is missing from the chord being asked for, not from the rest', () => {
+		const marking = markPassage(II_V_I, 0, [62, 65, 69]);
+		expect(marking.missing).toEqual([0]);
+		expect(marking.extra).toEqual([]);
+	});
+
+	it('marks each chord as a chord: octave and inversion free, extras not', () => {
+		expect(markPassage(II_V_I, 0, [50, 53, 57, 60]).correct).toBe(true);
+		expect(markPassage(II_V_I, 0, [62, 65, 69, 72, 74]).correct).toBe(true);
+		expect(markPassage(II_V_I, 0, [62, 65, 69, 72, 73]).correct).toBe(false);
+	});
+
+	it('is not satisfied by silence', () => {
+		expect(markPassage(II_V_I, 0, []).correct).toBe(false);
+		expect(markPassage(II_V_I, 0, []).done).toBe(0);
+	});
+
+	it('stays finished once it is finished', () => {
+		const past = markPassage(II_V_I, 3, [60, 64, 67, 71]);
+		expect(past.complete).toBe(true);
+		expect(past.done).toBe(3);
 	});
 });
 

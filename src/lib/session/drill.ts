@@ -11,12 +11,49 @@ import { formatKey, key as makeKey, keyTonic, parseKey } from '$lib/music/key';
  * whether the answer is heard, seen or played — comes from the direction.
  */
 
+/**
+ * One chord of a passage, carrying everything the room needs of it.
+ *
+ * The voicing is what sounds and the pitch classes are what is marked — the
+ * same split every other card keeps between `answerVoicing` and
+ * `answerPitchClasses`. The symbol and the numeral come along because a passage
+ * is answered in order, so the screen has to be able to say which chord you are
+ * on, and what it was once the answer is out.
+ */
+export type PromptChord = {
+	/** What the chord is called: `Dm7`. */
+	symbol: string;
+	/** What it does in the key: `ii7`. */
+	numeral: string;
+	pitchClasses: number[];
+	voicing: number[];
+};
+
 export type Prompt = {
 	direction: CardDirection;
 	/** What the screen shows. Empty when the question is purely aural. */
 	visible: string | null;
 	/** Notes to play through the speakers together, if any. */
 	audible: number[] | null;
+	/**
+	 * The chords of a passage, in the order they move.
+	 *
+	 * Set where the answer is a *movement* rather than a shape, and never set
+	 * alongside `audible`: that field means "these notes, together", which is the
+	 * one thing a progression must not be asked as. A passage is sounded one
+	 * chord after another and marked one chord after another — see `markPassage`.
+	 *
+	 * Whether it is sounded at all follows the rule `visible` already states. A
+	 * question with nothing written down is a question for the ear, so it is
+	 * played; one that shows the numerals is read, and playing it would be
+	 * handing over the answer.
+	 *
+	 * A field of this name existed before and meant something narrower — the
+	 * chords a cadence question sounded before asking for a single note back —
+	 * and went when those two questions did. It comes back as the whole shape of
+	 * the answer rather than as a preamble to one.
+	 */
+	sequence: PromptChord[] | null;
 	/** How the answer is given. */
 	answerWith: 'play' | 'name';
 	/** One line telling you what to do. */
@@ -44,6 +81,7 @@ export function pose(
 		payload.kind === 'scale'
 			? scaleVoicing(payload.answerPitchClasses, payload.answerVoicing?.[0], midiRoot)
 			: (payload.answerVoicing ?? toVoicing(payload.answerPitchClasses, midiRoot));
+	const passage = passageOf(payload);
 
 	switch (direction) {
 		case 'hear_name':
@@ -51,24 +89,46 @@ export function pose(
 				direction,
 				visible: null,
 				audible: voicing,
+				sequence: null,
 				answerWith: 'name',
 				instruction: 'Listen. What is it?'
 			};
+		/*
+		 * Heard and played back — as one shape, or as a movement.
+		 *
+		 * A progression takes the second road, and until it did, this direction
+		 * sounded `toVoicing` of every pitch class in the whole progression at
+		 * once. The union of a ii–V–I is the whole major scale, so what arrived was
+		 * a seven-note cluster and what was then demanded back was all seven of
+		 * them together — which is not a chord, and not a hand.
+		 */
 		case 'hear_play':
 			return {
 				direction,
 				visible: null,
-				audible: voicing,
+				audible: passage ? null : voicing,
+				sequence: passage,
 				answerWith: 'play',
-				instruction: 'Listen, then play it back.'
+				instruction: passage
+					? 'Listen, then play it back — one chord at a time.'
+					: 'Listen, then play it back.'
 			};
+		/*
+		 * Shown and played, which for a passage means shown as *numerals*.
+		 *
+		 * A progression's own name is its numerals — `ii7 – V7 – Imaj7` — so the
+		 * function is what is written and the spelling is what is asked for, in
+		 * order. That is the introduction a progression actually needs, and it is
+		 * a different question from the same numerals one at a time.
+		 */
 		case 'see_play':
 			return {
 				direction,
 				visible: payload.label,
 				audible: null,
+				sequence: passage,
 				answerWith: 'play',
-				instruction: 'Play it.'
+				instruction: passage ? 'Play it through, one chord at a time.' : 'Play it.'
 			};
 		/*
 		 * Retired, and kept only for the rows that already carry it.
@@ -85,6 +145,7 @@ export function pose(
 				direction,
 				visible: payload.detail ?? payload.degree ?? payload.label,
 				audible: null,
+				sequence: null,
 				answerWith: 'name',
 				instruction: 'Play it, then name what you played.'
 			};
@@ -113,6 +174,7 @@ export function pose(
 				direction,
 				visible: key ? `${degree} — ${key}` : degree,
 				audible: null,
+				sequence: null,
 				answerWith: 'name',
 				instruction: 'Play the chord that degree asks for, then name what you played.'
 			};
@@ -131,10 +193,35 @@ export function pose(
 				direction,
 				visible: payload.detail ?? payload.label,
 				audible: null,
+				sequence: null,
 				answerWith: 'play',
 				instruction: 'One chord, two jobs. Play it.'
 			};
 	}
+}
+
+/**
+ * The chords a card is a passage of, or nothing.
+ *
+ * Read off `payload.steps`, which progression cards have carried since the day
+ * they were first generated — the material was always there, and only the two
+ * functions that pose and mark it were looking at the union instead.
+ *
+ * Null for a progression whose payload has no steps. Cards are written once and
+ * never rewritten, so a row from before the steps were stored falls back to the
+ * old single-cluster question: a poor question rather than a crash, which is the
+ * right failure for a row that predates the shape.
+ */
+function passageOf(payload: CardPayload): PromptChord[] | null {
+	if (payload.kind !== 'progression') return null;
+	const steps = payload.steps;
+	if (!steps?.length) return null;
+	return steps.map((step) => ({
+		symbol: step.symbol,
+		numeral: step.numeral,
+		pitchClasses: step.pitchClasses,
+		voicing: step.voicing
+	}));
 }
 
 /**
@@ -174,6 +261,14 @@ export type Marking = {
 	extra: number[];
 };
 
+/** One chord of a passage marked, and how far through it that leaves you. */
+export type PassageMarking = Marking & {
+	/** How many chords are behind you now. */
+	done: number;
+	/** Whether the last one has landed. */
+	complete: boolean;
+};
+
 /**
  * Mark a played answer.
  *
@@ -207,6 +302,31 @@ export function markGathered(expected: number[], gathered: number[]): Marking {
 	// Extra notes are not an error here: passing notes and repeats are how
 	// scales are actually played.
 	return { correct: missing.length === 0, missing, extra: [] };
+}
+
+/**
+ * Mark a passage a chord at a time.
+ *
+ * The correction `markGathered` made for scales, one level up. A scale is not a
+ * chord; a progression is not one either, and comparing it as one asked for the
+ * union of every chord in it simultaneously — for a ii–V–I that is every note of
+ * the key at once, which is not a hand shape and not the exercise.
+ *
+ * The unit here is the chord, so each is marked as a simultaneity by
+ * `markPlayed`: a chord *is* notes held together, and a note that does not
+ * belong in one is an error in a way a passing note in a scale is not. What
+ * changes is only which chord is being asked for. A right one moves you on; a
+ * wrong one leaves you exactly where you were rather than sending you back to
+ * the top, because the movement between chords is the thing being practised and
+ * you cannot practise a movement by restarting it every time a finger misses.
+ */
+export function markPassage(passage: number[][], done: number, played: number[]): PassageMarking {
+	const chord = passage[done];
+	if (!chord) return { correct: true, missing: [], extra: [], done, complete: true };
+
+	const marking = markPlayed(chord, played);
+	const next = marking.correct ? done + 1 : done;
+	return { ...marking, done: next, complete: next >= passage.length };
 }
 
 /**
