@@ -247,18 +247,30 @@ export function callsAt(workout: Workout): string[] {
 	return keys;
 }
 
+/** A count and the thing it counts, agreeing about number. See `countOf` in the composer. */
+const countOf = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
 function previewLine(task: Task): string {
 	switch (task.kind) {
 		case 'sight':
-			return joinLine(`${task.cardIds.length} symbols at sight`, describeMaterial(task.makeup));
+			return joinLine(
+				`${countOf(task.cardIds.length, 'symbol', 'symbols')} at sight`,
+				describeMaterial(task.makeup)
+			);
 		case 'ear':
-			return joinLine(`${task.cardIds.length} ear questions`, describeMaterial(task.makeup));
+			return joinLine(
+				`${countOf(task.cardIds.length, 'ear question', 'ear questions')}`,
+				describeMaterial(task.makeup)
+			);
 		case 'function':
-			return joinLine(`${task.cardIds.length} degrees across keys`, describeMaterial(task.makeup));
+			return joinLine(
+				`${countOf(task.cardIds.length, 'degree', 'degrees')} across keys`,
+				describeMaterial(task.makeup)
+			);
 		case 'crossing':
 			// The keys are the answer, so `describeMaterial` must not name them —
 			// a preview that lists C, G and F has given away three of six.
-			return `${task.cardIds.length} questions · where the music is, and where it went`;
+			return `${countOf(task.cardIds.length, 'question', 'questions')} · where the music is, and where it went`;
 		case 'mission':
 			return `${task.mission.chartName}. ${describeGoal(task.goal)}`;
 		case 'new_thing':

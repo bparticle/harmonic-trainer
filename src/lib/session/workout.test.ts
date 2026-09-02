@@ -146,6 +146,8 @@ const ONE_TUNE: MissionChart = {
 const held = (bpm: number): HeldRun => ({ bpm, voiced: 20, landed: 20, bestStreak: 12 });
 
 const taskKinds = (workout: Workout) => workout.tasks.map((t) => t.kind);
+const sightCards = (workout: Workout) =>
+	workout.tasks.flatMap((t) => (t.kind === 'sight' ? t.cardIds : []));
 const earCards = (workout: Workout) =>
 	workout.tasks.flatMap((t) => (t.kind === 'ear' ? t.cardIds : []));
 const functionCards = (workout: Workout) =>
@@ -393,9 +395,15 @@ describe('the ear queue never runs dry', () => {
 		}
 	});
 
+	/*
+	 * Twice rather than three times, because a queue built on its own still only
+	 * takes half an item's workout budget: the rule that stops the first task
+	 * spending everything does not know whether another task is coming, and
+	 * leaving something behind is the safe way to be wrong.
+	 */
 	it('goes round a short pool rather than stopping early, but only so far', () => {
 		const one = [card('only-one', 'hear_play', 'C')];
-		expect(earQueue(one, { now: NOW, day: 0 })).toEqual(['only-one', 'only-one', 'only-one']);
+		expect(earQueue(one, { now: NOW, day: 0 })).toEqual(['only-one', 'only-one']);
 	});
 
 	it('has nothing to say when the bank holds no aural cards at all', () => {
@@ -490,7 +498,7 @@ describe('the function queue', () => {
 
 	it('goes round a short pool rather than stopping early, but only so far', () => {
 		const one = [card('only-one', 'degree_play', 'C')];
-		expect(functionQueue(one, { now: NOW, day: 0 })).toEqual(['only-one', 'only-one', 'only-one']);
+		expect(functionQueue(one, { now: NOW, day: 0 })).toEqual(['only-one', 'only-one']);
 	});
 
 	it('has nothing to say when nothing reached carries a numeral', () => {
@@ -923,11 +931,18 @@ describe('the mission', () => {
 
 describe('a brand-new account', () => {
 	const firstReached = cellsOf(FIRST_FRONTIER);
+	/*
+	 * Carrying `item` the way the database seam does, because the whole point of
+	 * a one-rung account is that its two cards are *one scale*. A fixture without
+	 * it would let the sight task and the ear task each think they had found
+	 * their own material, which is the bug this account exists to pin.
+	 */
 	const firstCards: Schedulable[] = cardsForRung('scale', STAGES[0]).map((generated, i) => ({
 		cardId: `first-${i}`,
 		direction: generated.direction,
 		keyCenter: generated.keyCenter,
 		skillCode: generated.skillCode,
+		item: `${generated.keyCenter}|${generated.payload.kind}|${generated.payload.label}`,
 		state: { ...initialState(NOW), reps: 0 }
 	}));
 
@@ -1024,8 +1039,26 @@ describe('a brand-new account', () => {
 		expect(mission.bpmFloor).toBeLessThanOrEqual(76);
 	});
 
-	it('has an ear task even though it owns one aural card', () => {
-		expect(earCards(first)).toHaveLength(3);
+	/*
+	 * **The first workout used to ask the C major scale six times.** One rung
+	 * makes one item and two cards, the drill tasks partition the bank by
+	 * direction, and each of them then looked at a pool of one and passed over it
+	 * three times — twice, because neither could tell the other was asking about
+	 * the same scale. Reported as *the same thing over and over*, and correctly.
+	 *
+	 * One budget between the tasks fixes it at the only place they meet. What a
+	 * first morning is now: see it twice, hear it once, then meet the home chord.
+	 */
+	it('asks its one scale three times across the whole workout, not three times each', () => {
+		const asked = first.tasks.flatMap((task) =>
+			task.kind === 'sight' || task.kind === 'ear' || task.kind === 'function' ? task.cardIds : []
+		);
+		expect(asked).toHaveLength(3);
+	});
+
+	it('still hears it as well as reading it, rather than one task taking the lot', () => {
+		expect(sightCards(first)).toHaveLength(2);
+		expect(earCards(first)).toHaveLength(1);
 		expect(new Set(earCards(first)).size).toBe(1);
 	});
 

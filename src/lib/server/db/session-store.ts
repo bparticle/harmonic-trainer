@@ -326,6 +326,26 @@ export async function stepBackLadder(userId: string): Promise<Frontier> {
 	return to;
 }
 
+/**
+ * The musical thing a card asks about, as the composer's budget counts it.
+ *
+ * Key, kind and label — so the four directions of one chord are one item, and
+ * the C major triad is the same item whether it was opened by the home-chord
+ * rung or the three-main-chords rung above it. That last part is deliberate: it
+ * is the same chord under the same hand, and a workout that has just asked
+ * about it three times has asked enough.
+ *
+ * The same three fields `lesson.ts` keys its guidance on, and for the same
+ * reason — see `guidanceKey`, which had this idea first and needed it on the
+ * page rather than in the composer. Falls back to nothing for a payload that
+ * cannot name itself, and a card with no item counts as its own.
+ */
+function itemIdentity(keyCenter: string, payload: unknown): string | undefined {
+	const shape = payload as { kind?: string; label?: string } | null;
+	if (!shape?.kind || !shape.label) return undefined;
+	return `${keyCenter}|${shape.kind}|${shape.label}`;
+}
+
 /** Everything with a schedule, due or not, in the shape the composer reads. */
 async function schedulableCards(userId: string): Promise<Schedulable[]> {
 	const scheduled = await db
@@ -334,6 +354,7 @@ async function schedulableCards(userId: string): Promise<Schedulable[]> {
 			direction: cards.direction,
 			keyCenter: cards.keyCenter,
 			skillCode: skills.code,
+			payload: cards.payloadJson,
 			stability: srsState.stability,
 			difficulty: srsState.difficulty,
 			dueAt: srsState.dueAt,
@@ -362,6 +383,7 @@ async function schedulableCards(userId: string): Promise<Schedulable[]> {
 			direction: row.direction as CardDirection,
 			keyCenter: row.keyCenter,
 			skillCode: row.skillCode,
+			item: itemIdentity(row.keyCenter, row.payload),
 			state: {
 				stability: row.stability,
 				difficulty: row.difficulty,

@@ -203,6 +203,20 @@ export type Schedulable = {
 	keyCenter: string;
 	/** Which skill the card belongs to, so a block can ask for its own material. */
 	skillCode?: string;
+	/**
+	 * The musical thing this card asks about, rather than the row asking it.
+	 *
+	 * `C major triad in C` is one item and four cards — read it, hear it, name
+	 * it, spell it from a numeral. The composer needs the distinction to stop a
+	 * workout spending its whole morning on one chord: the tasks partition the
+	 * bank by direction, so without this each of them looks at a one-item bank
+	 * and sees a pool it may pass over three times, and the same scale is asked
+	 * six times by two tasks that cannot tell they are about the same scale.
+	 *
+	 * Optional, because a caller that has not got one is not wrong — it just
+	 * cannot share a budget, and every card then counts as its own item.
+	 */
+	item?: string;
 	state: SrsState;
 };
 

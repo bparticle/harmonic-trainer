@@ -6184,3 +6184,53 @@ Walked in the app, on a throwaway database, with a fresh account:
 
 Three departures, three different mornings, and a slow three-chord song on the
 third, in the key the chords were learned in.
+
+### Six questions about one scale, and the partition that could not see it
+
+Left standing in the pass above and reported straight back: the first workout
+still asked the C major scale six times. Worth writing down separately, because
+the cause is not the one it looks like.
+
+`MAX_PASSES` was doing its job. A drill task over a one-card pool asks it three
+times rather than stopping at one, and three passes is a lesson — the guidance
+machinery turns them into _guided_, then _supported_, then _recall_. What went
+wrong is one level up. The four drill tasks partition the bank **by direction**,
+which is what stops a card being asked twice; and a rung makes one scale as two
+cards, `see_play` and `hear_play`. So the sight task looked at a pool of one and
+asked three, and then the ear task looked at a different pool of one, could not
+tell it was the same scale, and asked three more.
+
+Direction is the wrong grain for this question. A chord is one thing to learn
+and four cards — read it, hear it, name it, spell it from a numeral — so the
+budget has to be **per item, not per card**, and `Schedulable` now carries the
+item alongside the row. It is `key|kind|label`, the same three fields
+`lesson.ts` keys its guidance on and for the same reason; that module had the
+idea first and needed it on the page rather than in the composer. The C major
+triad is therefore one item whether the home-chord rung opened it or the rung
+above did, which is right: it is the same chord under the same hand.
+
+**Three asks per item per workout, and no task takes more than half of what is
+left.** The halving is the part worth arguing for. Without it whichever queue is
+built first spends the whole budget and every later task comes back empty —
+which is the same bug wearing the opposite hat, a first morning of six sight
+questions and no listening at all. Halving makes a one-item morning _see it
+twice, hear it once_, which is a lesson rather than a loop.
+
+It binds only where there is nothing else to ask. Counted across the ladder:
+
+| standing on           | items | drill questions |
+| --------------------- | ----- | --------------- |
+| the scale             | 1     | 3               |
+| the home chord        | 2     | 6               |
+| the three main chords | 4     | 11              |
+| all seven triads      | 8     | 22              |
+| a few months in       | 125   | 24              |
+
+The last row is the configured maximum — six at sight, ten by ear, eight
+degrees — reached exactly as before. Where there is material, no task asks the
+same item twice anyway and none of this runs.
+
+One thing fell out of the counts getting small: _"1 questions"_. While every
+drill cycled a pool that sentence was unreachable, and a task that cannot count
+to one reads as precisely the glitch this milestone was reported as. Both the
+composer and the board preview now agree with their own numbers.

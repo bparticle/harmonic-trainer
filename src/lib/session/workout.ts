@@ -831,11 +831,92 @@ function leadWithPinned(
 }
 
 /** Repeat a short pool rather than ending early, up to `MAX_PASSES` times. */
-function toQueue(ordered: Schedulable[], count: number): string[] {
-	return fill(
-		ordered.map((c) => c.cardId),
-		Math.min(count, ordered.length * MAX_PASSES)
-	);
+/**
+ * How many times one musical thing may be asked in one workout.
+ *
+ * **Three, across every task rather than within each of them**, and that is the
+ * whole of the fix. `MAX_PASSES` below is a per-task cap and was doing its job:
+ * a task over a one-card pool asked it three times, which is a lesson rather
+ * than a punishment. But the four drill tasks partition the bank by *direction*,
+ * so on a first morning — one rung, one scale, two cards — the sight task looked
+ * at a pool of one and asked three, and then the ear task looked at a different
+ * pool of one, could not tell it was the same scale, and asked three more. Six
+ * questions about the C major scale, reported as *the same thing over and over*
+ * and correctly.
+ *
+ * A budget per item rather than per card is what lets two tasks agree, since a
+ * chord is one item and four cards. It only ever binds on a small bank: where
+ * there is material, no task asks the same item twice anyway, and this changes
+ * nothing.
+ */
+const ASKS_PER_ITEM = 3;
+
+/** What is left of each item's budget, shared by every queue in one workout. */
+type ItemBudget = Map<string, number>;
+
+const newBudget = (): ItemBudget => new Map();
+
+/**
+ * The musical thing, falling back to the row when nothing said.
+ *
+ * A caller with no `item` is not wrong — it simply cannot share, and every card
+ * counts as its own item, which is exactly the old behaviour one task at a time.
+ */
+const itemOf = (card: Schedulable): string => card.item ?? card.cardId;
+
+/**
+ * How much of an item's remaining budget one task may take.
+ *
+ * **Half, rounded up, and never the lot.** A task that spends an item's whole
+ * budget leaves the rest of the workout nothing to say about it, which is the
+ * bug one layer down: whichever queue happened to be built first would take
+ * everything and the others would come back empty. Halving means a one-item
+ * morning is *see it twice, hear it once* rather than six of one or three of one
+ * and nothing else.
+ */
+function allowanceFor(budget: ItemBudget, item: string): number {
+	const remaining = budget.get(item) ?? ASKS_PER_ITEM;
+	return remaining <= 0 ? 0 : Math.max(1, Math.ceil(remaining / 2));
+}
+
+function toQueue(ordered: Schedulable[], count: number, budget: ItemBudget): string[] {
+	const allowance = new Map<string, number>();
+	for (const card of ordered) {
+		const item = itemOf(card);
+		if (!allowance.has(item)) allowance.set(item, allowanceFor(budget, item));
+	}
+
+	/*
+	 * The pool, passed over until the count is met or every item is spent.
+	 *
+	 * `fill` used to do this by repeating the whole pool and slicing, which is
+	 * the same thing while every card may be asked equally often. It is not the
+	 * same thing once an item runs out mid-pass: this drops that card and carries
+	 * on with the rest, where a repeat-and-slice would have kept handing it out.
+	 */
+	const out: string[] = [];
+	const left = new Map(allowance);
+	for (let pass = 0; pass < MAX_PASSES && out.length < count; pass++) {
+		let placed = false;
+		for (const card of ordered) {
+			if (out.length >= count) break;
+			const item = itemOf(card);
+			const remaining = left.get(item) ?? 0;
+			if (remaining <= 0) continue;
+			out.push(card.cardId);
+			left.set(item, remaining - 1);
+			placed = true;
+		}
+		if (!placed) break;
+	}
+
+	// What was actually asked comes off the workout's budget; what a task claimed
+	// and did not use goes back, so a short queue does not starve the next one.
+	for (const [item, unused] of left) {
+		const used = (allowance.get(item) ?? 0) - unused;
+		budget.set(item, (budget.get(item) ?? ASKS_PER_ITEM) - used);
+	}
+	return out;
 }
 
 const withSkill = (cards: Schedulable[], skill: string | null | undefined) =>
@@ -881,6 +962,15 @@ type QueueOptions = {
 	coldKeys?: string[];
 	pinnedSkill?: string | null;
 	keyCenter?: string;
+	/**
+	 * The workout's remaining asks per item, shared by every queue it builds.
+	 *
+	 * Passed rather than owned because the point is that the queues *share* it —
+	 * a budget per queue is what the per-task cap already was. Absent means a
+	 * caller building one queue on its own, which gets a fresh budget and the
+	 * old behaviour.
+	 */
+	budget?: ItemBudget;
 };
 
 /**
@@ -924,7 +1014,11 @@ function ledQueue(tiered: Schedulable[], options: QueueOptions, count: number): 
 			]
 		: pinned;
 
-	return toQueue(leadWithPinned(tiered, led, pinnedShare(count)), count);
+	return toQueue(
+		leadWithPinned(tiered, led, pinnedShare(count)),
+		count,
+		options.budget ?? newBudget()
+	);
 }
 
 /**
@@ -1014,7 +1108,8 @@ export function functionQueue(cards: Schedulable[], options: QueueOptions): stri
 	const pinned = withSkill(spread, options.pinnedSkill);
 	return toQueue(
 		leadWithPinned(spread, pinned, pinnedShare(FUNCTION_QUESTIONS)),
-		FUNCTION_QUESTIONS
+		FUNCTION_QUESTIONS,
+		options.budget ?? newBudget()
 	);
 }
 
@@ -1035,7 +1130,7 @@ export function functionQueue(cards: Schedulable[], options: QueueOptions): stri
  */
 export function crossingQueue(
 	cards: Schedulable[],
-	options: { now: Date; day: number; coldKeys?: string[] }
+	options: { now: Date; day: number; coldKeys?: string[]; budget?: ItemBudget }
 ): string[] {
 	const tiered = tieredPool(cards, { ...options, directions: CROSSING_DIRECTIONS });
 	if (tiered.length === 0) return [];
@@ -1057,7 +1152,11 @@ export function crossingQueue(
 		)
 	).filter((lane) => lane.length > 0);
 
-	return toQueue(interleave(rotate(lanes, options.day)), CROSSING_QUESTIONS);
+	return toQueue(
+		interleave(rotate(lanes, options.day)),
+		CROSSING_QUESTIONS,
+		options.budget ?? newBudget()
+	);
 }
 
 // ---------------------------------------------------------------------------
@@ -1451,12 +1550,22 @@ export function chooseNovelty(input: {
  * makes the pair the rest of the app is built on — by ear, and on sight — and
  * `Ear` has been sitting on one half of it on its own since the workout existed.
  */
+/**
+ * A count and the thing it counts, agreeing about number.
+ *
+ * Needed because the counts got small. While every drill filled a pool over and
+ * over, "1 questions" was unreachable; sharing an item's budget between tasks
+ * made a one-question task an ordinary morning, and a task that cannot count to
+ * one reads as the glitch this milestone is about.
+ */
+const countOf = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
 function sightTask(cardIds: string[], cards: Schedulable[]): SightTask | null {
 	if (cardIds.length === 0) return null;
 	return {
 		kind: 'sight',
 		title: 'On sight',
-		instruction: `${cardIds.length} symbols · read it, play it.`,
+		instruction: `${countOf(cardIds.length, 'symbol', 'symbols')} · read it, play it.`,
 		goal: { kind: 'questions', count: cardIds.length },
 		cardIds,
 		makeup: makeupOf(cardIds, cards)
@@ -1468,7 +1577,7 @@ function earTask(cardIds: string[], cards: Schedulable[]): EarTask | null {
 	return {
 		kind: 'ear',
 		title: 'Ear',
-		instruction: `${cardIds.length} questions · listen, then play or name.`,
+		instruction: `${countOf(cardIds.length, 'question', 'questions')} · listen, then play or name.`,
 		goal: { kind: 'questions', count: cardIds.length },
 		cardIds,
 		makeup: makeupOf(cardIds, cards)
@@ -1480,7 +1589,7 @@ function functionTask(cardIds: string[], cards: Schedulable[]): FunctionTask | n
 	return {
 		kind: 'function',
 		title: 'Function',
-		instruction: `${cardIds.length} degrees across keys · play, then name.`,
+		instruction: `${countOf(cardIds.length, 'degree', 'degrees')} across keys · play, then name.`,
 		goal: { kind: 'questions', count: cardIds.length },
 		cardIds,
 		makeup: makeupOf(cardIds, cards)
@@ -1492,7 +1601,7 @@ function crossingTask(cardIds: string[], cards: Schedulable[]): CrossingTask | n
 	return {
 		kind: 'crossing',
 		title: 'The hinge',
-		instruction: `${cardIds.length} questions · one chord doing two jobs. Play it.`,
+		instruction: `${countOf(cardIds.length, 'question', 'questions')} · one chord doing two jobs. Play it.`,
 		goal: { kind: 'questions', count: cardIds.length },
 		cardIds,
 		makeup: makeupOf(cardIds, cards)
@@ -1725,21 +1834,34 @@ export function composeWorkout(input: WorkoutInput): Workout {
 		day
 	});
 
-	// Four queues, one bank, partitioned by direction — so nothing is asked twice
-	// without any queue having to know the others exist.
+	/*
+	 * Four queues, one bank, partitioned by direction — so nothing is asked twice
+	 * without any queue having to know the others exist.
+	 *
+	 * And **one budget between them**, which is the thing the partition could not
+	 * do on its own. Direction is what keeps a *card* from being asked twice; it
+	 * says nothing about the C major scale being one scale whether it is read or
+	 * heard. The budget is the only place the four queues meet, and they meet in
+	 * the order they are shown, so the earliest task gets first call on a small
+	 * bank and none of them gets all of it. See `ASKS_PER_ITEM`.
+	 */
+	const budget = newBudget();
 	const sight = sightTask(
-		sightQueue(input.cards, { now, day, coldKeys, pinnedSkill, keyCenter }),
+		sightQueue(input.cards, { now, day, coldKeys, pinnedSkill, keyCenter, budget }),
 		input.cards
 	);
 	const ear = earTask(
-		earQueue(input.cards, { now, day, coldKeys, pinnedSkill, keyCenter }),
+		earQueue(input.cards, { now, day, coldKeys, pinnedSkill, keyCenter, budget }),
 		input.cards
 	);
 	const fn = functionTask(
-		functionQueue(input.cards, { now, day, coldKeys, pinnedSkill, keyCenter }),
+		functionQueue(input.cards, { now, day, coldKeys, pinnedSkill, keyCenter, budget }),
 		input.cards
 	);
-	const crossing = crossingTask(crossingQueue(input.cards, { now, day, coldKeys }), input.cards);
+	const crossing = crossingTask(
+		crossingQueue(input.cards, { now, day, coldKeys, budget }),
+		input.cards
+	);
 
 	let missionsBuilt = 0;
 	/*
