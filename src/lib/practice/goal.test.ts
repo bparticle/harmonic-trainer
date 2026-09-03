@@ -331,4 +331,15 @@ describe('reading a mission off the URL', () => {
 		const goal = readMission(new URLSearchParams('goal=choruses&choruses=100'))?.goal;
 		expect(goal).toEqual({ kind: 'choruses', count: 32 });
 	});
+
+	it('treats an empty value as absent rather than zero', () => {
+		// `Number('')` is 0 in JS, so a hand-edited URL with `&percent=` (present
+		// but empty) must fall back to the default, not silently clamp to zero.
+		expect(readMission(new URLSearchParams('goal=guide_tones&percent='))?.goal).toEqual({
+			kind: 'guide_tones',
+			percent: GUIDE_TONE_TARGET,
+			choruses: 1
+		});
+		expect(readMission(new URLSearchParams('goal=guide_tones&bpm='))?.bpmFloor).toBeNull();
+	});
 });

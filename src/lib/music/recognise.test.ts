@@ -119,6 +119,18 @@ describe('recognition invariants', () => {
 		}
 	});
 
+	it('gives a compound extension in the bass no tertian inversion number, rather than calling it root position', () => {
+		// Cmaj9 (C E G B D) voiced with the 9th, D, in the bass.
+		const pitches = [50, 60, 64, 67, 71]; // D3, C4, E4, G4, B4
+		const candidate = recognise(pitches).find(
+			(c) =>
+				c.chord.quality === 'maj' && c.chord.extensions.includes(9) && c.chord.root.letter === 'C'
+		);
+		expect(candidate).toBeDefined();
+		expect(candidate?.reasoning.some((line) => line.includes('9th in the bass'))).toBe(true);
+		expect(candidate?.inversion).toBeNull();
+	});
+
 	it('ranks the played chord first for root-position diatonic sevenths in every key', () => {
 		const keys = ['C', 'F', 'Bb', 'Eb', 'G', 'D', 'A', 'E'];
 		for (const keyName of keys) {

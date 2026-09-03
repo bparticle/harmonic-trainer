@@ -59,4 +59,14 @@ describe('spoken labels', () => {
 	it('reads the bass of a slash chord', () => {
 		expect(chordSymbolLabel(parseChord('C/E'))).toBe('C major over E');
 	});
+
+	it('spells a double accidental in the bass, not a garbled leftover sign', () => {
+		expect(chordSymbolLabel(parseChord('C/Bbb'))).toBe('C major over B double flat');
+		expect(chordSymbolLabel(parseChord('C/F##'))).toBe('C major over F double sharp');
+	});
+
+	it('spells a double accidental root the same way, not just the bass', () => {
+		expect(chordSymbolLabel(parseChord('Bbbm7'))).toBe('B double flat minor 7');
+		expect(chordSymbolLabel(parseChord('F##7'))).toBe('F double sharp dominant 7');
+	});
 });

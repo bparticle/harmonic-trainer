@@ -202,6 +202,14 @@ describe('describeTasks', () => {
 		expect(describeTasks(['Ear', 'Mission', 'Mission'])).toBe('Ear · Mission ×2');
 	});
 
+	it('counts a repeat even when something sits between the two, as a long workout does', () => {
+		// A long workout's slots are [..., 'mission', 'new_thing', 'mission'], so
+		// the two missions are never adjacent in the titles a real workout produces.
+		expect(
+			describeTasks(['On sight', 'Ear', 'Function', 'Mission', 'One new thing', 'Mission'])
+		).toBe('On sight · Ear · Function · Mission ×2 · One new thing');
+	});
+
 	it('says nothing about an empty workout', () => {
 		expect(describeTasks([])).toBe('');
 	});

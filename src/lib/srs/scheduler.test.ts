@@ -182,6 +182,13 @@ describe('choosing what to ask next', () => {
 		expect(selectDue(cards, { now: at(0) })[0].cardId).toBe('name');
 	});
 
+	it('makes pivot_play the heaviest, matching what its own comment claims', () => {
+		expect(DIRECTION_WEIGHT.pivot_play).toBeGreaterThan(DIRECTION_WEIGHT.degree_play);
+		expect(DIRECTION_WEIGHT.pivot_play).toBeGreaterThan(DIRECTION_WEIGHT.hear_name);
+		expect(DIRECTION_WEIGHT.pivot_play).toBeGreaterThan(DIRECTION_WEIGHT.see_play);
+		expect(DIRECTION_WEIGHT.pivot_play).toBeGreaterThan(DIRECTION_WEIGHT.hear_play);
+	});
+
 	it('pulls neglected keys forward', () => {
 		const cards = [
 			card('warm', 'see_play', 'C', { dueAt: at(-2) }),

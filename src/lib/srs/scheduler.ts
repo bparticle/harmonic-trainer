@@ -179,7 +179,7 @@ export function isDue(state: SrsState, now = new Date()): boolean {
 export const DIRECTION_WEIGHT: Record<CardDirection, number> = {
 	// The heaviest, and it earns it: two keys, no chord name, and a shape that
 	// has to be found from what it does rather than from what it is called.
-	pivot_play: 1.55,
+	pivot_play: 1.65,
 	// Then the chord directions, play-to-name first — see the note above.
 	degree_play: 1.6,
 	hear_name: 1.15,

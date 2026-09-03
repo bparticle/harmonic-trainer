@@ -146,6 +146,18 @@ describe('velocity tracking', () => {
 		expect(tracker.velocity()).toBeGreaterThan(0);
 	});
 
+	it('keeps three samples, as documented, and drops a fourth', () => {
+		const tracker = new VelocityTracker();
+		// A fast opening move followed by three steady samples. A 3-sample window
+		// drops the opening jump and reads only the steady rate; a 4-sample
+		// window (the bug) would still average the jump in, reading much faster.
+		tracker.add(0, 0);
+		tracker.add(50, 16);
+		tracker.add(52, 32);
+		tracker.add(54, 48);
+		expect(tracker.velocity()).toBeCloseTo(2.083, 2);
+	});
+
 	it('resets', () => {
 		const tracker = new VelocityTracker();
 		tracker.add(0, 0);

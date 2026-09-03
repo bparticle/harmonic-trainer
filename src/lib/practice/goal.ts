@@ -397,7 +397,7 @@ const MAX_BPM = 300;
 const MAX_CHORUSES = 32;
 
 function whole(raw: string | null, min: number, max: number): number | null {
-	if (raw === null) return null;
+	if (raw === null || raw.trim() === '') return null;
 	const value = Number(raw);
 	if (!Number.isFinite(value)) return null;
 	return Math.max(min, Math.min(max, Math.round(value)));

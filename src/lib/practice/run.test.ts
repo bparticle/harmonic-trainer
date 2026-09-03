@@ -218,6 +218,30 @@ describe('the outbox', () => {
 		expect(readOutbox(store).blocks.map((b) => b.blockId)).toEqual(['block-2']);
 	});
 
+	/*
+	 * MAX_OUTBOX_RUNS caps retained runs at 500. Before the fix, that slice was
+	 * pure recency: a run months of free play eventually pushed out was dropped
+	 * even while a mission block still named it, leaving the block pointing at
+	 * a run nothing will ever send.
+	 */
+	it('protects a run a pending mission block still needs from the run-count cap', () => {
+		queue(store, post({ runs: [run('run-old')], blocks: [blockResult('block-1', 'run-old')] }));
+		for (let i = 0; i < 600; i++) queue(store, post({ runs: [run(`run-${i}`)] }));
+
+		const waiting = readOutbox(store);
+		expect(waiting.runs.map((r) => r.id)).toContain('run-old');
+		expect(waiting.blocks.map((b) => b.blockId)).toContain('block-1');
+	});
+
+	it('still lets an old run go once nothing pending names it, keeping the newest 500', () => {
+		queue(store, post({ runs: [run('run-old')] }));
+		for (let i = 0; i < 600; i++) queue(store, post({ runs: [run(`run-${i}`)] }));
+
+		const waiting = readOutbox(store);
+		expect(waiting.runs).toHaveLength(500);
+		expect(waiting.runs.map((r) => r.id)).not.toContain('run-old');
+	});
+
 	it('reads an outbox written before missions existed', () => {
 		// A browser holding a run from last week has no `blocks` in it, and that run
 		// belonged to no session anyway.

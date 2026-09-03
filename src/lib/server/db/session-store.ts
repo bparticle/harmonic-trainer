@@ -181,53 +181,62 @@ export async function repairFrontier(userId: string): Promise<Frontier> {
  * Create any cards for places already reached that do not exist yet.
  *
  * Idempotent through the identity string, so it can be called on every session
- * start without duplicating anything.
+ * start without duplicating anything — including two starts racing each other
+ * (two tabs, two devices, or a retried request), which is why the read-then-
+ * insert below runs under a transaction-scoped advisory lock keyed on the
+ * user: without it, two concurrent calls can both read the same "not yet
+ * known" identity, both insert a card for it, and leave two rows silently
+ * tracking one question on two independent FSRS schedules.
  */
 export async function ensureCards(userId: string, generated: GeneratedCard[]): Promise<number> {
 	if (generated.length === 0) return 0;
 
-	const skillRows = await db.select({ id: skills.id, code: skills.code }).from(skills);
-	const skillIds = new Map(skillRows.map((s) => [s.code, s.id]));
+	return await db.transaction(async (tx) => {
+		await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${'ensure_cards:' + userId}))`);
 
-	const existing = await db
-		.select({ payload: cards.payloadJson })
-		.from(cards)
-		.where(eq(cards.userId, userId));
-	const known = new Set(
-		existing
-			.map((row) => (row.payload as { identity?: string })?.identity)
-			.filter((id): id is string => Boolean(id))
-	);
+		const skillRows = await tx.select({ id: skills.id, code: skills.code }).from(skills);
+		const skillIds = new Map(skillRows.map((s) => [s.code, s.id]));
 
-	const fresh = generated.filter((card) => !known.has(card.identity));
-	if (fresh.length === 0) return 0;
+		const existing = await tx
+			.select({ payload: cards.payloadJson })
+			.from(cards)
+			.where(eq(cards.userId, userId));
+		const known = new Set(
+			existing
+				.map((row) => (row.payload as { identity?: string })?.identity)
+				.filter((id): id is string => Boolean(id))
+		);
 
-	const newCards: Array<typeof cards.$inferInsert> = [];
-	const newStates: Array<typeof srsState.$inferInsert> = [];
-	const now = new Date();
+		const fresh = generated.filter((card) => !known.has(card.identity));
+		if (fresh.length === 0) return 0;
 
-	for (const card of fresh) {
-		const skillId = skillIds.get(card.skillCode);
-		// A card with no skill row would violate the foreign key. Skipping is
-		// better than failing the whole session; the seed will supply it later.
-		if (!skillId) continue;
+		const newCards: Array<typeof cards.$inferInsert> = [];
+		const newStates: Array<typeof srsState.$inferInsert> = [];
+		const now = new Date();
 
-		const id = randomUUID();
-		newCards.push({
-			id,
-			userId,
-			skillId,
-			direction: card.direction,
-			keyCenter: card.keyCenter,
-			payloadJson: { ...card.payload, identity: card.identity }
-		});
-		newStates.push({ cardId: id, ...initialState(now) });
-	}
+		for (const card of fresh) {
+			const skillId = skillIds.get(card.skillCode);
+			// A card with no skill row would violate the foreign key. Skipping is
+			// better than failing the whole session; the seed will supply it later.
+			if (!skillId) continue;
 
-	if (newCards.length === 0) return 0;
-	await db.insert(cards).values(newCards);
-	await db.insert(srsState).values(newStates);
-	return newCards.length;
+			const id = randomUUID();
+			newCards.push({
+				id,
+				userId,
+				skillId,
+				direction: card.direction,
+				keyCenter: card.keyCenter,
+				payloadJson: { ...card.payload, identity: card.identity }
+			});
+			newStates.push({ cardId: id, ...initialState(now) });
+		}
+
+		if (newCards.length === 0) return 0;
+		await tx.insert(cards).values(newCards);
+		await tx.insert(srsState).values(newStates);
+		return newCards.length;
+	});
 }
 
 /** Bring the ladder's cards up to date with everything the frontier holds. */
@@ -812,16 +821,28 @@ export async function finishTask(
  * hoping to be read.
  */
 export async function beginBlock(sessionId: string, blockType: WorkoutBlockType): Promise<string> {
-	const [existing] = await db
-		.select({ id: sessionBlocks.id })
-		.from(sessionBlocks)
-		.where(and(eq(sessionBlocks.sessionId, sessionId), eq(sessionBlocks.blockType, blockType)))
-		.limit(1);
-	if (existing) return existing.id;
+	// A plain check-then-insert races: two tabs (or a retry) opening the same
+	// block at once can both see no existing row and both insert one, and
+	// `finishBlock`'s update — which matches on (session, blockType), not a
+	// single id — would then silently mark both duplicates finished, doubling
+	// the block in every count `practiceTotals` and the workout report take
+	// from it. The transaction-scoped lock serializes exactly that race,
+	// released automatically when the transaction ends.
+	return await db.transaction(async (tx) => {
+		await tx.execute(
+			sql`select pg_advisory_xact_lock(hashtext(${'session_block:' + sessionId + ':' + blockType}))`
+		);
+		const [existing] = await tx
+			.select({ id: sessionBlocks.id })
+			.from(sessionBlocks)
+			.where(and(eq(sessionBlocks.sessionId, sessionId), eq(sessionBlocks.blockType, blockType)))
+			.limit(1);
+		if (existing) return existing.id;
 
-	const id = randomUUID();
-	await db.insert(sessionBlocks).values({ id, sessionId, blockType });
-	return id;
+		const id = randomUUID();
+		await tx.insert(sessionBlocks).values({ id, sessionId, blockType });
+		return id;
+	});
 }
 
 export async function finishBlock(

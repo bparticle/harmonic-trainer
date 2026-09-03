@@ -1,5 +1,5 @@
 import type { AbstractChord } from './chord';
-import { formatPitch } from './note';
+import { formatPitch, type Note } from './note';
 
 /**
  * Chord symbols broken into typographic parts.
@@ -161,6 +161,36 @@ export function partsToText(parts: SymbolPart[]): string {
 		.join('');
 }
 
+/**
+ * A letter plus its accidental, spoken out ("B double flat"), for the root or
+ * a slash chord's bass note.
+ *
+ * Not four chained `.replace()` calls: the replacement text for a double
+ * accidental contains the letter 'b' itself ("double flat"), so a later
+ * `.replace('b', ' flat')` in the chain would find and mangle that 'b' too —
+ * "B double flat" becomes "B dou flatle flat". Splitting the letter from the
+ * accidental and mapping the whole accidental at once sidesteps that trap.
+ */
+function spokenPitch(note: Note): string {
+	const spelled = formatPitch(note);
+	const letter = spelled[0];
+	switch (spelled.slice(1)) {
+		case '':
+			return letter;
+		case 'b':
+			return `${letter} flat`;
+		case '#':
+			return `${letter} sharp`;
+		case 'bb':
+			return `${letter} double flat`;
+		case '##':
+			return `${letter} double sharp`;
+		default:
+			// Beyond a double accidental is not a shape this app spells.
+			return spelled;
+	}
+}
+
 /** Spoken form, for screen readers: "E flat minor seven". */
 export function chordSymbolLabel(c: AbstractChord): string {
 	const spoken: Record<string, string> = {
@@ -177,11 +207,7 @@ export function chordSymbolLabel(c: AbstractChord): string {
 		min6: 'minor sixth'
 	};
 
-	const root = formatPitch(c.root)
-		.replace('bb', ' double flat')
-		.replace('##', ' double sharp')
-		.replace('b', ' flat')
-		.replace('#', ' sharp');
+	const root = spokenPitch(c.root);
 
 	const highest = [...c.extensions].sort((a, b) => b - a)[0];
 	// A dominant always has a seventh even when the symbol does not spell it out,
@@ -192,9 +218,7 @@ export function chordSymbolLabel(c: AbstractChord): string {
 	const alterations = c.alterations
 		.map((a) => ` ${a.startsWith('b') ? 'flat' : 'sharp'} ${a.slice(1)}`)
 		.join('');
-	const bass = c.bass
-		? ` over ${formatPitch(c.bass).replace('b', ' flat').replace('#', ' sharp')}`
-		: '';
+	const bass = c.bass ? ` over ${spokenPitch(c.bass)}` : '';
 
 	return `${root} ${spoken[c.quality]}${extension}${alterations}${spokenAdded}${bass}`;
 }

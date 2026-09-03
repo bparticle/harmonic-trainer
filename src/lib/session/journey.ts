@@ -289,8 +289,8 @@ export function describeWhen(when: Date, now = new Date()): string {
 export function describeTasks(titles: string[]): string {
 	const counted: Array<{ title: string; n: number }> = [];
 	for (const title of titles) {
-		const last = counted[counted.length - 1];
-		if (last?.title === title) last.n++;
+		const entry = counted.find((c) => c.title === title);
+		if (entry) entry.n++;
 		else counted.push({ title, n: 1 });
 	}
 	return counted.map(({ title, n }) => (n > 1 ? `${title} ×${n}` : title)).join(' · ');

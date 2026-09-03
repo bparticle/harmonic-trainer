@@ -309,23 +309,46 @@ function mergeFlush(a: Flush, b: Flush): Flush {
 
 /** Bound retained objects without losing the aggregate facts of a run. */
 function compactFlush(flush: Flush): Flush {
+	// A block names the run that answers it, and posting it without that run is
+	// worse than not posting it: a dangling runId settles nothing server-side.
+	// So the size cap protects any run a still-pending block needs, regardless
+	// of age, before it starts dropping runs by recency alone.
+	const neededByBlocks = new Set(flush.blocks.map((block) => block.runId));
+	const originalRunIds = new Set(flush.runs.map((run) => run.id));
+	let keptRuns: RunPayload[];
+	if (flush.runs.length <= MAX_OUTBOX_RUNS) {
+		keptRuns = flush.runs;
+	} else {
+		const required = flush.runs.filter((run) => neededByBlocks.has(run.id));
+		const budget = MAX_OUTBOX_RUNS - required.length;
+		const keep = new Set(
+			(budget > 0
+				? [...required, ...flush.runs.filter((run) => !neededByBlocks.has(run.id)).slice(-budget)]
+				: required
+			).map((run) => run.id)
+		);
+		// A pool of pending blocks larger than the cap itself is not something
+		// this app can produce today, but the fallback still yields the newest
+		// runs rather than an oversized array if it ever did.
+		keptRuns = flush.runs.filter((run) => keep.has(run.id)).slice(-MAX_OUTBOX_RUNS);
+	}
+
 	let budget = MAX_OUTBOX_ATTEMPTS;
-	const keptRuns = flush.runs.slice(-MAX_OUTBOX_RUNS);
 	const runs = new Array<RunPayload>(keptRuns.length);
 
 	// Spend the detail budget newest first. The old run summary stays even when
 	// its chord rows are compacted away.
 	for (let index = keptRuns.length - 1; index >= 0; index--) {
 		const run = keptRuns[index];
-		const keep = Math.min(run.attempts.length, budget);
+		const keepAttempts = Math.min(run.attempts.length, budget);
 		const attempts =
-			keep === run.attempts.length
+			keepAttempts === run.attempts.length
 				? run.attempts
-				: keep > 0
-					? run.attempts.slice(run.attempts.length - keep)
+				: keepAttempts > 0
+					? run.attempts.slice(run.attempts.length - keepAttempts)
 					: [];
 		runs[index] = attempts === run.attempts ? run : { ...run, attempts };
-		budget -= keep;
+		budget -= keepAttempts;
 	}
 	const runIds = new Set(runs.map((run) => run.id));
 
@@ -336,8 +359,15 @@ function compactFlush(flush: Flush): Flush {
 			.map((badge) =>
 				badge.runId !== null && !runIds.has(badge.runId) ? { ...badge, runId: null } : badge
 			),
-		// A block can legitimately name a run already accepted in an earlier post.
-		blocks: flush.blocks.slice(-MAX_OUTBOX_RUNS)
+		// A block can legitimately name a run already accepted in an earlier
+		// post — that run is absent from `flush.runs` entirely, not merely
+		// pruned here, exactly the case `nextOutboxBatch` also treats as settled.
+		// Only a block whose run was present a moment ago and was just dropped by
+		// the cap above (the case the `required` set is meant to prevent, and
+		// only reachable at all in the oversized-pool fallback) is truly orphaned.
+		blocks: flush.blocks.filter(
+			(block) => runIds.has(block.runId) || !originalRunIds.has(block.runId)
+		)
 	};
 }
 

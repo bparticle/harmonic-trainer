@@ -29,6 +29,19 @@
 	let draft = $state<Prefs>({ ...prefs });
 	// svelte-ignore state_referenced_locally
 	let baseline = $state<Prefs>({ ...prefs });
+	// `prefs` is re-fetched (e.g. after onboarding writes tuned defaults via
+	// invalidateAll) while this menu stays mounted in the persistent nav, so
+	// draft/baseline must resync whenever the prop itself changes — otherwise
+	// saving here silently overwrites the newer server value with the value
+	// this component saw when it first mounted.
+	// svelte-ignore state_referenced_locally
+	let syncedPrefs = prefs;
+	$effect(() => {
+		if (prefs === syncedPrefs) return;
+		syncedPrefs = prefs;
+		draft = { ...prefs };
+		baseline = { ...prefs };
+	});
 
 	let panel = $state<HTMLDivElement>();
 

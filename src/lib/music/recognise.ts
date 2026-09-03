@@ -38,8 +38,13 @@ export type Candidate = {
 	/** 0–1. Ambiguous input should produce two similar, middling numbers. */
 	confidence: number;
 	interpretation: Interpretation;
-	/** Which chord tone is in the bass. A fact about the voicing, not the chord. */
-	inversion: 0 | 1 | 2 | 3;
+	/**
+	 * Which chord tone is in the bass, as a fact about the voicing.
+	 *
+	 * Null for a compound extension (9th/11th/13th) in the bass: those have no
+	 * inversion number in the tertian sense — only root/3rd/5th/7th do.
+	 */
+	inversion: 0 | 1 | 2 | 3 | null;
 	/** Chord degrees the player left out, e.g. [1, 5] for a rootless voicing. */
 	omitted: number[];
 	/** Why this candidate ranks where it does, in plain language. */
@@ -319,12 +324,12 @@ function scoreTemplate(
 	 * `bass` is reserved for a bass note that is genuinely not a chord tone.
 	 */
 	const DEGREE_TO_INVERSION: Record<number, 0 | 1 | 2 | 3> = { 1: 0, 3: 1, 5: 2, 7: 3 };
-	let inversion: 0 | 1 | 2 | 3 = 0;
+	let inversion: 0 | 1 | 2 | 3 | null = 0;
 	let slashBass: number | null = null;
 
 	if (byPc.has(bassPc)) {
 		const degree = byPc.get(bassPc)!;
-		inversion = DEGREE_TO_INVERSION[degree] ?? 0;
+		inversion = DEGREE_TO_INVERSION[degree] ?? null;
 		if (degree === 1) {
 			score += W.bassIsRoot;
 			reasoning.push('root in the bass');

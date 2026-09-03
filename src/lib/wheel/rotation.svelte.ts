@@ -107,7 +107,7 @@ export class VelocityTracker {
 
 	add(angle: number, time: number) {
 		this.#samples.push({ angle, time });
-		if (this.#samples.length > 4) this.#samples.shift();
+		if (this.#samples.length > 3) this.#samples.shift();
 	}
 
 	clear() {
