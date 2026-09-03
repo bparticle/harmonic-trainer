@@ -9,7 +9,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 	const data = await exportAccount(currentUserId(locals.userId));
 	return json(data, {
 		headers: {
-			'Content-Disposition': 'attachment; filename="harmonic-trainer-export.json"'
+			'Content-Disposition': 'attachment; filename="roundel-export.json"'
 		}
 	});
 };

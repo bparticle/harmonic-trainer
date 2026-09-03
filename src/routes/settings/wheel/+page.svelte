@@ -93,7 +93,7 @@
 	}
 </script>
 
-<svelte:head><title>Calibrate · Harmonic Trainer</title></svelte:head>
+<svelte:head><title>Calibrate · Roundel</title></svelte:head>
 
 <main class="mx-auto min-h-dvh max-w-[1300px] px-5 py-6">
 	<header class="mb-6 flex items-center gap-3">

@@ -152,7 +152,7 @@ export async function requestPasswordReset(
 		const token = await createResetToken(row.id);
 		await sendMail(
 			normalized,
-			'Reset your Harmonic Trainer password',
+			'Reset your Roundel password',
 			`Follow this link to choose a new password. It expires in an hour and works once.\n\n` +
 				`${resetUrl(token)}\n\n` +
 				`If you did not ask for this, ignore this email — nothing changes until the link is used.`

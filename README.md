@@ -1,19 +1,24 @@
-# Harmonic Trainer
+# Roundel
 
-A harmonic wheel for practising chord progressions — see how they move, hear
-them, and drill them until they are automatic in every key.
+A practice tool for chord progressions, laid out as a transit map of the twelve
+keys — see how they move, hear them, and drill them until they are automatic
+everywhere.
+
+The twelve keys are stations on a network. Each curriculum step is a line across
+it; a day's workout is a departure that calls at the keys you have opened. That
+map is how you navigate and how the lessons are built. The circle-of-fifths
+wheel is still here — it is the terrain the network is drawn on — and it is
+where you explore chords, neighbours and voice leading.
 
 A progression is the real unit of harmony, not the chords in isolation: a
 ii–V–I means something as a single shape, not three symbols to memorise
-separately. The wheel puts that shape in front of you — spin it, transpose it,
-watch a turnaround fall round the circle of fifths — while the rest of the app
-makes sure you can also hear it, recognise it on your own instrument, and find
-it again next week.
+separately. Roundel puts that shape in front of you — on the wheel and across
+the map — while the rest of it makes sure you can also hear it, recognise it on
+your own instrument, and find it again next week.
 
-Not a music theory course. One loop, worked from every direction: put a
-progression on the wheel, hear it, drill it across all twelve keys, and apply
-it — recognising it as you play, or playing along with a generated rhythm
-section.
+Not a music theory course. One loop, worked from every direction: take a
+progression, hear it, drill it across all twelve keys, and apply it —
+recognising it as you play, or playing along with a generated rhythm section.
 
 ```
 SEE → HEAR → DRILL → APPLY
@@ -97,8 +102,8 @@ whole thing is a few hundred kilobytes.
 You need **Node 22+** and a **Postgres 15+**. Docker gives you the second one.
 
 ```bash
-git clone https://github.com/bparticle/harmonic-trainer.git
-cd harmonic-trainer
+git clone https://github.com/bparticle/roundel.git
+cd roundel
 npm install
 cp .env.example .env    # the defaults already match docker-compose
 npm run db:up           # start Postgres in Docker
@@ -673,7 +678,7 @@ npm run verify   # format check, types, tests — the same three CI runs
 
 ## Licence
 
-**AGPL-3.0-or-later.** See `LICENSE`. Copyright © 2026 the Harmonic Trainer
+**AGPL-3.0-or-later.** See `LICENSE`. Copyright © 2026 the Roundel
 contributors.
 
 Run it, read it, change it, fork it, host it for yourself. The licence asks one

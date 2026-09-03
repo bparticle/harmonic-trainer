@@ -232,7 +232,7 @@
 	width={size}
 	height={size}
 	role={interactive ? 'slider' : 'img'}
-	aria-label="Harmonic wheel"
+	aria-label="Circle of fifths"
 	aria-valuenow={interactive ? stepsForAngle(rotation.angle) : undefined}
 	aria-valuemin={interactive ? 0 : undefined}
 	aria-valuemax={interactive ? 11 : undefined}

@@ -10,7 +10,7 @@
 			kicker: 'See · the wheel',
 			title: 'Hue means pitch, and nothing else',
 			blurb:
-				'Notes are spelled, never numbered. Twelve colours come from seven. The harmonic wheel is five circles of fifths stacked so a chord is a rigid shape you can rotate into any key.'
+				'Notes are spelled, never numbered. Twelve colours come from seven. The wheel is five circles of fifths stacked so a chord is a rigid shape you can rotate into any key.'
 		},
 		{
 			slug: 'the-ladder',
@@ -30,12 +30,12 @@
 </script>
 
 <svelte:head>
-	<title>Notes · Harmonic Trainer</title>
+	<title>Notes · Roundel</title>
 	<meta
 		name="description"
-		content="How the Harmonic Trainer works, and the music theory it is built on: the pitch-colour wheel, the exercise ladder, spaced repetition, chord recognition and roman-numeral analysis."
+		content="How Roundel works, and the music theory it is built on: the pitch-colour wheel, the exercise ladder, spaced repetition, chord recognition and roman-numeral analysis."
 	/>
-	<meta property="og:title" content="Notes · Harmonic Trainer" />
+	<meta property="og:title" content="Notes · Roundel" />
 	<meta
 		property="og:description"
 		content="How the app works, and the music theory under it — written semi-technically, with diagrams."
@@ -48,11 +48,11 @@
 		<p class="note-eyebrow">Notes · how it works</p>
 		<h1>What the app is built on</h1>
 		<p class="note-standfirst">
-			The Harmonic Trainer is a practice tool for learning harmony at the piano — a wheel, a MIDI
-			keyboard, ear training, spaced repetition and a generated rhythm section. These notes explain
-			the machinery: the music theory it encodes, the parts it has derived from that theory, and how
-			it turns practising into something it can measure. Semi-technical, with diagrams, and no staff
-			notation anywhere.
+			Roundel is a practice tool for learning harmony at the piano — a wheel, a MIDI keyboard, ear
+			training, spaced repetition and a generated rhythm section. These notes explain the machinery:
+			the music theory it encodes, the parts it has derived from that theory, and how it turns
+			practising into something it can measure. Semi-technical, with diagrams, and no staff notation
+			anywhere.
 		</p>
 	</header>
 
@@ -100,7 +100,7 @@
 			<p>
 				The project is free software under the AGPL. The music core is plain TypeScript with a few
 				hundred hand-written test fixtures, and you can read all of it —
-				<a href="https://github.com/bparticle/harmonic-trainer" target="_blank" rel="noreferrer"
+				<a href="https://github.com/bparticle/roundel" target="_blank" rel="noreferrer"
 					>the source is on GitHub</a
 				>, and <code>DECISIONS.md</code> there records the reasoning behind nearly everything below.
 			</p>

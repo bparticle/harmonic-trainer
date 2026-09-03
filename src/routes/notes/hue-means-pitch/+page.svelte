@@ -108,10 +108,10 @@
 </script>
 
 <svelte:head>
-	<title>Hue means pitch · Notes · Harmonic Trainer</title>
+	<title>Hue means pitch · Notes · Roundel</title>
 	<meta
 		name="description"
-		content="How the Harmonic Trainer represents music: notes spelled not numbered, twelve pitch-class colours derived from seven, and a harmonic wheel built from five stacked circles of fifths so that a chord is a rigid shape you can rotate into any key."
+		content="How Roundel represents music: notes spelled not numbered, twelve pitch-class colours derived from seven, and a wheel built from five stacked circles of fifths so that a chord is a rigid shape you can rotate into any key."
 	/>
 	<meta property="og:title" content="Hue means pitch, and nothing else" />
 	<meta
@@ -311,7 +311,7 @@
 						class="wide"
 						viewBox="0 0 560 300"
 						role="img"
-						aria-label="A schematic of the harmonic wheel: four concentric rings and twelve radial spokes. One spoke is drawn bold, with four coloured dots down it labelled C, E-flat, G-flat, A — a C diminished seventh chord. A note says the fifth ring repeats the first."
+						aria-label="A schematic of the wheel: four concentric rings and twelve radial spokes. One spoke is drawn bold, with four coloured dots down it labelled C, E-flat, G-flat, A — a C diminished seventh chord. A note says the fifth ring repeats the first."
 					>
 						{#each RINGS as r (r)}
 							<circle cx="150" cy="150" {r} class="f-faint" fill="none" />

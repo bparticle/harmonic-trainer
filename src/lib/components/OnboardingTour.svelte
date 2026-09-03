@@ -98,7 +98,7 @@
 				title: 'Hear what your hands found',
 				body:
 					experience === 'beginner'
-						? 'Play any chord. Harmonic gives you a moment to name it, then shows what landed.'
+						? 'Play any chord. Roundel gives you a moment to name it, then shows what landed.'
 						: 'Use this as a quick recognition drill: play, name, then check the reading.',
 				points: [
 					'The wheel and keyboard light the notes you are holding.',
@@ -406,7 +406,7 @@
 						<p class="eyebrow">Setup · 2 of 3</p>
 						<h2 id="tour-title">Connect your piano</h2>
 						<p>
-							Switch it on first, then let this browser use MIDI. Harmonic never sends notes out.
+							Switch it on first, then let this browser use MIDI. Roundel never sends notes out.
 						</p>
 					</div>
 
@@ -476,7 +476,7 @@
 						</h2>
 						<p>
 							{inputMode === 'midi'
-								? 'Watch each note appear below. Three different notes confirms that the full MIDI signal is reaching Harmonic.'
+								? 'Watch each note appear below. Three different notes confirms that the full MIDI signal is reaching Roundel.'
 								: 'Click or tap three different keys. You can practise without MIDI and connect a piano later from Settings.'}
 						</p>
 					</div>

@@ -1,7 +1,7 @@
 {
-	"name": "harmonic-trainer",
+	"name": "roundel",
 	"version": "0.1.0",
-	"description": "A harmonic wheel for practising chord progressions. No staff notation, anywhere.",
+	"description": "Practise chord progressions on a map of the twelve keys. No staff notation, anywhere.",
 	"license": "AGPL-3.0-or-later",
 	"private": true,
 	"type": "module",
@@ -17,11 +17,11 @@
 	],
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/bparticle/harmonic-trainer.git"
+		"url": "https://github.com/bparticle/roundel.git"
 	},
-	"homepage": "https://github.com/bparticle/harmonic-trainer#readme",
+	"homepage": "https://github.com/bparticle/roundel#readme",
 	"bugs": {
-		"url": "https://github.com/bparticle/harmonic-trainer/issues"
+		"url": "https://github.com/bparticle/roundel/issues"
 	},
 	"engines": {
 		"node": ">=22"

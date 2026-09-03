@@ -451,17 +451,13 @@
 </script>
 
 <svelte:head>
-	<title
-		>{data.public
-			? 'Harmonic Trainer — see, hear, drill and apply harmony'
-			: 'Harmonic Trainer'}</title
-	>
+	<title>{data.public ? 'Roundel — see, hear, drill and apply harmony' : 'Roundel'}</title>
 	{#if data.public}
 		<meta
 			name="description"
 			content="An open-source, instrument-first practice tool for seeing, hearing and mastering chord progressions in every key."
 		/>
-		<meta property="og:title" content="Harmonic Trainer" />
+		<meta property="og:title" content="Roundel" />
 		<meta
 			property="og:description"
 			content="See harmony move. Hear it. Drill it in every key. Apply it at your instrument."

@@ -107,7 +107,7 @@
 	const noteName = (pc: number) => formatNote(spell(pc, C_MAJOR), { unicode: true });
 </script>
 
-<svelte:head><title>Colours · Harmonic Trainer</title></svelte:head>
+<svelte:head><title>Colours · Roundel</title></svelte:head>
 
 <main class="mx-auto min-h-dvh max-w-[1300px] px-5 py-6">
 	<header class="mb-6 flex items-center gap-3">

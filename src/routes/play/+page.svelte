@@ -160,7 +160,7 @@
 	);
 </script>
 
-<svelte:head><title>Play · Harmonic Trainer</title></svelte:head>
+<svelte:head><title>Play · Roundel</title></svelte:head>
 <svelte:window onkeydown={onKeydown} />
 
 <main class="mx-auto flex min-h-dvh max-w-[1400px] flex-col px-5 py-6">

@@ -131,7 +131,7 @@
 	const noteName = (pc: number) => formatNote(spell(pc, currentKey), { unicode: true });
 </script>
 
-<svelte:head><title>Explore · Harmonic Trainer</title></svelte:head>
+<svelte:head><title>Explore · Roundel</title></svelte:head>
 
 <main class="mx-auto min-h-dvh max-w-[1500px] px-5 py-6">
 	<div class="grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">

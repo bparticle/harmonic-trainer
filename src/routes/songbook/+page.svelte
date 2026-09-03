@@ -198,7 +198,7 @@
 </script>
 
 <svelte:head>
-	<title>Songbook · Harmonic</title>
+	<title>Songbook · Roundel</title>
 </svelte:head>
 
 <div class="mx-auto flex max-w-[1500px] flex-col gap-6 px-3 py-6 sm:px-5">

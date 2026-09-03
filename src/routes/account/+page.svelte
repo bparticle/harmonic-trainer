@@ -13,7 +13,7 @@
 	);
 </script>
 
-<svelte:head><title>Account · Harmonic Trainer</title></svelte:head>
+<svelte:head><title>Account · Roundel</title></svelte:head>
 
 <main class="mx-auto w-full max-w-2xl px-5 py-12 sm:py-16">
 	<header class="flex items-center gap-4 sm:gap-5">

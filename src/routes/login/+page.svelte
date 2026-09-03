@@ -5,7 +5,7 @@
 	let pending = $state(false);
 </script>
 
-<svelte:head><title>Harmonic Trainer</title></svelte:head>
+<svelte:head><title>Roundel</title></svelte:head>
 
 <main class="grid min-h-dvh place-items-center px-6">
 	<form
@@ -20,10 +20,10 @@
 		}}
 	>
 		<h1 class="font-display text-ink text-4xl leading-none font-semibold tracking-tight">
-			Harmonic&nbsp;Trainer
+			Roundel
 		</h1>
 		<p class="text-ink-dim mt-2 font-mono text-xs tracking-widest uppercase">
-			Progressions on the wheel
+			Every key is a station
 		</p>
 		{#if data.notice}
 			<p

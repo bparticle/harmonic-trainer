@@ -5,7 +5,7 @@
 	let pending = $state(false);
 </script>
 
-<svelte:head><title>Reset password · Harmonic Trainer</title></svelte:head>
+<svelte:head><title>Reset password · Roundel</title></svelte:head>
 
 <main class="grid min-h-dvh place-items-center px-6">
 	<div class="w-full max-w-sm">

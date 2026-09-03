@@ -23,7 +23,7 @@
 
 <div class="note-shell">
 	<nav class="note-topbar" aria-label="Notes">
-		<a href="/">← Harmonic Trainer</a>
+		<a href="/">← Roundel</a>
 		<span class="sep" aria-hidden="true">/</span>
 		{#if onIndex}
 			<span class="here">Notes</span>

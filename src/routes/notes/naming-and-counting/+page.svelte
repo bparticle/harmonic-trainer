@@ -113,10 +113,10 @@
 </script>
 
 <svelte:head>
-	<title>Naming what you play · Notes · Harmonic Trainer</title>
+	<title>Naming what you play · Notes · Roundel</title>
 	<meta
 		name="description"
-		content="How the Harmonic Trainer names chords, analyses progressions, generates a rhythm section from Roman numerals, judges what you play against a chord's guide tones, and keeps a record where every number traces to a row."
+		content="How Roundel names chords, analyses progressions, generates a rhythm section from Roman numerals, judges what you play against a chord's guide tones, and keeps a record where every number traces to a row."
 	/>
 	<meta property="og:title" content="Naming what you play, and counting it honestly" />
 	<meta

@@ -1409,7 +1409,7 @@
 	const glyph = (s: string) => s.replace(/b/g, '♭').replace(/#/g, '♯');
 </script>
 
-<svelte:head><title>Workout · Harmonic Trainer</title></svelte:head>
+<svelte:head><title>Workout · Roundel</title></svelte:head>
 <svelte:window onkeydown={onKeydown} />
 
 <main class="mx-auto flex min-h-dvh max-w-5xl flex-col px-5 py-6">

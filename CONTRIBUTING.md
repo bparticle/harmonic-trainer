@@ -9,8 +9,8 @@ You need Node 22+, Docker (or any Postgres), and a browser with Web MIDI —
 Chrome, Edge or Firefox. See the README for why Safari cannot run it.
 
 ```bash
-git clone https://github.com/bparticle/harmonic-trainer.git
-cd harmonic-trainer
+git clone https://github.com/bparticle/roundel.git
+cd roundel
 npm install
 cp .env.example .env       # the defaults match docker-compose
 npm run db:up              # starts Postgres

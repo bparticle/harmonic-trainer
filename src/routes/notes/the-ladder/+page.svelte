@@ -87,10 +87,10 @@
 </script>
 
 <svelte:head>
-	<title>The ladder · Notes · Harmonic Trainer</title>
+	<title>The ladder · Notes · Roundel</title>
 	<meta
 		name="description"
-		content="The Harmonic Trainer's curriculum: a two-axis ladder through the twelve keys, cards that do not exist until you reach them, spaced repetition that weights the hard questions, a workout composed from the date, and a gate that never sets a tune whose chords you have not been shown."
+		content="Roundel's curriculum: a two-axis ladder through the twelve keys, cards that do not exist until you reach them, spaced repetition that weights the hard questions, a workout composed from the date, and a gate that never sets a tune whose chords you have not been shown."
 	/>
 	<meta property="og:title" content="The ladder, and why it widens before it deepens" />
 	<meta

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
+	import BrandMark from './BrandMark.svelte';
 	import LiveNotes from './LiveNotes.svelte';
 	import SettingsMenu from './SettingsMenu.svelte';
 	import type { Key } from '$lib/music/key';
@@ -44,9 +45,12 @@
 
 <header class="border-ground-line bg-ground/90 sticky top-0 z-40 border-b backdrop-blur">
 	<div class="mx-auto flex h-14 max-w-[1500px] items-center gap-2 px-3 sm:gap-5 sm:px-5">
-		<a href="/" class="font-display text-ink hidden text-base font-semibold tracking-tight sm:block"
-			>Harmonic</a
-		>
+		<a href="/" aria-label="Roundel — Today" class="text-ink flex flex-none items-center gap-2">
+			<BrandMark variant="flat" size={18} />
+			<span class="font-display hidden text-base font-semibold tracking-tight sm:block"
+				>Roundel</span
+			>
+		</a>
 
 		<!-- The links scroll rather than push: a fourth destination was enough to
 		     make the whole page slide sideways on a narrow screen. -->

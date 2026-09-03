@@ -6647,3 +6647,65 @@ Out of the app went the board's filled-disc origin, the profile's twelve column
 charts, and the caption in the corner of every question. In came one mark and one
 row, used in six places, which is fewer drawings of the twelve keys than there
 were this morning.
+
+## The app is called Roundel now
+
+**"Harmonic Trainer" was a description with a job it could not do.** It said what
+the app was for and nothing about which app it was — a phrase three words long
+and a thousand results deep, the kind of name a search engine cannot tell from a
+category. It also described the app that existed before the network: a wheel, and
+a drill attached to it. That is no longer the shape of the thing. The twelve keys
+are a transit map now, and the map is how you navigate and how the curriculum is
+built. The name had to be a name, and it had to be able to point at that.
+
+**Roundel.** It is the London Underground's word for the mark at a station — a
+ring with a bar across it — and the app was already full of them: every key on
+the network is a roundel, drawn in its tonic's colour, filled by what the record
+holds. The brand is the roundel for the whole network. Nothing about the product
+changed to fit the name; the name was found by looking at what was already drawn.
+
+### The mark, and the two things it is not allowed to claim
+
+A ring with a bar across it. `pitch` makes the ring the circle of fifths: twelve
+stations, C at noon, each in its tonic's colour from the palette the account
+owns. `flat` is the same shape in `currentColor`, for the header, a tab, the
+favicon — the sizes where colour stops reading.
+
+Two rules, and both are refusals:
+
+- **Twelve pitches or none.** Hue means pitch everywhere else in the app, so the
+  brand never takes a single hue for itself — a one-colour roundel would read as
+  the key of C. The flat mark is ink.
+- **Nothing is hidden and nothing is at the centre.** The first draft ran the
+  bar straight through the ring and covered two stations, and put a dot in the
+  middle. Both were read — correctly — as significance that was not there: the
+  two covered notes looked chosen, and the centre dot looked like a junction. So
+  every station is drawn _on top of_ the bar now, each with a hairline gap in the
+  ground colour so a light one still holds on ink, and the two the bar meets — A
+  and E♭, the horizontal — simply sit on the line, the way a station sits on a
+  line. The centre is empty. If the site ever wants motion, a dot can run the
+  length of the bar and leave.
+
+It lives in `BrandMark.svelte`, which is **not** `Roundel.svelte`. That one draws
+a single key as a station on the map; this draws the whole network's mark. They
+are the same figure at two scales, on purpose, and keeping them as two files
+keeps the station from having to know it is also a logo.
+
+### What the rename touched, and what it left alone
+
+Every `<title>` and social tag, the app header and both landing headers, the PWA
+manifest, the favicon (`static/icon.svg` — the one place the palette is written
+in hex, now with the bar added), one password-reset email subject, the export
+filename, and `package.json`. The GitHub URLs point at `bparticle/roundel`; the
+repository itself still needs renaming there to match, which is the one step of
+this that cannot be done from inside the tree.
+
+Left alone: the wheel is still the wheel and still the terrain — it did not lose
+a name, "the harmonic wheel" was never the brand. And the music core keeps every
+`Harmonic` it has — `harmonicMinor`, `HarmonicStudy`, `HarmonicRole`,
+`harmonicity` on a synth voice. That word is doing real work there and none of it
+is about what the app is called.
+
+One line of copy moved with the name: the sign-in page read _Progressions on the
+wheel_ and now reads _Every key is a station_, because the first was a promise
+the home page stopped keeping the day it became a map.

@@ -1,5 +1,7 @@
 <script lang="ts">
-	const REPOSITORY = 'https://github.com/bparticle/harmonic-trainer';
+	import BrandMark from './BrandMark.svelte';
+
+	const REPOSITORY = 'https://github.com/bparticle/roundel';
 
 	const pitches = [
 		{ note: 'C', pc: 0 },
@@ -31,19 +33,9 @@
 
 <div class="landing-shell">
 	<header class="site-header">
-		<a class="brand" href="#top" aria-label="Harmonic Trainer home">
-			<svg viewBox="0 0 40 40" aria-hidden="true">
-				<circle cx="20" cy="20" r="13" class="mark-ring" />
-				{#each pitches as pitch, i (pitch.note)}
-					<circle
-						cx={20 + Math.sin((i / 12) * Math.PI * 2) * 13}
-						cy={20 - Math.cos((i / 12) * Math.PI * 2) * 13}
-						r="2.7"
-						style:fill={`var(--pc-${pitch.pc})`}
-					/>
-				{/each}
-			</svg>
-			<span>Harmonic Trainer</span>
+		<a class="brand" href="#top" aria-label="Roundel home">
+			<BrandMark variant="pitch" size={32} />
+			<span>Roundel</span>
 		</a>
 
 		<nav class="site-nav" aria-label="Project">
@@ -81,7 +73,7 @@
 				<p class="hero-note entrance entrance-5">AGPL licensed · no telemetry · self-hostable</p>
 			</div>
 
-			<div class="hero-instrument entrance entrance-3" aria-label="Animated harmonic wheel">
+			<div class="hero-instrument entrance entrance-3" aria-label="Animated circle of fifths">
 				<div class="orbit-label orbit-label-a">ii</div>
 				<div class="orbit-label orbit-label-b">V</div>
 				<div class="orbit-label orbit-label-c">I</div>
@@ -142,7 +134,7 @@
 
 				<div class="product-window backing-window" aria-label="Play along interface preview">
 					<div class="window-bar">
-						<span class="window-brand">Harmonic</span>
+						<span class="window-brand">Roundel</span>
 						<span>Today</span><span>Play</span><b>Play along</b><span>Explore</span>
 						<i></i>
 					</div>
@@ -188,8 +180,7 @@
 			<div class="preview-stage recognition-preview">
 				<div class="product-window recognition-window" aria-label="Live chord recognition preview">
 					<div class="window-bar">
-						<span class="window-brand">Harmonic</span><b>Play</b><i></i><span>MIDI · connected</span
-						>
+						<span class="window-brand">Roundel</span><b>Play</b><i></i><span>MIDI · connected</span>
 					</div>
 					<div class="recognition-body">
 						<div class="mini-wheel" aria-hidden="true">
@@ -369,19 +360,9 @@
 	</main>
 
 	<footer>
-		<a class="brand footer-brand" href="#top">
-			<svg viewBox="0 0 40 40" aria-hidden="true">
-				<circle cx="20" cy="20" r="13" class="mark-ring" />
-				{#each pitches as pitch, i (pitch.note)}
-					<circle
-						cx={20 + Math.sin((i / 12) * Math.PI * 2) * 13}
-						cy={20 - Math.cos((i / 12) * Math.PI * 2) * 13}
-						r="2.7"
-						style:fill={`var(--pc-${pitch.pc})`}
-					/>
-				{/each}
-			</svg>
-			<span>Harmonic Trainer</span>
+		<a class="brand footer-brand" href="#top" aria-label="Roundel">
+			<BrandMark variant="pitch" size={28} />
+			<span>Roundel</span>
 		</a>
 		<p>Open source under the AGPL-3.0 license.</p>
 		<div>
@@ -429,12 +410,6 @@
 		letter-spacing: -0.02em;
 		text-decoration: none;
 	}
-	.brand svg {
-		width: 2rem;
-		height: 2rem;
-		flex: none;
-	}
-	.mark-ring,
 	.wheel-track {
 		fill: none;
 		stroke: var(--color-ground-line);

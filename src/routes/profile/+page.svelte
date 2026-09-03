@@ -125,7 +125,7 @@
 	const bandName = (id: string) => bandById(id)?.name ?? id;
 </script>
 
-<svelte:head><title>Profile · Harmonic</title></svelte:head>
+<svelte:head><title>Profile · Roundel</title></svelte:head>
 
 <main class="mx-auto max-w-[1100px] px-5 py-7">
 	<header class="mb-7 flex items-center gap-3.5">

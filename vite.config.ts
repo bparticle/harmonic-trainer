@@ -23,9 +23,9 @@ export default defineConfig({
 		SvelteKitPWA({
 			registerType: 'autoUpdate',
 			manifest: {
-				name: 'Harmonic Trainer',
-				short_name: 'Harmonic',
-				description: 'A harmonic wheel for practising chord progressions.',
+				name: 'Roundel',
+				short_name: 'Roundel',
+				description: 'Practise chord progressions on a map of the twelve keys.',
 				lang: 'en',
 				theme_color: '#0c0d11',
 				background_color: '#0c0d11',

@@ -22,7 +22,7 @@
 	 * only honest offer is the source, and that offer is a real one.
 	 */
 
-	const REPOSITORY = 'https://github.com/bparticle/harmonic-trainer';
+	const REPOSITORY = 'https://github.com/bparticle/roundel';
 
 	let { data } = $props();
 
@@ -51,7 +51,7 @@
 </script>
 
 <svelte:head>
-	<title>Demo · Harmonic Trainer</title>
+	<title>Demo · Roundel</title>
 	<meta
 		name="description"
 		content="Play along with a generated rhythm section. No account needed."
@@ -61,7 +61,7 @@
 <div class="demo-bar">
 	<a class="home" href="/">
 		<span aria-hidden="true">←</span>
-		<span>Harmonic Trainer</span>
+		<span>Roundel</span>
 	</a>
 
 	<p>
