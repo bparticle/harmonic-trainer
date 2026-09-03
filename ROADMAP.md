@@ -703,6 +703,85 @@ self-hostable, carries separate invite-only accounts, and makes no claim that
 public hosting exists. The later replacement can still say **run it yourself,
 or let somebody else run it for you** when M13 makes the second half true.
 
+## The writing that has to come out of the interface
+
+Not a milestone, a standing job with a growing list. **The app explains itself in
+prose, in the places where it is being used**, and the explanations are good —
+they are the reason the confusing behaviour became legible — but a paragraph that
+changes under a toggle is a layout that moves when you press something, and a
+screen that has to be read before it can be used is a screen that has stopped
+being an instrument.
+
+So the rule from here: **the drawing says it, or it goes in the writing.** The
+board's calling points now say _which of these are on the leading line_ in track
+rather than in a sentence — stops on a piece of track, stops elsewhere standing
+off it — and the map says _this run is held at one station_ by receding and
+capping the line, rather than by a paragraph underneath. Neither needed words
+once the diagram was asked to carry it.
+
+What is needed is somewhere for the words to go. Three surfaces, none of which
+exists yet:
+
+- **FAQ.** Short answers to the questions the app actually gets asked.
+- **How to use the app.** The one read-through: what a station is, what a line
+  is, what a run is made of, what the marks mean.
+- **Notes / blog.** `/notes` already exists and is public and static — the
+  natural home for the longer arguments, and it already holds three of them.
+
+### Taken out of the interface, and owed a page
+
+Written down here because they were true and useful, and deleting them without a
+record would lose the only clear statement of each.
+
+1. **Why a pinned exercise still calls at other keys.** A pin _leads_ the queue
+   and does not narrow it — at most half the questions go to what you chose, and
+   the rest come from every open cell. So pinning the relative minor, which may
+   be open in C and nowhere else, composes a run that starts there and carries
+   on into F and G on lines that do call there. This is the single most
+   confusing thing the app does and the FAQ's first entry.
+
+2. **What "stay at this station" does.** Every question comes from that station
+   and its relative minor. There is no key question on such a run, because that
+   exercise is about telling confusable places apart and one place is nothing to
+   tell apart. The play-along goes to the same stop, and a minor tune with
+   nowhere minor to go is not set at all.
+
+3. **The wheel and the network are two drawings with two jobs.** The wheel on
+   Explore is the terrain: twelve keys laid out by the intervals between them,
+   with nothing about you in it. The network on Today is what the curriculum has
+   built across that terrain. This is why there are not two circles of fifths in
+   the app, and it belongs in the how-to rather than as a sentence on each page.
+
+4. **Why the stop list is not the exact queue.** The previews are composed before
+   anything is pinned — recomposing them on every press of the map would be a
+   round trip for a line of text — so the tasks are the shape of the day and
+   their sub-lines name the keys an unpinned run would touch.
+
+### Still in the interface, and candidates for the same move
+
+Listed in rough order of how much room they take and how little they are read:
+
+- Today's _Press a station to depart from that key, a line to lead with that
+  idea, or a crossing of the two_ — three gestures, three sentences, above a
+  diagram that is already the argument for pressing it.
+- The station panel's _the run above is already composed, so this changes
+  nothing in it_ — a true and rarely needed answer about a rare press.
+- The board's _the map is pinned to …, the run above was composed already_ —
+  same shape, same rarity.
+- The workout's _open next_ paragraph, which explains what going deeper means
+  every time it offers it.
+- The _play-along next_ paragraph on the board, which is a curriculum
+  explanation standing in a departure board.
+
+The map's own legend is **not** on this list. A legend is part of a diagram, not
+prose about one, and a reader who needs it needs it where the diagram is.
+
+### Done when
+
+The three surfaces exist and are linked from somewhere obvious; the four
+paragraphs above have a home; and Today, the workout and the profile carry no
+paragraph whose job is to explain a mark that is already on the screen.
+
 ---
 
 ## Decisions still open

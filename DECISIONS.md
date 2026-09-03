@@ -6368,3 +6368,282 @@ all eighty-four cells have always been startable and the cards are made on the
 way out. The README has said so since the picker existed, the map had never once
 said it, and the two ways to find out were reading the source or pressing a
 station the diagram drew in dashes.
+
+## One universe, and the two questions a pin was answering at once
+
+Three things reported together, and they turned out to be one thing said from
+three distances: _push the metro concept through the whole app, conceptually and
+not decoratively_; _inside an exercise nothing points back at what we are doing
+or which keys we are handling_; and _when the relative minor is open in C and
+nowhere else, why does the board advertise calling at F and G — is that an
+oversight?_
+
+The first is the general case. The second is where the map had simply never
+gone. The third is the one place where the map and the composer told a player
+two true things and joined them with nothing.
+
+### The map's own marks, drawn once
+
+The network entry recorded the fault it was built to end: the twelve keys were
+drawn three times within a screen of each other in three visual languages,
+meaning three different things. The fix held on that page and nowhere else. The
+board underneath it drew its own origin as a **filled disc**; the profile drew
+the same twelve as a **column chart**; the workout page drew them not at all.
+Three drawings of one thing again, on three pages instead of in one screen, and
+it does not stop being that fault because a navigation happens in between.
+
+`Roundel.svelte` is the mark, extracted from `NetworkMap` and now used by all
+four. It carries the rules rather than restating them: the only colour is the
+tonic's, a ring is a key that exists, what is inside it is what the record
+holds, and dashed is _nothing here yet_ — the app's one meaning for dashed,
+everywhere.
+
+Two decisions inside it are worth keeping written down. It is sized in **rem and
+not em**, because these sit inside mono captions at 0.7rem as often as inside a
+headline, and a mark that inherited its size from the caption came out at a
+third of the intended one, with its own name inside it, illegible. And **"here"
+is the map's `calls` ring, not its `READING` ring** — a solid ink circle a size
+down from the departure ring. The dashed one means a station you are looking at
+and not going to, which is the opposite claim to the one a strip over a live
+question is making.
+
+The profile was the one conversion that needed an argument rather than a swap,
+because the bar chart was better at one thing: twelve proportions read
+precisely. What settles it is that `keyStandings` and the profile's spread are
+one reading of one table — both fold `chord_attempts` by tonic — so they were
+not two facts drawn two ways, they were one fact drawn two ways. The exact count
+still sits under each roundel, which is where precision belonged all along.
+
+### The workout page had never been on the map
+
+The strongest form of the second report. `/session` said `Task 2 of 4 · from C ·
+the relative minor` in the header and then, per question, a caption in the far
+corner reading `C · the scale`. Two quiet lines of mono about **different
+things** — one about the run, one about the question — within an inch of each
+other, with nothing marking which was which. That is how a page ends up read as
+saying neither.
+
+`RouteStrip.svelte` replaces both with one row of the network: the line this
+question is on, the stops the task calls at, and the one being served. Nothing
+new is measured — `Makeup.keys` has carried the calling points since a task
+learned to say what it was made of, and `keyStandings` is the same call the home
+page already makes. It is deliberately a **row and not a second diagram**;
+drawing the network twice would be the fault the network was built to end.
+
+The line is read off the **current card** rather than off the task, and that is
+the whole reason the strip is worth having. A queue leads with what was pinned
+and then runs on, so the line genuinely changes under you — a strip that named
+only the pinned one would go back to describing the run instead of the question,
+which is what the header was already doing.
+
+Every refusal the old caption carried moved across intact, which was the part
+that took care. The key question draws its stops **blank** — one grey roundel
+with a question mark, because you are at a station and which one is the
+question, and a row of named roundels would hand the answer over more plainly
+than the caption ever could have leaked it. A progression that is _heard_ has
+its line left unnamed, because `prog:ii-V-I` reads back as "ii7 – V7 – Imaj7"
+and that is the answer, printed an inch above the question. `see_play` keeps the
+whole line: the numerals are already in the prompt.
+
+The end screen got the other half of the sentence. The board says **calls at**
+before you leave, which is a forecast composed before anything is answered; the
+report now says **called at**, off the rows, which is the register. A workout is
+the one place in this app where the two can honestly differ, because a queue
+that runs short stops early — so the closing line is the one that is a fact.
+
+### It was not an oversight, and the board had never said so
+
+The third report is the oldest confusion in the app, and the answer has been
+written down in `leadWithPinned` all along: _a pinned choice does not narrow the
+queue — narrowing is the cage this milestone is undoing — it leads it._ Half the
+questions at most go to the pin and the rest come from every open cell. So
+pinning **the relative minor**, which is open in C and nowhere else, composes a
+run that starts on that line at C and then carries on into F and G on lines that
+do call there. Both halves are true.
+
+**No sentence on the board joined them.** The row said `Calls at C · F · G`
+directly beneath a button reading `C · The relative minor`, which reads as the
+line making a promise it cannot keep. The map has been honest about this the
+whole time — `NetworkMap` rings a calling point only where the leading line
+actually reaches it — and the board was the reading that disagreed.
+
+So the row was made to carry the join. It did it in a sentence for one
+afternoon and it does it in track now — see _The sentences came out again_
+below, which is where that argument ends up.
+
+### And then the switch that was actually being asked for
+
+_Is there a way to only practise C if we want to?_ There was not, and the
+argument against it turns out to be about something else. `leadWithPinned`'s note
+is about **skills** — twenty minutes orbiting the handful of facts one skill
+holds is the thing the picker was built to open — and it was quietly deciding for
+**keys** as well. Those are different questions. "Today, only C" is an ordinary
+thing to want in the week you meet a key, and especially in the week after
+opening a rung that exists in one key and nowhere else.
+
+So it is a separate answer to a separate question, and it is one switch on the
+board: **stay at this station**. The pin still leads and still does not narrow;
+this says where the run is allowed to go.
+
+**Station and not key**, which is the whole of why it works. A station holds both
+halves of a relative pair — the roundel says C and the line under it says Am, and
+it has said so since the map was drawn — so staying at C keeps A minor, which is
+the only reading under which _the relative minor in C_ is one place. That fact
+had lived only inside the drawing; `stationHolding` and `keysAtStation` are it,
+written down where the composer can ask.
+
+They deliberately refuse to read a bare minor tonic. `minorKeysReached` hands
+those out for missions, and eight of the twelve collide with a major key of the
+same name — reading `D` would file D major's cards at F's station, because F's
+relative is D minor. The ambiguity is older than these functions and is not one
+they may guess at. A test asserts that every station answers to its own two names
+and to no other station's.
+
+One filter, applied once, in `composeWorkout`, and every queue is built from what
+it leaves. Doing it there rather than inside four queues is the whole of keeping
+the promise: a run advertised as calling at C only cannot have one of four queues
+quietly reaching somewhere else, and the rules those queues carry about leading,
+spreading and budgeting go on working over a smaller bank without knowing
+anything changed.
+
+**And there is no key question.** `crossingQueue`'s own note says the spread
+across keys _is_ the exercise, because what is being taught is telling confusable
+places apart; asked six times in one key it is six repetitions of _yes, still C_,
+whose answer is printed on the board above it. So a station-only run has one task
+fewer, and the board says why rather than quietly having three tasks instead of
+four. The play-along goes to the same stop, and a minor tune with nowhere minor
+to go is refused by the rule that already refuses it for every other account.
+
+It is **off on every load**, always. The ordinary run is the one that calls
+everywhere, and a switch that remembered "C only" from a fortnight ago would be
+the app narrowing somebody's practice without being asked twice. It is a decision
+about today, taken beside the button that starts today.
+
+### The two drawings, and where that belongs
+
+The wheel is the terrain and the network is what has been built across it. That
+is Beck's distinction, it is why there are not two circles of fifths in this app,
+and it had been recorded here and said on neither page — so the two read as two
+tools that happened to agree about colour.
+
+A sentence went on each page and came off again within the hour, with the rest of
+the prose. It is the clearest case of the rule below: the fact is real, it is
+worth writing down, and a paragraph on a study bench is not where somebody reads
+it. It is in `ROADMAP.md` waiting for the how-to.
+
+### The sentences came out again, the same afternoon
+
+Read back on the screen rather than in the diff: _there is a little bit too much
+text-based communication and it's even affecting the layout — if we switch
+between "only this station" and the full crossing, a text field changes to
+explain what's going on._
+
+Correct, and the fault is not that the sentences were wrong. Each of them was
+true and each of them was the thing that made a confusing behaviour legible. The
+fault is that **a paragraph that changes under a toggle is a layout that moves
+when you press something**, and this app is meant to sit on a music stand at
+arm's length and be used rather than read. Two of the three were also load-bearing
+in the worst way: they were the only place a fact was stated, so the drawing had
+been let off carrying it.
+
+So the drawing was asked to carry it, and it turned out it already knew how.
+
+**Track means this line.** The board's calling points are now two groups: the
+stops the leading line actually has, sitting on a piece of track, and the rest
+standing off it. That is the grammar the map three inches below has used since
+the day it was drawn — a line connects the stations it calls at — so the reader
+has been taught it already, and the sentence that used to say _F and G are on
+other lines the run passes along_ is a caption for a picture that now makes the
+point itself.
+
+**And a service cut back to one stop is a thing a transit diagram can simply
+show.** Holding a run at one station recedes the rest of the network and caps the
+line either side of the station that is left, with a buffer stop — the diagram's
+own mark for _the service ends here_. The recession is staggered from the ends
+inwards, because that is what cutting a service back looks like: the far
+terminus closes first and the closure walks towards what is left. It is the one
+piece of motion on the page and it explains a state change, which is the only
+kind this app allows itself.
+
+The stations recede rather than disappear. Pressing one is still how you go
+somewhere else, and a control that vanished when a switch was thrown would be a
+worse answer than the paragraph this replaced.
+
+**The words are not deleted, they are relocated** — see `ROADMAP.md`, which now
+carries the standing job and the four paragraphs verbatim enough to be rewritten
+into an FAQ, a how-to and the `/notes` section that already exists for exactly
+this. The rule that came out of it, and it applies to everything after this: **the
+drawing says it, or it goes in the writing.** Not both, and never a paragraph
+whose job is to explain a mark that is already on the screen.
+
+One sentence stayed, and the distinction is worth keeping. The workout header
+still reads `Task 1 of 4 · from G · this station only`, because that is a
+_label for the state_ rather than an explanation of it — the same class of thing
+as `DEPARTS` on the map. What went was every sentence that argued.
+
+### The track went through the names, and three controls were captions
+
+Three reports off the same screen, and the first one is a straight bug.
+
+**The line struck the letters out.** The board's calling points drew their track
+as a CSS bar behind a row of roundels — and a roundel is a transparent SVG, so
+the bar went through the middle of every one of them and put a pen through the
+key name inside it. Unreadable, and the only reason it survived the afternoon it
+was written is that the row it was tested on had one stop in it.
+
+The fix is where the fix belonged from the start: **the track is drawn inside the
+mark, in the mark's own units.** Each roundel carries a segment from its ring out
+to the edge of its box, so two boxes set side by side join into one continuous
+track that the roundels interrupt — at any size, with nothing in a stylesheet
+that has to be kept in step with something in an SVG. The gap between stops is
+now the roundel's own margin inside its box, which is where spacing between
+marks should come from anyway: it scales with the mark. `RouteStrip` had the same
+bar and lost it the same way.
+
+**And three controls had been drawn as captions.** _Stop this workout_, _back to
+the suggestion_ and the workout's own _skip / later / stop_ were all bare mono
+text at the dimmest ink in the palette — two of them sitting in a row with three
+bordered chips. So the two ways out of a decision, and the three ways out of a
+run, read as labels rather than as things to press, and were reported as hard to
+find. Being hard to find was the whole of what was wrong with them: **the page
+already had a shape for a small control and these were not wearing it.** They
+wear it now, and `stay at this station` came off its odd pill and joined the same
+family.
+
+Stopping gets one step more than the rest — a brighter edge and full ink — and
+no further. A filled button would make stopping look like the thing the page
+wants you to do.
+
+### The way back from a play-along grew a verdict
+
+The sharpest of the three, because the button was already correct and in the
+wrong register. `/backing` carries `← Workout` at the foot of the mission panel,
+0.68rem, dim, underlined. Fine before you have played: going back is a way of
+_not_ doing this, and it belongs at the weight of every other small control.
+
+Then the run stops and the verdict lands, and going back becomes the most
+predictable press in the app — the tune has been played and judged, and there are
+three tasks still waiting on the other page. It was still a caption. **So it
+grows**: once there is a verdict it becomes the app's primary button, in full
+ink, sitting directly under the sentence that has just said how it went, and it
+says _Back to the workout_ rather than _Workout_.
+
+One control, two weights, chosen by whether the thing it leads back to is now the
+obvious next move. That is the general rule this pass leaves behind, and it is
+cheaper than adding controls: **an action's prominence is a claim about what to
+do next, so it should be allowed to change when that answer changes.**
+
+### What this cost
+
+One new stored field, optional, on the plan: `stationOnly`, so a workout composed
+before it existed reads as the ordinary run it was. No migration, no change to
+the scheduler, no change to what a card is. `/session` pays one `GROUP BY` it did
+not pay before — the same `loadKeyChords` the home page and the profile already
+pay — and pays it whether or not a workout is open, because the end screen is
+where the stations are needed most and finishing a workout is exactly what makes
+`activeWorkout` return nothing.
+
+Out of the app went the board's filled-disc origin, the profile's twelve column
+charts, and the caption in the corner of every question. In came one mark and one
+row, used in six places, which is fewer drawings of the twelve keys than there
+were this morning.

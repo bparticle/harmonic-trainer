@@ -1,4 +1,5 @@
 import { BADGE_TIERS } from '$lib/effects/streak';
+import { stationHolding } from '$lib/curriculum/ladder';
 import { keyTonic } from '$lib/music/key';
 import type { Verdict } from '$lib/practice/goal';
 import type { Workout } from './workout';
@@ -58,6 +59,16 @@ export type WorkoutReport = {
 	missions: Array<{ met: boolean; says: string; chartName: string }>;
 	/** Only keys the record held nothing in before today. */
 	coldKeys: string[];
+	/**
+	 * Every station the run actually reached, in the order the rows were written.
+	 *
+	 * The bookend to the board's *calls at*. That row is a forecast composed
+	 * before anything is answered; this is the register, off `chord_attempts` and
+	 * `reviews` — and a workout is the one thing in this app where the two can
+	 * honestly differ, because a queue that runs short stops early. Saying what
+	 * the run did is the only version of the sentence that is a fact.
+	 */
+	calledAt: string[];
 	badges: Array<BadgeWon & { name: string }>;
 	/** The lines the end screen shows, in order, and nothing beyond them. */
 	says: string[];
@@ -108,6 +119,15 @@ export function reportWorkout(input: ReportInput): WorkoutReport {
 
 	const badges = input.badges.map((badge) => ({ ...badge, name: tierName(badge.tier) }));
 
+	// Stations rather than keys, so a run that asked about C and about A minor
+	// reports one stop and not two. Order of first touch, which is the order the
+	// rows were written.
+	const calledAt: string[] = [];
+	for (const touched of input.keysTouched) {
+		const station = stationHolding(touched.keyCenter) ?? keyTonic(touched.keyCenter);
+		if (!calledAt.includes(station)) calledAt.push(station);
+	}
+
 	const says: string[] = [
 		`${input.tasksFinished}/${tasksTotal} ${plural(tasksTotal, 'task')} · ${input.workout.keyCenter}`
 	];
@@ -120,6 +140,12 @@ export function reportWorkout(input: ReportInput): WorkoutReport {
 
 	for (const mission of missions) {
 		says.push(`${mission.chartName} · ${mission.says}`);
+	}
+
+	// Only where it says something the first line does not: a run that stayed at
+	// one station has already named it.
+	if (calledAt.length > 1) {
+		says.push(`Called at ${calledAt.join(', ')}.`);
 	}
 
 	for (const key of coldKeys) {
@@ -138,6 +164,7 @@ export function reportWorkout(input: ReportInput): WorkoutReport {
 		against,
 		missions,
 		coldKeys,
+		calledAt,
 		badges,
 		says
 	};

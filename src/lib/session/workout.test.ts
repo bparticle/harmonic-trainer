@@ -1651,3 +1651,96 @@ describe('a minor progression is placed the same way', () => {
 		expect(chosen.keyCenter).toBe(mode === 'minor' ? 'A' : 'C');
 	});
 });
+
+describe('a run that stays at one station', () => {
+	/**
+	 * The thing the board could never offer and the composer could never do.
+	 *
+	 * `leadWithPinned` leads and does not narrow, which is right about *skills*
+	 * and was quietly deciding for keys as well. These are about the switch that
+	 * separates the two questions, and the promise it has to keep: every question
+	 * comes from one stop.
+	 */
+	const keysOf = (workout: Workout) =>
+		workout.tasks.flatMap((task) =>
+			'cardIds' in task
+				? task.cardIds.map((id) => bank().find((c) => c.cardId === id)?.keyCenter ?? '?')
+				: []
+		);
+
+	it('asks nothing outside the station it departs from', () => {
+		const workout = composeWorkout(
+			input({
+				size: 'long',
+				choice: { kind: 'rung', key: 'F', rungId: 'all-triads' },
+				stationOnly: true
+			})
+		);
+
+		expect(workout.keyCenter).toBe('F');
+		expect(workout.stationOnly).toBe(true);
+		expect([...new Set(keysOf(workout))]).toEqual(['F']);
+	});
+
+	it('keeps the relative minor, because a station holds both halves of the pair', () => {
+		// A minor progression's cards are stored under `Am` and the relative-minor
+		// rung's under `C`. Narrowing by key rather than by station would keep one
+		// of those and drop the other, at the one stop where they are the same
+		// music.
+		const cards = [
+			...bank(),
+			card('a-minor-prog', 'hear_play', 'Am', { skillCode: 'prog:i-iv-v' })
+		];
+
+		const workout = composeWorkout(
+			input({
+				cards,
+				size: 'long',
+				choice: { kind: 'progression', progressionId: 'i-iv-v', keyCenter: 'Am' },
+				stationOnly: true
+			})
+		);
+
+		const asked = workout.tasks.flatMap((task) => ('cardIds' in task ? task.cardIds : []));
+		expect(asked).toContain('a-minor-prog');
+		// And C's cards are the same station, so they stay askable — and nothing
+		// from any other one does.
+		const keys = asked.map((id) => cards.find((c) => c.cardId === id)?.keyCenter);
+		expect([...new Set(keys)].sort()).toEqual(['Am', 'C']);
+	});
+
+	it('asks no key question, because there is nothing to tell apart', () => {
+		const workout = composeWorkout(
+			input({
+				size: 'long',
+				choice: { kind: 'rung', key: 'C', rungId: 'scale' },
+				stationOnly: true
+			})
+		);
+
+		expect(taskKinds(workout)).not.toContain('crossing');
+	});
+
+	it('sets the play-along at the same station', () => {
+		const workout = composeWorkout(
+			input({
+				size: 'long',
+				charts: MISSION_CHARTS,
+				choice: { kind: 'rung', key: 'Bb', rungId: 'all-sevenths' },
+				stationOnly: true
+			})
+		);
+
+		for (const mission of missions(workout)) expect(mission.keyCenter).toBe('Bb');
+	});
+
+	it('changes nothing at all when it is off', () => {
+		const shared = {
+			size: 'standard' as WorkoutSize,
+			choice: { kind: 'rung' as const, key: 'F', rungId: 'all-triads' as RungId }
+		};
+		const plain = composeWorkout(input(shared));
+		const explicit = composeWorkout(input({ ...shared, stationOnly: false }));
+		expect(explicit).toEqual(plain);
+	});
+});

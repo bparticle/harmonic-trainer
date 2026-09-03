@@ -15,6 +15,8 @@ import {
 	isWellFormed,
 	minorKeysReached,
 	relativeMinorOf,
+	keysAtStation,
+	stationHolding,
 	itemsForRung,
 	ladderIdentity,
 	narrower,
@@ -595,5 +597,48 @@ describe('which cell a move opened', () => {
 
 	it('is null when nothing moved', () => {
 		expect(openedCell(FIRST_FRONTIER, FIRST_FRONTIER)).toBeNull();
+	});
+});
+
+describe('stations, and the two spellings one of them answers to', () => {
+	it('finds the station a major key is', () => {
+		expect(stationHolding('C')).toBe('C');
+		expect(stationHolding('Gb')).toBe('Gb');
+	});
+
+	it('finds the station a relative minor sits at', () => {
+		expect(stationHolding('Am')).toBe('C');
+		expect(stationHolding('Ebm')).toBe('Gb');
+	});
+
+	/*
+	 * The ambiguity this deliberately refuses to guess at. `minorKeysReached`
+	 * hands out bare tonics for missions, and `D` is both D major's own station
+	 * and the tonic of F's relative minor. Reading it would put D major's cards
+	 * at F's stop.
+	 */
+	it('reads a bare minor tonic as the major key of that name, and nothing else', () => {
+		expect(stationHolding('D')).toBe('D');
+		expect(stationHolding('F#')).toBeNull();
+	});
+
+	it('lists both spellings a station’s cards are stored under', () => {
+		expect(keysAtStation('C')).toEqual(['C', 'Am']);
+		expect(keysAtStation('Am')).toEqual(['C', 'Am']);
+	});
+
+	it('every station answers to its own two names and to no other station’s', () => {
+		for (const stage of STAGES) {
+			const names = keysAtStation(stage.key);
+			expect(names).toEqual([stage.key, stage.relativeMinor]);
+			for (const other of STAGES) {
+				if (other.key === stage.key) continue;
+				expect(names).not.toContain(other.relativeMinor);
+			}
+		}
+	});
+
+	it('hands back a name it cannot place, so a filter built on it holds nothing extra', () => {
+		expect(keysAtStation('H')).toEqual(['H']);
 	});
 });

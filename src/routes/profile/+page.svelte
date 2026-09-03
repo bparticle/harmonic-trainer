@@ -1,5 +1,6 @@
 <script lang="ts">
 	import UserAvatar from '$lib/components/UserAvatar.svelte';
+	import Roundel from '$lib/components/Roundel.svelte';
 	import { BADGE_TIERS } from '$lib/effects/streak';
 	import { bandById } from '$lib/practice/tempo';
 
@@ -209,25 +210,38 @@
 					<h2 class="head">Keys</h2>
 					<p
 						class="visual-key"
-						aria-label="Filled swatches show chords played; pale swatches are untouched"
+						aria-label="A filled roundel is a key the record holds chords in, a ring is one the ladder has opened and nothing has been played in, and a dashed ring is one the ladder has not reached"
 					>
-						<span><i class="filled"></i>chords</span><span><i></i>untouched</span>
+						<span><i class="mark-full"></i>chords</span><span><i class="mark-empty"></i>opened</span
+						><span><i class="mark-unbuilt"></i>not reached</span>
 					</p>
 				</div>
 				<ul class="keys">
 					{#each data.keys as entry (entry.pc)}
 						{@const scored = percent(entry.landed, entry.voiced)}
-						<li
-							class="key"
-							class:is-empty={entry.voiced === 0}
-							style:--tone="var(--pc-{entry.pc})"
-							style:--fill="{Math.round(share(entry.voiced, busiest))}%"
-							title={entry.voiced
-								? `${entry.label}: ${entry.voiced.toLocaleString()} chords${scored === null ? '' : `, ${scored}% landed`}`
-								: `${entry.label}: nothing played yet`}
-						>
-							<span class="key-swatch"><span class="key-fill"></span></span>
-							<span class="key-name">{entry.label}</span>
+						{@const title = entry.voiced
+							? `${entry.label}: ${entry.voiced.toLocaleString()} chords${scored === null ? '' : `, ${scored}% landed`}`
+							: `${entry.label}: nothing played yet`}
+						<li class="key">
+							<!--
+								The network's own roundel, at the size of a list.
+
+								These twelve and the network's twelve stations are one reading of
+								one thing — `keyStandings` folds `chord_attempts` by tonic and so
+								does the map's Record layer — and they were drawn as a column
+								chart here and as a roundel there. Two drawings of one fact is
+								the fault the network was built to end; it does not stop being
+								that fault because the two are on different pages.
+							-->
+							<Roundel
+								inline
+								size={2.6}
+								name={entry.label}
+								pc={entry.pc}
+								fill={share(entry.voiced, busiest) / 100}
+								built={entry.reached > 0}
+								{title}
+							/>
 							<span class="key-count">{entry.voiced ? entry.voiced.toLocaleString() : '·'}</span>
 						</li>
 					{/each}
@@ -638,8 +652,27 @@
 		border-radius: 3px;
 	}
 
-	.visual-key .filled {
+	/*
+	 * The three station marks, in ink.
+	 *
+	 * Round, because the thing they stand for is round now — a legend still
+	 * drawing squares beside twelve roundels is a key to a different picture.
+	 * Ink and not colour: a legend entry is about a state and a state has no
+	 * pitch.
+	 */
+	.visual-key .mark-full,
+	.visual-key .mark-empty,
+	.visual-key .mark-unbuilt {
+		border-radius: 50%;
+	}
+
+	.visual-key .mark-full {
 		background: var(--color-ink-dim);
+	}
+
+	.visual-key .mark-unbuilt {
+		border-style: dashed;
+		opacity: 0.75;
 	}
 
 	.visual-key .tempo-solid,
@@ -762,42 +795,12 @@
 	}
 
 	/*
-	 * A column that fills from the bottom rather than a bar chart on its side.
-	 * Upright because the eye reads twelve of these as a row of keys and not as a
-	 * ranking, and a ranking would be the wrong idea — no key is meant to win.
+	 * No ranking, on purpose: twelve roundels read as a row of keys, and a bar
+	 * chart would ask which of them won. None of them is meant to.
+	 *
+	 * The name is inside the roundel now — the map draws it there — so the row
+	 * under each one is the exact count and nothing else.
 	 */
-	.key-swatch {
-		display: flex;
-		align-items: flex-end;
-		width: 100%;
-		height: 3.4rem;
-		border: 1px solid var(--color-ground-line);
-		border-radius: 6px;
-		background: color-mix(in oklab, var(--color-ground) 70%, transparent);
-		overflow: hidden;
-	}
-
-	.key-fill {
-		width: 100%;
-		height: var(--fill);
-		background: var(--tone);
-		transition: height 260ms ease;
-	}
-
-	.key.is-empty .key-swatch {
-		border-style: dashed;
-	}
-
-	.key-name {
-		color: var(--color-ink-muted);
-		font-family: var(--font-mono);
-		font-size: 0.68rem;
-	}
-
-	.key.is-empty .key-name {
-		color: var(--color-ink-dim);
-	}
-
 	.key-count {
 		color: var(--color-ink-dim);
 		font-family: var(--font-mono);
@@ -1113,11 +1116,5 @@
 		color: var(--color-ink);
 		font-family: var(--font-mono);
 		font-size: 0.72rem;
-	}
-
-	@media (prefers-reduced-motion: reduce) {
-		.key-fill {
-			transition: none;
-		}
 	}
 </style>

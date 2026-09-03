@@ -320,6 +320,45 @@ export function relativeMinorOf(key: string): string | null {
 	return stage ? stage.relativeMinor.replace(/m$/, '') : null;
 }
 
+/**
+ * The station a key name belongs to, major or relative minor.
+ *
+ * **A station holds both halves of a relative pair**, which the network map has
+ * drawn since the day it existed — the roundel says C and the line under it says
+ * Am — and which nothing outside that drawing could ask about. It matters
+ * wherever a key name has to be turned back into a place: an A minor
+ * progression's cards are stored under `A`, the relative-minor rung's are stored
+ * under `C`, and both are the same stop on the same map.
+ *
+ * Null for a name no stage holds, which is a spelling this build cannot read
+ * rather than a station it has not opened.
+ *
+ * **Only the two spellings a card row actually carries**, which are the stage's
+ * key and its `Am`-style relative. A bare minor tonic is deliberately not read:
+ * `minorKeysReached` hands those out for missions, and eight of the twelve
+ * collide with a major key of the same name — resolving `D` would put D major at
+ * F's station, because F's relative is D minor. The ambiguity is older than this
+ * function and is not one it may guess at.
+ */
+export function stationHolding(key: string): string | null {
+	return STAGES.find((s) => s.key === key || s.relativeMinor === key)?.key ?? null;
+}
+
+/**
+ * Every key name one station answers to: the major, and its relative minor.
+ *
+ * For narrowing anything to a station rather than to a key. The minor is here
+ * because a card row carries it: the relative-minor rung's cards are stored
+ * under `C` and a minor progression pinned there is stored under `Am`, and a
+ * filter that knew only the major would quietly drop half the material at the
+ * stop it was asked to stay at.
+ */
+export function keysAtStation(key: string): string[] {
+	const station = stationHolding(key);
+	const stage = station ? stageByKey(station) : undefined;
+	return stage ? [stage.key, stage.relativeMinor] : [key];
+}
+
 /** Rungs that are open in at least one key. Depth, as opposed to breadth. */
 export function depthOf(frontier: Frontier): number {
 	return frontier.widths.filter((width) => width > 0).length;

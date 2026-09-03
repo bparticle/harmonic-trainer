@@ -1685,7 +1685,7 @@
      scrolling from the chart following the music. -->
 <svelte:window onkeydown={onKeydown} onwheel={holdAutoScroll} ontouchmove={holdAutoScroll} />
 
-<svelte:head><title>Play along · Harmonic</title></svelte:head>
+<svelte:head><title>Play along · Roundel</title></svelte:head>
 
 <main class="mx-auto max-w-[1500px] px-5 py-7">
 	<header class="mb-5 flex flex-wrap items-start justify-between gap-3">
@@ -1896,11 +1896,24 @@
 							{verdict.says}
 						</p>
 					{/if}
-					<!-- The way back, and only for a mission a workout actually set. A
-					     mission opened by hand belongs to no workout and is offered no
-					     door out of a page nobody sent you to. -->
+					<!--
+						The way back, and only for a mission a workout actually set. A
+						mission opened by hand belongs to no workout and is offered no
+						door out of a page nobody sent you to.
+
+						**It grows once the run has been judged.** Before you have played,
+						going back is a way of not doing this and belongs at the weight of
+						every other small control. After the verdict it is the obvious next
+						thing in the world — the tune has been played, the workout has
+						three tasks still waiting, and it was a dim underlined caption at
+						0.68rem underneath the one line everybody reads. Reported as hard
+						to find, and it was the most predictable press on the page.
+					-->
 					{#if mission.blockId}
-						<a class="mission-back" href="/session">← Workout</a>
+						<a class="mission-back" class:is-next={verdict !== null} href="/session">
+							<span aria-hidden="true">←</span>
+							{verdict ? 'Back to the workout' : 'Workout'}
+						</a>
 					{/if}
 				</section>
 			{/if}
@@ -3006,16 +3019,48 @@
 	}
 
 	.mission-back {
-		display: inline-block;
-		margin-top: 0.4rem;
+		display: inline-flex;
+		align-self: flex-start;
+		align-items: center;
+		gap: 0.4rem;
+		margin-top: 0.55rem;
+		padding: 0.3rem 0.65rem;
+		border: 1px solid var(--color-ground-line);
+		border-radius: 8px;
 		font-family: var(--font-mono);
-		font-size: 0.68rem;
-		color: var(--color-ink-dim);
-		text-decoration: underline;
+		font-size: 0.7rem;
+		color: var(--color-ink-muted);
+		transition:
+			background 130ms ease,
+			border-color 130ms ease,
+			color 130ms ease;
 	}
 
 	.mission-back:hover {
+		border-color: var(--color-ink-dim);
 		color: var(--color-ink);
+	}
+
+	/*
+	 * Once the run has a verdict this is the next thing to do, so it is drawn as
+	 * the next thing to do: the app's primary button, at the size the rest of
+	 * this page's controls are, directly under the sentence that just told you
+	 * how it went.
+	 */
+	.mission-back.is-next {
+		padding: 0.6rem 1.1rem;
+		border-color: transparent;
+		background: var(--color-ink);
+		color: var(--color-ground);
+		font-family: var(--font-display);
+		font-size: 0.95rem;
+		font-weight: 600;
+	}
+
+	.mission-back.is-next:hover {
+		background: var(--color-ink);
+		color: var(--color-ground);
+		filter: brightness(0.93);
 	}
 
 	/* Where the notes sat, as one bar. Weight, not hue — the same language the

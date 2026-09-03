@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Roundel from '$lib/components/Roundel.svelte';
 	import { borrowColumn, type Line, type Network, type Station } from '$lib/session/network';
 	import { neighbours, sayInKey, type ProgressionAnchor } from '$lib/curriculum/atlas';
 	import { stageByKey, type RungId } from '$lib/curriculum/ladder';
@@ -39,6 +40,7 @@
 		layers,
 		progression = null,
 		callsAt = [],
+		heldAt = null,
 		onstation,
 		online,
 		oncell
@@ -54,6 +56,16 @@
 		progression?: ProgressionAnchor | null;
 		/** The keys today's questions would touch, ringed on the leading line. */
 		callsAt?: string[];
+		/**
+		 * The one station the run is being held at, when it is being held at one.
+		 *
+		 * The map answers this rather than a sentence under the board. A service
+		 * cut back to a single stop is a thing a transit diagram can simply *show*
+		 * — the rest of the network recedes and the line is capped either side of
+		 * the station that is left — and showing it costs no words and survives
+		 * somebody who reads none.
+		 */
+		heldAt?: string | null;
 		onstation: (key: string) => void;
 		online: (rungId: RungId) => void;
 		oncell: (key: string, rungId: RungId) => void;
@@ -82,7 +94,6 @@
 
 	const glyph = (s: string) => s.replace(/b/g, '♭').replace(/#/g, '♯');
 	const tint = (pc: number) => `var(--pc-${pc})`;
-	const tintInk = (pc: number) => `var(--pc-${pc}-ink)`;
 
 	const departure = $derived(net.stations.find((s) => s.key === departureKey) ?? net.stations[6]);
 
@@ -164,6 +175,27 @@
 		layers.today ? callsAt.filter((key) => leading?.keys.includes(key)) : []
 	);
 
+	const held = $derived(heldAt ? (net.stations.find((s) => s.key === heldAt) ?? null) : null);
+
+	/**
+	 * How long a station waits before it recedes.
+	 *
+	 * The far ends go first and the fade travels inwards, because that is what
+	 * cutting a service back to one stop looks like: the ends close and the
+	 * closure walks towards what is left. Nought at the far terminus and longest
+	 * beside the station being held.
+	 *
+	 * Zero when nothing is held, so letting the network back is one movement
+	 * rather than an unwinding — the run is not being cut back, it is being
+	 * restored, and those are different events.
+	 */
+	const REACH = 22;
+	const recedeDelay = (column: number) => {
+		if (!held) return 0;
+		const furthest = Math.max(held.column, net.ends.sharp - held.column);
+		return (furthest - Math.abs(column - held.column)) * REACH;
+	};
+
 	const isOpenCell = (station: Station, line: Line) => line.index < station.lines;
 
 	const lineNote = (line: Line) => {
@@ -174,6 +206,7 @@
 
 <svg
 	class="map"
+	class:is-held={held !== null}
 	viewBox="0 0 {WIDTH} {HEIGHT}"
 	role="img"
 	aria-label="The ladder as a network: {net.lines.filter((l) => l.stops > 0)
@@ -296,24 +329,31 @@
 		{@const x = xOf(station.column)}
 		{@const warm = layers.record ? station.fill : 0}
 
-		{#if station.onNetwork}
-			<line
-				class="spine"
-				x1={x}
-				y1={ROUNDEL_Y + 40}
-				x2={x}
-				y2={yOf(Math.max(0, station.lines - 1))}
-				style:--tint={tint(station.pc)}
-			/>
-		{/if}
+		<!-- One group per station, so a station recedes as the one thing it is
+		     rather than as a spine, some stops and a roundel going separately. -->
+		<g
+			class="station"
+			class:is-receded={held !== null && station.key !== held.key}
+			style:transition-delay="{recedeDelay(station.column)}ms"
+		>
+			{#if station.onNetwork}
+				<line
+					class="spine"
+					x1={x}
+					y1={ROUNDEL_Y + 40}
+					x2={x}
+					y2={yOf(Math.max(0, station.lines - 1))}
+					style:--tint={tint(station.pc)}
+				/>
+			{/if}
 
-		<!-- The open stops, drawn. Not pressable themselves: the hit circles below
+			<!-- The open stops, drawn. Not pressable themselves: the hit circles below
 		     cover every crossing at one size, open or not. -->
-		{#each net.lines.slice(0, station.lines) as line (line.rungId)}
-			<circle class="stop" cx={x} cy={yOf(line.index)} r="4.6" style:--tint={tint(station.pc)} />
-		{/each}
+			{#each net.lines.slice(0, station.lines) as line (line.rungId)}
+				<circle class="stop" cx={x} cy={yOf(line.index)} r="4.6" style:--tint={tint(station.pc)} />
+			{/each}
 
-		<!--
+			<!--
 			Every crossing of a line and a station, pressable.
 
 			**Only the open ones used to be.** A crossing with nothing drawn on it
@@ -328,82 +368,89 @@
 			with the control that opens it where the ladder can reach it. The cards
 			are made on the way out, so it is also somewhere a train can leave from.
 		-->
-		{#each net.lines as line (line.rungId)}
-			{@const open = line.index < station.lines}
-			<circle
-				class="cell-hit"
-				class:is-shut={!open}
-				cx={x}
-				cy={yOf(line.index)}
-				r="17"
+			{#each net.lines as line (line.rungId)}
+				{@const open = line.index < station.lines}
+				<circle
+					class="cell-hit"
+					class:is-shut={!open}
+					cx={x}
+					cy={yOf(line.index)}
+					r="17"
+					role="button"
+					tabindex="-1"
+					aria-label="{glyph(station.key)}, {line.label}{open ? '' : ' — not open yet'}"
+					onclick={(event) => {
+						event.stopPropagation();
+						oncell(station.key, line.rungId);
+					}}
+					onkeydown={(event) => {
+						if (event.key !== 'Enter' && event.key !== ' ') return;
+						event.preventDefault();
+						oncell(station.key, line.rungId);
+					}}
+				/>
+			{/each}
+
+			<g
+				class="roundel"
 				role="button"
-				tabindex="-1"
-				aria-label="{glyph(station.key)}, {line.label}{open ? '' : ' — not open yet'}"
-				onclick={(event) => {
-					event.stopPropagation();
-					oncell(station.key, line.rungId);
-				}}
+				tabindex="0"
+				aria-label="{glyph(station.key)} major with {glyph(station.relativeMinor)}{station.onNetwork
+					? `, ${station.lines} of ${net.lines.length} lines`
+					: ', not on the network yet'}"
+				aria-pressed={station.key === selectedKey}
+				onclick={() => onstation(station.key)}
 				onkeydown={(event) => {
-					if (event.key !== 'Enter' && event.key !== ' ') return;
-					event.preventDefault();
-					oncell(station.key, line.rungId);
+					if (event.key === 'Enter' || event.key === ' ') {
+						event.preventDefault();
+						onstation(station.key);
+					}
 				}}
-			/>
-		{/each}
-
-		<g
-			class="roundel"
-			role="button"
-			tabindex="0"
-			aria-label="{glyph(station.key)} major with {glyph(station.relativeMinor)}{station.onNetwork
-				? `, ${station.lines} of ${net.lines.length} lines`
-				: ', not on the network yet'}"
-			aria-pressed={station.key === selectedKey}
-			onclick={() => onstation(station.key)}
-			onkeydown={(event) => {
-				if (event.key === 'Enter' || event.key === ' ') {
-					event.preventDefault();
-					onstation(station.key);
-				}
-			}}
-		>
-			{#if !station.onNetwork}
-				<circle class="ring is-unbuilt" cx={x} cy={ROUNDEL_Y} r="15" style:--tint={tint(station.pc)}
-				></circle>
-			{:else if warm === 0}
-				<circle class="ring is-empty" cx={x} cy={ROUNDEL_Y} r="15" style:--tint={tint(station.pc)}
-				></circle>
-			{:else}
-				<circle class="halo" cx={x} cy={ROUNDEL_Y} r="16" style:--tint={tint(station.pc)}></circle>
-				<circle class="core" cx={x} cy={ROUNDEL_Y} r={6 + 9 * warm} style:--tint={tint(station.pc)}
-				></circle>
-				<circle class="ring" cx={x} cy={ROUNDEL_Y} r="15" style:--tint={tint(station.pc)}></circle>
-			{/if}
-
-			<text
-				class="station-name"
-				class:is-shut={!station.onNetwork}
-				{x}
-				y={ROUNDEL_Y + 5}
-				text-anchor="middle"
-				style:--ink={warm > 0.45 ? tintInk(station.pc) : 'var(--color-ink)'}
 			>
-				{glyph(station.key)}
-			</text>
+				<Roundel
+					name={station.key}
+					pc={station.pc}
+					fill={warm}
+					built={station.onNetwork}
+					{x}
+					y={ROUNDEL_Y}
+					r={15}
+				/>
 
-			<text
-				class="station-minor"
-				class:is-relative={band === 'crossings' && station.key === selectedKey}
-				{x}
-				y={ROUNDEL_Y + 32}
-				text-anchor="middle"
-			>
-				{glyph(station.relativeMinor)}{band === 'crossings' && station.key === selectedKey
-					? ' · relative'
-					: ''}
-			</text>
+				<text
+					class="station-minor"
+					class:is-relative={band === 'crossings' && station.key === selectedKey}
+					{x}
+					y={ROUNDEL_Y + 32}
+					text-anchor="middle"
+				>
+					{glyph(station.relativeMinor)}{band === 'crossings' && station.key === selectedKey
+						? ' · relative'
+						: ''}
+				</text>
+			</g>
 		</g>
 	{/each}
+
+	<!--
+		The line, capped either side of the station it is being held at.
+
+		A buffer stop: the transit diagram's own mark for *the service ends here*,
+		and the only thing on this drawing that says the run will not go anywhere
+		else. It closes in from outside rather than growing from the roundel,
+		because the movement is a network being cut back to one stop.
+	-->
+	{#if held}
+		{@const hx = xOf(held.column)}
+		<!-- Outside the departure ring at r=22, and inside the half-step to the
+		     next station at 38, which is the whole of the room there is. -->
+		<g class="terminus">
+			<path class="buffer" d="M {hx - 26} {ROUNDEL_Y} H {hx - 33}" />
+			<path class="buffer" d="M {hx - 33} {ROUNDEL_Y - 7} V {ROUNDEL_Y + 7}" />
+			<path class="buffer" d="M {hx + 26} {ROUNDEL_Y} H {hx + 33}" />
+			<path class="buffer" d="M {hx + 33} {ROUNDEL_Y - 7} V {ROUNDEL_Y + 7}" />
+		</g>
+	{/if}
 
 	<!-- Today's run: where it leaves from, and what it calls at on the leading
 	     line. Ink and not colour, because a departure is not a pitch. -->
@@ -561,48 +608,6 @@
 		stroke-dasharray: 3 3;
 	}
 
-	.halo {
-		fill: var(--tint);
-		opacity: 0.22;
-	}
-
-	.core {
-		fill: var(--tint);
-		transition: r 300ms var(--ease-wheel);
-	}
-
-	.ring {
-		fill: none;
-		stroke: var(--tint);
-		stroke-width: 2.5;
-	}
-
-	/* Opened and never played is an invitation, so it keeps full-strength
-	   colour and simply has nothing inside it yet. */
-	.ring.is-empty {
-		fill: var(--color-ground);
-		stroke-width: 3;
-	}
-
-	/* Not reached yet. Dashed is how this app has always drawn "nothing here". */
-	.ring.is-unbuilt {
-		fill: var(--color-ground);
-		stroke-dasharray: 3 3;
-		opacity: 0.75;
-	}
-
-	.station-name {
-		font-family: var(--font-display);
-		font-size: 14.5px;
-		font-weight: 600;
-		letter-spacing: -0.02em;
-		fill: var(--ink);
-	}
-
-	.station-name.is-shut {
-		fill: var(--color-ink-dim);
-	}
-
 	.station-minor {
 		font-family: var(--font-mono);
 		font-size: 10px;
@@ -681,6 +686,67 @@
 
 	.opens.is-open {
 		fill: var(--color-ink);
+	}
+
+	/* --- Held at one station -------------------------------------------- */
+
+	/*
+	 * The network receding, and the line capped where the run is being kept.
+	 *
+	 * Motion that explains a state change and nothing else, which is the only
+	 * kind this app allows itself. The stations do not disappear — pressing one
+	 * is still how you go somewhere else, and a control that vanished when a
+	 * switch was thrown would be a worse answer than the sentence this replaced.
+	 * They stand back.
+	 */
+	.station {
+		transition: opacity 300ms var(--ease-wheel);
+	}
+
+	.station.is-receded {
+		opacity: 0.24;
+	}
+
+	/* The rails go quiet too, but a step less far: the network is still there,
+	   the run simply is not using it. */
+	.map.is-held :is(.track, .stub, .ghost-stop, .hair, .loop-note, .line-count) {
+		opacity: 0.4;
+		transition: opacity 300ms var(--ease-wheel);
+	}
+
+	.buffer {
+		fill: none;
+		stroke: var(--color-ink);
+		stroke-width: 2.4;
+		stroke-linecap: round;
+	}
+
+	.terminus {
+		transform-box: fill-box;
+		transform-origin: center;
+		animation: close-in 320ms var(--ease-wheel) both;
+	}
+
+	@keyframes close-in {
+		from {
+			opacity: 0;
+			transform: scaleX(1.7);
+		}
+		to {
+			opacity: 1;
+			transform: scaleX(1);
+		}
+	}
+
+	/*
+	 * The global reduced-motion rule cuts every duration to nothing and leaves
+	 * delays alone, so without this the map would still stagger its way through
+	 * a third of a second for somebody who asked it not to move at all.
+	 */
+	@media (prefers-reduced-motion: reduce) {
+		.station {
+			transition-delay: 0ms !important;
+		}
 	}
 
 	/* --- Interaction ---------------------------------------------------- */

@@ -8,6 +8,9 @@ import {
 	loadCards
 } from '$lib/server/db/session-store';
 import { currentUserId } from '$lib/server/db/user';
+import { loadKeyChords } from '$lib/server/db/play-log';
+import { keyStandings } from '$lib/session/warmth';
+import { workingPosition } from '$lib/curriculum/ladder';
 
 type CardsByTask = Record<number, Awaited<ReturnType<typeof loadCards>>>;
 
@@ -27,16 +30,36 @@ export const load: PageServerLoad = async ({ parent, locals }) => {
 	const userId = currentUserId(locals.userId);
 	const active = await activeWorkout(userId);
 
-	if (!active) return { settings, workout: null, cards: {} as CardsByTask };
-
 	const byTask: CardsByTask = {};
-	for (const entry of active.tasks) {
+	for (const entry of active?.tasks ?? []) {
 		const task = entry.task;
 		if (!('cardIds' in task)) continue;
 		if (task.cardIds.length) byTask[entry.index] = await loadCards(userId, task.cardIds);
 	}
 
-	return { settings, workout: active, cards: byTask };
+	/*
+	 * The twelve stations, exactly as the home page and the profile read them.
+	 *
+	 * So the strip above each question can draw the *same* roundel the network
+	 * draws — a ring for a key that exists and a core for what the record holds
+	 * in it — rather than inventing a third swatch for the one screen where the
+	 * keys are actually being played. That has been the standing rule since the
+	 * network replaced three drawings of these twelve, and it only holds if every
+	 * page pays the one `GROUP BY` it costs. See `loadKeyChords`.
+	 *
+	 * Read whether or not a workout is open, because the end screen is the one
+	 * place they are needed most and finishing a workout is exactly what makes
+	 * `activeWorkout` return nothing. Drawn from a load that had emptied itself,
+	 * *called at C, F and G* would have come out as three grey rings.
+	 */
+	const frontier = await currentFrontier(userId);
+	const keys = keyStandings(
+		await loadKeyChords(userId),
+		frontier,
+		workingPosition(frontier).stageIndex
+	);
+
+	return { settings, workout: active, cards: byTask, keys };
 };
 
 export const actions: Actions = {

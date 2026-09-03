@@ -188,3 +188,48 @@ describe('a quiet workout', () => {
 		expect(reportWorkout(input()).says).toEqual(['2/2 tasks · Eb']);
 	});
 });
+
+describe('where the run actually went', () => {
+	it('names the stations the rows say it reached, in the order it reached them', () => {
+		const report = reportWorkout(
+			input({
+				keysTouched: [
+					{ keyCenter: 'Eb', heldBefore: 40 },
+					{ keyCenter: 'Bb', heldBefore: 12 },
+					{ keyCenter: 'F', heldBefore: 3 }
+				]
+			})
+		);
+
+		expect(report.calledAt).toEqual(['Eb', 'Bb', 'F']);
+		expect(report.says).toContain('Called at Eb, Bb, F.');
+	});
+
+	it('folds a relative pair into the one stop that holds it', () => {
+		const report = reportWorkout(
+			input({
+				keysTouched: [
+					{ keyCenter: 'C', heldBefore: 9 },
+					{ keyCenter: 'Am', heldBefore: 4 }
+				]
+			})
+		);
+
+		expect(report.calledAt).toEqual(['C']);
+	});
+
+	/*
+	 * The first line already says where the run departed from, and a run that
+	 * never left is a run whose calling points are that one word again.
+	 */
+	it('says nothing extra about a run that stayed at one station', () => {
+		const report = reportWorkout(input({ keysTouched: [{ keyCenter: 'Eb', heldBefore: 40 }] }));
+
+		expect(report.calledAt).toEqual(['Eb']);
+		expect(report.says.some((line) => line.startsWith('Called at'))).toBe(false);
+	});
+
+	it('has nothing to say when nothing was touched', () => {
+		expect(reportWorkout(input()).calledAt).toEqual([]);
+	});
+});

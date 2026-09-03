@@ -568,6 +568,8 @@ export type WorkoutRequest = {
 	size?: WorkoutSize;
 	/** What the picker pinned, already read into the composer's own shape. */
 	choice?: Choice | null;
+	/** Keep the whole run at the pinned station. See `WorkoutInput.stationOnly`. */
+	stationOnly?: boolean;
 };
 
 /**
@@ -620,6 +622,7 @@ async function gatherWorkoutInput(
 		played,
 		yesterdaysNovelty,
 		choice: request.choice ?? null,
+		stationOnly: request.stationOnly ?? false,
 		// The wider reading, so the offer to go deeper arrives on a rung that has
 		// been worked to death as well as on one that has been mastered.
 		rungLooksSolid: progress.readyToMoveOn,

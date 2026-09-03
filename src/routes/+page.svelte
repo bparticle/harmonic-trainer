@@ -3,6 +3,7 @@
 	import { parseKey } from '$lib/music/key';
 	import LandingPage from '$lib/components/LandingPage.svelte';
 	import NetworkMap from '$lib/components/NetworkMap.svelte';
+	import Roundel from '$lib/components/Roundel.svelte';
 	import { network, stationOf } from '$lib/session/network';
 	import {
 		PROGRESSION_ANCHORS,
@@ -11,9 +12,22 @@
 		stageAtAccidentals,
 		type Neighbour
 	} from '$lib/curriculum/atlas';
-	import { stageByKey, type RungId } from '$lib/curriculum/ladder';
+	import { stageByKey, stationHolding, type RungId } from '$lib/curriculum/ladder';
 	import type { WorkoutSize } from '$lib/session/workout';
 	import { describeTasks, describeWhen } from '$lib/session/journey';
+	import { scale } from 'svelte/transition';
+	import { cubicOut } from 'svelte/easing';
+
+	/*
+	 * A stop arriving or leaving the board.
+	 *
+	 * The only motion on this page, and it is here because the row changes under
+	 * a press: holding the run at one station takes two roundels off it, and
+	 * three marks vanishing between frames reads as a redraw rather than as a
+	 * consequence. Short, and from the mark's own centre, so it is the stop
+	 * leaving rather than the row reflowing.
+	 */
+	const STOP_IN = { duration: 240, start: 0.5, opacity: 0, easing: cubicOut };
 
 	/*
 	 * Today: where does this go, and what does it call at?
@@ -84,6 +98,17 @@
 	);
 
 	/*
+	 * Whether the run stays where it departs from.
+	 *
+	 * Off, always, on every load — because the ordinary run is the one that calls
+	 * everywhere, and a switch that quietly remembered "C only" from a fortnight
+	 * ago would be the app narrowing somebody's practice without being asked
+	 * twice. It is a decision about *today*, taken beside the button that starts
+	 * today.
+	 */
+	let stationOnly = $state(false);
+
+	/*
 	 * What is drawn on top of the network, and what is pinned, are separate
 	 * things. Turning a layer on shows you something; it does not decide what you
 	 * are about to practise. Pressing something does.
@@ -104,9 +129,16 @@
 	 * opened is a perfectly good thing to press — you want to know what it would
 	 * take — it is just not somewhere a train can leave from.
 	 */
-	/** Whichever half of a relative pair was named, as the station holding it. */
-	const stationHolding = (key: string) =>
-		data.stages.find((stage) => stage.key === key || stage.relativeMinor === key)?.key ?? key;
+	/**
+	 * Whichever half of a relative pair was named, as the station holding it.
+	 *
+	 * The page used to work this out for itself off `data.stages`. It is
+	 * `stationHolding` in the ladder now, because three other places wanted the
+	 * same answer — the composer, when it narrows a run to one stop, and the
+	 * workout page, when it says which station a question came from — and a fact
+	 * about the map written down four times is four chances to disagree.
+	 */
+	const stationFor = (key: string) => stationHolding(key) ?? key;
 
 	// svelte-ignore state_referenced_locally
 	let selectedKey = $state<string>(
@@ -114,7 +146,7 @@
 		// before anything has been pressed. A workout in flight owns that answer,
 		// unless a ladder move has just named a cell — then it is that cell's key,
 		// and the panel below is already reading the station you asked about.
-		stationHolding(data.opened?.key ?? data.resume?.keyCenter ?? data.position.key)
+		stationFor(data.opened?.key ?? data.resume?.keyCenter ?? data.position.key)
 	);
 
 	const preview = $derived(data.previews[size] ?? []);
@@ -289,6 +321,11 @@
 		// A workout in flight knows its own calling points exactly.
 		if (resuming) return (data.resume?.calls ?? []).slice(0, 6);
 
+		// Kept at one station, the board can say so exactly rather than trim a
+		// list: `composeWorkout` filters the whole bank to this stop before it
+		// builds a single queue.
+		if (stationOnly) return [choice.key];
+
 		/*
 		 * The departure goes first because the queue really does start there.
 		 * `startWorkout` makes the pinned cell's cards before it composes,
@@ -300,6 +337,46 @@
 		const lead = choice.key;
 		return [lead, ...listed.filter((key: string) => key !== lead)].slice(0, 6);
 	});
+
+	/**
+	 * The stops the *leading line* actually has, out of everything the run calls at.
+	 *
+	 * The question this page had never answered, and the one that reads as a bug
+	 * every time somebody asks it: pin **the relative minor**, which is open in C
+	 * and nowhere else, and the board still lists F and G. Both facts are true —
+	 * the line calls at C, and the run goes on into F and G on other lines,
+	 * because `leadWithPinned` gives the pin half the queue and fills the rest
+	 * from every open cell. Nothing on the board joined them, so the row looked
+	 * like a promise the line could not keep.
+	 */
+	const leadStops = $derived.by(() => {
+		/*
+		 * A run in flight leads with the line it was composed around, which is not
+		 * the one the map is pinned to: the pin re-seeds from the ladder's own
+		 * suggestion on every load, and the run has been fixed since it departed.
+		 */
+		const run = resuming ? (data.resume?.choice ?? null) : null;
+		if (run) {
+			if (run.kind === 'rung') {
+				return net.lines.find((line) => line.rungId === run.rungId)?.keys ?? [];
+			}
+			const at = PROGRESSION_ANCHORS[run.progressionId]?.lineIndex;
+			return at === null || at === undefined ? [] : (net.lines[at]?.keys ?? []);
+		}
+
+		if (choice.kind === 'rung') return leadLine?.keys ?? [];
+		const at = anchor?.lineIndex;
+		return at === null || at === undefined ? [] : (net.lines[at]?.keys ?? []);
+	});
+
+	/** Calling points the leading line has. These get the track. */
+	const onLine = $derived(calls.filter((key: string) => leadStops.includes(key)));
+
+	/** And the ones it does not, which stand off it. Empty is the quiet case. */
+	const otherLines = $derived(calls.filter((key: string) => !leadStops.includes(key)));
+
+	/** The station a calling point belongs to, so the board draws the map's own roundel. */
+	const stationAt = $derived((key: string) => stationOf(net, stationFor(key)) ?? null);
 
 	const resumeAt = $derived(
 		data.resume ? Math.max(0, Math.min(data.resume.at, data.resume.tasks.length - 1)) : 0
@@ -439,7 +516,21 @@
 			-->
 			<div class="go">
 				<div class="board-origin">
-					<span class="origin-roundel">{glyph(stationKey)}</span>
+					<!-- The map's own roundel, at the size of a headline. The board used
+					     to draw its origin as a filled disc and the map draws stations as
+					     a ring with the record inside it, which is two drawings of one
+					     key within a screen of each other — the exact fault the network
+					     was built to end. -->
+					<Roundel
+						inline
+						size={3.4}
+						name={stationKey}
+						pc={departureStation.pc}
+						fill={departureStation.fill}
+						built={departureStation.onNetwork}
+						departs
+						title="Departs {glyph(stationKey)}"
+					/>
 					<span class="origin-names">
 						<span class="origin-major">{glyph(stationKey)}</span>
 						<span class="origin-minor">with {glyph(departureStation.relativeMinor)}</span>
@@ -460,6 +551,9 @@
 					/>
 					<input type="hidden" name="focusKey" value={choice.kind === 'rung' ? choice.key : ''} />
 					<input type="hidden" name="focusRung" value={choice.kind === 'rung' ? choice.rung : ''} />
+					{#if stationOnly}
+						<input type="hidden" name="stationOnly" value="on" />
+					{/if}
 
 					<button type="submit" class="start">
 						<span class="start-text">
@@ -505,10 +599,64 @@
 				<div class="board-row">
 					<dt>Calls at</dt>
 					<dd>
+						<!--
+							Which of these the leading line has, and which are somewhere else,
+							said in track rather than in prose.
+
+							The oldest question this board could not answer. Pin the relative
+							minor — open in C and nowhere else — and the row still lists F and
+							G, because `leadWithPinned` gives the pin half the queue and takes
+							the rest from every open cell. Both facts are true and nothing
+							joined them, so the row read as the line making a promise it could
+							not keep.
+
+							It was a sentence for an afternoon, and a sentence is the wrong
+							shape for it: the map three inches below already draws stops on a
+							line as connected and stops elsewhere as not. **Track means this
+							line.** So the leading line's calling points sit on a piece of
+							track and the rest stand off it, in the grammar the reader has
+							already been taught, and the explanation goes where explanations
+							go. See ROADMAP.md.
+						-->
 						<span class="calls">
-							{#each calls as key (key)}
-								<span class="call" style:--tint={tint(key)}><i></i>{glyph(key)}</span>
-							{/each}
+							<span class="leg">
+								{#each onLine as key, i (key)}
+									{@const at = stationAt(key)}
+									<span class="call" transition:scale={STOP_IN}>
+										<Roundel
+											inline
+											size={2.15}
+											name={key}
+											pc={pcOf(key)}
+											fill={at?.fill ?? 0}
+											built={at?.onNetwork ?? true}
+											departs={key === choice.key}
+											linkLeft={i > 0}
+											linkRight={i < onLine.length - 1}
+											title="{glyph(key)} — on the leading line"
+										/>
+									</span>
+								{/each}
+							</span>
+
+							{#if otherLines.length}
+								<span class="elsewhere">
+									{#each otherLines as key (key)}
+										{@const at = stationAt(key)}
+										<span class="call" transition:scale={STOP_IN}>
+											<Roundel
+												inline
+												size={2.15}
+												name={key}
+												pc={pcOf(key)}
+												fill={at?.fill ?? 0}
+												built={at?.onNetwork ?? true}
+												title="{glyph(key)} — on another line"
+											/>
+										</span>
+									{/each}
+								</span>
+							{/if}
 						</span>
 					</dd>
 				</div>
@@ -530,7 +678,7 @@
 			<div class="choices">
 				{#if resuming}
 					<form method="POST" action="?/end">
-						<button class="quiet">
+						<button class="quiet is-exit">
 							{data.resume?.complete ? 'close it and start another' : 'stop this workout'}
 						</button>
 					</form>
@@ -556,6 +704,29 @@
 						other direction: nothing said the pin had moved off the ladder's
 						own suggestion, and only a reload put it back.
 					-->
+					<!--
+						The one control that narrows anything, and it narrows a place
+						rather than a subject.
+
+						`leadWithPinned` has always led and never narrowed, and the note
+						there gives the reason: a workout that orbits one skill is the cage
+						the picker was built to open. That argument is about *skills*. It
+						was silently deciding for keys too, and "today, only C" is an
+						ordinary thing to want in the week you meet a key — especially the
+						week after opening a rung that exists in one key and nowhere else.
+
+						Named for the map, because that is where the answer is drawn: the
+						run stays at this station, which is a key and its relative minor.
+					-->
+					<button
+						type="button"
+						class="scope"
+						class:is-on={stationOnly}
+						aria-pressed={stationOnly}
+						onclick={() => (stationOnly = !stationOnly)}
+						>{stationOnly ? `staying at ${glyph(choice.key)}` : 'stay at this station'}</button
+					>
+
 					{#if !suggested}
 						<button type="button" class="quiet" onclick={followSuggestion}
 							>back to the suggestion</button
@@ -681,6 +852,7 @@
 					{layers}
 					progression={layers.progressions ? shownAnchor : null}
 					callsAt={calls}
+					heldAt={(resuming ? data.resume?.stationOnly : stationOnly) ? stationKey : null}
 					onstation={goTo}
 					online={lead}
 					oncell={goToCell}
@@ -1070,27 +1242,6 @@
 		gap: 0.85rem;
 	}
 
-	.origin-roundel {
-		display: grid;
-		width: 3.6rem;
-		height: 3.6rem;
-		flex: none;
-		place-items: center;
-		border-radius: 50%;
-		background: var(--tint);
-		color: var(--tint-ink);
-		font-family: var(--font-display);
-		font-size: 1.35rem;
-		font-weight: 600;
-		letter-spacing: -0.03em;
-	}
-
-	.origin-roundel.is-unbuilt {
-		background: transparent;
-		border: 2px dashed var(--tint);
-		color: var(--tint);
-	}
-
 	.origin-names {
 		display: flex;
 		min-width: 0;
@@ -1149,26 +1300,52 @@
 		color: var(--color-ink);
 	}
 
+	/*
+	 * Track means this line.
+	 *
+	 * The whole of what the board now says about its calling points, drawn in the
+	 * grammar the map below already uses: the leading line's stops sit on a piece
+	 * of track and everything else stands off it. The gap between the two groups
+	 * is wide enough to read as a break rather than as spacing.
+	 */
 	.calls {
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
-		gap: 0.35rem 0.6rem;
+		gap: 0.4rem 1.5rem;
+	}
+
+	.leg,
+	.elsewhere {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+	}
+
+	/*
+	 * No gap on the leg, because the track is drawn inside each mark and the
+	 * marks have to touch for it to join up. The visible spacing is the roundel's
+	 * own margin inside its box, which is where it should come from anyway: it
+	 * scales with the mark instead of being a number in here that has to be kept
+	 * in step with one in there.
+	 */
+	.elsewhere {
+		gap: 0.35rem;
 	}
 
 	.call {
 		display: inline-flex;
-		align-items: center;
-		gap: 0.3rem;
-		color: var(--color-ink-muted);
+		line-height: 0;
 	}
 
-	.call i {
-		display: block;
-		width: 0.5rem;
-		height: 0.5rem;
-		border-radius: 50%;
-		background: var(--tint);
+	/* The sentence that joins two true facts. Ink, at the weight of a caption:
+	   it explains the row above it and is not a second row. */
+	/* Pressed, this is the only control on the page that takes material away for
+	   the day, so it says which station it is holding you at rather than "on". */
+	.scope.is-on {
+		background: var(--color-ground-overlay);
+		border-color: var(--color-ink-dim);
+		color: var(--color-ink);
 	}
 
 	/* The stops of today's run. Ink and weight: a task is not a pitch. */
@@ -1378,9 +1555,21 @@
 		transform: rotate(180deg);
 	}
 
+	/*
+	 * One shape for every small control on this page.
+	 *
+	 * `.quiet` and `.scope` were bare text at the dimmest ink in the palette,
+	 * sitting in a row with three bordered chips — so *stop this workout* and
+	 * *back to the suggestion*, which are the two ways out of a decision, read as
+	 * captions rather than as things to press. They were reported as hard to
+	 * find, and being hard to find is the only thing wrong with them: the row
+	 * already had a vocabulary for a small control and these were not in it.
+	 */
 	.size,
 	.chip,
-	.move {
+	.move,
+	.quiet,
+	.scope {
 		padding: 0.35rem 0.7rem;
 		border-radius: 8px;
 		border: 1px solid var(--color-ground-line);
@@ -1407,19 +1596,29 @@
 		color: var(--color-ink);
 	}
 
-	.quiet {
-		font-family: var(--font-mono);
-		font-size: 0.7rem;
-		color: var(--color-ink-dim);
-		transition: color 120ms ease;
-	}
-
-	.quiet:hover:not(:disabled) {
+	.quiet:hover:not(:disabled),
+	.scope:hover {
+		border-color: var(--color-ink-dim);
 		color: var(--color-ink);
 	}
 
 	.quiet:disabled {
 		opacity: 0.4;
+	}
+
+	/*
+	 * The way out of a workout, which is the one control on the board somebody
+	 * goes looking for rather than notices. A step up from the rest of the row
+	 * and no further: it ends the day's run, and a filled button would make
+	 * stopping look like the thing the page wants.
+	 */
+	.quiet.is-exit {
+		border-color: var(--color-ink-dim);
+		color: var(--color-ink);
+	}
+
+	.quiet.is-exit:hover {
+		background: var(--color-ground-overlay);
 	}
 
 	/* ---------------------------------------------------------------------

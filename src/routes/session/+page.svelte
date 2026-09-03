@@ -25,7 +25,9 @@
 	import { describeGoal, type Verdict } from '$lib/practice/goal';
 	import { taskTags } from '$lib/session/progress';
 	import { skillLabel } from '$lib/curriculum/cards';
-	import { itemsForRung, rungById, stageByKey } from '$lib/curriculum/ladder';
+	import { itemsForRung, rungById, stageByKey, stationHolding } from '$lib/curriculum/ladder';
+	import Roundel from '$lib/components/Roundel.svelte';
+	import RouteStrip from '$lib/components/RouteStrip.svelte';
 	import { progressionById, realiseProgression } from '$lib/curriculum/progressions';
 	import type { Mission } from '$lib/session/workout';
 	import type { WorkoutReport } from '$lib/session/report';
@@ -296,7 +298,8 @@
 	 * and the header line that names a card's key are both written for the other
 	 * drills, and a pivot is a chord you have to find from what it *does* — a
 	 * wheel with the workout's key drawn on it in degrees does half of that for
-	 * you. See the note on `questionSource`.
+	 * you. See the note on `route`, which draws its stop blank for the same
+	 * reason.
 	 *
 	 * There were three of these and two were withdrawn; the family kept its shape
 	 * so that a second crossing direction inherits the discipline by existing.
@@ -792,38 +795,128 @@
 		return progressionById(choice.progressionId)?.name ?? null;
 	});
 
-	const questionSource = $derived.by(() => {
-		if (!currentCard) return '';
+	/* -- Where on the network this run actually is -------------------------
+	 *
+	 * The workout page named its run — `from C · the relative minor` — and then
+	 * said nothing about any individual question except a caption in the far
+	 * corner. So the one screen where the keys are being played was the one the
+	 * map had never reached, and the answer to *which key is this* had to be
+	 * inferred from the chord symbol.
+	 *
+	 * What follows is one row of the network, in the map's own marks: the line
+	 * this question is on, the stops the task calls at, and the one being served.
+	 * Nothing new is measured — `Makeup.keys` has carried the calling points since
+	 * the day a task learned to say what it was made of. */
+
+	/** The station a key name belongs to, so both halves of a relative pair land on one stop. */
+	const stationFor = (key: string) => stationHolding(key) ?? key;
+
+	/** A stop, drawn from the same standings the network and the profile read. */
+	function stopAt(key: string) {
+		const station = stationFor(key);
+		const standing = data.keys.find((entry) => entry.key === station);
+		return {
+			key: station,
+			pc: standing?.pc ?? 0,
+			fill: standing?.fill ?? 0,
+			built: (standing?.reached ?? 0) > 0
+		};
+	}
+
+	/** The station the run leaves from, for the header. */
+	const departureStop = $derived(stopAt(workout?.keyCenter ?? 'C'));
+
+	/** The station this question is at. Null where saying so would be the answer. */
+	const hereStation = $derived(
+		currentCard && !isCrossingQuestion ? stationFor(currentCard.keyCenter) : null
+	);
+
+	/**
+	 * The line, the stops, and whether the stops may be named.
+	 *
+	 * A drill's line is the *current card's* skill rather than the task's, because
+	 * a queue leads with what was pinned and then runs on — so the line genuinely
+	 * changes under you, and a strip that named only the pinned one would go back
+	 * to describing the run instead of the question. The stops do not change: they
+	 * are what the task calls at, in the order it reaches them.
+	 */
+	const route = $derived.by(() => {
+		if (!task) return null;
+
+		if (task.kind === 'mission') {
+			return {
+				line: 'Play along',
+				stops: [stopAt(task.mission.keyCenter)],
+				anonymous: false
+			};
+		}
+
+		if (task.kind === 'new_thing') {
+			return {
+				line: 'A new thing',
+				stops: [stopAt(workout?.keyCenter ?? 'C')],
+				anonymous: false
+			};
+		}
+
 		/*
-		 * Silent for the key question, and this is not a nicety.
+		 * The key question keeps its stops unnamed, and that is the whole of it.
 		 *
-		 * This line exists to say which key and which topic a question came from,
-		 * which is exactly the answer when the question is *which key is this*.
-		 * Printing it put "G · where are we?" above a cadence in G and turned a
-		 * listening test into a reading test. Found by rendering the page, because
-		 * the leak is in the one place the drill's own tests cannot see: a header
-		 * that belongs to the workout rather than to the card.
-		 *
-		 * Silent for the pivot too, which does not leak — it names both keys in
-		 * its own prompt — but would get "C · where are we?" over a question that
-		 * is not asking that.
+		 * The wheel already refuses to draw this question's key and the prompt
+		 * names both keys itself; a row of named roundels over the top would hand the
+		 * answer over more plainly than either of them could have leaked it. One
+		 * blank stop is the honest drawing: you are at a station, and which one is
+		 * the question.
 		 */
-		if (isCrossingQuestion) return '';
-		const key = glyph(currentCard.keyCenter);
+		if (task.kind === 'crossing') {
+			return {
+				line: skillLabel(currentCard?.skillCode) ?? 'Where are we?',
+				stops: [{ key: '?', pc: 0, fill: 0, built: true }],
+				anonymous: true
+			};
+		}
+
+		const keys = 'makeup' in task ? (task.makeup?.keys ?? []) : [];
+		const stations: string[] = [];
+		for (const key of keys) {
+			const station = stationFor(key);
+			if (!stations.includes(station)) stations.push(station);
+		}
+		// A workout composed before tasks carried their makeup has no calling
+		// points to draw, so the strip falls back to the one station it is sure of.
+		if (stations.length === 0) stations.push(stationFor(workout?.keyCenter ?? 'C'));
+
 		/*
-		 * And silent about the topic for a progression that is *heard*, for the
-		 * same reason.
+		 * And the line goes unnamed on a progression that is *heard*.
 		 *
 		 * A progression's skill is named after its numerals — `prog:ii-V-I` reads
-		 * back as "ii7 – V7 – Imaj7" — so this line would print the answer to a
-		 * `hear_play` question in the corner above it. The key stays, because every
-		 * other ear question shows the key and the key is not what is being asked.
-		 * `see_play` keeps the whole line: it has the numerals in the prompt.
+		 * back as "ii7 – V7 – Imaj7" — so printing it here would put the answer an
+		 * inch above the question. The key stays, because every other ear question
+		 * shows the key and the key is not what is being asked. `see_play` keeps
+		 * the whole line: it has the numerals in the prompt already.
 		 */
-		if (soundsPassage) return key;
-		const topic = skillLabel(currentCard.skillCode)?.toLowerCase();
-		return topic ? `${key} · ${topic}` : key;
+		return {
+			line: soundsPassage
+				? 'A progression'
+				: (skillLabel(currentCard?.skillCode) ?? leadingLine ?? ''),
+			stops: stations.map(stopAt),
+			anonymous: false
+		};
 	});
+
+	/*
+	 * The caption that used to sit in the corner naming the key and the topic is
+	 * gone, and the strip above says both.
+	 *
+	 * It said `C · the scale` in the far corner while the header said
+	 * `from C · the relative minor`, and the two were about different things — one
+	 * about the question, one about the run — with nothing marking which. Two
+	 * quiet lines of mono saying nearly the same words within an inch of each
+	 * other is how a page ends up read as saying neither.
+	 *
+	 * Every refusal it carried moved with it: the key question draws its stop
+	 * blank, and a progression that is heard goes unnamed. See `route` above.
+	 */
 
 	/**
 	 * The chords the new thing is made of, so it can be seen and heard.
@@ -1329,11 +1422,24 @@
 				<h1 class="font-display text-ink mb-4 text-4xl font-semibold tracking-tight">
 					{stoppedShort ? 'Stopped there.' : 'Done.'}
 				</h1>
-				<ul class="mb-7 flex flex-col gap-2">
+				<ul class="mb-6 flex flex-col gap-2">
 					{#each report.says as line, i (i)}
 						<li class="text-ink-muted leading-relaxed">{line}</li>
 					{/each}
 				</ul>
+
+				<!--
+					Where it went, drawn.
+
+					The bookend to the board's *calls at*: that row is a forecast made
+					before anything was answered, and this is the register. Same marks,
+					same order, at each end of the same twenty minutes.
+				-->
+				{#if report.calledAt.length}
+					<div class="mb-7 flex justify-center">
+						<RouteStrip line="Called at" stops={report.calledAt.map(stopAt)} />
+					</div>
+				{/if}
 				<div class="flex flex-wrap justify-center gap-3">
 					<a href="/" class="bg-ink text-ground rounded-lg px-5 py-3 font-semibold">Another one</a>
 					<a href="/backing" class="border-ground-line rounded-lg border px-5 py-3 font-semibold"
@@ -1351,7 +1457,24 @@
 		</div>
 	{:else if task}
 		<header class="mb-4 flex flex-wrap items-center justify-between gap-3">
-			<div class="flex min-w-0 flex-wrap items-baseline gap-2 sm:gap-3">
+			<div class="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
+				<!--
+					Where the run left from, as the roundel the network draws.
+
+					The board that started this said *departs C* over a roundel; the page
+					it hands off to said `from C` in mono and drew nothing. Same fact,
+					two vocabularies, one press apart.
+				-->
+				<Roundel
+					inline
+					size={2}
+					name={departureStop.key}
+					pc={departureStop.pc}
+					fill={departureStop.fill}
+					built={departureStop.built}
+					departs
+					title="Departs {glyph(departureStop.key)}"
+				/>
 				<h1 class="font-display text-ink text-lg font-semibold tracking-tight">{task.title}</h1>
 				<!--
 					What this run is, said the way the board that started it said it.
@@ -1367,7 +1490,7 @@
 				<span class="text-ink-muted font-mono text-xs">
 					Task {progress} · from {glyph(workout?.keyCenter ?? '')}{leadingLine
 						? ` · ${leadingLine.toLowerCase()}`
-						: ''}
+						: ''}{workout?.stationOnly ? ' · this station only' : ''}
 				</span>
 				<!-- What is new here and what is coming round again, in the one place
 				     somebody is actually about to answer the questions. Composed by
@@ -1379,8 +1502,17 @@
 			<div class="flex items-center gap-2 sm:gap-4">
 				<!-- The goal, in view for as long as the task runs. -->
 				<span class="text-ink-dim font-mono text-[0.7rem]">{goalLine}</span>
+				<!--
+					Three ways out, and they had all three been drawn as captions.
+
+					Dim mono text with no edge, in the corner of a header, for the
+					controls somebody goes *looking* for — reported, correctly, as hard
+					to find. They wear the board's own chip now, which is the shape this
+					app already uses for a small control, and stopping wears it a step
+					stronger because it is the one that ends the run.
+				-->
 				<button
-					class="text-ink-dim hover:text-ink rounded-md px-2 py-2 font-mono text-xs transition-colors"
+					class="task-action"
 					onclick={() => finishTask({ skipped: true })}
 					aria-label="Skip task"
 					disabled={busy}>skip</button
@@ -1389,13 +1521,11 @@
 				     button called "leave" kept the workout open, which is how a
 				     workout opened to look at the screen ended up following somebody
 				     around all day. -->
-				<button
-					class="text-ink-dim hover:text-ink rounded-md px-2 py-2 font-mono text-xs transition-colors"
-					onclick={leave}
-					aria-label="Keep workout for later">later</button
+				<button class="task-action" onclick={leave} aria-label="Keep workout for later"
+					>later</button
 				>
 				<button
-					class="text-ink-dim hover:text-ink rounded-md px-2 py-2 font-mono text-xs transition-colors"
+					class="task-action is-exit"
 					onclick={endNow}
 					aria-label="Stop workout"
 					disabled={busy}>stop</button
@@ -1418,6 +1548,27 @@
 				{/each}
 			</ol>
 		</nav>
+
+		<!--
+			One row of the network: the line this question is on, the stops the task
+			calls at, and the one being served.
+
+			The answer to *what am I doing and which keys am I handling*, which this
+			page could not give — it named the run in the header and then left every
+			individual question to be placed from the chord symbol. The marks are the
+			map's own, so a key means the same thing here as it does on the board that
+			composed this run.
+		-->
+		{#if route}
+			<div class="route-bar">
+				<RouteStrip
+					line={route.line}
+					stops={route.stops}
+					here={hereStation}
+					anonymous={route.anonymous}
+				/>
+			</div>
+		{/if}
 
 		<p class="task-instruction">{task.instruction}</p>
 
@@ -1645,9 +1796,6 @@
 							<span class="round-label"
 								>round {lessonGuidance.round} of {lessonGuidance.rounds}</span
 							>
-						{/if}
-						{#if questionSource}
-							<p class="question-source">{questionSource}</p>
 						{/if}
 					</div>
 				</div>
@@ -2064,6 +2212,48 @@
 		white-space: nowrap;
 	}
 
+	/* Between the route table and the question: context, at the weight of
+	   context. It sits above the prompt because it is what the prompt is about,
+	   and it never competes with it. */
+	/* The board's chip, so a control looks the same wherever it is. */
+	.task-action {
+		padding: 0.3rem 0.65rem;
+		border: 1px solid var(--color-ground-line);
+		border-radius: 8px;
+		font-family: var(--font-mono);
+		font-size: 0.7rem;
+		color: var(--color-ink-muted);
+		transition:
+			background 120ms ease,
+			border-color 120ms ease,
+			color 120ms ease;
+	}
+
+	.task-action:hover:not(:disabled) {
+		border-color: var(--color-ink-dim);
+		color: var(--color-ink);
+	}
+
+	.task-action:disabled {
+		opacity: 0.4;
+	}
+
+	.task-action.is-exit {
+		border-color: var(--color-ink-dim);
+		color: var(--color-ink);
+	}
+
+	.task-action.is-exit:hover:not(:disabled) {
+		background: var(--color-ground-overlay);
+	}
+
+	.route-bar {
+		margin: 0.55rem 0 0.1rem;
+		padding: 0.5rem 0.15rem;
+		border-top: 1px solid color-mix(in oklab, var(--color-ground-line) 60%, transparent);
+		border-bottom: 1px solid color-mix(in oklab, var(--color-ground-line) 60%, transparent);
+	}
+
 	.task-instruction {
 		max-width: 62ch;
 		margin-bottom: 1.25rem;
@@ -2113,13 +2303,6 @@
 		line-height: 1.4;
 		color: var(--color-ink);
 		text-wrap: balance;
-	}
-
-	.question-source {
-		margin-top: 0.15rem;
-		font-family: var(--font-mono);
-		font-size: 0.68rem;
-		color: var(--color-ink-dim);
 	}
 
 	.question-heading h2 {

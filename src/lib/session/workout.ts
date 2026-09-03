@@ -1,9 +1,11 @@
 import { GROOVES, type Groove } from '$lib/audio/groove';
 import { MISSION_CHARTS, type ChartCategory } from '$lib/curriculum/charts';
 import {
+	keysAtStation,
 	minorKeysReached,
 	relativeMinorOf,
 	rungById,
+	stationHolding,
 	type Move,
 	type RungId
 } from '$lib/curriculum/ladder';
@@ -253,6 +255,13 @@ export type Workout = {
 	tasks: Task[];
 	/** What the home picker pinned, if anything. */
 	choice: Choice | null;
+	/**
+	 * Whether the run was kept to one station, so a reader can say so.
+	 *
+	 * Optional, because a workout composed before this existed is still sitting
+	 * in somebody's `plan_json` and must read as the ordinary run it was.
+	 */
+	stationOnly?: boolean;
 	/** The cold spots that steered it, in the order they steered. */
 	coldSpots: ColdSpot[];
 	/** Lifted out of its task so tomorrow can avoid it. */
@@ -488,6 +497,26 @@ export type WorkoutInput = {
 	/** Yesterday's novelty, by `noveltyId`. */
 	yesterdaysNovelty?: string | null;
 	choice?: Choice | null;
+	/**
+	 * Keep the whole run at one station.
+	 *
+	 * **The one thing a pin has never done, offered as its own switch rather than
+	 * folded into the pin.** `leadWithPinned` leads and does not narrow, on
+	 * purpose — narrowing is the cage M17 was undoing, and a workout that orbits
+	 * the handful of facts one skill holds is the thing this app used to be. That
+	 * argument is about *skills*, though, and it was quietly deciding for keys
+	 * too: there has never been a way to say "today, only C", which is a perfectly
+	 * ordinary thing to want the week you meet a key.
+	 *
+	 * So it is a separate answer to a separate question. The pin still leads and
+	 * still does not narrow; this says which stations the run is allowed to call
+	 * at, and it says *station* rather than *key* because a station holds both
+	 * halves of a relative pair — see `keysAtStation`. Staying at C keeps A minor,
+	 * which is the only reading under which "the relative minor in C" is one place.
+	 *
+	 * Absent is the ordinary run and every previous caller's behaviour exactly.
+	 */
+	stationOnly?: boolean;
 	/** Charts available to a mission. The built-ins when the caller says nothing. */
 	charts?: MissionChart[];
 	/**
@@ -1183,6 +1212,8 @@ function composeMission(input: {
 	plays: Record<string, number>;
 	/** The minor keys the ladder has opened, as bare tonics. Often empty. */
 	minorKeys: string[];
+	/** The run stays at `keyCenter`, so the tune has one place it may go. */
+	stationOnly?: boolean;
 	day: number;
 	nth: number;
 }): Mission | null {
@@ -1208,10 +1239,12 @@ function composeMission(input: {
 	 * for; and every other reached key is behind them so a tune is never refused
 	 * for want of somewhere to put it when somewhere exists.
 	 */
-	const keyOrder = unique(
-		[input.keyCenter, ...input.coldKeys, ...input.reached.map((cell) => cell.key)],
-		(key) => key
-	);
+	const keyOrder = input.stationOnly
+		? [input.keyCenter]
+		: unique(
+				[input.keyCenter, ...input.coldKeys, ...input.reached.map((cell) => cell.key)],
+				(key) => key
+			);
 
 	/*
 	 * What each key on its own has been taught.
@@ -1792,6 +1825,26 @@ export function composeWorkout(input: WorkoutInput): Workout {
 			? rungSkillCode(choice.rungId)
 			: progressionSkillCode(choice.progressionId)
 		: null;
+
+	/*
+	 * The stations this run may call at, and the bank that comes with them.
+	 *
+	 * One filter, applied once, and every queue below is built from what it left.
+	 * Doing it here rather than inside each queue is the whole of keeping the
+	 * promise: a run advertised as calling at C only cannot have one of four
+	 * queues quietly reaching somewhere else, and the three rules the queues each
+	 * carry about leading, spreading and budgeting go on working over a smaller
+	 * bank without knowing anything changed.
+	 *
+	 * The station and not the key. `keysAtStation` is why "the relative minor in
+	 * C" survives the filter: its cards are stored under `C`, an A minor
+	 * progression's under `A`, and both are the same stop.
+	 */
+	const stationOnly = input.stationOnly ?? false;
+	const stationKeys = keysAtStation(keyCenter);
+	const bank = stationOnly
+		? input.cards.filter((card) => stationKeys.includes(card.keyCenter))
+		: input.cards;
 	/*
 	 * The minor keys the ladder has actually opened — the relative minors, and
 	 * only those. Read off `reached` rather than passed in, because it is a
@@ -1847,21 +1900,26 @@ export function composeWorkout(input: WorkoutInput): Workout {
 	 */
 	const budget = newBudget();
 	const sight = sightTask(
-		sightQueue(input.cards, { now, day, coldKeys, pinnedSkill, keyCenter, budget }),
-		input.cards
+		sightQueue(bank, { now, day, coldKeys, pinnedSkill, keyCenter, budget }),
+		bank
 	);
-	const ear = earTask(
-		earQueue(input.cards, { now, day, coldKeys, pinnedSkill, keyCenter, budget }),
-		input.cards
-	);
+	const ear = earTask(earQueue(bank, { now, day, coldKeys, pinnedSkill, keyCenter, budget }), bank);
 	const fn = functionTask(
-		functionQueue(input.cards, { now, day, coldKeys, pinnedSkill, keyCenter, budget }),
-		input.cards
+		functionQueue(bank, { now, day, coldKeys, pinnedSkill, keyCenter, budget }),
+		bank
 	);
-	const crossing = crossingTask(
-		crossingQueue(input.cards, { now, day, coldKeys, budget }),
-		input.cards
-	);
+	/*
+	 * And no key question at one station.
+	 *
+	 * Not an omission to apologise for: `crossingQueue`'s own note says the spread
+	 * across keys *is* the exercise, because the thing being taught is telling
+	 * confusable places apart. Asked six times in one key it is six repetitions of
+	 * "yes, still C" — a question whose answer is printed on the board above it.
+	 * A run that stays at one station has one task fewer and is honest about why.
+	 */
+	const crossing = stationOnly
+		? null
+		: crossingTask(crossingQueue(bank, { now, day, coldKeys, budget }), bank);
 
 	let missionsBuilt = 0;
 	/*
@@ -1882,11 +1940,16 @@ export function composeWorkout(input: WorkoutInput): Workout {
 			vocabulary,
 			reached: input.reached,
 			keyCenter,
-			coldKeys,
+			// A run kept to one station has no cold keys to rotate towards and one
+			// minor key to offer — its own relative, and only if the ladder opened
+			// it. A minor tune with nowhere minor to go is refused, which is the
+			// same rule `composeMission` already applies to every other account.
+			coldKeys: stationOnly ? [] : coldKeys,
 			coldSpots,
 			ladders: input.ladders ?? {},
 			plays: input.plays ?? {},
-			minorKeys,
+			minorKeys: stationOnly ? minorKeys.filter((key) => stationKeys.includes(key)) : minorKeys,
+			stationOnly,
 			day,
 			nth: missionsBuilt
 		});
@@ -1950,6 +2013,7 @@ export function composeWorkout(input: WorkoutInput): Workout {
 		keyCenter,
 		tasks,
 		choice,
+		stationOnly,
 		coldSpots,
 		novelty,
 		openNext,

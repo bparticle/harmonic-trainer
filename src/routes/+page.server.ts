@@ -237,6 +237,20 @@ export const load: PageServerLoad = async ({ parent, locals, url }) => {
 					at: active.resumeAt,
 					complete: active.complete,
 					keyCenter: active.workout.keyCenter,
+					// Whether this one was kept to a single stop, so the board says the
+					// same thing about a run in flight that it said before it left.
+					stationOnly: active.workout.stationOnly ?? false,
+					/*
+					 * What this run actually leads with.
+					 *
+					 * The board draws its calling points as stops on the leading line and
+					 * stops elsewhere, and while a workout is open the leading line is the
+					 * one *it* was composed around — not whatever the map happens to be
+					 * pinned to, which seeds from the ladder's suggestion on every load.
+					 * Without this the track would be drawn against a line the run has
+					 * nothing to do with, which is a picture telling a small lie.
+					 */
+					choice: active.workout.choice,
 					calls: callsAt(active.workout),
 					tasks: previewTasks(active.workout).map((preview, index) => ({
 						...preview,
@@ -332,7 +346,14 @@ export const actions: Actions = {
 
 		await startWorkout(userId, {
 			size: readSize(form.get('size')),
-			choice
+			choice,
+			/*
+			 * Whether the run stays at one station.
+			 *
+			 * A checkbox posts its value only when it is ticked, so the presence of
+			 * the field is the answer and nothing has to be defaulted on the way in.
+			 */
+			stationOnly: form.get('stationOnly') === 'on'
 		});
 		redirect(303, '/session');
 	},

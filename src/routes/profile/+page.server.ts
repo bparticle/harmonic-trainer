@@ -15,7 +15,8 @@ import {
 	type Slice
 } from '$lib/server/db/play-log';
 import { bestBand, describeMonth, readMovement } from '$lib/practice/tempo';
-import { practiceTotals } from '$lib/server/db/session-store';
+import { currentFrontier, practiceTotals } from '$lib/server/db/session-store';
+import { rungsOpenIn, STAGES } from '$lib/curriculum/ladder';
 import { allBadges } from '$lib/effects/badges';
 import { CHARTS } from '$lib/curriculum/charts';
 import { circleOfFifthsIndex, formatKey, parseKey } from '$lib/music/key';
@@ -117,6 +118,23 @@ export const load: PageServerLoad = async ({ locals }) => {
 		});
 	}
 
+	/*
+	 * How far the ladder has reached in each of them.
+	 *
+	 * Read so that these twelve can be drawn as the network's twelve, with the
+	 * network's three states rather than two of them. Without it every key the
+	 * ladder has never opened comes out as a full-strength empty ring, and the
+	 * panel becomes twelve bright circles most of which are things you have not
+	 * done — which is the one thing this page has always refused to be. Dashed is
+	 * how this app says *nothing here yet*, and it is quiet on purpose.
+	 */
+	const frontier = await currentFrontier(userId);
+	const reachedByPc = new Map<number, number>();
+	for (const stage of STAGES) {
+		const pc = tonicOf(stage.key);
+		if (pc !== null) reachedByPc.set(pc, rungsOpenIn(frontier, stage.key));
+	}
+
 	const keys = Array.from({ length: 12 }, (_, pc) => pc)
 		.sort((a, b) => circleOfFifthsIndex(a) - circleOfFifthsIndex(b))
 		.map((pc) => {
@@ -127,7 +145,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 				// player would have met them rather than by a lookup table.
 				label: keyLabel(SHARPS_AND_FLATS[pc]),
 				voiced: slice?.voiced ?? 0,
-				landed: slice?.landed ?? 0
+				landed: slice?.landed ?? 0,
+				/** Rungs of this key the ladder has opened. Never a gate, only a mark. */
+				reached: reachedByPc.get(pc) ?? 0
 			};
 		});
 
