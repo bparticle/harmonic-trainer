@@ -751,11 +751,25 @@ export function directionsForRung(rungId: RungId): CardDirection[] {
  * triads carry a degree — so asking the A minor scale which numeral it is would
  * be exactly the unanswerable question `directionsForRung` exists to prevent,
  * smuggled in by the rung next door.
+ *
+ * **And `hear_name` came in through the same door, and stayed longer.** The
+ * refusal above is written for the scale *rung* — `directionsForRung('scale')`
+ * has never returned it — but the relative minor is a chord rung that happens to
+ * contain a scale, so its scale item was handed the whole chord list and only
+ * the degree was taken back. What that made was a card asking you to name the A
+ * minor scale, and the wrong answers offered beside it came from the same bank:
+ * on an account that had opened only C, the two buttons were *C scale* and *Am
+ * scale*, which contain the same seven notes. There is no listening that
+ * separates them. A scale has no chord shape to name at either level, and this
+ * says so at the level the exception actually lives on: the item's own `chord`,
+ * which every triad and seventh carries and no scale does.
  */
 export function directionsForItem(rungId: RungId, item: LadderItem): CardDirection[] {
-	return directionsForRung(rungId).filter(
-		(direction) => direction !== 'degree_play' || Boolean(item.degree)
-	);
+	return directionsForRung(rungId).filter((direction) => {
+		if (direction === 'degree_play') return Boolean(item.degree);
+		if (direction === 'hear_name') return Boolean(item.chord);
+		return true;
+	});
 }
 
 /** Stable identity, so re-generating a rung matches its existing cards. */

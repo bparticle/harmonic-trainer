@@ -245,6 +245,33 @@ describe('directions', () => {
 			}
 		}
 	});
+
+	it('never asks the relative minor to name the scale it holds', () => {
+		// The refusal above is written for the scale *rung*, and the relative minor
+		// is a chord rung with a scale inside it — so its scale item was handed the
+		// whole chord list and made a card asking you to name the A minor scale.
+		// On an account that had opened only C the buttons beside it were *C scale*
+		// and *Am scale*, which are the same seven notes.
+		const [scale, tonic] = itemsForRung('relative-minor', STAGES[0]);
+		expect(scale.kind).toBe('scale');
+		expect(directionsForItem('relative-minor', scale)).not.toContain('hear_name');
+		expect(directionsForItem('relative-minor', tonic)).toContain('hear_name');
+	});
+
+	it('asks for a name only where there is a chord to name it with', () => {
+		// The same rule as the numerals, one field along: `chord` is what a triad
+		// and a seventh carry and a scale does not.
+		for (const stage of STAGES) {
+			for (const rung of RUNGS) {
+				for (const item of itemsForRung(rung.id, stage)) {
+					const asked = directionsForItem(rung.id, item).includes('hear_name');
+					expect(asked, `${stage.key}/${rung.id}/${item.label}`).toBe(
+						directionsForRung(rung.id).includes('hear_name') && Boolean(item.chord)
+					);
+				}
+			}
+		}
+	});
 });
 
 describe('moving along', () => {

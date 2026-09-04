@@ -398,6 +398,56 @@
 	/** Whether this question ends with a name rather than with a shape. */
 	const needsName = $derived(prompt?.answerWith === 'name');
 
+	/**
+	 * Whether the material may be drawn, lit or lettered yet.
+	 *
+	 * One rule, in one place: **a question that still owes a name shows nothing of
+	 * that name.** The scaffolding this page can put under a scale — the keys lit,
+	 * the note names printed along the route, the lit key walking the scale as it
+	 * sounds — is all of it teaching, and teaching is the wrong thing to do to a
+	 * question whose answer is *what was that*.
+	 *
+	 * It matters for one card and that card should not exist: `hear_name` on a
+	 * scale, which `directionsForItem` now refuses to make. But cards are
+	 * insert-only, so every account that reached the relative minor before today
+	 * is carrying an *Am scale* naming card that will keep coming round, and the
+	 * refusal upstream does nothing for the rows already written. This is what
+	 * those rows meet.
+	 */
+	const answerMayShow = $derived(!needsName || answered || showedAnswer);
+
+	/**
+	 * A scale being *taught*, as opposed to a scale being asked about.
+	 *
+	 * `isSequential` is a marking rule — *this is answered one note at a time* —
+	 * and it reads the payload's kind and nothing else. The prompt panel took it
+	 * for a second meaning it never had, and since it is the first branch in the
+	 * chain it claimed every card whose material is a scale, whatever the question
+	 * was. So the legacy `hear_name` scale card came up with `Play it.` over `Am
+	 * scale` in display type over *Play one note at a time*, and then asked you
+	 * which scale that had been, with `Am scale` among the buttons. The question
+	 * printed its own answer and then marked you on reading it.
+	 *
+	 * This is the same distinction `isChordLesson` already draws for chords, in
+	 * the same words: a lesson is a thing you are being shown, and you are only
+	 * being shown it if playing it is the answer.
+	 */
+	const isScaleLesson = $derived(isSequential && marksPlaying);
+
+	/**
+	 * Whether the notes are on the screen already, which decides whether the
+	 * button offering to show them has anything to offer.
+	 *
+	 * Read off the same condition that actually draws them rather than off the
+	 * guidance alone: with the guidance suppressed on a naming question, the old
+	 * test still said *notes are shown* and greyed the button out, which would
+	 * have taken the last piece of help off the one question that had just lost
+	 * all the others.
+	 */
+	const notesAlreadyShown = $derived(
+		(isSequential || isChordLesson) && lessonGuidance.showTargetLabels && answerMayShow
+	);
+
 	/** What the right name is, spelled as the card stores it. */
 	const answerLabel = $derived(
 		(currentCard?.payload as { label?: string } | undefined)?.label ?? ''
@@ -533,8 +583,10 @@
 				await animatePassage(passage.length, PASSAGE_SECONDS * 1000);
 			} else if (isSequential) {
 				const playing = playSequence(audible, 0.4);
+				// The lit key walking the scale is a demonstration, and a demonstration
+				// is the wrong answer to *what was that*. See `answerMayShow`.
 				const demonstration =
-					lessonGuidance.mode === 'guided'
+					lessonGuidance.mode === 'guided' && answerMayShow
 						? animateScale(audible, 400)
 						: wait(audible.length * 400);
 				await Promise.all([playing, demonstration]);
@@ -869,7 +921,10 @@
 	);
 	const targetNotes = $derived.by(() => {
 		if (isPassage) return passageTarget;
-		if (isSequential && (lessonGuidance.showTarget || showedAnswer || answered)) return scaleTarget;
+		// `answerMayShow` first: a scale asked as a *name* gets no lit keys, whatever
+		// the guidance would otherwise have offered it.
+		if (isSequential && answerMayShow && (lessonGuidance.showTarget || showedAnswer || answered))
+			return scaleTarget;
 		if (
 			isChordLesson &&
 			(lessonPhase === 'watch' || lessonGuidance.showTarget || showedAnswer || answered)
@@ -1238,7 +1293,7 @@
 				? (prompt?.instruction ?? '')
 				: `Chord ${passageDone + 1} of ${passage.length}`;
 		}
-		if (isSequential) {
+		if (isScaleLesson) {
 			if (lessonPhase === 'watch') return 'Watch the scale move';
 			if (lessonGuidance.mode === 'guided') return 'Your turn — follow the lights';
 			if (lessonGuidance.mode === 'supported') return 'Again — with fewer hints';
@@ -1307,7 +1362,7 @@
 		if (playingQuestion) {
 			if (isChordLesson && lessonGuidance.mode === 'guided')
 				return 'Watch every note land together';
-			if (isSequential && lessonGuidance.mode === 'guided') return 'Follow the moving key';
+			if (isScaleLesson && lessonGuidance.mode === 'guided') return 'Follow the moving key';
 			return 'Listen first';
 		}
 		// Said out loud because the two halves of the drill room look alike and want
@@ -1318,7 +1373,7 @@
 		// Said as an offer rather than an instruction, because it is one now: the
 		// demonstration is there to be taken and playing the thing skips it.
 		if (lessonPhase === 'watch') return 'Hear it first, or play it if you know it';
-		if (isSequential && gathered.length) {
+		if (isScaleLesson && gathered.length) {
 			return `${gathered.length} of ${answerNotes.length} notes found${missingNotes[0] ? ` · next, find ${missingNotes[0]}` : ''}`;
 		}
 		if (isChordLesson && activeMarking) {
@@ -1586,10 +1641,28 @@
 
 	// ---- the wheel ----------------------------------------------------------
 
+	/**
+	 * The wheel, and the answer drawn on it once the question has given it away.
+	 *
+	 * The test used to be `prompt.visible` — *has this question got anything
+	 * written on it at all* — which is true of `see_play`, where the chord's name
+	 * is the prompt and lighting its notes tells you nothing you were not just
+	 * told, and equally true of `degree_play`, where what is written is `vi — C`
+	 * and the notes are the entire question. So the wheel sat there with A, C and
+	 * E lit under a question asking which chord the sixth degree is, and then
+	 * asking you to name what you had played.
+	 *
+	 * The honest test is not whether the prompt says something but whether it says
+	 * *this*: the answer goes on the wheel when the question has already named it,
+	 * and otherwise not until it is out. `keyAnswerHighlights` has held the second
+	 * half of that rule since the crossing question arrived; this is the same rule,
+	 * for every other question on the page.
+	 */
 	const highlights = $derived.by((): Highlight[] => {
 		const shapes: Highlight[] = [{ cells: keyView.scaleCells, strength: 0.4, outline: true }];
 
-		if ((prompt?.visible || revealed) && currentCard) {
+		const named = Boolean(answerLabel) && prompt?.visible === answerLabel;
+		if ((named || revealed) && currentCard) {
 			const pcs = (currentCard.payload as { answerPitchClasses: number[] }).answerPitchClasses;
 			if (pcs.length)
 				shapes.push({ cells: cellsFor(pcs, pcs[0], config, GEOMETRY), strength: 0.9 });
@@ -2025,7 +2098,7 @@
 
 				<div class="question-core">
 					<div class="prompt-panel">
-						{#if isSequential}
+						{#if isScaleLesson}
 							<p class="prompt-kicker">
 								{lessonPhase === 'watch' ? 'See it. Hear it.' : 'Play it.'}
 							</p>
@@ -2135,8 +2208,11 @@
 									class:is-demo={demoNotes.includes(scaleTarget[noteIndex])}
 									style:--note-color={`var(--pc-${(((scaleTarget[noteIndex] ?? 0) % 12) + 12) % 12})`}
 								>
+									<!-- The note names, unless naming is the question. See `answerMayShow`. -->
 									<span
-										>{lessonGuidance.showTargetLabels || showedAnswer ? note : noteIndex + 1}</span
+										>{(lessonGuidance.showTargetLabels && answerMayShow) || showedAnswer
+											? note
+											: noteIndex + 1}</span
 									>
 								</li>
 							{/each}
@@ -2259,12 +2335,9 @@
 					<button
 						class="secondary-action"
 						onclick={showAnswer}
-						disabled={showedAnswer ||
-							((isSequential || isChordLesson) && lessonGuidance.showTargetLabels)}
+						disabled={showedAnswer || notesAlreadyShown}
 					>
-						{(isSequential || isChordLesson) && lessonGuidance.showTargetLabels
-							? 'Notes are shown'
-							: 'Show the notes'}
+						{notesAlreadyShown ? 'Notes are shown' : 'Show the notes'}
 					</button>
 					<button class="quiet-action" onclick={skipCard}>
 						{showedAnswer ? 'Next question' : 'Skip this question'}
@@ -2297,7 +2370,7 @@
 					target={targetNotes}
 					found={foundTargetNotes}
 					demo={demoNotes}
-					labelTargets={(isSequential || isChordLesson) && lessonGuidance.showTargetLabels}
+					labelTargets={notesAlreadyShown}
 					onnoteon={(n) => virtual('noteon', n)}
 					onnoteoff={(n) => virtual('noteoff', n)}
 					from={keyboard.from}

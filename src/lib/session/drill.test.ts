@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { CardPayload } from '$lib/curriculum/cards';
-import { STAGES, itemsForRung } from '$lib/curriculum/ladder';
-import { cardsForPivots, cardsForProgression } from '$lib/curriculum/cards';
+import { RUNGS, STAGES, itemsForRung } from '$lib/curriculum/ladder';
+import { cardsForPivots, cardsForProgression, cardsForRung } from '$lib/curriculum/cards';
 import { progressionById } from '$lib/curriculum/progressions';
 import {
 	choicesFor,
@@ -92,6 +92,31 @@ describe('posing a question', () => {
 	it('ends the degree question on the name, the way play-then-name always has', () => {
 		expect(pose('degree_play', cmaj7, 60, 'C').answerWith).toBe('name');
 		expect(pose('degree_play', cmaj7, 60, 'C').instruction).toContain('name');
+	});
+
+	it('never writes the answer on a question that asks for the answer', () => {
+		/*
+		 * The rule the wheel reads, checked against everything the ladder makes.
+		 *
+		 * The wheel used to draw a card's notes whenever the prompt had anything
+		 * written on it at all, which is true of `see_play` — where the chord's name
+		 * *is* the prompt and lighting its notes tells you nothing new — and equally
+		 * true of `degree_play`, where what is written is `vi — C` and the notes are
+		 * the whole question. The honest test is not whether a question says
+		 * something but whether it says *this*, so that is what the wheel asks now
+		 * and this is what keeps it answerable.
+		 */
+		for (const stage of STAGES) {
+			for (const rung of RUNGS) {
+				for (const card of cardsForRung(rung.id, stage)) {
+					const prompt = pose(card.direction, card.payload, 60, card.keyCenter);
+					if (prompt.answerWith !== 'name') continue;
+					expect(prompt.visible, `${stage.key}/${rung.id}/${card.direction}`).not.toBe(
+						card.payload.label
+					);
+				}
+			}
+		}
 	});
 
 	it('builds a voicing when the card does not carry one', () => {

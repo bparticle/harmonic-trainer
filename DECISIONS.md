@@ -6860,3 +6860,96 @@ same reason.
 Verified against a throwaway local Postgres rather than argued: one run, four
 wrong names on one card and a shown answer on another, and the `reviews` table
 came back with exactly one row per card.
+
+## The questions that were holding their own answers
+
+> Sometimes we get a question that actually holds the answer. It asks the Am
+> scale, I play the Am scale which is fine, but then I still have to tell the app
+> that it was the Am scale to get through the question correctly.
+
+Four faults, one shape. Every one of them is a piece of the room that was written
+for a question where showing the material is the _point_, applied to a question
+where the material is the _answer_.
+
+### The A minor scale, asked by name
+
+There is a card that plays you the A minor scale and asks which scale it was.
+`directionsForRung` has refused to make one since the ladder was written — _a
+scale has no chord shape to name_ — but that refusal is written for the scale
+_rung_, and the relative minor is a chord rung that happens to contain a scale.
+Its scale item was handed the whole chord list, and `directionsForItem` took back
+only the numeral.
+
+The wrong answers beside it come from the same bank. On an account that has
+opened only C, the buttons are **`C scale` and `Am scale`, which contain the same
+seven notes.** There is no listening that separates them. The refusal now lives
+on the item, where the exception actually is, and reads off the item's own
+`chord` — the field every triad and seventh carries and no scale does.
+
+Then the page put the answer on the screen anyway. `isSequential` is a _marking_
+rule — this is answered one note at a time — and it reads the payload's kind and
+nothing else. The prompt panel took it for a second meaning it never had, and
+since it is the first branch in the chain it claimed every card whose material is
+a scale, whatever the question was. So the card came up reading `Play it.` over
+`Am scale` in display type over _Play one note at a time_, with the scale lit
+along the keyboard and a lit key walking it as it sounded, and then asked which
+scale that had been. **The question printed its own answer and then marked you on
+reading it back**, which is the report, word for word.
+
+`isScaleLesson` is the distinction `isChordLesson` already drew for chords, in
+the same words: a lesson is a thing you are being shown, and you are only being
+shown it if playing it is the answer.
+
+### And the same structure for chords, which is where it did real damage
+
+`degree_play` asks for a chord by its function and then asks what you just
+played. It was in `SHAPE_DIRECTIONS`, so it was a chord _lesson_, so it got the
+whole demonstration: the watch phase, the chord sounded to you before you played
+it, the keys lit under the answer with their note names printed on them, and —
+loudest of all — the chord's own symbol across the top of the prompt. The screen
+read `Am` over `i — Am`, and then four buttons, one of which said `Am`.
+
+Both halves of the question were answered by the question.
+
+The set has been split. `guidanceKey` still groups a degree card with the shape
+cards, because _how much repetition a shape has had_ is a fair thing for it to
+inherit; `isChordShape` — the one the demonstration hangs off — now takes only
+`hear_play` and `see_play`. The naming half **stays**, and that is deliberate:
+finding vi under your hands is not the same as knowing it is called A minor, and
+the second half is a real question the moment the first one stops answering it.
+
+### The wheel drew the answer whenever the prompt said anything
+
+`highlights` tested `prompt.visible` — _has this question got anything written on
+it at all_ — which is true of `see_play`, where the chord's name **is** the
+prompt and lighting its notes tells you nothing you were not just told, and
+equally true of `degree_play`, where what is written is `vi — C` and the notes
+are the entire question. So the wheel sat there with A, C and E lit under a
+question asking which chord the sixth degree is.
+
+The honest test is not whether the prompt says something but whether it says
+_this_: the answer goes on the wheel when the question has already named it, and
+otherwise not until it is out. `keyAnswerHighlights` has held the second half of
+that rule since the crossing question arrived. This is the same rule, for every
+other question on the page.
+
+### The rows that are already written
+
+Cards are insert-only, so refusing to generate the A minor scale question does
+nothing for the accounts carrying one. `answerMayShow` is the rule stated once
+and applied where the drawing happens — **a question that still owes a name shows
+nothing of that name** — so the lit keys, the note names along the route and the
+key walking the scale as it sounds all come off a naming question and come back
+the moment it is answered. The button offering to show the notes reads off the
+same condition, because it was greying itself out with _Notes are shown_ over a
+question that had just stopped showing them, which would have taken the last
+piece of help off the one question that had lost all the others.
+
+Three tests hold it: the relative minor never asks for the name of the scale it
+holds, a degree card shares a fade without being demonstrable, and — swept over
+every rung in every stage — no question that ends in a name is posed as that
+name.
+
+Not verified in a running drill room. The suite passes and the app builds, but
+the browser check needed a signed-in session and minting one was the wrong way to
+get it.

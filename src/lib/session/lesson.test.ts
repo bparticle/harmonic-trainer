@@ -38,6 +38,24 @@ describe('practice guidance', () => {
 		expect(isChordShape(heard)).toBe(true);
 	});
 
+	it('shares the fade with a degree card without letting it be demonstrated', () => {
+		// Two judgements, and they were one. How much repetition a shape has had is
+		// a fair thing for `degree_play` to inherit; being *shown* is not, because
+		// that question ends by asking what you just played. It was posed with `Am`
+		// in display type over `i — Am`, above a keyboard with A, C and E lit and
+		// lettered, after the app had played the chord.
+		const heard = {
+			id: 'hear-am',
+			keyCenter: 'C',
+			direction: 'hear_play',
+			payload: { kind: 'triad', label: 'Am' }
+		};
+		const degree = { ...heard, id: 'degree-am', direction: 'degree_play' };
+
+		expect(guidanceKey(degree)).toBe(guidanceKey(heard));
+		expect(isChordShape(degree)).toBe(false);
+	});
+
 	it('does not spoil a pure naming question by grouping it with a shown chord', () => {
 		const played = {
 			id: 'play-g7',
