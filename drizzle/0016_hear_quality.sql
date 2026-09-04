@@ -1,0 +1,33 @@
+-- The question that should have come first.
+--
+-- Every aural question this app has ever asked wanted a chord's *name* —
+-- `hear_name` sounds one, writes nothing down, and asks for the symbol. That is
+-- two abilities at once: which root, and which quality. Only one of them is
+-- learnable without perfect pitch, only one of them is the same fact in all
+-- twelve keys, and it is the one nothing has ever asked on its own.
+--
+-- `hear_quality` asks it: a chord sounds, and the answer is what *kind* of chord
+-- it is. No root, no key, nothing to transpose. The options are the shapes the
+-- ladder has actually opened — three at `all-triads`, seven once the sevenths
+-- are up — so the contrast set is the frontier rather than a list somebody
+-- maintains.
+--
+-- Nothing already recorded changes, for the reasons 0014 gives and by the same
+-- mechanism. Every existing card keeps the direction it was created with, every
+-- review still points at the same card, and no row is rewritten: the type gains
+-- a value that nothing yet uses. The cards come from `ensureLadderCards`, which
+-- creates whatever the frontier has opened and has always skipped what already
+-- exists, so an account halfway up the ladder grows its quality cards on its
+-- next session with every other card's history untouched.
+--
+-- No new skill row. These hang off the rung they came from — `rung:all-triads`,
+-- `rung:all-sevenths` — because hearing the difference between a minor seventh
+-- and a dominant is not a separate ability from owning the sevenths rung, it is
+-- the half of that rung the app was never testing.
+--
+-- One statement, and deliberately alone, for the reason 0014 sets out at
+-- length: `ADD VALUE` may run inside a transaction block but the value it adds
+-- cannot be *used* until that transaction commits, and Drizzle runs every
+-- pending migration inside one. Anything that wants to write 'hear_quality'
+-- belongs in a later migration or, as here, in the application.
+ALTER TYPE "public"."card_direction" ADD VALUE 'hear_quality';

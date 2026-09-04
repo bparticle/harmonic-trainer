@@ -393,6 +393,7 @@ async function schedulableCards(userId: string): Promise<Schedulable[]> {
 			keyCenter: row.keyCenter,
 			skillCode: row.skillCode,
 			item: itemIdentity(row.keyCenter, row.payload),
+			shape: (row.payload as { shape?: string } | null)?.shape,
 			state: {
 				stability: row.stability,
 				difficulty: row.difficulty,

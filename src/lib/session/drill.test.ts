@@ -10,11 +10,14 @@ import {
 	markNamed,
 	markPassage,
 	markPlayed,
+	markShape,
 	materialOf,
 	nameNeighbours,
 	pose,
+	shapeChoices,
 	toVoicing
 } from './drill';
+import { vocabularyFromRungs, type Shape } from '$lib/curriculum/vocabulary';
 
 const cmaj7: CardPayload = {
 	kind: 'chord',
@@ -663,5 +666,182 @@ describe('filling the buttons on an account that owns one chord', () => {
 
 	it('says nothing about a key it cannot read', () => {
 		expect(diatonicNames('not a key', 'triad')).toEqual([]);
+	});
+});
+
+describe('the quality question', () => {
+	const cards = (rungId: 'all-triads' | 'all-sevenths', key = 'C') =>
+		cardsForRung(
+			rungId,
+			STAGES.find((s) => s.key === key)!
+		).filter((card) => card.direction === 'hear_quality');
+
+	it('sounds the chord and writes nothing down', () => {
+		const [first] = cards('all-triads');
+		const prompt = pose('hear_quality', first.payload, 60, 'C');
+		expect(prompt.visible).toBeNull();
+		expect(prompt.audible).not.toBeNull();
+		expect(prompt.answerWith).toBe('quality');
+	});
+
+	it('refuses an anchor, because a quality is not counted from anywhere', () => {
+		// The one aural question with no key in it. Sounding a tonic first would
+		// suggest the key bears on an answer it cannot bear on.
+		const [first] = cards('all-sevenths');
+		expect(pose('hear_quality', first.payload, 60, 'C').anchor).toBeNull();
+	});
+
+	it('carries its answer on the card', () => {
+		for (const rungId of ['all-triads', 'all-sevenths'] as const) {
+			for (const card of cards(rungId)) {
+				expect(card.payload.shape, card.payload.label).toBeTruthy();
+			}
+		}
+	});
+
+	it('names the sounds the triads rung actually teaches', () => {
+		const shapes = new Set(cards('all-triads').map((card) => card.payload.shape));
+		expect([...shapes].sort()).toEqual(['diminished', 'major', 'minor']);
+	});
+
+	it('names the four sevenths, which is the whole point of that rung', () => {
+		const shapes = new Set(cards('all-sevenths').map((card) => card.payload.shape));
+		expect([...shapes].sort()).toEqual([
+			'dominant seventh',
+			'half-diminished',
+			'major seventh',
+			'minor seventh'
+		]);
+	});
+
+	it('offers every open shape, in teaching order, and never `unknown`', () => {
+		const open: Shape[] = ['major', 'minor', 'diminished'];
+		expect(shapeChoices('minor', open)).toEqual(['major', 'minor', 'diminished']);
+		expect(shapeChoices('minor', [...open, 'unknown'])).not.toContain('unknown');
+	});
+
+	it('grows from three buttons to seven as the ladder opens', () => {
+		const triads = vocabularyFromRungs(['scale', 'tonic-triad', 'all-triads']).shapes;
+		const sevenths = vocabularyFromRungs(['all-triads', 'all-sevenths']).shapes;
+		expect(shapeChoices('major', triads)).toHaveLength(3);
+		expect(shapeChoices('major', sevenths)).toHaveLength(7);
+	});
+
+	it('never poses a card whose own answer is missing from the row', () => {
+		// It cannot happen from `ensureLadderCards` — a card exists because its
+		// rung is open — but a question you cannot answer is worth making
+		// impossible rather than merely unlikely.
+		expect(shapeChoices('dominant seventh', ['major', 'minor'])).toContain('dominant seventh');
+	});
+
+	it('marks only the shape the card is', () => {
+		expect(markShape('minor seventh', 'minor seventh')).toBe(true);
+		expect(markShape('minor seventh', 'half-diminished')).toBe(false);
+		expect(markShape(undefined, 'major')).toBe(false);
+	});
+});
+
+describe('the anchor under a naming question', () => {
+	const namer = (key: string) =>
+		cardsForRung(
+			'all-sevenths',
+			STAGES.find((s) => s.key === key)!
+		).filter((card) => card.direction === 'hear_name')[0];
+
+	it('sounds the tonic of the key before the chord', () => {
+		// Without it, naming a chord sounded into silence is a test of perfect
+		// pitch — and the ear queue crosses keys, so there was not even a stable
+		// context to count from across a run.
+		const prompt = pose('hear_name', namer('G').payload, 60, 'G');
+		expect(prompt.anchor).toEqual([43]);
+	});
+
+	it('sounds one note and not the tonic chord, which on the I would be the answer', () => {
+		// The fault a real morning printed: home came out as C–E–G and the chord
+		// to be named came out as C–E–G an octave up, so the question answered
+		// itself. One note leaves the shape above it still to be heard.
+		const card = cardsForRung('all-triads', STAGES[0]).filter(
+			(c) => c.direction === 'hear_name' && c.payload.label === 'C'
+		)[0];
+		const prompt = pose('hear_name', card.payload, 60, 'C');
+		expect(prompt.anchor).toHaveLength(1);
+		expect(new Set(prompt.audible!.map((n) => n % 12))).not.toEqual(
+			new Set(prompt.anchor!.map((n) => n % 12))
+		);
+	});
+
+	it('puts it below the chord, so it reads as ground rather than as part of it', () => {
+		for (const key of ['C', 'G', 'F', 'Bb']) {
+			const prompt = pose('hear_name', namer(key).payload, 60, key);
+			expect(Math.max(...prompt.anchor!), key).toBeLessThan(Math.min(...prompt.audible!));
+		}
+	});
+
+	it('puts the same key in the same place every time it is asked', () => {
+		// Home should be the same note every question, not wherever the card's own
+		// stored voicing happened to land.
+		const anchors = cardsForRung('all-sevenths', STAGES[0])
+			.filter((c) => c.direction === 'hear_name')
+			.map((c) => pose('hear_name', c.payload, 60, 'C').anchor?.join());
+		expect(new Set(anchors).size).toBe(1);
+	});
+
+	it('gives nothing rather than a guess when the key cannot be read', () => {
+		expect(pose('hear_name', cmaj7, 60, 'not a key').anchor).toBeNull();
+		expect(pose('hear_name', cmaj7, 60, undefined).anchor).toBeNull();
+	});
+
+	it('is never offered to a question answered with the hands', () => {
+		for (const direction of ['see_play', 'hear_play', 'degree_play', 'pivot_play'] as const) {
+			expect(pose(direction, cmaj7, 60, 'C').anchor, direction).toBeNull();
+		}
+	});
+});
+
+describe('wrong answers that vary the quality', () => {
+	/** The bank an account three keys wide actually has, at the sevenths. */
+	const bank = (kind: string) =>
+		['C', 'G', 'F']
+			.flatMap((key) =>
+				cardsForRung(
+					'all-sevenths',
+					STAGES.find((s) => s.key === key)!
+				)
+			)
+			.filter((card) => card.direction === 'hear_name' && card.payload.kind === kind)
+			.map((card) => ({
+				label: card.payload.label,
+				kind: card.payload.kind,
+				keyCenter: card.keyCenter
+			}));
+
+	it('puts the same root under a different quality first', () => {
+		// The fault: G is the only G on the sevenths rung of C and B is the only
+		// B, so the dominant and the half-diminished — the two most distinctive
+		// sounds in the key — were the two you could get right by reading the
+		// letter. `Gmaj7` and `Gm7` are real cards in G and F.
+		const neighbours = nameNeighbours('G7', bank('seventh'), 'C');
+		expect(neighbours.slice(0, 2).sort()).toEqual(['Gm7', 'Gmaj7']);
+	});
+
+	it('offers the half-diminished against the minor seventh it is confused with', () => {
+		const options = choicesFor('Bm7b5', nameNeighbours('Bm7b5', bank('seventh'), 'C'));
+		expect(options).toContain('Bm7');
+	});
+
+	it('still fills four buttons when no same-root option exists', () => {
+		const onlyCard = [{ label: 'C', kind: 'triad', keyCenter: 'C' }];
+		const among = [...onlyCard, ...diatonicNames('C', 'triad')];
+		expect(choicesFor('C', nameNeighbours('C', among, 'C'))).toHaveLength(4);
+	});
+
+	it('reads a root through the accidental rather than around it', () => {
+		// `Cm7b5` normalises to `cm7b5`, where the character after the letter is
+		// `m` — so the root is `c` and not `cb`.
+		const among = [
+			{ label: 'Cm7b5', kind: 'seventh', keyCenter: 'Db' },
+			{ label: 'Cbmaj7', kind: 'seventh', keyCenter: 'Gb' }
+		];
+		expect(nameNeighbours('Cmaj7', among, 'C')[0]).toBe('Cm7b5');
 	});
 });

@@ -80,7 +80,8 @@ export const cardDirection = pgEnum('card_direction', [
 	'degree_play',
 	'key_hear',
 	'key_moved',
-	'pivot_play'
+	'pivot_play',
+	'hear_quality'
 ]);
 
 /** FSRS memory states. */

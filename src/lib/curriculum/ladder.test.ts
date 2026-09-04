@@ -205,8 +205,49 @@ describe('directions', () => {
 			'see_play',
 			'hear_play',
 			'hear_name',
+			'hear_quality',
 			'degree_play'
 		]);
+	});
+
+	it('asks no quality question until there are two qualities to tell apart', () => {
+		// `tonic-triad` and `primary-triads` build major triads and nothing else.
+		// *What kind of chord was that* is not a question when it has had one
+		// answer every time it has ever been asked.
+		expect(directionsForRung('tonic-triad')).not.toContain('hear_quality');
+		expect(directionsForRung('primary-triads')).not.toContain('hear_quality');
+		expect(directionsForRung('all-triads')).toContain('hear_quality');
+	});
+
+	it('asks no name until the bank can supply a wrong one', () => {
+		// The mirror image, and the fault it fixes. On those two rungs the whole
+		// bank is major triads, so the three buttons beside the right answer came
+		// from `diatonicNames` — chords derived from the key that the ladder has
+		// not built and nobody has met.
+		expect(directionsForRung('tonic-triad')).not.toContain('hear_name');
+		expect(directionsForRung('primary-triads')).not.toContain('hear_name');
+		expect(directionsForRung('all-triads')).toContain('hear_name');
+	});
+
+	it('opens the quality question no later than the naming one it feeds', () => {
+		// The ordering this milestone exists for, checked as an ordering rather
+		// than as two facts that happen to agree today.
+		for (const rung of RUNGS) {
+			const asked = directionsForRung(rung.id);
+			if (asked.includes('hear_name')) expect(asked, rung.id).toContain('hear_quality');
+		}
+	});
+
+	it('asks the quality of every item that is a chord, and of no other', () => {
+		for (const stage of STAGES) {
+			for (const rung of RUNGS) {
+				if (!directionsForRung(rung.id).includes('hear_quality')) continue;
+				for (const item of itemsForRung(rung.id, stage)) {
+					const asked = directionsForItem(rung.id, item).includes('hear_quality');
+					expect(asked, `${stage.key}/${rung.id}/${item.label}`).toBe(Boolean(item.chord));
+				}
+			}
+		}
 	});
 
 	it('makes no card in a direction nothing asks for', () => {

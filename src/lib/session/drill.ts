@@ -1,6 +1,8 @@
 import type { CardDirection } from '$lib/server/db/schema';
 import type { CardPayload } from '$lib/curriculum/cards';
 import { diatonicSeventh, diatonicTriad, formatChord } from '$lib/music/chord';
+import { parseNote, pitchClass } from '$lib/music/note';
+import { SHAPES, type Shape } from '$lib/curriculum/vocabulary';
 import { formatKey, key as makeKey, keyTonic, parseKey } from '$lib/music/key';
 
 /**
@@ -54,8 +56,29 @@ export type Prompt = {
 	 * the answer rather than as a preamble to one.
 	 */
 	sequence: PromptChord[] | null;
+	/**
+	 * Notes to sound *before* the question, as a reference rather than as part of
+	 * it.
+	 *
+	 * Only `hear_name` has one, and without it that question was unanswerable by
+	 * anyone lacking perfect pitch. A chord sounded into silence and asked to be
+	 * named is two questions — which root, and which quality — and the root half
+	 * has no answer unless something has established where the key is. The ear
+	 * queue crosses keys by design, so there was not even a stable context to
+	 * count from across a run.
+	 *
+	 * This is the rule `degree_play` already keeps and says out loud: *a workout's
+	 * function task crosses keys, so the key travels beside the numeral.* The ear
+	 * task crosses keys for the same reason and said nothing at all. So the tonic
+	 * arrives first and the question becomes a relative one, which is a thing that
+	 * can actually be practised.
+	 *
+	 * Never marked, never part of the answer, and never on `hear_quality` — see
+	 * that case in `pose` for why the quality question refuses one.
+	 */
+	anchor: number[] | null;
 	/** How the answer is given. */
-	answerWith: 'play' | 'name';
+	answerWith: 'play' | 'name' | 'quality';
 	/** One line telling you what to do. */
 	instruction: string;
 };
@@ -90,8 +113,41 @@ export function pose(
 				visible: null,
 				audible: voicing,
 				sequence: null,
+				anchor: anchorFor(keyCenter),
 				answerWith: 'name',
-				instruction: 'Listen. What is it?'
+				instruction: 'Home first, then the chord. What is it?'
+			};
+		/*
+		 * The other half of `hear_name`, and the half that should have come first.
+		 *
+		 * A chord sounds and the answer is what *kind* of chord it was — major,
+		 * minor, diminished, and the four sevenths once the ladder has built them.
+		 * No root, no symbol, no spelling. It is the only question in this app that
+		 * is the same question in all twelve keys, which is exactly why it can be
+		 * asked long before the one that is not.
+		 *
+		 * **No anchor, and that is the point rather than an omission.** `hear_name`
+		 * needs a tonic because half of what it wants is a root, and a root has no
+		 * name without somewhere to count from. A quality is not counted from
+		 * anywhere: a minor seventh is a minor seventh played on any note by any
+		 * instrument in any key, and sounding a tonic first would suggest the key
+		 * bears on an answer it cannot bear on. The silence before it is the
+		 * question saying so.
+		 *
+		 * The options are not built here. They are every shape the ladder has
+		 * opened — three at `all-triads`, seven once the sevenths are up — which is
+		 * a fact about the frontier and not about this card, so the room supplies
+		 * them and `payload.shape` is only the answer. See `shapeChoices`.
+		 */
+		case 'hear_quality':
+			return {
+				direction,
+				visible: null,
+				audible: voicing,
+				sequence: null,
+				anchor: null,
+				answerWith: 'quality',
+				instruction: 'Listen. What kind of chord is that?'
 			};
 		/*
 		 * Heard and played back — as one shape, or as a movement.
@@ -108,6 +164,7 @@ export function pose(
 				visible: null,
 				audible: passage ? null : voicing,
 				sequence: passage,
+				anchor: null,
 				answerWith: 'play',
 				instruction: passage
 					? 'Listen, then play it back — one chord at a time.'
@@ -127,6 +184,7 @@ export function pose(
 				visible: payload.label,
 				audible: null,
 				sequence: passage,
+				anchor: null,
 				answerWith: 'play',
 				instruction: passage ? 'Play it through, one chord at a time.' : 'Play it.'
 			};
@@ -146,6 +204,7 @@ export function pose(
 				visible: payload.detail ?? payload.degree ?? payload.label,
 				audible: null,
 				sequence: null,
+				anchor: null,
 				answerWith: 'name',
 				instruction: 'Play it, then name what you played.'
 			};
@@ -175,6 +234,7 @@ export function pose(
 				visible: key ? `${degree} — ${key}` : degree,
 				audible: null,
 				sequence: null,
+				anchor: null,
 				answerWith: 'name',
 				instruction: 'Play the chord that degree asks for, then name what you played.'
 			};
@@ -194,6 +254,7 @@ export function pose(
 				visible: payload.detail ?? payload.label,
 				audible: null,
 				sequence: null,
+				anchor: null,
 				answerWith: 'play',
 				instruction: 'One chord, two jobs. Play it.'
 			};
@@ -261,6 +322,43 @@ function scaleVoicing(
 	const root = storedRoot ?? toVoicing([pitchClasses[0]], from)[0];
 	const degrees = toVoicing(pitchClasses, root);
 	return [...degrees, root + 12];
+}
+
+/**
+ * One low note — the tonic of the key — as a place to hear the question from.
+ *
+ * **A note and not the tonic triad, and that is the whole of what makes it a
+ * reference rather than a give-away.** A triad was the obvious thing to sound
+ * and it is wrong for one card in seven: on the I chord the anchor *is* the
+ * answer. Walking a real morning printed it plainly — home came out as C–E–G
+ * and the chord to be named came out as C–E–G an octave up, so "listen, then
+ * name it" was answered by noticing the two were the same. One note cannot do
+ * that. You still have to hear that the thing above it is a major triad built
+ * on that note, which is the question.
+ *
+ * It also removes the branch the relative minor would otherwise need. A single
+ * pitch has no mode, so C is where A minor is counted from without anything
+ * having to decide whether home is major or minor.
+ *
+ * A fixed low register rather than one derived from the chord. Both were tried:
+ * hanging it an octave under whatever the card happened to sound put the same
+ * key's tonic at C2 on one question and C3 on the next, because the stored
+ * voicings sit where `closeVoicing(chord, 3)` put them. Home should be the same
+ * note every time it is played, and octave 2 is below every voicing this app
+ * builds, so it never blurs into the chord it is introducing.
+ *
+ * A key that cannot be parsed gives nothing rather than a guess, and a question
+ * with no anchor is the question exactly as it was before this existed.
+ */
+const ANCHOR_FROM = 36;
+
+function anchorFor(keyCenter: string | undefined): number[] | null {
+	if (!keyCenter) return null;
+	try {
+		return toVoicing([pitchClass(parseNote(keyTonic(keyCenter)))], ANCHOR_FROM);
+	} catch {
+		return null;
+	}
 }
 
 /** Spread pitch classes into a playable voicing above a root. */
@@ -431,10 +529,28 @@ export function diatonicNames(keyCenter: string, kind: string | undefined): Name
  * runs along — a triad is mistaken for a triad, and a chord in this key for
  * another chord in this key. Anything of the same kind from elsewhere follows,
  * so a task spread across keys still fills four buttons.
+ *
+ * **Same root goes in front of both, and that is a fault being fixed.** A chord
+ * symbol carries two facts and this question asks for both, but every wrong
+ * answer it used to offer differed in the *root*: on the sevenths rung the
+ * buttons beside `G7` were `Dm7`, `Em7` and `Cmaj7`, and beside `Bm7b5` they
+ * were `Cmaj7`, `Em7` and `Dm7`. G is the only G on that rung and B is the only
+ * B, so **the two most distinctive sounds in the key — the dominant and the
+ * half-diminished — were the two you could get right without listening at
+ * all.** Read the letter, press the letter.
+ *
+ * A same-root option makes the quality the thing that separates them: `G7`
+ * against `Gmaj7` and `Gm7`, `Bm7b5` against `Bm7`. These are not invented —
+ * they are drawn from the bank like every other neighbour, and they appear as
+ * soon as the frontier is two keys wide, because `Gm7` is the ii of F and `C7`
+ * is the V of F. On an account one key wide there are none and the ordering
+ * falls through to what it always was.
  */
 export function nameNeighbours(correct: string, among: NameOption[], keyCenter?: string): string[] {
 	const wanted = normalise(correct);
+	const root = rootOf(correct);
 	const seen = new Set<string>([wanted]);
+	const sameRoot: string[] = [];
 	const near: string[] = [];
 	const far: string[] = [];
 
@@ -444,11 +560,56 @@ export function nameNeighbours(correct: string, among: NameOption[], keyCenter?:
 		const key = normalise(label);
 		if (seen.has(key)) continue;
 		seen.add(key);
-		if (keyCenter && option.keyCenter === keyCenter) near.push(label);
+		if (root && rootOf(label) === root) sameRoot.push(label);
+		else if (keyCenter && option.keyCenter === keyCenter) near.push(label);
 		else far.push(label);
 	}
 
-	return [...near, ...far];
+	return [...sameRoot, ...near, ...far];
+}
+
+/**
+ * The note a chord symbol is built on, spelled as `normalise` spells things.
+ *
+ * Read off the normalised symbol so that `B♭m7` and `Bbm7` come back as the
+ * same root, and so a trailing accidental in the *quality* cannot be mistaken
+ * for one in the root: `Cm7b5` normalises to `cm7b5`, where the character after
+ * the letter is `m` and the root is therefore `c`.
+ */
+function rootOf(symbol: string): string | null {
+	return normalise(symbol).match(/^[a-g][b#]?/)?.[0] ?? null;
+}
+
+/**
+ * The buttons for a quality question: every shape the ladder has opened.
+ *
+ * **Not a sample of four, and this is the one place this app does not sample.**
+ * `choicesFor` takes three wrong answers out of a bank of hundreds because a
+ * naming question cannot show you every chord in every key. The shapes are a
+ * closed vocabulary of seven, and the whole of what `hear_quality` teaches is
+ * that vocabulary — so the row is the same row every time, in the same order,
+ * and you come to know it the way you know the names of the fingers. A row that
+ * reshuffled its contents each question would be teaching you to read the
+ * buttons instead of to hear the chord.
+ *
+ * It also means the question gets honestly harder as the ladder opens: three
+ * buttons at `all-triads`, seven once the sevenths are up. Nothing sets that —
+ * it falls out of what has been opened, which is the only rule the frontier has.
+ *
+ * The correct answer is folded in whether or not the vocabulary claims it, so a
+ * card can never be posed with its own answer missing from the row. That cannot
+ * happen from `ensureLadderCards` — a card exists because its rung is open, and
+ * an open rung is in the vocabulary — but a question you cannot answer is bad
+ * enough to be worth one `Set` insertion to make impossible.
+ */
+export function shapeChoices(correct: Shape, open: Iterable<Shape>): Shape[] {
+	const offered = new Set<Shape>([...open, correct]);
+	return SHAPES.filter((shape) => shape !== 'unknown' && offered.has(shape));
+}
+
+/** Mark a chosen quality. Exact, because the buttons emit the shapes themselves. */
+export function markShape(expected: Shape | undefined, given: Shape): boolean {
+	return expected === given;
 }
 
 /**

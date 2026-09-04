@@ -737,10 +737,41 @@ export function itemsForRung(rungId: RungId, stage: Stage): LadderItem[] {
  * kept `degree_play`, because its numerals belong to A minor and a bare `iv`
  * would have been a wrong question with a right answer behind it. That was true
  * of every other rung as well the moment a workout began crossing keys.
+ *
+ * **`hear_quality` opens at `all-triads`, and `hear_name` moves to meet it.**
+ * The two are one question split along the seam it should always have had: a
+ * chord sounds, and you are asked either what *kind* of thing that was or what
+ * it was called. The first is the same fact in all twelve keys and the second is
+ * not, which is the whole of why they are different rungs' worth of difficulty
+ * and why they now open in that order.
+ *
+ * A quality question needs at least two qualities to choose between, and the
+ * ladder does not build a second one until `all-triads` — `tonic-triad` and
+ * `primary-triads` are three major triads and a lot of encouragement. Asking
+ * *what kind of chord was that* when the answer has been major every time it was
+ * ever asked is not a question, and it is the same refusal the scale gets one
+ * line above.
+ *
+ * `hear_name` leaves those two rungs for the mirror-image reason, and this is a
+ * fault being fixed rather than a balance being struck. Naming needs *confusable
+ * wrong answers*, the bank on those rungs holds three major triads, and so the
+ * three buttons beside the right one came from `diatonicNames` — which derives
+ * all seven chords of the key whether or not anybody has met them. On the first
+ * chord rung of a new account the question was `C`, and the wrong answers were
+ * `Dm`, `Em` and `Am`: three chords the ladder had not built, offered to
+ * somebody whose entire vocabulary was one triad. That is the fault the whole
+ * frontier exists to prevent, arriving through the one door nothing was
+ * watching — the wrong answers rather than the right one.
+ *
+ * What those two rungs keep is what they can honestly ask: read it, hear it and
+ * play it back, and spell it from its numeral. That is plenty for a rung whose
+ * entire content is one sound.
  */
 export function directionsForRung(rungId: RungId): CardDirection[] {
 	if (rungId === 'scale') return ['see_play', 'hear_play'];
-	return ['see_play', 'hear_play', 'hear_name', 'degree_play'];
+	if (rungId === 'tonic-triad' || rungId === 'primary-triads')
+		return ['see_play', 'hear_play', 'degree_play'];
+	return ['see_play', 'hear_play', 'hear_name', 'hear_quality', 'degree_play'];
 }
 
 /**
@@ -767,7 +798,10 @@ export function directionsForRung(rungId: RungId): CardDirection[] {
 export function directionsForItem(rungId: RungId, item: LadderItem): CardDirection[] {
 	return directionsForRung(rungId).filter((direction) => {
 		if (direction === 'degree_play') return Boolean(item.degree);
-		if (direction === 'hear_name') return Boolean(item.chord);
+		// Both aural chord questions need the item to *be* a chord. `hear_quality`
+		// asks what kind of chord that was, and a scale is not a worse answer to
+		// that than a triad — it is not an answer to it.
+		if (direction === 'hear_name' || direction === 'hear_quality') return Boolean(item.chord);
 		return true;
 	});
 }

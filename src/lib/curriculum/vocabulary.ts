@@ -126,6 +126,39 @@ export type Shape =
 	| 'unknown';
 
 /**
+ * The shapes in the order they are worth *teaching*, which is not the order
+ * they are worth comparing in.
+ *
+ * `sortShapes` sorts alphabetically and is right to: everywhere else in this
+ * file a set of shapes is a set, compared and deduplicated, and alphabetical is
+ * the cheapest stable order for that. It is a poor order to read, though, and
+ * `hear_quality` reads it — those are its buttons. Alphabetically the row runs
+ * *diminished, dominant seventh, half-diminished, major, major seventh…*, which
+ * shuffles the triads in among the sevenths and puts the two things a beginner
+ * is actually deciding between at opposite ends.
+ *
+ * So: triads first, in the order the ladder builds them, then the sevenths in
+ * the order `all-sevenths` stacks them. Neighbouring entries are the ones
+ * genuinely mistaken for each other, which is what a row of buttons should be.
+ *
+ * `unknown` is last and is never offered — nothing teaches it, and it exists so
+ * a hand-typed chart can say *I could not read this*.
+ */
+export const SHAPES: Shape[] = [
+	'major',
+	'minor',
+	'diminished',
+	'augmented',
+	'suspended',
+	'major seventh',
+	'dominant seventh',
+	'minor seventh',
+	'half-diminished',
+	'minor-major seventh',
+	'unknown'
+];
+
+/**
  * A way of leaving the key, named as a musician would name it.
  *
  * **This was an ordered three-step scale — `in_key < coloured < off_key` — and

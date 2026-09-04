@@ -18,6 +18,7 @@ import {
 	realiseProgression,
 	type Progression
 } from './progressions';
+import { shapeOf, type Shape } from './vocabulary';
 
 /**
  * Cards are generated from the ladder, and only where you have actually been.
@@ -41,6 +42,25 @@ export type CardPayload = {
 	/** The key the degree is counted from, when the card's own key is not it. */
 	degreeOf?: string;
 	detail?: string;
+	/**
+	 * What kind of chord this is, for the one question that asks only that.
+	 *
+	 * `hear_quality` sounds a chord and wants *major seventh* rather than
+	 * `Cmaj7` — the half of the naming question that is the same fact in all
+	 * twelve keys. That answer is a `Shape`, so the card carries one.
+	 *
+	 * This is the exception to the rule on `LadderItem.chord`, which says the
+	 * chord itself is a fact about the rung and never becomes a fact about the
+	 * question. The chord still does not travel; its *shape* does, and only
+	 * because a direction now asks for it directly. Derived once here rather
+	 * than re-derived from the label at pose time, because `formatChord` and
+	 * `parseChord` are not each other's inverse for every symbol this app can
+	 * build and a question must not be able to disagree with its own answer.
+	 *
+	 * Absent on scales, which have no chord, and on progressions, which are not
+	 * asked this way.
+	 */
+	shape?: Shape;
 	/**
 	 * Progressions only: the chords in order, and the answer to the card.
 	 *
@@ -92,7 +112,8 @@ function toPayload(item: LadderItem): CardPayload {
 		answerVoicing: item.answerVoicing,
 		degree: item.degree,
 		degreeOf: item.degreeOf,
-		detail: item.detail
+		detail: item.detail,
+		shape: item.chord ? shapeOf(item.chord) : undefined
 	};
 }
 

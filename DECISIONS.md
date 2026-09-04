@@ -6953,3 +6953,120 @@ name.
 Not verified in a running drill room. The suite passes and the app builds, but
 the browser check needed a signed-in session and minting one was the wrong way to
 get it.
+
+## The ear question that was two questions
+
+> We are asked to recognize different chords by ear but we have never even
+> practiced distinguishing minor from major chords or seventh chords from
+> diminished etc etc.
+
+Correct, and the app could not have done it. There was no direction that asked
+what kind of chord a sound was. `hear_name` was the only aural naming question
+and it asked for the whole symbol — root **and** quality — from four buttons.
+Two abilities, one grade, and only one of the two ever practised.
+
+### What the wrong answers were actually testing
+
+Not the ear. On the sevenths rung of C the buttons beside `G7` were `Dm7`, `Em7`
+and `Cmaj7`, and beside `Bm7b5` they were `Cmaj7`, `Em7` and `Dm7`. G is the only
+G on that rung and B is the only B, so **the dominant and the half-diminished —
+the two most distinctive sounds in the key — were the two you could get right
+without listening.** Read the letter, press the letter. `nameNeighbours` sorted
+by same-kind and same-key and never once by same-root, so the axis the question
+was named after was the axis it never varied.
+
+It was also asked before it could be answered. `directionsForRung` handed
+`hear_name` to `tonic-triad`, where the bank holds one chord: the three wrong
+answers came from `diatonicNames`, which derives all seven chords of the key
+whether or not anybody has met them. The first chord rung of a new account asked
+`C` and offered `Dm`, `Em` and `Am` beside it — the fault the whole frontier
+exists to prevent, arriving through the one door nothing was watching.
+
+And nothing said where the key was. `degree_play` puts the key beside the numeral
+because a workout's function task crosses keys and _eight questions in eight keys
+cannot_ leave it unsaid. The ear queue crosses keys for the same reason and said
+nothing at all, so naming the root was a test of perfect pitch.
+
+### The question that should have come first
+
+`hear_quality` sounds a chord and asks what **kind** of chord it was. No root, no
+symbol, no key — the only question in this app that is the same question in all
+twelve keys, which is exactly why it can be asked long before the one that is
+not.
+
+Its answer set needed no new theory, because `vocabulary.ts` has had `Shape` and
+`shapeOf` since the tunes needed to know what a chart demands. The buttons are
+**every shape the ladder has opened**, so the contrast set is the frontier: three
+at `all-triads` — the rung whose own `teaches` line already reads _three are
+major, three are minor, one is diminished_ — and seven once the sevenths are up.
+Nothing configures that and there is no list to maintain.
+
+It opens at `all-triads` and not before, because `tonic-triad` and
+`primary-triads` build major triads and nothing else, and _what kind of chord was
+that_ is not a question when it has had one answer every time it has ever been
+asked. `hear_name` leaves those same two rungs, for the mirror-image reason. The
+two now open together, in the order that makes the second one answerable, and a
+test asserts the ordering rather than the two facts that happen to agree today.
+
+### Its own task while it is new, then folded
+
+The colour task rides in front of the day on the terms the sight task already
+established: **added to a morning rather than taken out of one.** It builds only
+from cards that have not reached `review`, so on an ordinary morning it costs no
+questions and does not appear; on the morning after `all-triads` opens it is
+there, second, after the material has arrived and before anything assumes you
+know it. Failing a shape hands it back.
+
+Once a card graduates the lesson is over and the question is not — telling a
+dominant from a major seventh is a thing you keep needing — so it folds into the
+ear pool and interleaves with the two questions it makes answerable. That makes
+`hear_quality` the only direction in two pools, which broke a rule. The rule was
+written as _one direction, one queue_ and what it was protecting was **one card,
+one queue**; for every other direction those are the same sentence. The partition
+is now by card state, it is exhaustive, and the test checks the thing that
+mattered instead of the thing that used to imply it.
+
+Its six questions spread by **shape**, not by key — the one queue in the app where
+the key is not the axis worth spreading on, because a quality question has no key
+in it. The pool is badly lopsided: `all-sevenths` builds three minor sevenths, two
+major sevenths, one dominant and one half-diminished per key, so a queue taken in
+order asks about the sounds you already know and skips the two you do not.
+
+### And the naming question, repaired
+
+Same-root wrong answers go in front of the others, drawn from the bank like every
+other neighbour rather than invented: `Gm7` is the ii of F and `C7` is the V of F,
+so they appear as soon as the frontier is two keys wide. `G7` now stands against
+`Gmaj7` and `Gm7`, and `Bm7b5` against `Bm7`.
+
+The key arrives first, as **one low note**. A tonic triad was the obvious choice
+and it is wrong for one card in seven: on the I chord the anchor _is_ the answer.
+Walking a real morning printed it plainly — home came out as C–E–G and the chord
+to be named came out as C–E–G an octave up. One note cannot do that, has no mode
+so the relative minor needs no branch, and sits in a fixed low register so home is
+the same note every time rather than wherever a card's stored voicing happened to
+land.
+
+**None of this reaches the rows already written.** Cards are insert-only, so an
+account that opened `tonic-triad` before today is still carrying the naming cards
+this refuses to generate — the same shape of limitation the previous milestone hit
+with the A minor scale, and the same answer: the gate is for what gets made, and
+the room is where the existing rows are met.
+
+### Verified against a real morning, not argued
+
+The suite passes and typechecks, but the two faults that actually got fixed here
+were found by running it: a real Postgres, the ladder walked to the sevenths, the
+cards generated and the workout composed. That printed the anchor sounding the
+answer on the I chord, and it printed the colour task drawing six questions across
+six different shapes — including the dominant and the half-diminished, the two the
+old ordering would have skipped.
+
+The button row was checked the same way rather than by arithmetic. `Cmaj7` is five
+characters and `dominant seventh` is sixteen, and in the naming row's columns every
+seventh wrapped onto two lines with `half-diminished` breaking at its hyphen. The
+quality row gets wider columns and a smaller face.
+
+Not seen in a signed-in drill room. The page needs a login and minting one was the
+wrong way to get it — so the pixels of the colour task in situ are the one thing
+here taken on the strength of its parts.

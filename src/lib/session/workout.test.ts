@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CardDirection } from '$lib/server/db/schema';
-import { initialState, type Schedulable } from '$lib/srs/scheduler';
+import { initialState, type Schedulable, type SrsState } from '$lib/srs/scheduler';
 import {
 	cellsOf,
 	FIRST_FRONTIER,
@@ -35,6 +35,7 @@ import {
 	functionQueue,
 	makeupOf,
 	noveltyId,
+	qualityQueue,
 	sightQueue,
 	describeAcquaintance,
 	type MissionChart,
@@ -282,8 +283,109 @@ describe('one bank, four queues, and nothing left out of all of them', () => {
 		}
 	});
 
-	it('puts each direction in one pool and no more, so nothing is asked twice', () => {
-		expect(new Set(ASKED_DIRECTIONS).size).toBe(ASKED_DIRECTIONS.length);
+	it('puts each card in one queue and no more, so nothing is asked twice', () => {
+		/*
+		 * This used to assert the *lists* were disjoint, and they no longer are:
+		 * `hear_quality` is in two of them on purpose, because the question changes
+		 * job once you can answer it — its own task while the shape is new, folded
+		 * into the ear pool once it graduates. What the old assertion was actually
+		 * protecting is one bank, one queue per card, so that is what is checked.
+		 */
+		const quality = (id: string, state: SrsState): Schedulable => ({
+			cardId: id,
+			direction: 'hear_quality',
+			keyCenter: 'C',
+			skillCode: 'rung:all-triads',
+			shape: 'minor',
+			state
+		});
+		const cards = [
+			...bank(),
+			quality('new-shape', { ...initialState(NOW), reps: 0 }),
+			quality('known-shape', { ...initialState(NOW), reps: 9, state: 'review' })
+		];
+
+		const options = { now: NOW, day: 3 };
+		// Compared across queues and not within one: a queue legitimately repeats a
+		// card when the pool is smaller than the questions asked of it, which is the
+		// budget's job and not this rule's.
+		const queues = [
+			new Set(sightQueue(cards, options)),
+			new Set(qualityQueue(cards, options)),
+			new Set(earQueue(cards, options)),
+			new Set(functionQueue(cards, options))
+		];
+		for (const [i, queue] of queues.entries()) {
+			for (const other of queues.slice(i + 1)) {
+				for (const id of queue) expect([...other], id).not.toContain(id);
+			}
+		}
+		expect(queues.some((queue) => queue.size > 0)).toBe(true);
+	});
+
+	it('keeps a new shape in its own task and a known one in the ear pool', () => {
+		const quality = (id: string, state: SrsState): Schedulable => ({
+			cardId: id,
+			direction: 'hear_quality',
+			keyCenter: 'C',
+			skillCode: 'rung:all-triads',
+			shape: 'minor',
+			state
+		});
+		const fresh = quality('new-shape', { ...initialState(NOW), reps: 0 });
+		const known = quality('known-shape', { ...initialState(NOW), reps: 9, state: 'review' });
+		const cards = [fresh, known];
+		const options = { now: NOW, day: 3 };
+
+		expect(new Set(qualityQueue(cards, options))).toEqual(new Set(['new-shape']));
+		expect(new Set(earQueue(cards, options))).toEqual(new Set(['known-shape']));
+	});
+
+	it('has nothing to say once every shape that is open is known', () => {
+		// The ordinary morning. The colour task is added to a day rather than
+		// taken out of one, so on a day with nothing new it costs no questions and
+		// does not appear at all.
+		const known = (id: string): Schedulable => ({
+			cardId: id,
+			direction: 'hear_quality',
+			keyCenter: 'C',
+			skillCode: 'rung:all-triads',
+			shape: 'major',
+			state: { ...initialState(NOW), reps: 9, state: 'review' }
+		});
+		expect(qualityQueue([known('a'), known('b')], { now: NOW, day: 1 })).toEqual([]);
+	});
+
+	it('spreads six questions over the sounds rather than over the pool', () => {
+		/*
+		 * The lopsidedness this fixes: `all-sevenths` builds three minor sevenths,
+		 * two major sevenths, one dominant and one half-diminished per key. Taken
+		 * in order, six questions are the sounds you already know and the two you
+		 * do not are never asked.
+		 */
+		const card = (id: string, shape: string): Schedulable => ({
+			cardId: id,
+			direction: 'hear_quality',
+			keyCenter: 'C',
+			skillCode: 'rung:all-sevenths',
+			shape,
+			state: { ...initialState(NOW), reps: 0 }
+		});
+		const cards = [
+			card('m7-a', 'minor seventh'),
+			card('m7-b', 'minor seventh'),
+			card('m7-c', 'minor seventh'),
+			card('maj7-a', 'major seventh'),
+			card('maj7-b', 'major seventh'),
+			card('dom', 'dominant seventh'),
+			card('half', 'half-diminished')
+		];
+
+		const shapeOfId = new Map(cards.map((c) => [c.cardId, c.shape]));
+		const asked = qualityQueue(cards, { now: NOW, day: 0 }).map((id) => shapeOfId.get(id));
+		expect(new Set(asked).size).toBe(4);
+		expect(asked).toContain('dominant seventh');
+		expect(asked).toContain('half-diminished');
 	});
 });
 

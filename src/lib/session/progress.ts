@@ -239,6 +239,10 @@ export function callsAt(workout: Workout): string[] {
 	const keys: string[] = [];
 	for (const task of workout.tasks) {
 		if (task.kind === 'crossing') continue;
+		// And not the colour task, for a nearer reason: its chords are filed under
+		// keys, but the question never mentions one and the answer cannot depend on
+		// one. A station this run does not actually call at. See `previewLine`.
+		if (task.kind === 'quality') continue;
 		if (!('makeup' in task)) continue;
 		for (const key of task.makeup?.keys ?? []) {
 			if (!keys.includes(key)) keys.push(key);
@@ -257,6 +261,15 @@ function previewLine(task: Task): string {
 				`${countOf(task.cardIds.length, 'symbol', 'symbols')} at sight`,
 				describeMaterial(task.makeup)
 			);
+		/*
+		 * The shapes and not the keys, which is the one line on this page whose
+		 * material is worth naming and whose *keys* are not. A quality question has
+		 * no key in it — see `hear_quality` in `drill.ts` — so "3 chords in C, G
+		 * and F" would be describing the one fact about these questions that
+		 * cannot bear on the answer.
+		 */
+		case 'quality':
+			return `${countOf(task.cardIds.length, 'chord', 'chords')} by ear · what kind?`;
 		case 'ear':
 			return joinLine(
 				`${countOf(task.cardIds.length, 'ear question', 'ear questions')}`,
@@ -332,6 +345,7 @@ const glyph = (name: string) => name.replace(/b/g, '♭').replace(/#/g, '♯');
 export function taskTags(task: Task): string[] {
 	switch (task.kind) {
 		case 'sight':
+		case 'quality':
 		case 'ear':
 		case 'function':
 			return makeupTags(task.makeup);

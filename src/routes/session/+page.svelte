@@ -13,11 +13,14 @@
 		markNamed,
 		markPassage,
 		markPlayed,
+		markShape,
 		materialOf,
 		nameNeighbours,
 		pose,
+		shapeChoices,
 		toVoicing
 	} from '$lib/session/drill';
+	import type { Shape } from '$lib/curriculum/vocabulary';
 	import { guidanceFor, guidanceKey, isChordShape, type LessonCard } from '$lib/session/lesson';
 	import { openQueue, putBack as putBackAt, stillToPutRight } from '$lib/session/queue';
 	import { gradeFromPerformance } from '$lib/srs/scheduler';
@@ -398,6 +401,37 @@
 	/** Whether this question ends with a name rather than with a shape. */
 	const needsName = $derived(prompt?.answerWith === 'name');
 
+	/** Whether it ends with a *kind* of chord instead — `hear_quality`, and only that. */
+	const needsQuality = $derived(prompt?.answerWith === 'quality');
+
+	/**
+	 * Whether the answer is given by pressing one of a row of buttons.
+	 *
+	 * The two multiple-choice questions run the identical machine — the row opens
+	 * when the question is posed, a wrong press keeps the question open and puts
+	 * the card back, the first attempt is the one the record hears — and the only
+	 * thing that differs between them is what is written on the buttons and what
+	 * counts as right. So they share the machine and part company at
+	 * `answerChoices` and `matchesAnswer`, rather than the page growing a second
+	 * copy of `chooseName` with two words changed.
+	 */
+	const needsChoice = $derived(needsName || needsQuality);
+
+	/** The shape this card is, which is the whole answer to a quality question. */
+	const answerShape = $derived(
+		(currentCard?.payload as { shape?: Shape } | undefined)?.shape ?? undefined
+	);
+
+	/**
+	 * Every shape the ladder has opened, as buttons.
+	 *
+	 * Not sampled and not shuffled — see `shapeChoices`. Three of them while the
+	 * triads are the whole vocabulary, seven once the sevenths are up.
+	 */
+	const qualityChoices = $derived(
+		needsQuality && answerShape ? shapeChoices(answerShape, data.shapes ?? []) : []
+	);
+
 	/**
 	 * Whether the material may be drawn, lit or lettered yet.
 	 *
@@ -414,7 +448,7 @@
 	 * refusal upstream does nothing for the rows already written. This is what
 	 * those rows meet.
 	 */
-	const answerMayShow = $derived(!needsName || answered || showedAnswer);
+	const answerMayShow = $derived(!needsChoice || answered || showedAnswer);
 
 	/**
 	 * A scale being *taught*, as opposed to a scale being asked about.
@@ -476,6 +510,17 @@
 		const among = [...fromBank, ...diatonicNames(currentCard.keyCenter, kind)];
 		return choicesFor(answerLabel, nameNeighbours(answerLabel, among, currentCard.keyCenter));
 	});
+
+	/** The row actually on screen, whichever of the two questions is asking. */
+	const answerChoices = $derived<string[]>(needsQuality ? qualityChoices : nameChoices);
+
+	/** And what counts as right in it. */
+	function matchesAnswer(option: string): boolean {
+		return needsQuality ? markShape(answerShape, option as Shape) : markNamed(answerLabel, option);
+	}
+
+	/** The right answer, spelled for the feedback line. */
+	const answerText = $derived(needsQuality ? (answerShape ?? '') : answerLabel);
 	const chordTarget = $derived.by(() => {
 		if (!isChordLesson || !currentCard) return [];
 		const payload = currentCard.payload as {
@@ -499,7 +544,7 @@
 	 * whole of it.
 	 */
 	$effect(() => {
-		const wants = needsName && !marksPlaying && !answered && Boolean(currentCard);
+		const wants = needsChoice && !marksPlaying && !answered && Boolean(currentCard);
 		untrack(() => {
 			if (wants && !naming) naming = true;
 		});
@@ -599,6 +644,20 @@
 				if (run === demoRun) demoNotes = [];
 				if (lessonPhase === 'watch') lessonPhase = 'play';
 			} else {
+				/*
+				 * The tonic first, where the question has one.
+				 *
+				 * Only `hear_name` does. It is not part of the answer and is never
+				 * marked — it is the reference the question was missing, without which
+				 * naming a chord sounded into silence is a test of perfect pitch. Held
+				 * shorter than the chord and separated by a real gap, so it reads as
+				 * *from here* rather than as the first half of what is being asked.
+				 * See `Prompt.anchor`.
+				 */
+				if (prompt?.anchor) {
+					await playChord(prompt.anchor, 1.1);
+					await wait(1250);
+				}
 				await playChord(audible, 1.9);
 				await wait(1900);
 			}
@@ -747,7 +806,7 @@
 	function chooseName(option: string) {
 		if (!currentCard || answered || wrongNames.includes(option)) return;
 
-		if (!markNamed(answerLabel, option)) {
+		if (!matchesAnswer(option)) {
 			// The first attempt is the one the record hears, whatever happens next.
 			record('again', false);
 			chosenName = option;
@@ -853,7 +912,7 @@
 		// A question that ends in a name still ends in one after being shown: the
 		// grade is already settled, and picking the name you were just told is how
 		// the answer gets connected to the sound rather than merely revealed.
-		if (needsName) naming = true;
+		if (needsChoice) naming = true;
 		record('again', false);
 		putBack();
 	}
@@ -1331,11 +1390,11 @@
 		 * the screen with one fewer wrong option beside it and reading it out here
 		 * would end the question the same way the old flash-and-move-on did.
 		 */
-		if (needsName && !answered && namedRight === false && chosenName) {
+		if (needsChoice && !answered && namedRight === false && chosenName) {
 			return `${chosenName} — no. One of the others.`;
 		}
-		if (answered && needsName) {
-			return namedRight ? `${answerLabel} — that is the one` : `It was ${answerLabel}`;
+		if (answered && needsChoice) {
+			return namedRight ? `${answerText} — that is the one` : `It was ${answerText}`;
 		}
 		/*
 		 * A passage counts in chords, because that is the unit it is answered in.
@@ -2301,7 +2360,7 @@
 					<p class="audio-problem">{audioProblem}</p>
 				{/if}
 
-				{#if needsName && naming}
+				{#if needsChoice && naming}
 					<!--
 						The naming half, with something to answer it with.
 
@@ -2312,15 +2371,16 @@
 					-->
 					<div
 						class="name-choices"
+						class:is-shapes={needsQuality}
 						class:is-refused={refused}
 						role="group"
-						aria-label="What was it?"
+						aria-label={needsQuality ? 'What kind of chord was that?' : 'What was it?'}
 					>
-						{#each nameChoices as option (option)}
+						{#each answerChoices as option (option)}
 							<button
 								class="name-choice"
 								class:is-picked={chosenName === option}
-								class:is-right={answered && markNamed(answerLabel, option)}
+								class:is-right={answered && matchesAnswer(option)}
 								class:is-wrong={wrongNames.includes(option)}
 								disabled={answered || wrongNames.includes(option)}
 								onclick={() => chooseName(option)}
@@ -2833,6 +2893,28 @@
 		width: 100%;
 		max-width: 34rem;
 		margin: 0 auto;
+	}
+
+	/*
+	 * The quality row, which holds words rather than symbols.
+	 *
+	 * `Cmaj7` is five characters and `dominant seventh` is sixteen, so the column
+	 * that fits the naming buttons cuts these in half. Wider columns, a smaller
+	 * face and a break opportunity at the space: every shape this app offers is
+	 * one or two words, so two short lines in a button is the worst case and it
+	 * is a tidy one. There are up to seven of these rather than four, which the
+	 * `auto-fit` grid already handles by adding rows.
+	 */
+	.name-choices.is-shapes {
+		grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+		max-width: 38rem;
+	}
+
+	.name-choices.is-shapes .name-choice {
+		font-size: 0.95rem;
+		line-height: 1.25;
+		text-wrap: balance;
+		hyphens: auto;
 	}
 
 	.name-choice {

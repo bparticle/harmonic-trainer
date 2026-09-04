@@ -126,7 +126,8 @@ export type WorkoutSize = 'short' | 'standard' | 'long';
  */
 export const TASK_COUNT: Record<WorkoutSize, number> = { short: 3, standard: 4, long: 6 };
 
-export type TaskKind = 'sight' | 'ear' | 'function' | 'crossing' | 'mission' | 'new_thing';
+export type TaskKind =
+	'sight' | 'quality' | 'ear' | 'function' | 'crossing' | 'mission' | 'new_thing';
 
 /**
  * A mission: the real play-along page under a constraint.
@@ -233,13 +234,15 @@ type TaskBase = {
 };
 
 export type SightTask = TaskBase & { kind: 'sight'; cardIds: string[]; makeup?: Makeup };
+export type QualityTask = TaskBase & { kind: 'quality'; cardIds: string[]; makeup?: Makeup };
 export type EarTask = TaskBase & { kind: 'ear'; cardIds: string[]; makeup?: Makeup };
 export type CrossingTask = TaskBase & { kind: 'crossing'; cardIds: string[]; makeup?: Makeup };
 export type FunctionTask = TaskBase & { kind: 'function'; cardIds: string[]; makeup?: Makeup };
 export type MissionTask = TaskBase & { kind: 'mission'; mission: Mission };
 export type NewThingTask = TaskBase & { kind: 'new_thing'; novelty: Novelty };
 
-export type Task = SightTask | EarTask | FunctionTask | CrossingTask | MissionTask | NewThingTask;
+export type Task =
+	SightTask | QualityTask | EarTask | FunctionTask | CrossingTask | MissionTask | NewThingTask;
 
 export type Workout = {
 	/**
@@ -639,7 +642,61 @@ const MISSION_CHORUSES = 2;
  */
 const SIGHT_DIRECTIONS: CardDirection[] = ['see_play'];
 
-const EAR_DIRECTIONS: CardDirection[] = ['hear_play', 'hear_name'];
+/**
+ * The question the naming one is built on, in its own partition while it is
+ * still being learned.
+ *
+ * `hear_quality` sounds a chord and asks what *kind* it was. It is the only
+ * aural question whose answer does not depend on the key, which is why it can
+ * be asked from the moment the ladder builds a second quality — and why it
+ * should be, since `hear_name` was asking for that answer and a root at the
+ * same time, and nothing had ever asked for it alone.
+ */
+const QUALITY_DIRECTIONS: CardDirection[] = ['hear_quality'];
+
+/**
+ * Six is a pass over every shape that is open, and short enough to lead a day.
+ *
+ * The vocabulary is three shapes at `all-triads` and seven once the sevenths
+ * are up, so six questions spread across shapes — see `spreadByShape` — is
+ * roughly one of each rather than six of whichever has the most cards.
+ */
+const QUALITY_QUESTIONS = 6;
+
+/**
+ * **`hear_quality` is in two pools, and it is the only direction that is.**
+ *
+ * The rule those pools were keeping was never *one direction, one queue* — it
+ * was **one card, one queue**, and for every other direction those are the same
+ * sentence. Here they part company, because the quality question changes job
+ * once you can answer it.
+ *
+ * While a shape is still new it is a lesson, and it gets what the sight task
+ * gets: its own slot, leading the day, ahead of anything that assumes it. Once
+ * the card graduates the lesson is over and the question is not — telling a
+ * dominant from a major seventh is a thing you keep needing — so it stops being
+ * a task of its own and folds into the ear pool, where it interleaves with the
+ * two questions it makes answerable.
+ *
+ * The partition is by card state and it is exhaustive: `qualityQueue` takes the
+ * cards that have not reached `review` and `earQueue` takes the ones that have,
+ * so no card can appear in both queues on the same morning. That is asserted
+ * rather than asserted-of-the-lists, which is what the test in `workout.test.ts`
+ * now checks.
+ */
+const EAR_DIRECTIONS: CardDirection[] = ['hear_play', 'hear_name', 'hear_quality'];
+
+/** Whether a quality card has outgrown its own task and belongs in the ear pool. */
+const qualityGraduated = (card: Schedulable): boolean => card.state.state === 'review';
+
+/**
+ * Whether this card belongs to the queue now asking for it.
+ *
+ * Only `hear_quality` is ever refused: every other direction lives in exactly
+ * one pool and the pool's own direction filter has already settled it.
+ */
+const inQualityHalf = (card: Schedulable, half: 'lesson' | 'folded'): boolean =>
+	card.direction !== 'hear_quality' || (half === 'folded') === qualityGraduated(card);
 
 const FUNCTION_DIRECTIONS: CardDirection[] = ['degree_play'];
 
@@ -670,21 +727,28 @@ const CROSSING_QUESTIONS = 6;
 /**
  * Every direction some task actually asks.
  *
- * The four pools laid end to end, exported so the one rule holding them together
- * can be tested rather than believed: **a direction `cards.ts` can generate and
- * this does not contain is a card made, scheduled, and never once put in front
- * of anybody.** The app carried two of those without noticing, because a pool is
+ * The pools laid end to end, exported so the one rule holding them together can
+ * be tested rather than believed: **a direction `cards.ts` can generate and this
+ * does not contain is a card made, scheduled, and never once put in front of
+ * anybody.** The app carried two of those without noticing, because a pool is
  * defined by what it takes and nothing was defined by what was left over.
  *
- * The lists are also disjoint, which is the other half of it — one bank, four
- * queues, nothing asked twice — and that is asserted in the same place.
+ * Deduplicated, which it did not used to need to be. The lists were disjoint and
+ * the test said so; `hear_quality` is now in two of them on purpose, and the
+ * rule that actually mattered — one bank, one queue per card, nothing asked
+ * twice in a morning — has moved to where it can still be checked. See
+ * `EAR_DIRECTIONS`.
  */
-export const ASKED_DIRECTIONS: CardDirection[] = [
-	...SIGHT_DIRECTIONS,
-	...EAR_DIRECTIONS,
-	...FUNCTION_DIRECTIONS,
-	...CROSSING_DIRECTIONS
-];
+export const ASKED_DIRECTIONS: CardDirection[] = unique(
+	[
+		...SIGHT_DIRECTIONS,
+		...QUALITY_DIRECTIONS,
+		...EAR_DIRECTIONS,
+		...FUNCTION_DIRECTIONS,
+		...CROSSING_DIRECTIONS
+	],
+	(direction) => direction
+);
 
 /**
  * Which form a cold quality is most at home in.
@@ -1067,9 +1131,58 @@ export function sightQueue(cards: Schedulable[], options: QueueOptions): string[
 
 /** Ten aural questions, and never fewer because the deck is well run. */
 export function earQueue(cards: Schedulable[], options: QueueOptions): string[] {
-	const tiered = tieredPool(cards, { ...options, directions: EAR_DIRECTIONS });
+	const pool = cards.filter((card) => inQualityHalf(card, 'folded'));
+	const tiered = tieredPool(pool, { ...options, directions: EAR_DIRECTIONS });
 	if (tiered.length === 0) return [];
 	return ledQueue(tiered, options, EAR_QUESTIONS);
+}
+
+/**
+ * The shapes that are still being learned, spread so six questions are six
+ * sounds.
+ *
+ * Empty on most mornings, exactly as `sightQueue` is, and for the same reason:
+ * a card that has reached `review` has left this pool for the ear task and only
+ * comes back if it is failed. So this task appears while a quality is new,
+ * disappears when it is known, and returns the morning after you mistake a
+ * half-diminished for a minor seventh — which is when it is worth having.
+ *
+ * Spread by shape rather than led by key, and this is the one queue in the app
+ * where the key is not the axis worth spreading on. A quality question has no
+ * key in it. What it has is a badly lopsided pool: `all-sevenths` builds three
+ * minor sevenths, two major sevenths, **one** dominant and **one**
+ * half-diminished per key, so a queue taken in order asks about the sounds you
+ * already know and skips the two you do not. Round-robin by shape instead.
+ */
+export function qualityQueue(cards: Schedulable[], options: QueueOptions): string[] {
+	const pool = cards.filter((card) => inQualityHalf(card, 'lesson'));
+	const tiered = tieredPool(pool, { ...options, directions: QUALITY_DIRECTIONS });
+	if (tiered.length === 0) return [];
+	return toQueue(
+		spreadByShape(tiered, options.day),
+		QUALITY_QUESTIONS,
+		options.budget ?? newBudget()
+	);
+}
+
+/**
+ * One shape at a time, in turn.
+ *
+ * `spreadByKey` with the lanes taken to be sounds instead of keys, on the same
+ * `interleave` those two already share. A card with no shape on it — nothing
+ * generates one, but rows outlive the code that wrote them — lands in its own
+ * lane rather than being dropped, because a question that can be asked is worth
+ * more than a tidy grouping.
+ */
+function spreadByShape(cards: Schedulable[], day: number): Schedulable[] {
+	const byShape = new Map<string, Schedulable[]>();
+	for (const card of cards) {
+		const lane = byShape.get(card.shape ?? '');
+		if (lane) lane.push(card);
+		else byShape.set(card.shape ?? '', [card]);
+	}
+
+	return interleave(rotate([...byShape.keys()], day).map((shape) => byShape.get(shape)!));
 }
 
 /**
@@ -1605,6 +1718,24 @@ function sightTask(cardIds: string[], cards: Schedulable[]): SightTask | null {
 	};
 }
 
+/**
+ * *Colour* rather than *Quality*, because one of those is a word about music
+ * and the other is a word about manufacturing. It is the question a musician
+ * asks — is that chord bright, dark, or strange — and the buttons say `major`
+ * and `minor seventh` in plain words, so the title does not have to.
+ */
+function qualityTask(cardIds: string[], cards: Schedulable[]): QualityTask | null {
+	if (cardIds.length === 0) return null;
+	return {
+		kind: 'quality',
+		title: 'Colour',
+		instruction: `${countOf(cardIds.length, 'chord', 'chords')} · no key, no name. What kind?`,
+		goal: { kind: 'questions', count: cardIds.length },
+		cardIds,
+		makeup: makeupOf(cardIds, cards)
+	};
+}
+
 function earTask(cardIds: string[], cards: Schedulable[]): EarTask | null {
 	if (cardIds.length === 0) return null;
 	return {
@@ -1757,15 +1888,32 @@ function noveltyLine(novelty: Novelty): string {
  * not arrive before its material and this is the material. Paying for that with
  * one of the day's questions would be the app introducing a chord by taking away
  * the chance to use it.
+ *
+ * **The colour slot sits directly behind it on the same terms.** It builds only
+ * while a shape is still being learned and it falls through to nothing, so on
+ * the ordinary morning it costs no questions and does not appear. On the morning
+ * after `all-triads` opens it does, and it goes second: the sight task is where
+ * the chords arrive, this is where you learn what they *sound* like, and both
+ * come before any question that assumes you know. Asking somebody to name a
+ * chord by ear before anything has asked them to tell major from minor is the
+ * order this whole milestone is about, and slot order is where that order is
+ * actually kept.
  */
 function slotsFor(size: WorkoutSize, day: number): TaskKind[] {
 	switch (size) {
 		case 'short':
-			return ['sight', DRILLS[day % DRILLS.length], 'mission', 'new_thing'];
+			return ['sight', 'quality', DRILLS[day % DRILLS.length], 'mission', 'new_thing'];
 		case 'standard':
-			return ['sight', 'ear', day % 2 === 0 ? 'function' : 'crossing', 'mission', 'new_thing'];
+			return [
+				'sight',
+				'quality',
+				'ear',
+				day % 2 === 0 ? 'function' : 'crossing',
+				'mission',
+				'new_thing'
+			];
 		case 'long':
-			return ['sight', 'ear', 'function', 'crossing', 'mission', 'new_thing', 'mission'];
+			return ['sight', 'quality', 'ear', 'function', 'crossing', 'mission', 'new_thing', 'mission'];
 	}
 }
 
@@ -1888,8 +2036,10 @@ export function composeWorkout(input: WorkoutInput): Workout {
 	});
 
 	/*
-	 * Four queues, one bank, partitioned by direction — so nothing is asked twice
-	 * without any queue having to know the others exist.
+	 * Five queues, one bank, partitioned by direction — and, for the one
+	 * direction two of them share, by whether its card has graduated. So nothing
+	 * is asked twice without any queue having to know the others exist. See
+	 * `EAR_DIRECTIONS`.
 	 *
 	 * And **one budget between them**, which is the thing the partition could not
 	 * do on its own. Direction is what keeps a *card* from being asked twice; it
@@ -1901,6 +2051,12 @@ export function composeWorkout(input: WorkoutInput): Workout {
 	const budget = newBudget();
 	const sight = sightTask(
 		sightQueue(bank, { now, day, coldKeys, pinnedSkill, keyCenter, budget }),
+		bank
+	);
+	// Second on the budget as it is second in the day: the sounds are met before
+	// anything asks you to name one.
+	const quality = qualityTask(
+		qualityQueue(bank, { now, day, coldKeys, pinnedSkill, keyCenter, budget }),
 		bank
 	);
 	const ear = earTask(earQueue(bank, { now, day, coldKeys, pinnedSkill, keyCenter, budget }), bank);
@@ -1987,21 +2143,33 @@ export function composeWorkout(input: WorkoutInput): Workout {
 		 * the ordinary state of an account and not a hole to be plugged. It does
 		 * appear at the end of the other chains — a day with new material and an
 		 * empty due pile should meet the material rather than shrug.
+		 *
+		 * The colour slot is the same exception for the same reason, one step
+		 * further on. Nothing falls into it, because a quality drill handed out to
+		 * fill a gap would be six questions asking whether a major triad is major
+		 * on a morning when nothing about that was in doubt; and it falls through
+		 * to nothing, because *every shape you have met is known* is the ordinary
+		 * state of an account and the correct amount of this task then is none of
+		 * it. Unlike the sight task it does not join the other chains either: it is
+		 * the one drill whose pool is defined by not having been learned yet, so
+		 * there is never a spare one of it to plug a hole with.
 		 */
 		const built =
 			slot === 'sight'
 				? take(sight)
-				: slot === 'ear'
-					? (take(ear) ?? take(fn) ?? take(crossing) ?? take(sight) ?? nextMission())
-					: slot === 'function'
-						? (take(fn) ?? take(crossing) ?? take(ear) ?? take(sight) ?? nextMission())
-						: slot === 'crossing'
-							? (take(crossing) ?? take(fn) ?? take(ear) ?? take(sight) ?? nextMission())
-							: slot === 'new_thing'
-								? novelty
-									? newThingTask(novelty)
-									: (nextMission() ?? take(ear) ?? take(fn) ?? take(crossing) ?? take(sight))
-								: (nextMission() ?? take(ear) ?? take(fn) ?? take(crossing) ?? take(sight));
+				: slot === 'quality'
+					? take(quality)
+					: slot === 'ear'
+						? (take(ear) ?? take(fn) ?? take(crossing) ?? take(sight) ?? nextMission())
+						: slot === 'function'
+							? (take(fn) ?? take(crossing) ?? take(ear) ?? take(sight) ?? nextMission())
+							: slot === 'crossing'
+								? (take(crossing) ?? take(fn) ?? take(ear) ?? take(sight) ?? nextMission())
+								: slot === 'new_thing'
+									? novelty
+										? newThingTask(novelty)
+										: (nextMission() ?? take(ear) ?? take(fn) ?? take(crossing) ?? take(sight))
+									: (nextMission() ?? take(ear) ?? take(fn) ?? take(crossing) ?? take(sight));
 
 		if (built) tasks.push(built);
 	}

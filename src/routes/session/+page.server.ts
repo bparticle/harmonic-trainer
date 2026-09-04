@@ -10,7 +10,8 @@ import {
 import { currentUserId } from '$lib/server/db/user';
 import { loadKeyChords } from '$lib/server/db/play-log';
 import { keyStandings } from '$lib/session/warmth';
-import { workingPosition } from '$lib/curriculum/ladder';
+import { cellsOf, workingPosition } from '$lib/curriculum/ladder';
+import { vocabularyFromRungs } from '$lib/curriculum/vocabulary';
 
 type CardsByTask = Record<number, Awaited<ReturnType<typeof loadCards>>>;
 
@@ -59,7 +60,22 @@ export const load: PageServerLoad = async ({ parent, locals }) => {
 		workingPosition(frontier).stageIndex
 	);
 
-	return { settings, workout: active, cards: byTask, keys };
+	/*
+	 * The shapes the ladder has opened, which is the whole answer set for a
+	 * quality question.
+	 *
+	 * Read off the frontier rather than off the day's cards, and that is the
+	 * difference between a vocabulary and a sample. The buttons must be the same
+	 * buttons every morning — the row *is* what `hear_quality` teaches — and a set
+	 * derived from whichever cards the queue happened to draw would reshuffle
+	 * itself daily and teach you to read the row instead of to hear the chord.
+	 *
+	 * The frontier is already loaded here for the stations, so this costs nothing
+	 * but the derivation. See `shapeChoices`.
+	 */
+	const shapes = vocabularyFromRungs(cellsOf(frontier).map((cell) => cell.rungId)).shapes;
+
+	return { settings, workout: active, cards: byTask, keys, shapes };
 };
 
 export const actions: Actions = {

@@ -186,6 +186,19 @@ export const DIRECTION_WEIGHT: Record<CardDirection, number> = {
 	see_play: 1.0,
 	hear_play: 1.0,
 	/*
+	 * The lightest of the aural questions, and lighter than the naming one it
+	 * feeds — which is the right way round even though it is the more
+	 * foundational of the two.
+	 *
+	 * This weight decides what gets *pulled forward* when it goes cold, and a
+	 * quality question has the smallest answer space in the app: seven buttons at
+	 * the very most, three for a long while before that. It comes round often
+	 * because its pool is small, not because it is being chased. The direction it
+	 * exists to make answerable is the one worth chasing, and `hear_name` already
+	 * carries that number.
+	 */
+	hear_quality: 1.0,
+	/*
 	 * Retired, and kept only because the enum and the old rows are.
 	 *
 	 * Nothing generates `play_name` any more — see `directionsForRung` — so this
@@ -217,6 +230,23 @@ export type Schedulable = {
 	 * cannot share a budget, and every card then counts as its own item.
 	 */
 	item?: string;
+	/**
+	 * What kind of chord this card is about, where it is about one.
+	 *
+	 * Carried for exactly one reader: the quality queue spreads its questions
+	 * across *sounds* rather than across keys, because a quality question has no
+	 * key in it and the pool it draws from is lopsided — three minor sevenths to
+	 * one dominant, per key. See `spreadByShape`.
+	 *
+	 * A bare string rather than the `Shape` union, so this module keeps knowing
+	 * nothing about the curriculum. `skillCode` and `item` are strings here for
+	 * the same reason: the scheduler orders cards, and what a card is *about* is
+	 * somebody else's vocabulary.
+	 *
+	 * Optional, on the same terms as `item`: a caller without one is not wrong,
+	 * it just cannot spread on this axis.
+	 */
+	shape?: string;
 	state: SrsState;
 };
 
