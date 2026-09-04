@@ -75,9 +75,19 @@
 		return out;
 	});
 
-	const width = $derived(keys.filter((k) => !k.black).length * WHITE_WIDTH);
 	const whites = $derived(keys.filter((k) => !k.black));
 	const blacks = $derived(keys.filter((k) => k.black));
+	/*
+	 * As wide as what is drawn, not as wide as the white keys.
+	 *
+	 * A window that ends on a black key — which any window cut to the material
+	 * can — puts half a sharp past the last white key's right edge, and a viewBox
+	 * measured in white keys clipped it. Half a key, always the top one, always
+	 * on the right: the same shape as a scale running off the end, in miniature.
+	 */
+	const width = $derived(
+		Math.max(whites.length * WHITE_WIDTH, ...blacks.map((k) => k.x + BLACK_WIDTH))
+	);
 
 	const NAMES = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
 	const labelFor = (note: number) =>

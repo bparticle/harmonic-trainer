@@ -13,11 +13,13 @@
 		markNamed,
 		markPassage,
 		markPlayed,
+		materialOf,
 		nameNeighbours,
 		pose,
 		toVoicing
 	} from '$lib/session/drill';
 	import { guidanceFor, guidanceKey, isChordShape, type LessonCard } from '$lib/session/lesson';
+	import { openQueue, putBack as putBackAt, stillToPutRight } from '$lib/session/queue';
 	import { gradeFromPerformance } from '$lib/srs/scheduler';
 	import { parseKey } from '$lib/music/key';
 	import { formatNote } from '$lib/music/note';
@@ -119,7 +121,22 @@
 	let problem = $state<string | null>(null);
 
 	// ---- per-task state ----------------------------------------------------
-	let cardIndex = $state(0);
+
+	/*
+	 * The walk over this task's cards, and what happens to the ones you miss.
+	 *
+	 * It was `cardIndex`, walking `taskCards` from nought, and a run was over
+	 * when it ran off the end — so a question you got wrong was one you never saw
+	 * again inside that run. The rule that replaces it lives in `queue.ts`, where
+	 * it can be tested without a keyboard; here it is only ever *applied*.
+	 *
+	 * Seeded where the server says to resume, in the same breath as `index`, so
+	 * the first render already has a card. See `resetTask`.
+	 */
+	// svelte-ignore state_referenced_locally
+	let queue = $state(seedQueue(data.workout?.resumeAt ?? 0));
+	/** Where in the queue we are. */
+	let position = $state(0);
 	let askedAt = $state(0);
 	let answered = $state(false);
 	let lastMarking = $state<{ correct: boolean; missing: number[]; extra: number[] } | null>(null);
@@ -142,6 +159,21 @@
 	/** The name that was chosen, and whether it was the right one. */
 	let chosenName = $state<string | null>(null);
 	let namedRight = $state<boolean | null>(null);
+	/**
+	 * The names already offered and refused, in the order they were tried.
+	 *
+	 * A wrong name used to end the question: it was recorded, the right answer
+	 * flashed up for six hundred milliseconds, and the next question arrived. The
+	 * only way to know you had been wrong was to catch the flash. Now a wrong
+	 * name is refused rather than accepted — it goes dark, the row shakes its
+	 * head, and the question is still open — so the grade the scheduler already
+	 * heard is the same one, and the *learner* hears it too, at the moment they
+	 * can still do something about it.
+	 */
+	let wrongNames = $state<string[]>([]);
+	/** Set for as long as the "no" plays, and for nothing else. */
+	let refused = $state(false);
+	let refusalRun = 0;
 	let showedAnswer = $state(false);
 	let cardRecorded = $state(false);
 	let audioUnlocked = $state(false);
@@ -172,8 +204,16 @@
 	>([]);
 
 	const taskCards = $derived(entry ? (data.cards[entry.index] ?? []) : []);
-	const currentCard = $derived(taskCards[cardIndex] ?? null);
-	const promptKey = $derived(currentCard ? `${index}:${cardIndex}:${currentCard.id}` : null);
+	/** Where the walk has got to, or nothing once it is off the end of the queue. */
+	const step = $derived(queue[position] ?? null);
+	/** Which card of the task is showing — its own place, not the queue's. */
+	const cardIndex = $derived(step?.at ?? 0);
+	/** Whether this is the second look at a card that went wrong the first time. */
+	const isRetry = $derived(step?.retry ?? false);
+	const currentCard = $derived(step ? (taskCards[step.at] ?? null) : null);
+	// Keyed on the place in the queue rather than on the card, so a card put back
+	// on the end is posed and sounded again rather than treated as already heard.
+	const promptKey = $derived(currentCard ? `${index}:${position}:${currentCard.id}` : null);
 	const lessonGuidance = $derived(guidanceAt(index, cardIndex));
 	const prompt = $derived(
 		currentCard
@@ -184,11 +224,14 @@
 	/**
 	 * How many questions this task asks.
 	 *
-	 * The queue's own length, which is the goal's own count — the composer set
-	 * both from the same number, and reading it off the cards keeps the progress on
-	 * screen honest if a card ever fails to load.
+	 * The queue's own length, which *was* the goal's own count and is now the
+	 * count plus whatever went wrong — a run grows by one each time a card is put
+	 * back, and saying so is the honest reading of "how far through am I". Falls
+	 * back to the composed count for the frame before the queue is seeded.
 	 */
-	const asks = $derived(task && 'cardIds' in task ? task.cardIds.length : 0);
+	const asks = $derived(queue.length || (task && 'cardIds' in task ? task.cardIds.length : 0));
+	/** How many of the questions still ahead are ones being put right. */
+	const toPutRight = $derived(stillToPutRight(queue, position));
 	const goalLine = $derived(task ? describeGoal(task.goal) : '');
 
 	/** The last thing a mission said about itself, kept on the block that set it. */
@@ -228,32 +271,63 @@
 		};
 	});
 
-	// Reset the per-task state whenever the task changes.
+	// The clock starts when the page does; every card transition restarts it.
 	$effect(() => {
-		const taskIndex = index;
 		untrack(() => {
-			cardIndex = 0;
-			answered = false;
-			revealed = false;
-			lastMarking = null;
-			gathered = [];
-			passageDone = 0;
-			soundingStep = -1;
-			naming = false;
-			playedRight = null;
-			chosenName = null;
-			namedRight = null;
-			showedAnswer = false;
-			cardRecorded = false;
-			pending = [];
 			askedAt = performance.now();
-			audioProblem = null;
-			demoRun++;
-			cardRun++;
-			demoNotes = [];
-			lessonPhase = openingPhase(taskIndex, 0);
 		});
 	});
+
+	/** A task's cards, in the order it composed them, before anything goes wrong. */
+	function seedQueue(taskIndex: number) {
+		const workoutEntry = data.workout?.tasks[taskIndex];
+		return openQueue(workoutEntry ? (data.cards[workoutEntry.index] ?? []).length : 0);
+	}
+
+	/**
+	 * Put everything a task owns back to the start of a task.
+	 *
+	 * Called from `finishTask`, in the same statement that moves `index`, rather
+	 * than from an effect watching it. An effect runs *after* the render that
+	 * changed its dependency, so for one frame `taskCards` was the new task's
+	 * while `cardIndex`, `lastMarking` and `answered` were still the old one's —
+	 * which is the previous question's chord shape and feedback line painted over
+	 * the next question's first card, reported exactly that way. Where the old
+	 * walk had gone further than the new task is long, it was worse than a smear:
+	 * `currentCard` came back undefined and every derived value that reads a card
+	 * had to survive it.
+	 */
+	function resetTask(taskIndex: number) {
+		queue = seedQueue(taskIndex);
+		position = 0;
+		pending = [];
+		audioProblem = null;
+		resetCard();
+	}
+
+	/** The same, for one question rather than a whole task. */
+	function resetCard() {
+		answered = false;
+		revealed = false;
+		lastMarking = null;
+		gathered = [];
+		passageDone = 0;
+		soundingStep = -1;
+		naming = false;
+		playedRight = null;
+		chosenName = null;
+		namedRight = null;
+		wrongNames = [];
+		refused = false;
+		refusalRun++;
+		showedAnswer = false;
+		cardRecorded = false;
+		askedAt = performance.now();
+		demoRun++;
+		cardRun++;
+		demoNotes = [];
+		lessonPhase = openingPhase(index, cardIndex);
+	}
 
 	/** True for the things played one note after another rather than together. */
 	const isSequential = $derived(
@@ -487,16 +561,26 @@
 
 	// ---- answering ----------------------------------------------------------
 
+	/*
+	 * Whether the hands are being listened to.
+	 *
+	 * The demonstration is a *sound*, not a gate. This used to read
+	 * `lessonPhase === 'play'`, so during the watch phase a correct chord played
+	 * on a real piano was thrown away and the only way past the screen was the
+	 * mouse — on a question whose answer was printed above the keyboard, for
+	 * somebody who had already played it. Playing the thing is a better claim to
+	 * knowing it than pressing *Watch and listen* ever was, so it counts, and the
+	 * phase follows the hands instead of holding them.
+	 *
+	 * Still not while the demonstration is actually sounding: fingers resting on
+	 * the keys through a two-second chord are not an answer, and the phase turns
+	 * over by itself the moment it finishes.
+	 */
+	const listeningToHands = $derived(!playingQuestion);
+
 	function handleNote(note: number) {
-		if (
-			!isSequential ||
-			!marksPlaying ||
-			answered ||
-			playingQuestion ||
-			lessonPhase !== 'play' ||
-			!currentCard
-		)
-			return;
+		if (!isSequential || !marksPlaying || answered || !listeningToHands || !currentCard) return;
+		if (lessonPhase === 'watch') lessonPhase = 'play';
 
 		const expected = (currentCard.payload as { answerPitchClasses: number[] }).answerPitchClasses;
 		const pc = ((note % 12) + 12) % 12;
@@ -507,15 +591,7 @@
 	}
 
 	function handleChord(chord: { notes: number[]; held?: number[] }) {
-		if (
-			!marksPlaying ||
-			answered ||
-			naming ||
-			!currentCard ||
-			isSequential ||
-			playingQuestion ||
-			lessonPhase !== 'play'
-		)
+		if (!marksPlaying || answered || naming || !currentCard || isSequential || !listeningToHands)
 			return;
 
 		const expected = (currentCard.payload as { answerPitchClasses: number[] }).answerPitchClasses;
@@ -531,6 +607,7 @@
 		 */
 		const played = chord.held ?? chord.notes;
 		if (played.length === 0) return;
+		if (lessonPhase === 'watch') lessonPhase = 'play';
 
 		/*
 		 * A passage is marked where it stands, not all at once.
@@ -603,16 +680,41 @@
 	 * A wrong answer is worth more than a fake right one, so this grades. Both
 	 * halves count where there are two: playing the right chord and then calling it
 	 * something else is not a question you answered.
+	 *
+	 * **And a wrong answer is not the end of the question.** It used to be: the
+	 * `again` went to the server, the right name lit up for six hundred
+	 * milliseconds, and the next question replaced it — so the whole of the
+	 * feedback was a flash you had to be looking at, and the one moment a learner
+	 * is most able to take a correction in was spent scrolling past it. The grade
+	 * still goes off at the first attempt, because that is the honest one and the
+	 * scheduler must not be told otherwise; what changes is that the *question*
+	 * stays open. The name you tried goes dark, the row says no, and you choose
+	 * again from what is left until the right one is under your hand — and the
+	 * card is put back on the end of the run for a second look. See `putBack`.
 	 */
 	function chooseName(option: string) {
-		if (!currentCard || answered) return;
-		const right = markNamed(answerLabel, option);
+		if (!currentCard || answered || wrongNames.includes(option)) return;
+
+		if (!markNamed(answerLabel, option)) {
+			// The first attempt is the one the record hears, whatever happens next.
+			record('again', false);
+			chosenName = option;
+			namedRight = false;
+			wrongNames = [...wrongNames, option];
+			refuse();
+			putBack();
+			return;
+		}
+
 		chosenName = option;
-		namedRight = right;
+		namedRight = true;
 		answered = true;
 		revealed = true;
 
-		const correct = right && playedRight !== false && !showedAnswer;
+		// Right at the first time of asking, with nothing given away and nothing
+		// tried and refused, is the only thing that counts as knowing it.
+		const correct =
+			wrongNames.length === 0 && playedRight !== false && !showedAnswer && !cardRecorded;
 		record(
 			correct ? gradeFromPerformance(true, Math.round(performance.now() - askedAt)) : 'again',
 			correct
@@ -620,8 +722,39 @@
 		settleThen(() => nextCard());
 	}
 
+	/**
+	 * Say no, briefly, and in the one place the answer was given.
+	 *
+	 * A head shake rather than a word: left, right, back, over in a third of a
+	 * second. It is the smallest thing that can carry *no* without the page
+	 * having to raise its voice, it lands on the row of names where the mistake
+	 * was made, and the feedback line under the keyboard says the rest.
+	 */
+	function refuse() {
+		const run = ++refusalRun;
+		refused = true;
+		setTimeout(() => {
+			if (run === refusalRun) refused = false;
+		}, 420);
+	}
+
+	/** Put this card back on the end of the run. The rule is in `queue.ts`. */
+	function putBack() {
+		if (currentCard) queue = putBackAt(queue, position);
+	}
+
+	/**
+	 * Write an answer down — unless this is the second look, which writes nothing.
+	 *
+	 * A card put back was already graded when it went wrong, and the answer it
+	 * gets now comes after being told what it was. Recording that too would turn
+	 * one wrong answer into fifty per cent and quietly hand the scheduler an
+	 * interval it has not earned, which is the same failure as the button that
+	 * used to grade itself correct — see above. The second look is practice. The
+	 * first one is the measurement.
+	 */
 	function record(rating: ReviewRating, correct: boolean) {
-		if (!currentCard || cardRecorded) return;
+		if (!currentCard || cardRecorded || isRetry) return;
 		cardRecorded = true;
 		const reviewId =
 			typeof globalThis.crypto?.randomUUID === 'function'
@@ -640,29 +773,15 @@
 	}
 
 	function nextCard() {
-		cardRun++;
-		const next = cardIndex + 1;
-		answered = false;
-		revealed = false;
-		lastMarking = null;
-		gathered = [];
-		passageDone = 0;
-		soundingStep = -1;
-		naming = false;
-		playedRight = null;
-		chosenName = null;
-		namedRight = null;
-		showedAnswer = false;
-		cardRecorded = false;
-		askedAt = performance.now();
-		demoRun++;
-		demoNotes = [];
-		cardIndex = next;
-		lessonPhase = openingPhase(index, next);
+		const next = position + 1;
+		position = next;
+		resetCard();
 
 		// Done when done: the goal is a count of questions, and the last answer is
-		// what meets it. Nothing here waits for a timer or for a button.
-		if (next >= taskCards.length) void finishTask({ asked: pending.length });
+		// what meets it. The queue is what says how many there are, so a run with
+		// something put back on the end of it finishes when *that* is answered
+		// rather than when the composed list runs out.
+		if (next >= queue.length) void finishTask({ asked: pending.length });
 	}
 
 	/**
@@ -670,7 +789,9 @@
 	 *
 	 * Not the same as skipping: you see the notes, so the next time round is a real
 	 * attempt rather than another blank. It still counts as needing help, which is
-	 * exactly what the scheduler should know.
+	 * exactly what the scheduler should know — and the next time round is now a
+	 * real thing rather than a figure of speech, because being shown it puts the
+	 * card back on the end of the run.
 	 */
 	function showAnswer() {
 		if (!currentCard || showedAnswer || answered) return;
@@ -682,6 +803,7 @@
 		// the answer gets connected to the sound rather than merely revealed.
 		if (needsName) naming = true;
 		record('again', false);
+		putBack();
 	}
 
 	const cardContext = $derived(parseKey(currentCard?.keyCenter ?? workout?.keyCenter ?? 'C'));
@@ -718,7 +840,20 @@
 		(activeMarking?.extra ?? []).map((pc) => formatNote(spell(pc, cardContext), { unicode: true }))
 	);
 
-	const scaleTarget = $derived(isSequential ? (prompt?.audible ?? []) : []);
+	/**
+	 * The notes this card is made of, whether or not the question sounds them.
+	 *
+	 * `prompt.audible` is what a question *plays*, and half the directions play
+	 * nothing on purpose: a scale asked as `see_play` prints its name and waits.
+	 * Everything that draws the material was reading the prompt, so on those
+	 * questions it drew nothing — the route above the keyboard came up empty and
+	 * the keyboard fell back to the hard-coded C3–E5 window the octave fix was
+	 * meant to have retired, which put B, B♭, A, A♭, G, G♭ and F off the
+	 * right-hand end again. Half the scale questions in the app, and only ever
+	 * the silent half, which is why it survived the fix.
+	 */
+	const cardMaterial = $derived(currentCard ? materialOf(currentCard.payload as never, 60) : []);
+	const scaleTarget = $derived(isSequential ? (prompt?.audible ?? cardMaterial) : []);
 	const scaleRouteNotes = $derived.by(() => {
 		return scaleTarget.map((note) => formatNote(spell(note, cardContext), { unicode: true }));
 	});
@@ -758,9 +893,9 @@
 		const missing = new Set(answered ? [] : (activeMarking?.missing ?? []));
 		return chordTarget.filter((note) => !missing.has(((note % 12) + 12) % 12));
 	});
-	const questionProgress = $derived(
-		asks ? Math.min(1, (cardIndex + (answered ? 1 : 0)) / asks) : 0
-	);
+	// How far along the *walk* is, not how far into the composed list — the two
+	// stopped being the same number the day a card could be put back.
+	const questionProgress = $derived(asks ? Math.min(1, (position + (answered ? 1 : 0)) / asks) : 0);
 	const chordPromptName = $derived.by(() => {
 		if (!isChordLesson || !currentCard) return '';
 		const label = (currentCard.payload as { label: string }).label;
@@ -1065,6 +1200,9 @@
 		 */
 		const notes = [
 			...(prompt?.audible ?? []),
+			// What the card is about, which for a silent question is the only thing
+			// on this list that says anything at all. See `cardMaterial`.
+			...cardMaterial,
 			...scaleTarget,
 			...chordTarget,
 			...targetNotes,
@@ -1106,6 +1244,10 @@
 			if (lessonGuidance.mode === 'supported') return 'Again — with fewer hints';
 			return 'Now play it from memory';
 		}
+		// The correction, at the top of the screen, for as long as the question is
+		// still open — which is now until it is answered rather than for the six
+		// hundred milliseconds it used to take to disappear.
+		if (naming && namedRight === false && !answered) return 'Not that one — try again';
 		if (naming) return playedRight ? 'Now name what you played' : 'Name what you heard';
 		if (isChordLesson) {
 			if (lessonPhase === 'watch') return 'Watch the chord land';
@@ -1126,6 +1268,17 @@
 		return 'Listening — screen keys work now';
 	});
 	const feedbackLine = $derived.by(() => {
+		/*
+		 * A refused name, named.
+		 *
+		 * The one line on this page that has to say *no* out loud. It names what
+		 * was tried rather than what was wanted, because the answer is still on
+		 * the screen with one fewer wrong option beside it and reading it out here
+		 * would end the question the same way the old flash-and-move-on did.
+		 */
+		if (needsName && !answered && namedRight === false && chosenName) {
+			return `${chosenName} — no. One of the others.`;
+		}
 		if (answered && needsName) {
 			return namedRight ? `${answerLabel} — that is the one` : `It was ${answerLabel}`;
 		}
@@ -1162,7 +1315,9 @@
 		// screen, and a player who has just played the right chord at a question
 		// that was never listening deserves to be told which is which.
 		if (naming) return playedRight ? 'That is the chord — now name it' : 'Choose the name';
-		if (lessonPhase === 'watch') return 'Start with a demonstration';
+		// Said as an offer rather than an instruction, because it is one now: the
+		// demonstration is there to be taken and playing the thing skips it.
+		if (lessonPhase === 'watch') return 'Hear it first, or play it if you know it';
 		if (isSequential && gathered.length) {
 			return `${gathered.length} of ${answerNotes.length} notes found${missingNotes[0] ? ` · next, find ${missingNotes[0]}` : ''}`;
 		}
@@ -1183,8 +1338,30 @@
 			: 'Play when you are ready';
 	});
 
+	/** Whether this question has a sounding still to come. See `advanceHandsFree`. */
+	const questionUnheard = $derived(
+		Boolean(prompt) &&
+			!answered &&
+			hasQuestionAudio &&
+			!playingQuestion &&
+			playedPromptKey !== promptKey
+	);
+	/**
+	 * ...and whether the *foot* may be the thing that asks for it.
+	 *
+	 * Only once something has already unlocked audio. Browsers start a sound only
+	 * from a user gesture, and a MIDI message is not one — the spacebar is, which
+	 * is why it can always do this and the pedal can only do it afterwards.
+	 * Advertising otherwise would put "pedal · hear it" under a pedal that
+	 * answers with an audio error.
+	 */
+	const pedalHears = $derived(questionUnheard && audioUnlocked);
+
 	function skipCard() {
-		if (currentCard && !answered) record('again', false);
+		if (currentCard && !answered) {
+			record('again', false);
+			putBack();
+		}
 		nextCard();
 	}
 
@@ -1231,9 +1408,28 @@
 			return;
 		}
 		if (prompt && !answered) {
-			// Never a wrong answer and never a skip. Being shown it is a real
-			// `again`, which is what the scheduler should know; a pedal press is not
-			// a claim about anything.
+			/*
+			 * The rule the other two tasks keep: the pedal follows the primary
+			 * control on screen.
+			 *
+			 * While a question has something to hear that has not been heard yet,
+			 * that control is *hear it* — and reaching for the mouse to press it was
+			 * the one interruption left in a page built so both hands could stay on
+			 * the piano. Hearing a question is not a claim about anything, so the
+			 * foot is welcome to it.
+			 *
+			 * The first sounding only. *Hear it again* is a button and stays one:
+			 * a pianist's foot is down more often than it is up, and a pedal that
+			 * retriggered the question would talk over the answer.
+			 *
+			 * Past that, a pedal press still means nothing while the question waits
+			 * for your hands, and Space still means "I am stuck, show me": nothing
+			 * about playing the piano involves a spacebar.
+			 */
+			if (questionUnheard && (source === 'key' || pedalHears)) {
+				void playQuestion();
+				return;
+			}
 			if (source === 'key') showAnswer();
 			return;
 		}
@@ -1281,7 +1477,10 @@
 			const next = index + 1;
 			if (next >= total) await endWorkout();
 			else {
+				// Moved and cleared in one breath, before anything renders. See
+				// `resetTask` for what a frame of the two disagreeing looked like.
 				index = next;
+				resetTask(next);
 				// A new task has a new new-thing, which nobody has heard yet.
 				noveltyHeard = false;
 				soundingChord = -1;
@@ -1789,13 +1988,26 @@
 				<div class="question-heading">
 					<div>
 						<p class="phase-label">{guidanceTitle}</p>
-						<h2>Question {Math.min(cardIndex + 1, asks)} of {asks}</h2>
+						<h2>Question {Math.min(position + 1, asks)} of {asks}</h2>
 					</div>
 					<div class="text-right">
-						{#if (isSequential || isChordLesson) && lessonGuidance.rounds > 1}
+						<!--
+							The second look, named where the round count is named.
+
+							A card put back on the end of the run arrives looking exactly like
+							a card that was always there, and it is not one: it is the one you
+							got wrong, come round again. Said plainly and once, in the corner
+							the phase labels already own, because it is context rather than a
+							verdict — nothing here is a telling-off.
+						-->
+						{#if isRetry}
+							<span class="round-label is-retry">a second look</span>
+						{:else if (isSequential || isChordLesson) && lessonGuidance.rounds > 1}
 							<span class="round-label"
 								>round {lessonGuidance.round} of {lessonGuidance.rounds}</span
 							>
+						{:else if toPutRight}
+							<span class="round-label">{toPutRight} to put right</span>
 						{/if}
 					</div>
 				</div>
@@ -1806,7 +2018,7 @@
 					aria-label="Questions answered"
 					aria-valuemin="0"
 					aria-valuemax={asks}
-					aria-valuenow={Math.min(cardIndex + (answered ? 1 : 0), asks)}
+					aria-valuenow={Math.min(position + (answered ? 1 : 0), asks)}
 				>
 					<span style:transform={`scaleX(${questionProgress})`}></span>
 				</div>
@@ -1820,7 +2032,7 @@
 							<p class="prompt-name">{(currentCard.payload as { label: string }).label}</p>
 							<p class="prompt-copy">
 								{lessonPhase === 'watch'
-									? 'Watch each note cross the piano. Then the keyboard becomes yours.'
+									? 'Watch each note cross the piano — or start playing, and it is yours now.'
 									: lessonGuidance.mode === 'recall'
 										? 'The lights are gone. Build the same shape from memory.'
 										: 'Play one note at a time. Every correct key stays lit.'}
@@ -1848,7 +2060,7 @@
 							{/if}
 							<p class="prompt-copy">
 								{lessonPhase === 'watch'
-									? 'Watch the notes arrive together. Then copy that shape on your piano.'
+									? 'Watch the notes arrive together — or play the shape now, if you already have it.'
 									: lessonGuidance.mode === 'guided'
 										? 'The note names and keys stay visible while your hand learns the chord.'
 										: lessonGuidance.mode === 'supported'
@@ -1910,7 +2122,11 @@
 					</div>
 
 					{#if isSequential}
-						<ol class="note-route" aria-label="Scale notes">
+						<ol
+							class="note-route"
+							aria-label="Scale notes"
+							style:--steps={scaleRouteNotes.length || 8}
+						>
 							{#each scaleRouteNotes as note, noteIndex (noteIndex)}
 								<li
 									class:is-found={gathered.includes(
@@ -2018,14 +2234,19 @@
 						the smallest honest replacement: the right name, and three the
 						record says you could actually confuse it with.
 					-->
-					<div class="name-choices" role="group" aria-label="What was it?">
+					<div
+						class="name-choices"
+						class:is-refused={refused}
+						role="group"
+						aria-label="What was it?"
+					>
 						{#each nameChoices as option (option)}
 							<button
 								class="name-choice"
 								class:is-picked={chosenName === option}
 								class:is-right={answered && markNamed(answerLabel, option)}
-								class:is-wrong={answered && chosenName === option && namedRight === false}
-								disabled={answered}
+								class:is-wrong={wrongNames.includes(option)}
+								disabled={answered || wrongNames.includes(option)}
 								onclick={() => chooseName(option)}
 							>
 								{option}
@@ -2085,14 +2306,18 @@
 			</footer>
 
 			<!--
-				The pedal is not named here while a question is open, because it no
-				longer does anything there — it used to mark the question wrong and
-				move on, which is not a thing to advertise. See `advanceHandsFree`.
+				The pedal is named here for exactly the things it does, and while a
+				question is waiting for your hands it does nothing — it used to mark
+				the question wrong and move on, which is not a thing to advertise.
+				What it *has* got back is the one control a question can offer before
+				it has been answered: sounding it. See `advanceHandsFree`.
 			-->
 			<div class="hands-free-line">
 				<span>
 					{#if answered}
 						<kbd>Space</kbd> / pedal · next
+					{:else if questionUnheard}
+						<kbd>Space</kbd>{pedalHears ? ' / pedal' : ''} · hear it
 					{:else}
 						<kbd>Space</kbd> · show me
 					{/if}
@@ -2100,9 +2325,11 @@
 				<span>
 					{answered
 						? 'Moving on…'
-						: naming
-							? 'Answer on the screen'
-							: 'Keep both hands on the piano — the pedal is yours'}
+						: questionUnheard
+							? 'Or play it — the demonstration is not a gate'
+							: naming
+								? 'Answer on the screen'
+								: 'Keep both hands on the piano — the pedal is yours'}
 				</span>
 			</div>
 		{/if}
@@ -2583,10 +2810,81 @@
 		opacity: 1;
 	}
 
+	/*
+	 * A name that has been tried and refused stays on the screen and stops being
+	 * an option. Legible, because knowing what you *thought* it was is half of
+	 * knowing what it is; struck through, because the question is still open and
+	 * three buttons that all look answerable is not the state it is in.
+	 */
+	.name-choice.is-wrong:disabled {
+		opacity: 0.6;
+		text-decoration: line-through;
+		text-decoration-thickness: 1px;
+	}
+
+	/*
+	 * No, said the way a person says it.
+	 *
+	 * Left, right, back, over in four hundred milliseconds — a head shake on the
+	 * row where the answer was given. Nothing flashes and nothing turns the page
+	 * red; this is the whole of the app's vocabulary for a wrong answer and it is
+	 * deliberately smaller than the vocabulary for a right one. Reduced motion
+	 * gets the colour on the button and the line under the keyboard, which were
+	 * always the parts carrying the meaning.
+	 */
+	.name-choices.is-refused {
+		animation: refuse 400ms cubic-bezier(0.36, 0.07, 0.19, 0.97);
+	}
+
+	@keyframes refuse {
+		0%,
+		100% {
+			transform: translateX(0);
+		}
+		15% {
+			transform: translateX(-0.5rem);
+		}
+		40% {
+			transform: translateX(0.4rem);
+		}
+		65% {
+			transform: translateX(-0.25rem);
+		}
+		85% {
+			transform: translateX(0.12rem);
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.name-choices.is-refused {
+			animation: none;
+		}
+	}
+
+	/* Not a badge and not a warning: the same mono corner label the rounds use,
+	   because coming back to a question is a fact about where you are in the run.
+	   Full ink, because it is the one thing on the line worth reading twice. */
+	.round-label.is-retry {
+		color: var(--color-ink);
+	}
+
+	/*
+	 * As many stops as the scale has, and never one wider than the column it is
+	 * in.
+	 *
+	 * Eight columns of at least two rem each is nine centimetres of hard floor
+	 * inside a track whose own floor is eighteen rem, so between those two
+	 * numbers the row simply ran past the right-hand edge — the same complaint as
+	 * the keyboard window, one element up, and the reason it read as *the scale
+	 * runs off the screen* wherever the panel got narrow. `minmax(0, 1fr)` cannot
+	 * do that: the circles get smaller instead, which is what a row of eight
+	 * things in a small space is supposed to do. And the count is the scale's own,
+	 * so a six-note scale stops leaving two empty columns on the end.
+	 */
 	.note-route {
 		position: relative;
 		display: grid;
-		grid-template-columns: repeat(8, minmax(2rem, 1fr));
+		grid-template-columns: repeat(var(--steps, 8), minmax(0, 1fr));
 		gap: 0.5rem;
 		align-items: center;
 		width: 100%;
@@ -2608,7 +2906,7 @@
 		z-index: 1;
 		display: grid;
 		aspect-ratio: 1;
-		min-width: 2rem;
+		min-width: 0;
 		place-items: center;
 		border: 2px solid var(--color-ground-line);
 		border-radius: 999px;
@@ -2904,12 +3202,10 @@
 		}
 
 		.note-route {
-			grid-template-columns: repeat(8, minmax(0, 1fr));
 			gap: 0.25rem;
 		}
 
 		.note-route li {
-			min-width: 0;
 			font-size: 0.72rem;
 		}
 

@@ -201,6 +201,29 @@ export function pose(
 }
 
 /**
+ * Every note a card is made of, whether or not the question sounds it.
+ *
+ * `pose` decides what is *heard* and what is *written down*, and those are
+ * deliberately different per direction — a scale asked as `see_play` prints its
+ * name and plays nothing. Anything sizing a drawing of the material needs the
+ * material itself, and reading it off the prompt meant a silent question
+ * reported no notes at all: the keyboard fell back to its old hard-coded C3–E5
+ * window and every scale above it climbed off the right-hand edge again, this
+ * time only in the half of the directions that stay quiet.
+ *
+ * So this answers *what is this card about* rather than what this question
+ * shows, out of the same two helpers `pose` builds its voicing from, so the two
+ * cannot disagree about the octave.
+ */
+export function materialOf(payload: CardPayload, midiRoot = 60): number[] {
+	const passage = passageOf(payload);
+	if (passage) return passage.flatMap((chord) => chord.voicing);
+	if (payload.kind === 'scale')
+		return scaleVoicing(payload.answerPitchClasses, payload.answerVoicing?.[0], midiRoot);
+	return payload.answerVoicing ?? toVoicing(payload.answerPitchClasses, midiRoot);
+}
+
+/**
  * The chords a card is a passage of, or nothing.
  *
  * Read off `payload.steps`, which progression cards have carried since the day

@@ -7,6 +7,7 @@ import {
 	cardsForPivots,
 	cardsForProgression,
 	cardsForReached,
+	skillLabel,
 	skillSeeds
 } from './cards';
 import { RUNGS, STAGES } from './ladder';
@@ -138,5 +139,33 @@ describe('a progression, as one card in two directions', () => {
 		expect(cardsForProgression(progressionById('ii-V-I')!, 'C').map((c) => c.identity)).toEqual(
 			cards.map((c) => c.identity)
 		);
+	});
+});
+
+describe('naming a skill', () => {
+	it('reads a rung and a progression off the material', () => {
+		expect(skillLabel('rung:scale')).toBe(RUNGS.find((r) => r.id === 'scale')!.label);
+		expect(skillLabel(`prog:${progressionById('ii-V-I')!.id}`)).toBe(
+			progressionById('ii-V-I')!.name
+		);
+		expect(skillLabel(CROSSING_SKILL)).toBe('The hinge');
+	});
+
+	it('says nothing about a code it does not know', () => {
+		expect(skillLabel('rung:renamed-away')).toBeNull();
+		expect(skillLabel('nonsense')).toBeNull();
+	});
+
+	/*
+	 * Every caller reads this off a card that may not be there, and between the
+	 * last answer of a task and the next task loading there is genuinely no card.
+	 * This used to throw out of a Svelte flush, which abandons the rest of it:
+	 * the previous question stayed painted under the next one and the next answer
+	 * went unregistered.
+	 */
+	it('says nothing about no code at all', () => {
+		expect(skillLabel(undefined)).toBeNull();
+		expect(skillLabel(null)).toBeNull();
+		expect(skillLabel('')).toBeNull();
 	});
 });

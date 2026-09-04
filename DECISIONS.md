@@ -6709,3 +6709,154 @@ is about what the app is called.
 One line of copy moved with the name: the sign-in page read _Progressions on the
 wheel_ and now reads _Every key is a station_, because the first was a promise
 the home page stopped keeping the day it became a map.
+
+## Four faults from one morning at the piano
+
+Reported together, after a run of daily exercises: a demonstration that would not
+let you past it without the mouse, a scale that ran off the right-hand edge of a
+keyboard the app had already fixed once, an answer that occasionally took seconds
+to register, and — the one that matters most — a wrong answer that was recorded,
+flashed and forgotten before you could learn anything from it.
+
+They are four bugs and one theme. Everything below is the app being asked to
+notice what the person in front of it is doing.
+
+### The demonstration was a gate, and it had no business being one
+
+A chord card's first round is `guided`: the name is printed, the shape is lit,
+and the phase is `watch` until the chord has been sounded. `handleChord` and
+`handleNote` both refused to mark anything while `lessonPhase !== 'play'`, so a
+pianist who read **Em7**, put their hand on Em7 and played it got nothing at all.
+The only way forward was to reach for the mouse and press _Watch and listen_ — on
+a question whose answer was already on the screen, for somebody who had just
+demonstrated they knew it. Reported, exactly, as "a lot of unintuitive
+interruptions".
+
+**The demonstration is a sound, not a gate.** Playing the thing counts, and the
+phase follows the hands rather than holding them. What is kept is the narrower
+rule that was doing the real work: nothing is marked while the demonstration is
+actually sounding, because fingers resting on the keys through a two-second chord
+are not an answer — and the phase turns over by itself the moment it finishes, so
+that costs nobody anything.
+
+The alternative on the table was to stop printing the name during `watch`. It was
+declined. The guided round exists to tie a name to a sound to a shape, and hiding
+one of the three to stop it being answered too easily is fixing the wrong end:
+the question was fine, the refusal to listen was not.
+
+**And the pedal has got the button back.** `advanceHandsFree` already keeps one
+rule — _the pedal follows the primary control on screen_ — for the mission and
+the new thing, and a question with something unheard on it has exactly one
+primary control: hear it. So the pedal sounds it, once. Only once: a pianist's
+foot is down more often than it is up, and a pedal that retriggered the question
+would talk over the answer. Past that first sounding a pedal press still means
+nothing while the question waits for your hands, which is the fix that stopped
+the pedal marking answers wrong and is not being undone.
+
+One asymmetry survives and is deliberate. Browsers start audio only from a user
+gesture, and **a MIDI message is not one** — so the spacebar can always sound a
+question and the pedal can only do it after something else has unlocked audio.
+The hands-free line says `Space · hear it` or `Space / pedal · hear it`
+accordingly, rather than advertising a foot that would answer with an audio
+error. On the first question of a workout that is the whole difference between a
+keyboard shortcut and a trip to the mouse.
+
+### Seven of the twelve scales ran off the keyboard again, in the silent half
+
+The window was cut to the material once already, and the cut was read off
+`prompt.audible` — what the question **plays**. Half the directions play nothing
+on purpose: `see_play` prints _B scale_ and waits. For those the material came
+back empty, the keyboard fell back to the hard-coded `from={48} count={29}` the
+first fix was meant to have retired, and B, B♭, A, A♭, G, G♭ and F climbed off
+the right-hand edge exactly as before. The route of note-circles above the
+keyboard was empty on the same questions, for the same reason.
+
+`materialOf` in `drill.ts` is now the one answer to _what is this card about_,
+built from the same two helpers `pose` builds its voicing from so the two cannot
+disagree about the octave — a scale's own octave from its stored root, a
+progression's chords in order rather than their union, a chord's stored voicing.
+`pose` decides what is heard and what is written down; this decides what is
+drawn, and it does not go quiet when the question does.
+
+Two smaller edges in the same complaint, both found by measuring rather than by
+looking:
+
+- **The viewBox was as wide as the white keys.** A window cut to the material can
+  end on a black key, and half of it sat past the last white key's right edge.
+  Half a sharp, always the top one, always on the right.
+- **`.note-route` had eight columns of at least two rem each** — nineteen and a
+  half rem of hard floor inside a grid track whose own floor is eighteen. Between
+  those two numbers the row simply ran past the panel. It is `minmax(0, 1fr)`
+  now, and the column count is the scale's own, so the circles get smaller
+  instead and a six-note scale stops leaving two empty columns.
+
+### The answer that took seconds to register
+
+```
+Uncaught TypeError: Cannot read properties of undefined (reading 'startsWith')
+```
+
+`skillLabel(code: string)` — one caller, twice, reading it off a card that may
+not be there: `skillLabel(currentCard?.skillCode)`. Between the last answer of a
+task and the next task's cards arriving there genuinely is no card, so the
+signature was a lie and the route strip above every question was the thing that
+tripped over it. Thrown out of a Svelte flush, which **abandons the rest of that
+flush**: the previous question's chord shape and feedback stayed painted under
+the next one, and the next answer went unregistered until something else woke the
+graph up. That is the whole of "sometimes it takes a really long time to register
+an answer", and it is also the render bleed that had been logged separately.
+
+A missing code is the same question as an unrecognised one — _what is this
+called?_ — and now has the same answer: null.
+
+The cause underneath it is fixed too. The per-task reset was an `$effect`
+watching `index`, and an effect runs _after_ the render that changed it, so for
+one frame `taskCards` was the new task's while the walk and its markings were
+still the old one's. It is a function called from `finishTask`, in the same
+breath that moves `index`, and there is no frame in between any more.
+
+### A wrong answer is the most useful thing that happens in a run
+
+It was also the thing the app did least with. `chooseName` recorded the `again`,
+lit the right name for six hundred milliseconds, and replaced the question. The
+grade was honest and the _teaching_ was a flash you had to be looking at —
+reported as "the only reason I know it was wrong is because I see the right
+answer appear just before the next question arrives".
+
+Two changes, and they are the same idea at two timescales.
+
+**A wrong name is refused, not accepted.** The name you tried goes dark and stays
+legible, struck through; the row shakes its head — left, right, back, four
+hundred milliseconds — the line under the keyboard says `Dm — no. One of the
+others.`, and the question is still open. You choose again from what is left.
+Nothing turns the page red and nothing announces the answer, because three
+buttons with one right one among them is a better place to be than a correction
+you have been handed. The head shake is the whole of the app's vocabulary for a
+wrong answer and it is deliberately smaller than the vocabulary for a right one;
+under reduced motion it comes off and the colour and the line carry it.
+
+**And the card is put back on the end of the run.** The queue in `queue.ts`
+replaces the walk from nought that made a missed question a question you never
+saw again. The gap that opens up is the rest of the task — a minute or two, long
+enough that answering it again is recall rather than an echo, short enough that
+the correction is still yours. The heading counts it honestly: a run of ten
+becomes a run of eleven, the corner says `2 to put right`, and when one comes
+round it says `a second look`. Being shown the answer and skipping put a card
+back too, which is what makes "the next time round" in the note on `showAnswer` a
+real thing rather than a figure of speech.
+
+Once per card, and never for a second look that goes wrong — that one is a card
+for tomorrow's queue, and a run that can put the same card back indefinitely is a
+run with no way out of it.
+
+**The second look writes no review, and that is the load-bearing decision.** It is
+asked after being told the answer, so recording it would turn one wrong answer
+into fifty per cent and hand the scheduler an interval it has not earned — the
+same failure as the _Reveal the name_ button that used to grade itself correct,
+wearing a kinder hat. The first attempt is the measurement. The second look is
+practice. Anki has drawn the line in the same place for twenty years and for the
+same reason.
+
+Verified against a throwaway local Postgres rather than argued: one run, four
+wrong names on one card and a shown answer on another, and the `reviews` table
+came back with exactly one row per card.

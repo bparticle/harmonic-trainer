@@ -261,8 +261,19 @@ export function cardsForProgression(progression: Progression, keyName: string): 
  * it is without a query. Null for a code naming nothing, which is what a card
  * left behind by a rung that has since been renamed looks like: a task that
  * cannot name its material says nothing about it.
+ *
+ * **And null for no code at all.** Every caller reads this off a card that may
+ * not be there — `skillLabel(currentCard?.skillCode)` — and between the last
+ * answer of a task and the next task loading there genuinely is no card. The
+ * signature said `string`, so that gap threw `Cannot read properties of
+ * undefined (reading 'startsWith')` out of a Svelte flush, which abandons the
+ * rest of that flush: the screen kept the previous question's chord shape and
+ * feedback under the new one, and the next answer went unregistered until
+ * something else woke the graph up. A missing code is the same question as an
+ * unrecognised one — *what is this called?* — and has the same answer.
  */
-export function skillLabel(code: string): string | null {
+export function skillLabel(code: string | null | undefined): string | null {
+	if (!code) return null;
 	if (code.startsWith('rung:')) {
 		return RUNGS.find((rung) => rungSkillCode(rung.id) === code)?.label ?? null;
 	}

@@ -10,6 +10,7 @@ import {
 	markNamed,
 	markPassage,
 	markPlayed,
+	materialOf,
 	nameNeighbours,
 	pose,
 	toVoicing
@@ -221,6 +222,70 @@ describe('a progression is a movement, not a chord', () => {
 		] as const) {
 			expect(pose(direction, cmaj7, 60, 'C').sequence, direction).toBeNull();
 		}
+	});
+});
+
+/*
+ * The keyboard window is cut from this rather than from the prompt, and the
+ * whole point is that it does not go quiet when the question does.
+ */
+describe('what a card is made of', () => {
+	it('gives a scale its whole octave, in the octave it was written in', () => {
+		for (const stage of STAGES) {
+			const [item] = itemsForRung('scale', stage);
+			const payload = {
+				kind: 'scale',
+				label: item.label,
+				answerPitchClasses: item.answerPitchClasses,
+				answerVoicing: item.answerVoicing
+			} as CardPayload;
+
+			const notes = materialOf(payload, 60);
+			expect(notes, item.label).toHaveLength(8);
+			expect(notes[notes.length - 1] - notes[0], item.label).toBe(12);
+			for (let i = 1; i < notes.length; i++) {
+				expect(notes[i], item.label).toBeGreaterThan(notes[i - 1]);
+			}
+		}
+	});
+
+	/*
+	 * `see_play` prints the scale's name and plays nothing, which is the whole of
+	 * the question — and left everything reading `prompt.audible` with nothing to
+	 * draw. Seven of the twelve scales then climbed off the right-hand end of a
+	 * keyboard that had fallen back to C3–E5.
+	 */
+	it('says the same thing whether or not the question sounds it', () => {
+		const [item] = itemsForRung(
+			'scale',
+			STAGES.find((s) => s.key === 'B')!
+		);
+		const payload = {
+			kind: 'scale',
+			label: item.label,
+			answerPitchClasses: item.answerPitchClasses,
+			answerVoicing: item.answerVoicing
+		} as CardPayload;
+
+		expect(pose('see_play', payload, 60).audible).toBeNull();
+		expect(materialOf(payload, 60)).toEqual(pose('hear_play', payload, 60).audible);
+	});
+
+	it('gives a progression every chord of it rather than the union', () => {
+		const [, byEar] = cardsForProgression(progressionById('ii-V-I')!, 'C');
+		const notes = materialOf(byEar.payload, 60);
+		expect(notes).toHaveLength(12);
+		// The union is seven pitch classes — the whole key, and not a range.
+		expect(byEar.payload.answerPitchClasses).toHaveLength(7);
+	});
+
+	it('gives a chord its stored voicing', () => {
+		expect(materialOf(cmaj7, 60)).toEqual([48, 52, 55, 59]);
+	});
+
+	it('spreads a chord that never had one', () => {
+		const { answerVoicing: _dropped, ...bare } = cmaj7;
+		expect(materialOf(bare as CardPayload, 60)).toEqual([60, 64, 67, 71]);
 	});
 });
 
