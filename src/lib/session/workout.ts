@@ -47,9 +47,10 @@ import { isRetiredIntroduction, selectDue, type Schedulable } from '$lib/srs/sch
  * neighbourhood of the ladder position, the record's cold spots, and one novelty
  * slot.
  *
- * The task kinds are the ones the play-along page cannot ask, plus the page
- * itself. On sight, the ear, the function and the hinge are questions no chart
- * poses; the mission *is* the chart, under a constraint, with a goal. `Goal`
+ * The drill tasks isolate one small skill at a time; the mission puts them back
+ * together in a chart. On sight turns one written symbol into a hand shape, the
+ * ear removes the writing, and function and the hinge add harmonic context. The
+ * mission *is* the chart, under a constraint, with a goal. `Goal`
  * itself, the line that describes one and the bar a guide-tone goal is set at
  * now live in `practice/goal.ts` beside the evaluator that answers them — see
  * the note there for why they had to move out of this module.
@@ -586,8 +587,8 @@ export type WorkoutInput = {
 // The numbers
 // ---------------------------------------------------------------------------
 
-/** The ear task's count. Ten, and it does not move with the due pile. */
-const EAR_QUESTIONS = 10;
+/** Six aural questions: enough to discriminate without making listening the whole workout. */
+const EAR_QUESTIONS = 6;
 
 /**
  * How many times a short pool may be gone round.
@@ -655,13 +656,13 @@ const SIGHT_DIRECTIONS: CardDirection[] = ['see_play'];
 const QUALITY_DIRECTIONS: CardDirection[] = ['hear_quality'];
 
 /**
- * Six is a pass over every shape that is open, and short enough to lead a day.
+ * Four is enough to compare the open sounds without exhausting a new ear.
  *
  * The vocabulary is three shapes at `all-triads` and seven once the sevenths
- * are up, so six questions spread across shapes — see `spreadByShape` — is
- * roughly one of each rather than six of whichever has the most cards.
+ * are up, so four questions spread across shapes — see `spreadByShape` — keeps
+ * the rare sounds in the mix without putting another full drill before the day.
  */
-const QUALITY_QUESTIONS = 6;
+const QUALITY_QUESTIONS = 4;
 
 /**
  * **`hear_quality` is in two pools, and it is the only direction that is.**
@@ -867,29 +868,35 @@ export function chooseKeyCenter(reachedKeys: string[], coldSpots: ColdSpot[], da
  */
 function tieredPool(
 	cards: Schedulable[],
-	options: { now: Date; day: number; directions: CardDirection[]; coldKeys?: string[] }
+	options: {
+		now: Date;
+		day: number;
+		directions: CardDirection[];
+		coldKeys?: string[];
+		retireIntroductions?: boolean;
+	}
 ): Schedulable[] {
 	const pool = cards.filter((c) => options.directions.includes(c.direction));
 	if (pool.length === 0) return [];
 
 	const reviewed = pool.filter((c) => c.state.reps > 0);
 
-	// Graduated introductions are dropped here and nowhere else in the app: a
-	// symbol you can already play is a question the chart asks all day with a
-	// band behind it. This decides the whole shape of the sight pool and nothing
-	// at all in the other three, which hold no introductions to retire — and it
-	// decided nothing anywhere until the sight task existed to ask for them.
-	// Failing one hands it back, which is how the introduction returns to a
-	// morning where it is needed again. See `isRetiredIntroduction`.
+	// Callers may retire graduated introductions when they truly have somewhere
+	// else to be asked. Sight practice deliberately keeps them now; the option
+	// remains here because retirement is a property of a use, not of the card.
 	const due = selectDue(reviewed, {
 		now: options.now,
 		coldKeys: options.coldKeys,
-		retireIntroductions: true
+		retireIntroductions: options.retireIntroductions ?? true
 	});
 	const dueIds = new Set(due.map((c) => c.cardId));
 
 	const nearDue = reviewed
-		.filter((c) => !dueIds.has(c.cardId) && !isRetiredIntroduction(c))
+		.filter(
+			(c) =>
+				!dueIds.has(c.cardId) &&
+				(!(options.retireIntroductions ?? true) || !isRetiredIntroduction(c))
+		)
 		.sort((a, b) => a.state.dueAt.getTime() - b.state.dueAt.getTime());
 
 	// No retirement filter on the fresh tier: `reps === 0` is a card still in
@@ -1115,21 +1122,32 @@ function ledQueue(tiered: Schedulable[], options: QueueOptions, count: number): 
 }
 
 /**
- * The symbols that have not been met yet, six of them.
+ * Six written symbols to turn into hand shapes.
  *
- * Empty on almost every morning, and that is the design rather than a shortfall:
- * `tieredPool` retires a graduated introduction, so a shape you have shown you
- * can play leaves this pool and does not come back until you fail it. The queue
- * is therefore exactly "what has arrived and is not yet yours", which is the
- * only honest content for a task that goes first.
+ * This used to retire as soon as a symbol had been introduced, on the assumption
+ * that charts supplied all later reading practice. That made the most direct
+ * finger-and-symbol exercise disappear from the workout while two listening
+ * tasks remained. A graduated `see_play` card now stays schedulable here: a
+ * mission practises reading a whole chart at tempo, while this task practises
+ * the smaller skill that makes that possible.
  */
 export function sightQueue(cards: Schedulable[], options: QueueOptions): string[] {
-	const tiered = tieredPool(cards, { ...options, directions: SIGHT_DIRECTIONS });
+	const tiered = tieredPool(cards, {
+		...options,
+		directions: SIGHT_DIRECTIONS,
+		retireIntroductions: false
+	});
 	if (tiered.length === 0) return [];
-	return ledQueue(tiered, options, SIGHT_QUESTIONS);
+	// A symbol still being learned leads the ordinary review pool. Otherwise a
+	// large due pile could hide the very material every later task assumes arrived.
+	const introductionsFirst = [
+		...tiered.filter((card) => !isRetiredIntroduction(card)),
+		...tiered.filter((card) => isRetiredIntroduction(card))
+	];
+	return ledQueue(introductionsFirst, options, SIGHT_QUESTIONS);
 }
 
-/** Ten aural questions, and never fewer because the deck is well run. */
+/** Six aural questions, and never fewer merely because the deck is well run. */
 export function earQueue(cards: Schedulable[], options: QueueOptions): string[] {
 	const pool = cards.filter((card) => inQualityHalf(card, 'folded'));
 	const tiered = tieredPool(pool, { ...options, directions: EAR_DIRECTIONS });
@@ -1866,28 +1884,19 @@ function noveltyLine(novelty: Novelty): string {
 /**
  * The order of the kinds, by size.
  *
- * There are three drill-room questions now rather than two, and the sizes
- * deliberately did not all grow to fit. A workout that gains a task because the
- * app gained a feature is the app spending somebody else's morning.
- *
- * So: **short** rotates through the three, one a day. **Standard** keeps its
- * four and alternates the middle slot between the degrees and the key question —
- * they are siblings, both asking where a sound sits rather than what it is, and
- * every other day is often enough for either. **Long** is the one that grew, to
- * six, because asking for the long workout is asking for all of it.
+ * Reading a symbol and playing it is regular practice now, not only an
+ * introduction. Short rotates one drill a day. Standard rotates balanced pairs:
+ * sight with ear, sight with function, then sight with the hinge. That makes
+ * reading the steady thread while the complementary skill changes. Long asks
+ * all four drill questions once.
  *
  * The mission and the new thing survive at every size, since a short day that
  * never plays with anyone and never meets anything is not a short workout, it
  * is a shrug.
  *
- * **The sight slot leads every size and takes nothing from any of them.** It is
- * the only slot that does not fall through to another task, so on the ordinary
- * morning — everything met, nothing failed — it builds nothing and the day is
- * the same length it always was. On the morning after the ladder moved it is a
- * fourth, fifth or seventh task, and it comes first, because an exercise must
- * not arrive before its material and this is the material. Paying for that with
- * one of the day's questions would be the app introducing a chord by taking away
- * the chance to use it.
+ * **The sight slot leads whenever it appears.** A new symbol therefore still
+ * arrives before anything tests it, while graduated symbols turn this same task
+ * into the regular chart-reading and finger practice the workout was missing.
  *
  * **The colour slot sits directly behind it on the same terms.** It builds only
  * while a shape is still being learned and it falls through to nothing, so on
@@ -1902,23 +1911,31 @@ function noveltyLine(novelty: Novelty): string {
 function slotsFor(size: WorkoutSize, day: number): TaskKind[] {
 	switch (size) {
 		case 'short':
-			return ['sight', 'quality', DRILLS[day % DRILLS.length], 'mission', 'new_thing'];
+			return SHORT_DRILLS[day % SHORT_DRILLS.length] === 'sight'
+				? ['sight', 'quality', 'mission', 'new_thing']
+				: ['quality', SHORT_DRILLS[day % SHORT_DRILLS.length], 'mission', 'new_thing'];
 		case 'standard':
 			return [
 				'sight',
 				'quality',
-				'ear',
-				day % 2 === 0 ? 'function' : 'crossing',
+				...STANDARD_DRILLS[day % STANDARD_DRILLS.length].slice(1),
 				'mission',
 				'new_thing'
 			];
 		case 'long':
-			return ['sight', 'quality', 'ear', 'function', 'crossing', 'mission', 'new_thing', 'mission'];
+			return ['sight', 'quality', 'ear', 'function', 'crossing', 'mission', 'new_thing'];
 	}
 }
 
-/** The three question kinds a short day rotates between. */
-const DRILLS: TaskKind[] = ['ear', 'function', 'crossing'];
+/** One compact drill beside the mission and novelty. */
+const SHORT_DRILLS: TaskKind[] = ['sight', 'ear', 'function', 'crossing'];
+
+/** Two complementary drills: hands lead twice, the ear remains a frequent visitor. */
+const STANDARD_DRILLS: TaskKind[][] = [
+	['sight', 'ear'],
+	['sight', 'function'],
+	['sight', 'crossing']
+];
 
 // ---------------------------------------------------------------------------
 // The composer
@@ -2136,17 +2153,13 @@ export function composeWorkout(input: WorkoutInput): Workout {
 		 * the questions nothing else in the app can pose, and the mission is the
 		 * one that can always be posed.
 		 *
-		 * The sight slot is the exception at both ends. Nothing falls *into* it,
-		 * because an introduction handed out to fill a gap would be a workout
-		 * teaching you something for want of anything better to do; and it falls
-		 * through to nothing itself, because there being nothing to introduce is
-		 * the ordinary state of an account and not a hole to be plugged. It does
-		 * appear at the end of the other chains — a day with new material and an
-		 * empty due pile should meet the material rather than shrug.
+		 * The sight slot is the exception at both ends. Nothing falls *into* it and
+		 * it falls through to nothing itself, so the written-symbol practice appears
+		 * at the cadence chosen by the size model rather than being used as padding.
 		 *
 		 * The colour slot is the same exception for the same reason, one step
 		 * further on. Nothing falls into it, because a quality drill handed out to
-		 * fill a gap would be six questions asking whether a major triad is major
+		 * fill a gap would be four questions asking whether a major triad is major
 		 * on a morning when nothing about that was in doubt; and it falls through
 		 * to nothing, because *every shape you have met is known* is the ordinary
 		 * state of an account and the correct amount of this task then is none of

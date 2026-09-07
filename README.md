@@ -465,28 +465,25 @@ whoever builds the rest.
 **Today** is a workout: three to seven tasks, composed fresh each morning, each
 one ending because its goal was met rather than because a clock ran out.
 
-One rule decides what is in it. **If the band can ask it, the band asks it** —
-so anything the play-along page can pose belongs there, with a rhythm section
-behind it and chord-by-chord judging in front, rather than in a thinner copy of
-it somewhere else. What is left is the handful of questions a chart cannot ask,
-plus the chart itself under a constraint:
+The drills isolate one small skill at a time; the mission puts them back
+together in a chart. On sight turns one written symbol into a hand shape, Ear
+removes the writing, and Function and The hinge add harmonic context. The
+play-along page then asks for the whole performance under a constraint:
 
-| Task              | What it asks                                                                                            |
-| ----------------- | ------------------------------------------------------------------------------------------------------- |
-| **On sight**      | Six symbols, read and played. Only shapes not yet shown to be playable, so most mornings there are none |
-| **Ear**           | Ten questions: listen and play it back, or listen and name it                                           |
-| **Function**      | Eight degrees, spread across keys: "IV — E♭", played and then named                                     |
-| **The hinge**     | Six pivots: one chord doing two jobs, named by its function in two keys at once                         |
-| **Mission**       | The play-along page itself, with a key, a tempo floor, a groove and a bar to clear                      |
-| **One new thing** | A single unseen item: the next rung, a progression, a groove never played over. Shown once, tried once  |
+| Task              | What it asks                                                                                           |
+| ----------------- | ------------------------------------------------------------------------------------------------------ |
+| **On sight**      | Six symbols, read and played: direct chord-sheet reading and finger practice                           |
+| **Colour**        | Four new or troublesome chord qualities: hear the sound, then identify its kind                        |
+| **Ear**           | Six questions: listen and play it back, or listen and name it                                          |
+| **Function**      | Eight degrees, spread across keys: "IV — E♭", played and then named                                    |
+| **The hinge**     | Six pivots: one chord doing two jobs, named by its function in two keys at once                        |
+| **Mission**       | The play-along page itself, with a key, a tempo floor, a groove and a bar to clear                     |
+| **One new thing** | A single unseen item: the next rung, a progression, a groove never played over. Shown once, tried once |
 
-**On sight** is the one task the band could ask, and it is here anyway for as
-long as the symbol is new: it is the only question that shows you a chord's name
-and its notes at once, so it is where the material arrives. A shape you have
-shown you can play leaves the pool and comes back only if you fail it. It leads
-the workout when there is anything in it, and takes nothing from the rest of the
-day — meeting a chord is not one of the day's exercises, so it does not cost
-one.
+**On sight** is the direct bridge from a chord symbol to the hands. It is the
+only question that shows you a chord's name and its notes at once, so new
+material arrives there first; after that, the card remains in rotation as the
+small, focused version of reading a whole chart at tempo.
 
 The tasks are composed from four inputs — what spaced repetition says is due,
 where the ladder has got to, the keys and chord qualities the record shows you
@@ -494,7 +491,7 @@ avoiding, and one slot kept for something you have not met. Composition is
 seeded on the date, so a reload resumes the same workout and tomorrow's is
 genuinely a different one.
 
-**A task never runs out of questions.** The ear task fills its ten from the due
+**A task never runs out of questions.** The ear task fills its six from the due
 pile first, then near-due, then anything already reached — so "nothing due
 today" is not a sentence it can produce, which is what a well-scheduled deck
 used to say most days.
@@ -515,7 +512,9 @@ tune asks there is no mission, and the workout says which tune is nearest, what
 it wants and where that is taught, rather than sending you to a cycle of chords
 nobody has mentioned.
 
-Short, standard and long are three, four and five tasks. Minutes were always an
+Short, standard and long are three, four and six tasks. Standard always pairs
+On sight with one rotating companion — Ear, Function or The hinge — while long
+includes all four drills once. Minutes were always an
 estimate; tasks are countable, which is why the home screen can show exactly
 what today holds instead of a set of durations that never varied — and on the
 first day or two, when there is one rung reached and no tune is playable yet, it

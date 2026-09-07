@@ -441,16 +441,15 @@
 			</p>
 
 			<p>
-				One rule decides what is in it: <strong>if the band can ask it, the band asks it.</strong>
+				The drills isolate one small skill at a time; the mission puts them back together in a
+				chart. On sight turns one written symbol into a hand shape, Ear removes the writing, and
+				Function and The hinge add harmonic context.
 			</p>
 
 			<p>
-				That rule is why the first task disappears. Reading a chord symbol and playing it is exactly
-				what the play-along page asks all day with a rhythm section behind it — so it is worth
-				asking here only while the symbol is still new, and a shape you have shown you can play
-				drops out of the pool and does not come back until you fail it. On the morning after the
-				ladder moves, the new shapes arrive first and the rest of the workout is unchanged: meeting
-				the material is not one of the day's exercises, so it does not take one away.
+				Reading a chord symbol and playing it is the small, focused skill underneath reading a whole
+				chart at tempo. New shapes still arrive there first, and familiar symbols remain in rotation
+				as direct reading and finger practice rather than disappearing after one successful meeting.
 			</p>
 
 			<div class="table-wrap">
@@ -461,14 +460,15 @@
 					<tbody>
 						<tr>
 							<td><strong>On sight</strong></td>
-							<td
-								>Six symbols, read and played. Only shapes you have not shown you can play yet, so
-								most mornings there are none.</td
-							>
+							<td>Six symbols, read and played: direct chord-sheet reading and finger practice.</td>
+						</tr>
+						<tr>
+							<td><strong>Colour</strong></td>
+							<td>Four new or troublesome chord qualities, heard without a key or name.</td>
 						</tr>
 						<tr>
 							<td><strong>Ear</strong></td>
-							<td>Ten questions: listen and play it back, or listen and name it.</td>
+							<td>Six questions: listen and play it back, or listen and name it.</td>
 						</tr>
 						<tr>
 							<td><strong>Function</strong></td>
@@ -500,7 +500,7 @@
 			</div>
 
 			<p>
-				A task never runs out of questions. The ear task fills its ten from the due pile first, then
+				A task never runs out of questions. The ear task fills its six from the due pile first, then
 				near-due, then any reached material it has not asked yet — so &ldquo;nothing due
 				today&rdquo; is not a sentence it can produce, which is what a well-scheduled deck used to
 				say most days. The function and crossing tasks then spread what they have across keys,

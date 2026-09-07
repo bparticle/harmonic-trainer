@@ -170,16 +170,35 @@ describe('the shape of a workout', () => {
 		expect(workout.tasks).toHaveLength(4);
 	});
 
-	it('asks one of each kind at standard length', () => {
-		const workout = composeWorkout(input({ size: 'standard' }));
-		expect(new Set(taskKinds(workout))).toEqual(
-			new Set(['ear', 'function', 'mission', 'new_thing'])
+	it('pairs regular chord reading with one complementary drill at standard length', () => {
+		for (let d = 0; d < 3; d++) {
+			const workout = composeWorkout(
+				input({ size: 'standard', now: new Date(NOW.getTime() + d * DAY) })
+			);
+			expect(taskKinds(workout), `day ${d}`).toContain('sight');
+			expect(taskKinds(workout), `day ${d}`).toContain('mission');
+			expect(taskKinds(workout), `day ${d}`).toContain('new_thing');
+		}
+		const companions = new Set(
+			[0, 1, 2].flatMap((d) =>
+				taskKinds(
+					composeWorkout(input({ size: 'standard', now: new Date(NOW.getTime() + d * DAY) }))
+				).filter((kind) => kind === 'ear' || kind === 'function' || kind === 'crossing')
+			)
 		);
+		expect(companions).toEqual(new Set(['ear', 'function', 'crossing']));
 	});
 
-	it('adds a second mission at long, because the band asks what it can ask', () => {
+	it('asks every drill once and one mission at long', () => {
 		const workout = composeWorkout(input({ size: 'long' }));
-		expect(missions(workout)).toHaveLength(2);
+		expect(taskKinds(workout)).toEqual([
+			'sight',
+			'ear',
+			'function',
+			'crossing',
+			'mission',
+			'new_thing'
+		]);
 	});
 
 	it('keeps the mission and the new thing on a short day', () => {
@@ -356,11 +375,11 @@ describe('one bank, four queues, and nothing left out of all of them', () => {
 		expect(qualityQueue([known('a'), known('b')], { now: NOW, day: 1 })).toEqual([]);
 	});
 
-	it('spreads six questions over the sounds rather than over the pool', () => {
+	it('spreads four questions over the sounds rather than over the pool', () => {
 		/*
 		 * The lopsidedness this fixes: `all-sevenths` builds three minor sevenths,
 		 * two major sevenths, one dominant and one half-diminished per key. Taken
-		 * in order, six questions are the sounds you already know and the two you
+		 * in order, four questions are the sounds you already know and the two you
 		 * do not are never asked.
 		 */
 		const card = (id: string, shape: string): Schedulable => ({
@@ -407,10 +426,8 @@ describe('the sight task, where the material arrives', () => {
 		}
 	});
 
-	it('has nothing to say once every symbol has been played back', () => {
-		// The whole of `bank()` has graduated, and a symbol you can already play is
-		// one the play-along page asks all day with a band behind it.
-		expect(sightQueue(bank(), { now: NOW, day: 0 })).toEqual([]);
+	it('keeps graduated symbols as reading and finger practice', () => {
+		expect(sightQueue(bank(), { now: NOW, day: 0 })).toHaveLength(6);
 	});
 
 	it('hands the introduction back to a shape that graduated and was then failed', () => {
@@ -432,23 +449,22 @@ describe('the sight task, where the material arrives', () => {
 	it('leads the day, because an exercise must not arrive before its material', () => {
 		const workout = composeWorkout(input({ cards: [...bank(), unmet('new-one')] }));
 		expect(taskKinds(workout)[0]).toBe('sight');
+		expect(sightCards(workout)[0]).toBe('new-one');
 	});
 
-	it('is added to the day rather than taken out of it', () => {
+	it('keeps the same reading slot when new material arrives', () => {
 		const ordinary = composeWorkout(input({ size: 'standard' }));
 		const arriving = composeWorkout(
 			input({ size: 'standard', cards: [...bank(), unmet('new-one')] })
 		);
 
-		expect(taskKinds(ordinary)).toEqual(['ear', 'function', 'mission', 'new_thing']);
-		expect(taskKinds(arriving)).toEqual(['sight', 'ear', 'function', 'mission', 'new_thing']);
+		expect(taskKinds(ordinary)).toEqual(['sight', 'function', 'mission', 'new_thing']);
+		expect(taskKinds(arriving)).toEqual(['sight', 'function', 'mission', 'new_thing']);
 	});
 
-	it('leaves its slot empty rather than borrowing a task to fill it', () => {
-		// Nothing falls into the sight slot. An introduction handed out for want of
-		// anything better would be the app teaching you something to pass the time.
+	it('is part of a balanced long workout after the symbols graduate', () => {
 		const workout = composeWorkout(input({ size: 'long' }));
-		expect(taskKinds(workout)).not.toContain('sight');
+		expect(taskKinds(workout)).toContain('sight');
 		expect(workout.tasks).toHaveLength(TASK_COUNT.long);
 	});
 
@@ -463,23 +479,19 @@ describe('the sight task, where the material arrives', () => {
 describe('the ear queue never runs dry', () => {
 	it('fills from the due pile when there is one', () => {
 		const queue = earQueue(bank(), { now: NOW, day: 0 });
-		expect(queue).toHaveLength(10);
+		expect(queue).toHaveLength(6);
 	});
 
 	it('falls back to near-due when nothing at all is due', () => {
 		const cards = bank({ dueInDays: 9 });
 		expect(cards.every((c) => c.state.dueAt.getTime() > NOW.getTime())).toBe(true);
 
-		const workout = composeWorkout(input({ cards }));
-		const ear = workout.tasks.find((t) => t.kind === 'ear');
-		expect(ear).toBeDefined();
-		expect(earCards(workout)).toHaveLength(10);
+		expect(earQueue(cards, { now: NOW, day: 0 })).toHaveLength(6);
 	});
 
 	it('falls back to fresh material that has never been reviewed', () => {
 		const cards = bank({ dueInDays: 30, reps: 0 });
-		const workout = composeWorkout(input({ cards }));
-		expect(earCards(workout)).toHaveLength(10);
+		expect(earQueue(cards, { now: NOW, day: 0 })).toHaveLength(6);
 	});
 
 	it('puts review work ahead of material only just met', () => {
@@ -621,7 +633,7 @@ describe('the function queue', () => {
 describe('the picker is honoured', () => {
 	it('pins a rung, and the workout takes its key', () => {
 		const workout = composeWorkout(
-			input({ choice: { kind: 'rung', key: 'F', rungId: 'all-sevenths' } })
+			input({ size: 'long', choice: { kind: 'rung', key: 'F', rungId: 'all-sevenths' } })
 		);
 		expect(workout.keyCenter).toBe('F');
 
@@ -639,7 +651,11 @@ describe('the picker is honoured', () => {
 			card('prog-ear', 'hear_play', 'Ab', { skillCode: 'prog:ii-V-I', dueInDays: -1 })
 		];
 		const workout = composeWorkout(
-			input({ cards, choice: { kind: 'progression', progressionId: 'ii-V-I', keyCenter: 'Ab' } })
+			input({
+				size: 'long',
+				cards,
+				choice: { kind: 'progression', progressionId: 'ii-V-I', keyCenter: 'Ab' }
+			})
 		);
 
 		expect(workout.keyCenter).toBe('Ab');
@@ -653,8 +669,10 @@ describe('the picker is honoured', () => {
 
 	it('varies around the choice instead of orbiting it', () => {
 		const choice = { kind: 'rung', key: 'F', rungId: 'all-sevenths' } as const;
-		const today = composeWorkout(input({ choice }));
-		const tomorrow = composeWorkout(input({ choice, now: new Date(NOW.getTime() + DAY) }));
+		const today = composeWorkout(input({ size: 'long', choice }));
+		const tomorrow = composeWorkout(
+			input({ size: 'long', choice, now: new Date(NOW.getTime() + DAY) })
+		);
 
 		expect(tomorrow.keyCenter).toBe(today.keyCenter);
 		expect(earCards(tomorrow)).not.toEqual(earCards(today));
@@ -666,7 +684,7 @@ describe('the picker is honoured', () => {
 		const cards = bank();
 		const byId = new Map(cards.map((c) => [c.cardId, c]));
 		const workout = composeWorkout(
-			input({ cards, choice: { kind: 'rung', key: 'F', rungId: 'tonic-triad' } })
+			input({ size: 'long', cards, choice: { kind: 'rung', key: 'F', rungId: 'tonic-triad' } })
 		);
 		const skills = new Set(earCards(workout).map((id) => byId.get(id)!.skillCode));
 		expect(skills.size).toBeGreaterThan(1);
@@ -911,9 +929,8 @@ describe('the mission', () => {
 		expect(mission.coldSpot?.quality).toBe('min7b5');
 	});
 
-	it('does not send a long workout round the same tune twice', () => {
-		const both = missions(composeWorkout(input({ size: 'long' })));
-		expect(both[0].chartSlug).not.toBe(both[1].chartSlug);
+	it('keeps one focused mission in a long workout', () => {
+		expect(missions(composeWorkout(input({ size: 'long' })))).toHaveLength(1);
 	});
 
 	it('judges a cycle on getting round it, and everything else on guide tones', () => {
@@ -1232,9 +1249,7 @@ describe('the mission only lands on a tune you have been taught', () => {
 		expect(slugs.has('three-tonic-cycle')).toBe(true);
 	});
 
-	it('refuses a second mission that would be the same tune in the same key', () => {
-		// One rung, one key, one ready tune. A long workout asks for two missions;
-		// the second would be a copy of the first, so it is not built.
+	it('does not duplicate the one mission in a long workout', () => {
 		const workout = composeWorkout({ ...earlyInput, size: 'long' });
 		const set = missions(workout).map((mission) => `${mission.chartSlug} ${mission.keyCenter}`);
 		expect(new Set(set).size).toBe(set.length);

@@ -289,10 +289,10 @@ export type SelectionOptions = {
 	 *
 	 * Opt-in, and off by default, because retiring a question is a claim about
 	 * where else it gets asked and only the caller is in a position to make it.
-	 * Workout composition is the caller that makes it: the symbol you can already
-	 * play is one the play-along page asks all day with a band behind it. The
-	 * six-block session used to be the reason for the default; it is gone, and the
-	 * default stays because the claim is still not this module's to make.
+	 * Workout composition once made that claim, then kept graduated sight cards
+	 * when focused symbol-to-hand practice became a regular part of the mix. The
+	 * default stays because retirement is still a caller's decision, not a fact
+	 * this scheduler can infer from a direction.
 	 */
 	retireIntroductions?: boolean;
 };
