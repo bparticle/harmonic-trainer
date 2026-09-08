@@ -7096,3 +7096,25 @@ round-robin ordering led with the chosen key before filtering to the pinned
 skill, which could leave another key first after the filter. Pinned function
 cards are now led by the chosen key after that filtering, keeping the home-page
 choice true as the card bank grows.
+
+## A play-along can have an end before it begins
+
+Continuous looping remains the play-along default: it is right for woodshedding
+a form and for stopping wherever the useful work is done. It is wrong when the
+work is the commitment itself — _four times through, then see how it went_ —
+because the last bar currently creates a scramble for Space, the pedal or the
+small stop button.
+
+The setup panel now offers **∞, 1×, 2×, 4× and 8× rounds**. The choice is part of
+the persistent player setup, the running transport names the current round, and
+the finite choices end through the same `stopFully` path as a deliberate stop.
+That matters more than the button: the open chord is closed, the final tally is
+held on screen, the run is queued, a mission is judged, and its return to the
+workout becomes the next prominent action.
+
+The stopping point lives on Tone's transport clock rather than in the visual
+beat reporter. Animation frames pause in a background tab; the music does not.
+The scheduled boundary includes the count-in and counts complete passes over
+whatever is playing — the whole chart normally, or the selected bar loop when
+one exists. The `Part` also receives the finite loop count so no first chord of
+an unwanted extra round is scheduled at the boundary.

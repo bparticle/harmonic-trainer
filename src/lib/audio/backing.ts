@@ -37,6 +37,8 @@ export type BackingConfig = {
 	loopTo?: number;
 	beatsPerBar?: number;
 	countInBars?: number;
+	/** Complete passes through the selected loop. Omit to keep looping. */
+	passes?: number;
 };
 
 const DEFAULT_BEATS_PER_BAR = 4;
@@ -61,6 +63,18 @@ const START_BUFFER = '+0.1';
  */
 const SCHEDULER_LOOK_AHEAD = 0.15;
 const SCHEDULER_UPDATE_INTERVAL = 0.04;
+
+/** A finite run on the transport clock, including any count-in before pass one. */
+export function playbackLimit(
+	config: Pick<BackingConfig, 'passes' | 'countInBars' | 'beatsPerBar'>,
+	beatsPerLoop: number
+): { passes: number; endBeat: number } | null {
+	const passes =
+		Number.isInteger(config.passes) && (config.passes ?? 0) > 0 ? Number(config.passes) : null;
+	if (passes === null || beatsPerLoop <= 0) return null;
+	const countInBeats = Math.max(0, config.countInBars ?? 0) * (config.beatsPerBar ?? 4);
+	return { passes, endBeat: countInBeats + beatsPerLoop * passes };
+}
 
 let tone: Tone | null = null;
 
@@ -405,6 +419,8 @@ export type BackingState = {
 	/** Beats since the top of the loop, or negative during the count-in. */
 	beat: number;
 	bar: number;
+	/** Complete loops already passed; zero during the first pass. */
+	pass: number;
 };
 
 export type BackingPosition = { beat: number; bar: number; pass: number };
@@ -425,6 +441,7 @@ export class BackingTrack {
 	#reportFrame: number | null = null;
 	#lastReportedBeat: number | null = null;
 	#countInEndId: number | null = null;
+	#completionId: number | null = null;
 
 	#config: BackingConfig | null = null;
 	#playing = false;
@@ -447,6 +464,8 @@ export class BackingTrack {
 	onBeat: ((state: BackingState) => void) | null = null;
 	/** Called when the count-in ends and the form begins. */
 	onStart: (() => void) | null = null;
+	/** Called after the requested number of complete passes. */
+	onComplete: (() => void) | null = null;
 
 	/**
 	 * Known the moment the transport is told to go, not when a frame is drawn.
@@ -551,10 +570,29 @@ export class BackingTrack {
 			if (this.#muted[part] || this.#level[part] === 0) return;
 			play(t, voices, event, time);
 		}, events.map(schedule));
-		this.#part.loop = true;
+		const limit = playbackLimit(config, beats);
+		this.#part.loop = limit?.passes ?? true;
 		this.#part.loopStart = 0;
 		this.#part.loopEnd = { '4n': beats };
 		this.#part.start({ '4n': this.#countInBeats });
+
+		if (limit) {
+			const completionGeneration = this.#startGeneration;
+			this.#completionId = transport.scheduleOnce(
+				() => {
+					this.#completionId = null;
+					// The Part itself ends exactly on this audio-clock boundary. Transport
+					// teardown and UI scoring schedule work of their own, so leave Tone's
+					// callback before doing either of them.
+					setTimeout(() => {
+						if (completionGeneration !== this.#startGeneration || !this.#playing) return;
+						this.stop();
+						this.onComplete?.();
+					}, 0);
+				},
+				{ '4n': limit.endBeat }
+			);
+		}
 
 		if (this.#countInBeats > 0) {
 			const clicks = Array.from({ length: this.#countInBeats }, (_, beat) => ({
@@ -616,6 +654,10 @@ export class BackingTrack {
 			transport.clear(this.#countInEndId);
 			this.#countInEndId = null;
 		}
+		if (this.#completionId !== null) {
+			transport.clear(this.#completionId);
+			this.#completionId = null;
+		}
 		this.#part?.dispose();
 		this.#countPart?.dispose();
 		this.#part = null;
@@ -623,7 +665,7 @@ export class BackingTrack {
 		this.#voices?.bass.triggerRelease();
 		this.#voices?.comp.releaseAll();
 		if (this.#voices) stopCymbals(this.#voices);
-		this.onBeat?.({ playing: false, beat: 0, bar: 0 });
+		this.onBeat?.({ playing: false, beat: 0, bar: 0, pass: 0 });
 	}
 
 	/**
@@ -742,7 +784,8 @@ export class BackingTrack {
 					this.onBeat?.({
 						playing: true,
 						beat,
-						bar: absoluteBeat < 0 ? 0 : Math.floor(beat / beatsPerBar) + 1
+						bar: absoluteBeat < 0 ? 0 : Math.floor(beat / beatsPerBar) + 1,
+						pass: absoluteBeat < 0 ? 0 : Math.floor(absoluteBeat / this.#beats)
 					});
 				}
 			}

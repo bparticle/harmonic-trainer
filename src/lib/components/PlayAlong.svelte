@@ -159,6 +159,14 @@
 	const KEYS = ['C', 'G', 'D', 'A', 'E', 'B', 'Gb', 'Db', 'Ab', 'Eb', 'Bb', 'F'];
 	const MIN_BPM = 40;
 	const MAX_BPM = 300;
+	type PassLimit = 1 | 2 | 4 | 8 | null;
+	const PASS_LIMITS: Array<{ value: PassLimit; label: string }> = [
+		{ value: null, label: '∞' },
+		{ value: 1, label: '1×' },
+		{ value: 2, label: '2×' },
+		{ value: 4, label: '4×' },
+		{ value: 8, label: '8×' }
+	];
 	/** Matches the endpoint's hard cap and bounds even an all-day transport run. */
 	const MAX_RECORDED_ATTEMPTS = 20_000;
 	const PARTS: Array<[Part, string]> = [
@@ -216,6 +224,7 @@
 	let bpm = $state(mission?.bpmFloor ?? initialSeed.defaultBpm);
 	let groove = $state<Groove>(mission?.groove ?? initialSeed.defaultGroove);
 	let countIn = $state(true);
+	let passLimit = $state<PassLimit>(null);
 
 	let loopFrom = $state<number | null>(null);
 	let loopTo = $state<number | null>(null);
@@ -234,6 +243,8 @@
 	/** Bar of the whole form, not of the loop, so the chart highlight is right. */
 	let liveBar = $state(0);
 	let liveBeat = $state(0);
+	/** Zero-based pass through the current whole-form or selected-bar loop. */
+	let livePass = $state(0);
 	/** The bar being examined when nothing is playing — including the one paused on. */
 	let pinnedBar = $state(1);
 	/** The exact half-bar chord being studied. */
@@ -1405,6 +1416,11 @@
 				const savedGroove = isGroove(saved.groove) ? saved.groove : saved.feel;
 				if (!requestedSlug && !mission?.groove && isGroove(savedGroove)) groove = savedGroove;
 				if (typeof saved.countIn === 'boolean') countIn = saved.countIn;
+				if ([1, 2, 4, 8].includes(Number(saved.passLimit))) {
+					passLimit = Number(saved.passLimit) as Exclude<PassLimit, null>;
+				} else if (saved.passLimit === null) {
+					passLimit = null;
+				}
 				if (typeof saved.fireworks === 'boolean') fireworks = saved.fireworks;
 				for (const [part] of PARTS) {
 					const savedMuted = (saved.muted as Partial<Record<Part, unknown>> | undefined)?.[part];
@@ -1431,7 +1447,7 @@
 		if (!playerReady) return;
 		localStorage.setItem(
 			PLAYER_KEY,
-			JSON.stringify({ slug, keyName, bpm, groove, countIn, fireworks, muted, level })
+			JSON.stringify({ slug, keyName, bpm, groove, countIn, passLimit, fireworks, muted, level })
 		);
 	});
 
@@ -1447,9 +1463,11 @@
 		if (!state.playing) {
 			liveBar = 0;
 			liveBeat = 0;
+			livePass = 0;
 			return;
 		}
 		liveBeat = state.beat;
+		livePass = state.pass;
 		liveBar = state.bar === 0 ? 0 : (loopFrom ?? 1) + state.bar - 1;
 
 		/*
@@ -1476,6 +1494,7 @@
 	};
 
 	track.onStart = () => (counting = false);
+	track.onComplete = () => stopFully();
 
 	function config() {
 		return {
@@ -1486,7 +1505,8 @@
 			loopFrom: loopFrom ?? undefined,
 			loopTo: loopTo ?? undefined,
 			beatsPerBar: chart.beatsPerBar,
-			countInBars: countIn ? 1 : 0
+			countInBars: countIn ? 1 : 0,
+			passes: passLimit ?? undefined
 		};
 	}
 
@@ -1936,7 +1956,8 @@
 						{#if counting}
 							Counting in…
 						{:else if playing && liveBar > 0}
-							Bar {liveBar}, beat {Math.floor(liveBeat % chart.beatsPerBar) + 1}
+							{passLimit ? `Round ${Math.min(livePass + 1, passLimit)} of ${passLimit} · ` : ''}Bar
+							{liveBar}, beat {Math.floor(liveBeat % chart.beatsPerBar) + 1}
 						{:else if playing}
 							Playing…
 						{:else if paused}
@@ -2146,6 +2167,34 @@
 							<span class="dot" class:is-lit={countIn}></span>
 							One bar of clicks
 						</button>
+					</div>
+
+					<div class="w-60">
+						<h2 class="panel-title">Rounds</h2>
+						<div class="repeat-options" aria-label="Number of rounds">
+							{#each PASS_LIMITS as option (option.label)}
+								<button
+									type="button"
+									class="chip"
+									class:is-on={passLimit === option.value}
+									onclick={() => {
+										passLimit = option.value;
+										void restartIfPlaying();
+									}}
+									aria-pressed={passLimit === option.value}
+									aria-label={option.value === null
+										? 'Keep looping until stopped'
+										: `Stop after ${option.value} ${option.value === 1 ? 'round' : 'rounds'}`}
+								>
+									{option.label}
+								</button>
+							{/each}
+						</div>
+						<p class="setup-note">
+							{passLimit === null
+								? 'Keeps looping until you stop.'
+								: `Stops and shows your score after ${passLimit} ${passLimit === 1 ? 'round' : 'rounds'}.`}
+						</p>
 					</div>
 
 					<div class="w-60">
@@ -2479,6 +2528,27 @@
 		background: var(--color-ground-overlay);
 		border-color: var(--color-ink-dim);
 		color: var(--color-ink);
+	}
+
+	.repeat-options {
+		display: grid;
+		grid-template-columns: repeat(5, minmax(0, 1fr));
+		gap: 0.35rem;
+	}
+
+	.repeat-options .chip {
+		justify-content: center;
+		min-height: 2.5rem;
+		padding-inline: 0.35rem;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.setup-note {
+		margin-top: 0.45rem;
+		color: var(--color-ink-dim);
+		font-family: var(--font-mono);
+		font-size: 0.68rem;
+		line-height: 1.4;
 	}
 
 	/*

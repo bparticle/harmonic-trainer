@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseChord } from '$lib/music/chord';
 import { key as makeKey } from '$lib/music/key';
-import { scoreFor } from './backing';
+import { playbackLimit, scoreFor } from './backing';
 import type { BarChord } from './bass';
 import {
 	compPattern,
@@ -19,6 +19,26 @@ const bars = (symbols: string[], beats = 4): BarChord[] =>
 	symbols.map((s) => ({ chord: parseChord(s), beats }));
 
 const iiVI = bars(['Dm7', 'G7', 'Cmaj7', 'Cmaj7']);
+
+describe('finite playback', () => {
+	it('stays continuous when no number of passes was chosen', () => {
+		expect(playbackLimit({ beatsPerBar: 4, countInBars: 1 }, 16)).toBeNull();
+	});
+
+	it('stops after the chosen complete passes, following the count-in', () => {
+		expect(playbackLimit({ passes: 4, beatsPerBar: 4, countInBars: 1 }, 16)).toEqual({
+			passes: 4,
+			endBeat: 68
+		});
+	});
+
+	it('counts passes over the selected loop length', () => {
+		expect(playbackLimit({ passes: 2, beatsPerBar: 3, countInBars: 1 }, 6)).toEqual({
+			passes: 2,
+			endBeat: 15
+		});
+	});
+});
 
 describe('drums', () => {
 	it('rides on every beat', () => {
