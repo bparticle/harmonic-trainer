@@ -1,3 +1,4 @@
+import { cardsInScope } from '$lib/session/practice-scope';
 import { randomUUID } from 'node:crypto';
 import { and, desc, eq, inArray, isNull, lt, sql } from 'drizzle-orm';
 import { db } from './index';
@@ -51,6 +52,8 @@ import { isGroove, type Groove } from '$lib/audio/groove';
 import { keyTonic } from '$lib/music/key';
 import {
 	cellsOf,
+	closeCell,
+	closeKey,
 	deepen,
 	FIRST_FRONTIER,
 	frontierCovering,
@@ -263,13 +266,7 @@ async function saveFrontier(userId: string, to: Frontier): Promise<Frontier> {
 	return to;
 }
 
-/**
- * Go deeper: open the next rung, and one more key of every rung above it.
- *
- * Two moves where there used to be one, and this is the one that carries the
- * milestone. Deepening is not free — see `deepen` — so it is impossible to end
- * up four rungs down in a key whose scale was never opened.
- */
+/** Open the next topic in C without adding any other keys. */
 export async function deepenLadder(userId: string): Promise<Frontier> {
 	const from = await currentFrontier(userId);
 	const to = deepen(from);
@@ -332,6 +329,23 @@ export async function stepBackLadder(userId: string): Promise<Frontier> {
 	if (!to) return from;
 	const settings = await loadSettings(userId);
 	await saveSettings(userId, { prefs: { ...settings.prefs, ladderWidths: to.widths } });
+	return to;
+}
+
+/** Close only the requested scope; saved cards and review history remain intact. */
+export async function closeLadder(
+	userId: string,
+	key: string,
+	rungId: string | null
+): Promise<Frontier> {
+	const from = await currentFrontier(userId);
+	const to = rungId === null ? closeKey(from, key) : closeCell(from, key, rungId);
+	if (!to) return from;
+	await saveFrontier(userId, to);
+	// A saved workout was composed against the old scope. Finish it so resuming
+	// cannot keep offering the material the learner just closed.
+	const open = await activeWorkout(userId);
+	if (open) await finishWorkout(open.id, userId);
 	return to;
 }
 
@@ -608,7 +622,7 @@ async function gatherWorkoutInput(
 
 	return {
 		size: request.size,
-		cards: cardBank,
+		cards: cardsInScope(cardBank, frontier, request.choice ?? null),
 		reached,
 		// What deepening would open next, worked out here because it needs the
 		// shape of the frontier and the composer is pure.

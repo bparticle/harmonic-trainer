@@ -61,7 +61,7 @@
 	const PREFIX = lattice([3, 3, 2, 2, 2, 2, 2], 0, 0);
 
 	const DEEPEN_BEFORE = lattice([3, 1, 0, 0, 0, 0, 0], 0, 0, 13, 3);
-	const DEEPEN_AFTER = lattice([4, 2, 1, 0, 0, 0, 0], 0, 0, 13, 3);
+	const DEEPEN_AFTER = lattice([3, 1, 1, 0, 0, 0, 0], 0, 0, 13, 3);
 
 	const DIRECTIONS = [
 		['see_play', 'Here is the symbol — play it.', 1.0],
@@ -266,12 +266,12 @@
 				</figcaption>
 			</figure>
 
-			<h3>Going deeper drags breadth along behind it</h3>
+			<h3>Depth and breadth are separate choices</h3>
 			<p>
 				The widths array is <em>non-increasing</em>: a rung is never open in more keys than the rung
 				above it. You cannot be four rungs deep in a key whose scale you have never played. Opening
-				the next rung is a single move that also opens one more key of every rung above it — so the
-				staircase builds itself, and it is impossible to be deep and narrow.
+				the next rung adds only that topic in C. Earlier topics stay exactly as they were. Widening
+				adds one named topic in one more key when its earlier topics are open.
 			</p>
 
 			<figure>
@@ -279,7 +279,7 @@
 					<svg
 						viewBox="0 0 460 150"
 						role="img"
-						aria-label="Two small grids. Before: the first rung open in three keys, the second in one. After: the first rung in four keys, the second in two, and a third rung newly open in one key."
+						aria-label="Two small grids. Before: the first rung open in three keys, the second in one. After: the first two rungs unchanged, and a third rung newly open in one key."
 					>
 						<text x="0" y="12" class="f-mono f-dim" font-size="10">BEFORE</text>
 						<g transform="translate(0 22)">
@@ -319,10 +319,9 @@
 					</svg>
 				</div>
 				<figcaption>
-					One press of &ldquo;go deeper&rdquo;: a new rung opens in the first key, and the two rungs
-					above it each gain a key. Do it seven times and you have the same seven rungs the old walk
-					reached in seven steps — with twenty-one cells of breadth underneath them that the old
-					walk never had.
+					One press opens a new rung in C. No other key or topic opens with it. You can close a
+					topic from the end of a line, or close all topics in the last open key. Your cards and
+					practice history stay saved for when you return.
 				</figcaption>
 			</figure>
 		</section>

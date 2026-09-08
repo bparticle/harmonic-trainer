@@ -13,12 +13,10 @@ import { ladderPath } from './journey';
 import { keyStandings } from './warmth';
 import { borrowColumn, network, stationOf } from './network';
 
-/** A frontier `moves` deepenings past the start. */
-const after = (moves: number): Frontier => {
-	let frontier = FIRST_FRONTIER;
-	for (let i = 0; i < moves; i++) frontier = deepen(frontier) ?? frontier;
-	return frontier;
-};
+/** A staircase fixture with explicit breadth as well as depth. */
+const after = (moves: number): Frontier => ({
+	widths: RUNGS.map((_, r) => Math.max(0, Math.min(moves + 1, RUNGS.length) - r))
+});
 
 const draw = (frontier: Frontier, rows: Array<{ key: string; chords: number }> = []) =>
 	network(ladderPath(frontier, []), keyStandings(rows, frontier, 0));
@@ -47,7 +45,7 @@ describe('network', () => {
 	});
 
 	it('grows into an arrowhead centred on C', () => {
-		// Seven deepenings gives [7, 6, 5, 4, 3, 2, 1], and every line is centred
+		// An explicitly widened frontier has [7, 6, 5, 4, 3, 2, 1], and every line is centred
 		// on C because the ladder alternates sides as it widens.
 		const net = draw(after(7));
 		expect(net.lines.map((line) => line.stops)).toEqual([7, 6, 5, 4, 3, 2, 1]);

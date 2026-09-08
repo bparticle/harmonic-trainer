@@ -12,7 +12,13 @@
 		stageAtAccidentals,
 		type Neighbour
 	} from '$lib/curriculum/atlas';
-	import { stageByKey, stationHolding, type RungId } from '$lib/curriculum/ladder';
+	import {
+		closeCell,
+		closeKey,
+		stageByKey,
+		stationHolding,
+		type RungId
+	} from '$lib/curriculum/ladder';
 	import type { WorkoutSize } from '$lib/session/workout';
 	import { describeTasks, describeWhen } from '$lib/session/journey';
 	import { scale } from 'svelte/transition';
@@ -1073,16 +1079,35 @@
 					{#if data.canDeepen && data.deepenTo?.rung}
 						<form method="POST" action="?/deepen">
 							<button class="move" class:is-suggested={data.progress.readyToMoveOn}>
-								Open the next line — {data.deepenTo.rung.label.toLowerCase()}
+								Open {data.deepenTo.rung.label.toLowerCase()} at C
 							</button>
 						</form>
 					{/if}
 
-					<form method="POST" action="?/back">
-						<button class="quiet" disabled={!data.canStepBack}>close the last stop</button>
-					</form>
+					{#each net.lines as line (line.rungId)}
+						{#if closeCell({ widths: data.settings.prefs.ladderWidths }, selectedKey, line.rungId)}
+							<form method="POST" action="?/close">
+								<input type="hidden" name="key" value={selectedKey} />
+								<input type="hidden" name="rung" value={line.rungId} />
+								<button class="quiet"
+									>Close {line.label.toLowerCase()} at {glyph(selectedKey)}</button
+								>
+							</form>
+						{/if}
+					{/each}
+					{#if closeKey({ widths: data.settings.prefs.ladderWidths }, selectedKey)}
+						<form method="POST" action="?/close">
+							<input type="hidden" name="key" value={selectedKey} />
+							<button class="quiet">Close all topics at {glyph(selectedKey)}</button>
+						</form>
+					{/if}
 				</div>
 
+				<p class="panel-line dim">
+					Close topics from the end of a line, or close all topics at the last scale. Your practice
+					history stays. Closing ends the current workout so the next one uses only your open
+					topics.
+				</p>
 				<p class="panel-line dim">
 					{#if reachAfter.length}
 						The ladder does not skip: {net.lines[0].label.toLowerCase()} reaches {glyph(

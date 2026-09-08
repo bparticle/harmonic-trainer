@@ -7,6 +7,7 @@ import { loadKeyChords } from '$lib/server/db/play-log';
 import {
 	activeWorkout,
 	currentFrontier,
+	closeLadder,
 	currentPosition,
 	repairFrontier,
 	deepenLadder,
@@ -320,6 +321,15 @@ export const load: PageServerLoad = async ({ parent, locals, url }) => {
 };
 
 export const actions: Actions = {
+	close: async ({ request, locals }) => {
+		const form = await request.formData();
+		const key = form.get('key');
+		const rung = form.get('rung');
+		if (typeof key === 'string' && (rung === null || typeof rung === 'string')) {
+			await closeLadder(currentUserId(locals.userId), key, rung);
+		}
+		redirect(303, '/');
+	},
 	/**
 	 * Start a workout around whatever the picker pinned.
 	 *
@@ -379,7 +389,7 @@ export const actions: Actions = {
 	},
 
 	/**
-	 * Go deeper: the next rung, plus one more key of every rung above it.
+	 * Go deeper: only the next rung in C.
 	 *
 	 * Deliberately unguarded — you can tell better than a review count. What
 	 * changed with the frontier is that this is no longer the only way forward:

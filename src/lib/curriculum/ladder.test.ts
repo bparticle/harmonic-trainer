@@ -6,6 +6,8 @@ import {
 	STAGES,
 	cellsOf,
 	deepen,
+	closeCell,
+	closeKey,
 	depthOf,
 	directionsForItem,
 	directionsForRung,
@@ -343,23 +345,41 @@ describe('the frontier', () => {
 		return frontier;
 	};
 
-	/*
-	 * The whole of "widen before you deepen", asserted as arithmetic. Going one
-	 * rung deeper drags every rung above it one key wider, so the staircase
-	 * builds itself and being deep-and-narrow is unreachable.
-	 */
-	it('widens everything above it when it deepens', () => {
-		expect(after(0).widths).toEqual([1, 0, 0, 0, 0, 0, 0]);
-		expect(after(1).widths).toEqual([2, 1, 0, 0, 0, 0, 0]);
-		expect(after(3).widths).toEqual([4, 3, 2, 1, 0, 0, 0]);
-		expect(after(6).widths).toEqual([7, 6, 5, 4, 3, 2, 1]);
+	it('opens only the next topic in C, regardless of existing breadth', () => {
+		expect(after(1).widths).toEqual([1, 1, 0, 0, 0, 0, 0]);
+		expect(after(3).widths).toEqual([1, 1, 1, 1, 0, 0, 0]);
+		expect(after(6).widths).toEqual([1, 1, 1, 1, 1, 1, 1]);
+		expect(cellsOf(after(6))).toHaveLength(7);
+		const before = { widths: [2, 2, 2, 2, 0, 0, 0] };
+		const opened = deepen(before)!;
+		expect(opened.widths).toEqual([2, 2, 2, 2, 1, 0, 0]);
+		expect(cellsOf(opened).filter((c) => !isOpen(before, c.key, c.rungId))).toEqual([
+			{ key: 'C', rungId: 'relative-minor' }
+		]);
+		expect(before.widths).toEqual([2, 2, 2, 2, 0, 0, 0]);
 	});
 
-	it('reaches every rung in as many moves as the old walk did', () => {
-		// Seven steps got you seven rungs before, in one key. It still does — with
-		// twenty-one cells of breadth underneath that the old walk did not have.
-		expect(depthOf(after(6))).toBe(RUNGS.length);
-		expect(cellsOf(after(6))).toHaveLength(28);
+	it('can close F entirely while keeping C relative minor and G triads', () => {
+		const before = { widths: [3, 3, 3, 3, 1, 0, 0] };
+		const closed = closeKey(before, 'F')!;
+		expect(closed.widths).toEqual([2, 2, 2, 2, 1, 0, 0]);
+		expect(isWellFormed(closed)).toBe(true);
+		expect(cellsOf(closed).filter((c) => c.key === 'F')).toEqual([]);
+		expect(closeKey(before, 'G')).toBeNull();
+		expect(closeKey(before, 'C')).toBeNull();
+		expect(closeKey(before, 'unknown')).toBeNull();
+		expect(closeKey(closed, 'F')).toBeNull();
+	});
+
+	it('closes only the named cell and refuses implicit dependent closures', () => {
+		const before = { widths: [2, 2, 2, 2, 1, 0, 0] };
+		expect(closeCell(before, 'G', 'all-triads')?.widths).toEqual([2, 2, 2, 1, 1, 0, 0]);
+		expect(closeCell(before, 'C', 'relative-minor')?.widths).toEqual([2, 2, 2, 2, 0, 0, 0]);
+		expect(closeCell(before, 'G', 'scale')).toBeNull();
+		expect(closeCell(before, 'C', 'all-triads')).toBeNull();
+		expect(closeCell(before, 'F', 'all-triads')).toBeNull();
+		expect(closeCell(before, 'C', 'unknown')).toBeNull();
+		expect(closeCell(FIRST_FRONTIER, 'C', 'scale')).toBeNull();
 	});
 
 	it('stops deepening at the last rung', () => {
@@ -377,7 +397,7 @@ describe('the frontier', () => {
 	it('refuses a widening that would break the staircase', () => {
 		// Rung two is open in one key and rung one in two. Widening rung two to
 		// two is legal; widening it again would put it ahead of rung one.
-		const frontier = after(1);
+		const frontier = { widths: [2, 1, 0, 0, 0, 0, 0] };
 		const once = widen(frontier, 1)!;
 		expect(once.widths).toEqual([2, 2, 0, 0, 0, 0, 0]);
 		expect(widen(once, 1)).toBeNull();
@@ -434,7 +454,7 @@ describe('the frontier', () => {
 
 	it('counts the rungs open in one key, for a swatch to print', () => {
 		expect(rungsOpenIn(after(3), 'C')).toBe(4);
-		expect(rungsOpenIn(after(3), 'D')).toBe(1);
+		expect(rungsOpenIn(after(3), 'D')).toBe(0);
 		expect(rungsOpenIn(after(3), 'Gb')).toBe(0);
 		expect(rungsOpenIn(after(3), 'nonsense')).toBe(0);
 	});
@@ -451,7 +471,7 @@ describe('the frontier', () => {
 	});
 
 	it('steps back a key at a time, then closes the rung, and never the last cell', () => {
-		const wide = widenNext(after(1))!;
+		const wide = { widths: [2, 2, 0, 0, 0, 0, 0] };
 		expect(wide.widths).toEqual([2, 2, 0, 0, 0, 0, 0]);
 		expect(narrower(wide)!.widths).toEqual([2, 1, 0, 0, 0, 0, 0]);
 		expect(narrower(narrower(wide)!)!.widths).toEqual([2, 0, 0, 0, 0, 0, 0]);
@@ -664,9 +684,7 @@ describe('which cell a move opened', () => {
 		expect(openedCell(from, to)).toEqual({ key: STAGES[1].key, rungId: RUNGS[0].id });
 	});
 
-	it('prefers the line that was shut over the ones deepening widened', () => {
-		// Deepening also drags every rung above it one key wider. The move was
-		// about the idea, not about the extra ground underneath it.
+	it('names only the next topic after successive openings', () => {
 		const from = deepen(FIRST_FRONTIER) as Frontier;
 		const to = deepen(from) as Frontier;
 		expect(openedCell(from, to)).toEqual({ key: 'C', rungId: RUNGS[2].id });

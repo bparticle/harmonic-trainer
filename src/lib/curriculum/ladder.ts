@@ -210,9 +210,8 @@ export function positionOf(key: string, rungId: string): Position | null {
  * app opened on purpose, so nothing is ever asked that has not been introduced,
  * which is the rule the note at the top of this file exists to keep.
  *
- * Widths only ever grow. Nothing here can take material away except `narrower`
- * below, which is a person pressing "step back" rather than the curriculum
- * revising itself.
+ * Opening only adds the requested cell. Closing is an explicit choice through
+ * `closeCell`, `closeKey` or `narrower`; it never deletes practice history.
  */
 export type Frontier = {
 	/** One count per rung, in `RUNGS` order. Non-increasing, each 0…STAGES.length. */
@@ -404,30 +403,11 @@ export function workingPosition(frontier: Frontier): Position {
 	return { stage: STAGES[stage], rung: RUNGS[rungIndex], stageIndex: stage, rungIndex };
 }
 
-/**
- * Open the next rung — and one more key of every rung above it.
- *
- * The single most important function in this file, and the whole of "widen
- * before you deepen" expressed as one move. Going deeper is not free: it drags
- * every shallower rung one key wider, so the staircase builds itself and it is
- * impossible to be deep and narrow. Seven of these gives
- * `[7, 6, 5, 4, 3, 2, 1]` — the same seven rungs the old walk reached in seven
- * steps, with twenty-one cells of breadth underneath them that the old walk did
- * not have.
- *
- * Null when every rung is already open; widening is what is left after that.
- */
+/** Open only the next rung in C. Breadth is a separate, explicit choice. */
 export function deepen(frontier: Frontier): Frontier | null {
 	const depth = depthOf(frontier);
 	if (depth >= RUNGS.length) return null;
-
-	return {
-		widths: frontier.widths.map((width, r) => {
-			if (r === depth) return 1;
-			if (r < depth) return Math.min(width + 1, STAGES.length);
-			return width;
-		})
-	};
+	return { widths: frontier.widths.map((width, r) => (r === depth ? 1 : width)) };
 }
 
 /**
@@ -463,8 +443,7 @@ export function widen(frontier: Frontier, rungIndex: number): Frontier | null {
  *
  * Deepening opens a line that was shut, always at the first key; widening adds
  * one key to a line already open, and the key it adds is the one at the width
- * it had. Deepening also widens every rung above it, so the newly open line is
- * checked first: it is the idea that move was about.
+ * it had. Both moves open exactly one cell.
  */
 export function openedCell(from: Frontier, to: Frontier): { key: string; rungId: RungId } | null {
 	const opened = to.widths.findIndex((width, r) => width > 0 && (from.widths[r] ?? 0) === 0);
@@ -530,6 +509,22 @@ export function narrower(frontier: Frontier): Frontier | null {
 	// the only thing open.
 	if (depth === 1) return null;
 	return { widths: frontier.widths.map((w, r) => (r === last ? 0 : w)) };
+}
+
+/** Close one named stop only when no open stop depends on it. */
+export function closeCell(frontier: Frontier, key: string, rungId: string): Frontier | null {
+	const stage = STAGES.findIndex((s) => s.key === key);
+	const rung = RUNGS.findIndex((r) => r.id === rungId);
+	if (stage < 0 || rung < 0 || frontier.widths[rung] !== stage + 1) return null;
+	const to = { widths: frontier.widths.map((w, r) => (r === rung ? w - 1 : w)) };
+	return isWellFormed(to) ? to : null;
+}
+
+/** Close all topics in the last open key, leaving every other key unchanged. */
+export function closeKey(frontier: Frontier, key: string): Frontier | null {
+	const stage = STAGES.findIndex((s) => s.key === key);
+	if (stage < 1 || frontier.widths[0] !== stage + 1) return null;
+	return { widths: frontier.widths.map((w) => Math.min(w, stage)) };
 }
 
 /**

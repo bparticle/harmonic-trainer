@@ -22,12 +22,10 @@ import {
 	type RungRecord
 } from './journey';
 
-/** A frontier `moves` deepenings past the start. */
-const after = (moves: number): Frontier => {
-	let frontier = FIRST_FRONTIER;
-	for (let i = 0; i < moves; i++) frontier = deepen(frontier) ?? frontier;
-	return frontier;
-};
+/** A staircase fixture with explicit breadth as well as depth. */
+const after = (moves: number): Frontier => ({
+	widths: RUNGS.map((_, r) => Math.max(0, Math.min(moves + 1, RUNGS.length) - r))
+});
 
 describe('looksSolid', () => {
 	const rung = RUNGS[1]; // the home chord, suggested after six
@@ -118,7 +116,7 @@ describe('the path, as the frontier', () => {
 describe('journeyProgress', () => {
 	it('counts cells open rather than steps along a walk', () => {
 		expect(journeyProgress(FIRST_FRONTIER)).toMatchObject({ cells: 1, total: LADDER_CELLS });
-		// Deepening opens more than one cell, which is the point of it.
+		// Count every explicitly opened cell, including breadth.
 		expect(journeyProgress(after(1)).cells).toBe(3);
 		expect(journeyProgress(after(6)).cells).toBe(28);
 	});
