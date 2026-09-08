@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { cellsOf, isWellFormed, RUNGS, STAGES } from './curriculum/ladder';
 import { parsePrefs, prefsFromRequest, readPrefs } from './settings-validate';
-import { DEFAULT_PREFS, type Prefs } from './settings';
+import { DEFAULT_PREFS, LADDER_VERSION, type Prefs } from './settings';
 
 /**
  * The upgrade path, tested against the rows that actually exist.
@@ -19,6 +19,7 @@ const withPrefs = (extra: Record<string, unknown>) => ({
 	revealDelayMs: 2000,
 	chordClusterWindowMs: 80,
 	midiLatencyOffsetMs: 0,
+	ladderVersion: LADDER_VERSION,
 	...extra
 });
 
@@ -28,19 +29,40 @@ describe('reading the frontier out of stored prefs', () => {
 		expect(parsePrefs(withPrefs({ ladderWidths: widths })).ladderWidths).toEqual(widths);
 	});
 
-	it('migrates every stored position to the ground it already covered', () => {
+	it('migrates every old stored position without taking away an open cell', () => {
+		const oldOrder = [
+			'scale',
+			'tonic-triad',
+			'primary-triads',
+			'all-triads',
+			'tonic-seventh',
+			'all-sevenths',
+			'relative-minor'
+		] as const;
 		for (const stage of STAGES) {
-			for (const rung of RUNGS) {
-				const prefs = parsePrefs(withPrefs({ ladderKey: stage.key, ladderRung: rung.id }));
+			for (const rungId of oldOrder) {
+				const prefs = parsePrefs(withPrefs({ ladderKey: stage.key, ladderRung: rungId }));
 				const frontier = { widths: prefs.ladderWidths };
-				expect(isWellFormed(frontier), `${stage.key} / ${rung.id}`).toBe(true);
+				expect(isWellFormed(frontier), `${stage.key} / ${rungId}`).toBe(true);
 
-				// The old walk's prefix, counted: every rung of every earlier key,
-				// plus this key's rungs up to and including where it stood.
-				const expected = STAGES.indexOf(stage) * RUNGS.length + (RUNGS.indexOf(rung) + 1);
-				expect(cellsOf(frontier), `${stage.key} / ${rung.id}`).toHaveLength(expected);
+				const open = new Set(cellsOf(frontier).map((cell) => `${cell.key}|${cell.rungId}`));
+				for (let s = 0; s <= STAGES.indexOf(stage); s++) {
+					const last = s < STAGES.indexOf(stage) ? oldOrder.length - 1 : oldOrder.indexOf(rungId);
+					for (let r = 0; r <= last; r++) {
+						expect(open.has(`${STAGES[s].key}|${oldOrder[r]}`), `${stage.key} / ${rungId}`).toBe(
+							true
+						);
+					}
+				}
 			}
 		}
+	});
+
+	it('moves a first-version frontier to the new order without losing sevenths', () => {
+		const prefs = parsePrefs(
+			withPrefs({ ladderVersion: undefined, ladderWidths: [4, 3, 2, 2, 2, 1, 1] })
+		);
+		expect(prefs.ladderWidths).toEqual([4, 3, 2, 2, 2, 2, 1]);
 	});
 
 	it('prefers a stored frontier over a stale position beside it', () => {
@@ -158,6 +180,7 @@ describe('reading a stored prefs row', () => {
 			revealDelayMs: 3000,
 			chordClusterWindowMs: 120,
 			midiLatencyOffsetMs: -40,
+			ladderVersion: LADDER_VERSION,
 			ladderWidths: [3, 2, 1, 0, 0, 0, 0]
 		});
 		expect(prefs).toEqual({
@@ -165,6 +188,7 @@ describe('reading a stored prefs row', () => {
 			revealDelayMs: 3000,
 			chordClusterWindowMs: 120,
 			midiLatencyOffsetMs: -40,
+			ladderVersion: LADDER_VERSION,
 			ladderWidths: [3, 2, 1, 0, 0, 0, 0]
 		});
 	});

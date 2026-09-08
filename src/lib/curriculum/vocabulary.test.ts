@@ -666,10 +666,11 @@ describe('knowing a minor chord is not knowing a minor key', () => {
 		return ALL_RUNGS.slice(0, at + 1);
 	};
 
-	const minorTune = chartsBySlug.get('st-james-infirmary')!.demand;
+	const minorTriads = demandOfNumerals(['i', 'iv', 'v'], 'minor');
+	const jazzTune = chartsBySlug.get('st-james-infirmary')!.demand;
 
 	it('reads a minor chart as demanding a minor key', () => {
-		expect(minorTune.tonality).toBe('minor');
+		expect(jazzTune.tonality).toBe('minor');
 		expect(chartsBySlug.get('when-the-saints')!.demand.tonality).toBe('major');
 	});
 
@@ -680,13 +681,19 @@ describe('knowing a minor chord is not knowing a minor key', () => {
 	});
 
 	it('holds the tune back until the relative minor rung, and says why', () => {
-		const before = vocabularyOf({ rungs: rungsTo('all-sevenths') });
-		expect(isReady(minorTune, before)).toBe(false);
-		expect(describeShortfall(shortfall(minorTune, before))).toContain('minor key');
+		const before = vocabularyOf({ rungs: rungsTo('all-triads') });
+		expect(isReady(minorTriads, before)).toBe(false);
+		expect(describeShortfall(shortfall(minorTriads, before))).toContain('minor key');
 	});
 
 	it('opens it on the rung that actually teaches one', () => {
-		expect(isReady(minorTune, vocabularyOf({ rungs: rungsTo('relative-minor') }))).toBe(true);
+		expect(isReady(minorTriads, vocabularyOf({ rungs: rungsTo('relative-minor') }))).toBe(true);
+	});
+
+	it('does not pull seventh-chord songs into the triad-only path', () => {
+		const triadOnly = vocabularyOf({ rungs: rungsTo('relative-minor') });
+		expect(isReady(jazzTune, triadOnly)).toBe(false);
+		expect(shortfall(jazzTune, triadOnly).shapes.length).toBeGreaterThan(0);
 	});
 
 	it('will not let a minor progression unlock minor tunes by being met', () => {
@@ -694,11 +701,11 @@ describe('knowing a minor chord is not knowing a minor key', () => {
 		// material *in* a minor key, not a teacher of one, and it has to be placed
 		// in a key the ladder opened just as a tune does.
 		const met = vocabularyOf({
-			rungs: rungsTo('all-sevenths'),
+			rungs: rungsTo('all-triads'),
 			progressions: PROGRESSIONS.filter((p) => p.mode === 'minor').map((p) => p.id)
 		});
 		expect(met.tonalities).toEqual(['major']);
-		expect(isReady(minorTune, met)).toBe(false);
+		expect(isReady(minorTriads, met)).toBe(false);
 	});
 
 	it('never claims a major tune needs a key nobody has', () => {

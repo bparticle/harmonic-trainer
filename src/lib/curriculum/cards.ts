@@ -357,7 +357,7 @@ export function skillSeeds(): SkillSeed[] {
 	 * answerable on the first morning while the cadence questions were in it —
 	 * the cadence did the teaching and the answer was one note — and that was the
 	 * argument that put six of them in front of somebody who had learned a scale.
-	 * What is left is a pivot, which needs a diatonic seventh, which is the sixth
+	 * What is left is a pivot, which needs a diatonic seventh, which is the final
 	 * rung. The level now says so.
 	 */
 	const crossings: SkillSeed[] = [

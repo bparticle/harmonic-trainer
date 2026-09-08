@@ -1265,7 +1265,16 @@ export function functionQueue(cards: Schedulable[], options: QueueOptions): stri
 	// No second rotation for the pinned cards here: the round-robin has already
 	// reordered them, so they do not sit still the way the ear queue's would.
 	const spread = spreadByKey(tiered, options.day, options.keyCenter);
-	const pinned = withSkill(spread, options.pinnedSkill);
+	// The spread leads with the chosen key before it filters to one skill. A
+	// different rung may occupy that first slot, so lead the filtered cards by
+	// key once more to keep the pin's promise.
+	const allPinned = withSkill(spread, options.pinnedSkill);
+	const pinned = options.keyCenter
+		? [
+				...allPinned.filter((card) => card.keyCenter === options.keyCenter),
+				...allPinned.filter((card) => card.keyCenter !== options.keyCenter)
+			]
+		: allPinned;
 	return toQueue(
 		leadWithPinned(spread, pinned, pinnedShare(FUNCTION_QUESTIONS)),
 		FUNCTION_QUESTIONS,

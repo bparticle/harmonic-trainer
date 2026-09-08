@@ -130,6 +130,14 @@ export const RUNGS: Rung[] = [
 		suggestAfter: 12
 	},
 	{
+		id: 'relative-minor',
+		label: 'The relative minor',
+		teaches:
+			'Exactly the same seven notes, starting from the sixth degree. A different feeling, no new notes.',
+		instruction: 'Play the minor scale, then its first, fourth and fifth chords.',
+		suggestAfter: 9
+	},
+	{
 		id: 'tonic-seventh',
 		label: 'Adding the seventh',
 		teaches: 'One more note on top of the home chord. This is the sound of jazz rather than folk.',
@@ -143,14 +151,6 @@ export const RUNGS: Rung[] = [
 			'The same seven chords, each with its seventh. Two are major sevenths, one is dominant.',
 		instruction: 'Up the scale again, four notes at a time.',
 		suggestAfter: 12
-	},
-	{
-		id: 'relative-minor',
-		label: 'The relative minor',
-		teaches:
-			'Exactly the same seven notes, starting from the sixth degree. A different feeling, no new notes.',
-		instruction: 'Play the minor scale, then its first, fourth and fifth chords.',
-		suggestAfter: 9
 	}
 ];
 

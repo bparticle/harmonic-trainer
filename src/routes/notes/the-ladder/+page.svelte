@@ -33,9 +33,9 @@
 		['The home chord', 'The first, third and fifth. Where the key rests.'],
 		['The three main chords', 'I, IV and V. A very large amount of music is only these.'],
 		['All seven triads', 'One chord on each note of the scale.'],
+		['The relative minor', 'The same seven notes, started from the sixth degree.'],
 		['Adding the seventh', 'One more note on the home chord — folk turning to jazz.'],
-		['All seven sevenths', 'The same seven chords, each with its seventh.'],
-		['The relative minor', 'The same seven notes, started from the sixth degree.']
+		['All seven sevenths', 'The same seven chords, each with its seventh.']
 	];
 
 	// A 12×7 lattice. `widths[r]` is how many keys rung r is open in, counted in

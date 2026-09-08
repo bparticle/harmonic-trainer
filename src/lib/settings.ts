@@ -52,7 +52,12 @@ export type Prefs = {
 	 * something is under your fingers far better than a review count can.
 	 */
 	ladderWidths: number[];
+	/** Identifies the rung order used by `ladderWidths`. */
+	ladderVersion: typeof LADDER_VERSION;
 };
+
+/** Version 2 moves the relative minor ahead of both seventh-chord rungs. */
+export const LADDER_VERSION = 2 as const;
 
 export type ColorMap = Oklch[];
 
@@ -71,7 +76,8 @@ export const DEFAULT_PREFS: Prefs = {
 	// Everyone starts at the beginning: C major, and the seven notes in it. Copied
 	// rather than shared, so this module constant and `FIRST_FRONTIER` cannot be
 	// aliased into one array that a careless in-place edit would corrupt for both.
-	ladderWidths: [...FIRST_FRONTIER.widths]
+	ladderWidths: [...FIRST_FRONTIER.widths],
+	ladderVersion: LADDER_VERSION
 };
 
 export const DEFAULT_COLOR_MAP: ColorMap = DEFAULT_PALETTE;

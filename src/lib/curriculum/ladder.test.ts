@@ -90,10 +90,19 @@ describe('the rungs', () => {
 			'tonic-triad',
 			'primary-triads',
 			'all-triads',
+			'relative-minor',
 			'tonic-seventh',
-			'all-sevenths',
-			'relative-minor'
+			'all-sevenths'
 		]);
+	});
+
+	it('lets a learner reach minor keys before choosing any seventh chords', () => {
+		const minor = RUNGS.findIndex((rung) => rung.id === 'relative-minor');
+		const firstSeventh = RUNGS.findIndex((rung) => rung.id === 'tonic-seventh');
+		expect(minor).toBeLessThan(firstSeventh);
+		expect(
+			RUNGS.slice(0, firstSeventh).flatMap((rung) => itemsForRung(rung.id, STAGES[0]))
+		).not.toContainEqual(expect.objectContaining({ kind: 'seventh' }));
 	});
 
 	it('holds no chord progressions — those moved to their own section', () => {
@@ -545,7 +554,7 @@ describe('reading a frontier back off the card bank', () => {
 		// Only the deepest cell survives, and the four rungs it stands on must come
 		// back with it — nobody reaches the sevenths of C without its scale.
 		const frontier = frontierCovering([{ key: 'C', rungId: 'all-sevenths' }]);
-		expect(frontier.widths).toEqual([1, 1, 1, 1, 1, 1, 0]);
+		expect(frontier.widths).toEqual([1, 1, 1, 1, 1, 1, 1]);
 	});
 
 	it('counts breadth by how far along the ladder each key sits', () => {
@@ -590,7 +599,7 @@ describe('which minor keys the ladder has actually opened', () => {
 	 * C minor, and on this ladder C minor belongs to the E-flat stage.
 	 */
 	it('is empty until the relative minor rung is open', () => {
-		expect(minorKeysReached(cellsOf({ widths: [2, 2, 2, 1, 1, 1, 0] }))).toEqual([]);
+		expect(minorKeysReached(cellsOf({ widths: [2, 2, 2, 1, 0, 0, 0] }))).toEqual([]);
 	});
 
 	it('is the relative minor, never the parallel', () => {

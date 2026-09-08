@@ -7070,3 +7070,29 @@ quality row gets wider columns and a smaller face.
 Not seen in a signed-in drill room. The page needs a login and minting one was the
 wrong way to get it — so the pixels of the colour task in situ are the one thing
 here taken on the strength of its parts.
+
+## Minor before sevenths — the triad-only road through the ladder
+
+The vertical order used to be scale, triads, tonic seventh, all sevenths, and
+only then the relative minor. That made a minor scale and its i, iv and v triads
+look like advanced material: reaching them required two rungs of four-note
+chords first, and the available practice had already begun admitting the jazz
+forms those chords unlock.
+
+The relative minor now follows all seven triads and precedes both seventh-chord
+rungs. A learner can therefore widen the frontier through every major/relative-
+minor pair while keeping the entire reached card bank to scales and triads. The
+seventh rungs remain where they can be opened one key at a time whenever the
+learner wants them; no setting or permanent beginner fork is needed.
+
+Saved frontier arrays are positional, so merely reordering `RUNGS` would have
+renamed existing progress. Preferences now carry a ladder-order version. Rows
+from the first frontier order are remapped on read, retaining every previously
+open seventh and opening the newly earlier relative-minor prerequisite wherever
+necessary. Nothing already practised is removed.
+
+The new order also exposed a latent pinning assumption in the function queue:
+round-robin ordering led with the chosen key before filtering to the pinned
+skill, which could leave another key first after the filter. Pinned function
+cards are now led by the chosen key after that filtering, keeping the home-page
+choice true as the card bank grows.

@@ -1691,7 +1691,7 @@ describe('a minor tune goes in a minor key the ladder opened', () => {
 	});
 
 	it('refuses the tune outright when no minor key is open', () => {
-		const noMinor: Frontier = { widths: [2, 1, 1, 1, 1, 1, 0] };
+		const noMinor: Frontier = { widths: [2, 1, 1, 1, 0, 0, 0] };
 		const cells = cellsOf(noMinor);
 		const workout = composeWorkout(
 			input({

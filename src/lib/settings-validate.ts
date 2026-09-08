@@ -1,12 +1,12 @@
 import { isInSrgbGamut, type Oklch } from './design/color';
+import { FIRST_FRONTIER, frontierCovering, isWellFormed, RUNGS, STAGES } from './curriculum/ladder';
 import {
-	FIRST_FRONTIER,
-	frontierFromPosition,
-	isWellFormed,
-	RUNGS,
-	STAGES
-} from './curriculum/ladder';
-import { DEFAULT_PREFS, type ColorMap, type Prefs, type WheelConfig } from './settings';
+	DEFAULT_PREFS,
+	LADDER_VERSION,
+	type ColorMap,
+	type Prefs,
+	type WheelConfig
+} from './settings';
 
 /**
  * Validation for the two settings the UI can write.
@@ -74,7 +74,8 @@ export function parsePrefs(input: unknown): Prefs {
 		revealDelayMs: bounded('revealDelayMs', 0, 30_000),
 		chordClusterWindowMs: bounded('chordClusterWindowMs', 20, 500),
 		midiLatencyOffsetMs: bounded('midiLatencyOffsetMs', -500, 500),
-		ladderWidths: readFrontier(value)
+		ladderWidths: readFrontier(value),
+		ladderVersion: LADDER_VERSION
 	};
 }
 
@@ -83,7 +84,9 @@ export function parsePrefs(input: unknown): Prefs {
  *
  * Three cases, in this order, and the order is the migration:
  *
- *   1. A well-formed `ladderWidths` is taken as it stands.
+ *   1. A well-formed current `ladderWidths` is taken as it stands. The first
+ *      frontier order is remapped by name, opening the newly earlier relative
+ *      minor wherever that is now a prerequisite for an already-open seventh.
  *   2. Otherwise a stored `ladderKey` and `ladderRung` are converted to the
  *      frontier they always meant — the same set of cells, expressed the new
  *      way. This is what upgrades an existing account without it losing ground.
@@ -99,17 +102,55 @@ function readFrontier(value: Record<string, unknown>): number[] {
 	const stored = value.ladderWidths;
 	if (Array.isArray(stored)) {
 		const widths = stored.map((w) => Number(w));
-		if (isWellFormed({ widths })) return widths;
+		if (isWellFormed({ widths })) {
+			if (Number(value.ladderVersion) === LADDER_VERSION) return widths;
+			return migrateFirstFrontier(widths);
+		}
 	}
 
 	const key = value.ladderKey;
 	const rung = value.ladderRung;
 	if (typeof key === 'string' && typeof rung === 'string') {
-		const migrated = frontierFromPosition(key, rung);
+		const migrated = migrateFirstPosition(key, rung);
 		if (migrated) return migrated.widths;
 	}
 
 	return [...FIRST_FRONTIER.widths];
+}
+
+/** The rung order used by the first frontier release. */
+const FIRST_RUNG_ORDER = [
+	'scale',
+	'tonic-triad',
+	'primary-triads',
+	'all-triads',
+	'tonic-seventh',
+	'all-sevenths',
+	'relative-minor'
+] as const;
+
+/**
+ * Keep every previously open cell when the relative minor moves above the
+ * sevenths. A seventh rung now depends on the relative minor below it, so that
+ * prerequisite is opened too; nothing a learner had practiced is taken away.
+ */
+function migrateFirstFrontier(widths: number[]): number[] {
+	const [scale, tonic, primary, triads, tonicSeventh, allSevenths] = widths;
+	return [scale, tonic, primary, triads, tonicSeventh, tonicSeventh, allSevenths];
+}
+
+/** Migrate the still older single-position representation through named cells. */
+function migrateFirstPosition(key: string, rung: string) {
+	const stage = STAGES.findIndex((candidate) => candidate.key === key);
+	const rungIndex = FIRST_RUNG_ORDER.indexOf(rung as (typeof FIRST_RUNG_ORDER)[number]);
+	if (stage < 0 || rungIndex < 0) return null;
+
+	const cells = [];
+	for (let s = 0; s <= stage; s++) {
+		const last = s < stage ? FIRST_RUNG_ORDER.length - 1 : rungIndex;
+		for (let r = 0; r <= last; r++) cells.push({ key: STAGES[s].key, rungId: FIRST_RUNG_ORDER[r] });
+	}
+	return frontierCovering(cells);
 }
 
 /** Kept honest by a test: the two constants describe the same ladder. */
@@ -162,7 +203,8 @@ export function readPrefs(stored: unknown): Prefs {
 			-500,
 			500
 		),
-		ladderWidths: readFrontier(value)
+		ladderWidths: readFrontier(value),
+		ladderVersion: LADDER_VERSION
 	};
 }
 
