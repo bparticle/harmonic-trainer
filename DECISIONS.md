@@ -7118,3 +7118,63 @@ The scheduled boundary includes the count-in and counts complete passes over
 whatever is playing — the whole chart normally, or the selected bar loop when
 one exists. The `Part` also receives the finite loop count so no first chord of
 an unwanted extra round is scheduled at the boundary.
+
+## A scale heard as a chord, and a workout that could start twice
+
+Two bugs reported together: the A minor scale sounding as one seven-note
+cluster at the end of a workout, and a workout that sometimes came back from a
+mission and showed the whole run again — the colour task, the ear task, on
+sight, from the top.
+
+### The relative minor is the one rung with a scale beside its triads
+
+`playNovelty` decided whether the new thing was a scale by looking at the
+whole of it: one item, more than three notes, therefore a scale, therefore
+heard as a line rather than a block chord. That is true of the `scale` rung on
+its own and true of `tonic-triad`, but false of `relative-minor`, the one rung
+`itemsForRung` hands back as four items rather than one — the A minor scale
+_and_ its i, iv and v triads, because that is what "the relative minor" always
+meant here. Four items failed the "exactly one" test, so the whole new thing
+fell into the chord branch, and the first of the four — the scale — was handed
+to `playChord`. Seven notes at once, which is what a minor scale sounds like
+played as a cluster: bad and a little funny, and reported as exactly that.
+
+The guess is gone. `LadderItem.kind` already says `scale` for the one the
+ladder generates that way; `noveltyChords` now carries it through to the page,
+and `playNovelty` reads it per item instead of asking a question about the
+list as a whole. A scale is heard as a line wherever it turns up in a new
+thing — first, alone, or beside three chords it happens to share a rung with.
+
+### `startWorkout` was the one door in the house left unlocked
+
+Every other place two requests can land on the same row at once in this file
+has an advisory lock around it — `ensureCards`, `beginBlock` — with a comment
+naming exactly the case: two tabs, two devices, a retried request. `startWorkout`
+never got one. It reads whether a workout is already open, and if not, composes
+one and inserts a row; between those two steps there was nothing stopping a
+second call from reading the same "nothing open" answer and inserting a second
+row.
+
+`activeWorkout` reads the _most recent_ unfinished session. A duplicate row
+started a few seconds after the real one — a doubled click on Depart, a
+retried form post — therefore wins every later read, even though every task
+answered so far was written against the _other_ row's id. Come back from a
+mission, and the page asks for the open workout, gets the untouched twin
+instead, and draws task one: the colour task, the ear task, on sight, in the
+same order, because it was composed from the same inputs a breath apart. Not a
+cache and not a stale read — a second workout that genuinely existed, hiding
+the first one behind it.
+
+The fix is the same shape as `ensureCards`'s: a transaction-scoped advisory
+lock keyed on the user around the insert, re-checking for an open workout
+_inside_ the lock before writing one. At most one of two racing calls ever
+inserts; the other is handed back the row the first one just committed.
+
+Not walked in a running account. The session/drill page needs a database and a
+signed-in user to exercise at all, and reasoning about a race from the two
+places `startWorkout` is called — the home page's Depart form and the
+`/api/session` `start` action — is what this fix rests on rather than having
+watched two requests collide. If the workout still doubles back after this,
+the race was not the whole of it and the report needs a closer look at exactly
+when "return to the workout page" happens — mid-run after the mission
+specifically, or after a full "Done" screen and a fresh Depart.

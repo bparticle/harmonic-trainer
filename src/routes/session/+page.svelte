@@ -1179,7 +1179,7 @@
 	 * chord to sound, only a rhythm section to go and play over.
 	 */
 	const noveltyChords = $derived.by(
-		(): Array<{ label: string; degree?: string; notes: number[] }> => {
+		(): Array<{ label: string; degree?: string; notes: number[]; kind: 'scale' | 'chord' }> => {
 			if (task?.kind !== 'new_thing') return [];
 			const novelty = task.novelty;
 
@@ -1189,7 +1189,8 @@
 				return itemsForRung(novelty.rungId, stage).map((item) => ({
 					label: item.label,
 					degree: item.degree,
-					notes: item.answerVoicing ?? toVoicing(item.answerPitchClasses)
+					notes: item.answerVoicing ?? toVoicing(item.answerPitchClasses),
+					kind: item.kind === 'scale' ? 'scale' : 'chord'
 				}));
 			}
 
@@ -1199,7 +1200,8 @@
 				return realiseProgression(progression, novelty.keyCenter).steps.map((step) => ({
 					label: step.symbol,
 					degree: step.numeral,
-					notes: step.voicing
+					notes: step.voicing,
+					kind: 'chord'
 				}));
 			}
 
@@ -1232,13 +1234,20 @@
 	});
 
 	/**
-	 * Play the new thing, one chord at a time.
+	 * Play the new thing, one item at a time.
 	 *
 	 * Chord by chord rather than through `playProgression`, because this is the
 	 * one place the *shape* is the lesson: each one lights on the wheel as it
 	 * sounds, which is the whole difference between hearing a progression and
-	 * being shown one. A scale arrives as a single item of seven notes and is
-	 * spread the same way, so the rung that opens an account demonstrates itself.
+	 * being shown one.
+	 *
+	 * A scale is heard as a line, whatever else the new thing is made of. The
+	 * relative minor teaches its scale alongside three triads in one rung, so a
+	 * scale is not always the only item — `kind` says so per item rather than
+	 * guessing from "the whole new thing turned out to be one item of many
+	 * notes", which missed exactly that rung: the scale sat beside its i, iv and
+	 * v triads rather than alone, so the guess fell through to the chord branch
+	 * and played all seven notes of the A minor scale as a single cluster.
 	 */
 	async function playNovelty() {
 		if (playingNovelty || noveltyChords.length === 0) return;
@@ -1248,15 +1257,12 @@
 		try {
 			await startAudio();
 			audioUnlocked = true;
-			const single = chords.length === 1 && chords[0].notes.length > 3;
-			if (single) {
-				// One item made of many notes: a scale. Heard as a line.
-				soundingChord = 0;
-				await playSequence(chords[0].notes, 0.4);
-				await wait(chords[0].notes.length * 400);
-			} else {
-				for (let i = 0; i < chords.length; i++) {
-					soundingChord = i;
+			for (let i = 0; i < chords.length; i++) {
+				soundingChord = i;
+				if (chords[i].kind === 'scale') {
+					await playSequence(chords[i].notes, 0.4);
+					await wait(chords[i].notes.length * 400);
+				} else {
 					await playChord(chords[i].notes, 1.15);
 					await wait(1150);
 				}

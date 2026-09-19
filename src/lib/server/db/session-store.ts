@@ -761,18 +761,38 @@ export async function startWorkout(
 		await gatherWorkoutInput(userId, frontier, { ...request, choice }, now)
 	);
 
-	const id = randomUUID();
-	await db.insert(sessions).values({
-		id,
-		userId,
-		startedAt: now,
-		keyCenter: workout.keyCenter,
-		planJson: workout
-	});
+	/*
+	 * The lock guards the insert, not the read all the way up at the top.
+	 *
+	 * That first check-then-insert races exactly the way `ensureCards`'s comment
+	 * describes: two departures pressed together — a doubled click, a retried
+	 * request, two tabs — can both see no open workout and both reach here to
+	 * insert one. Without a lock both rows land, and `activeWorkout`'s "most
+	 * recent" reading then hides whichever one lost the race behind an
+	 * untouched twin composed a moment later from the same inputs — a workout
+	 * actually in progress, tasks answered and blocks finished, disappearing
+	 * behind a fresh copy of itself the next time its own page reloads. Re-
+	 * checking inside the lock is what makes at most one of the two ever insert.
+	 */
+	return await db.transaction(async (tx) => {
+		await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${'start_workout:' + userId}))`);
 
-	// Hydrated rather than assembled, so a workout one second old and one an hour
-	// old are the same shape read the same way.
-	return hydrateWorkout({ id, startedAt: now, planJson: workout }, [])!;
+		const reopened = await activeWorkout(userId);
+		if (reopened) return reopened;
+
+		const id = randomUUID();
+		await tx.insert(sessions).values({
+			id,
+			userId,
+			startedAt: now,
+			keyCenter: workout.keyCenter,
+			planJson: workout
+		});
+
+		// Hydrated rather than assembled, so a workout one second old and one an
+		// hour old are the same shape read the same way.
+		return hydrateWorkout({ id, startedAt: now, planJson: workout }, [])!;
+	});
 }
 
 /** The workout a session holds, or null when the row is not one. */
