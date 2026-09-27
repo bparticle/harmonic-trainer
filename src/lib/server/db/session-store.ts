@@ -33,7 +33,9 @@ import {
 	hydrateWorkout,
 	isWorkout,
 	taskBlockType,
-	type ActiveWorkout
+	type ActiveWorkout,
+	type StoredBlock,
+	type StoredSession
 } from '$lib/session/progress';
 import { reportWorkout, type Asked, type WorkoutReport } from '$lib/session/report';
 import {
@@ -698,20 +700,42 @@ export async function previewWorkouts(
  * abandoned by any reasonable reading and dragging it back would be stranger
  * than leaving it.
  */
-export async function activeWorkout(userId: string): Promise<ActiveWorkout | null> {
-	const rows = await db
-		.select()
-		.from(sessions)
-		.where(and(eq(sessions.userId, userId), isNull(sessions.endedAt)))
-		.orderBy(desc(sessions.startedAt))
-		.limit(RECENT_SESSIONS);
+type ReadRecentSessions = () => Promise<StoredSession[]>;
+type ReadSessionBlocks = (sessionId: string) => Promise<StoredBlock[]>;
 
+/**
+ * Read an active workout through one database executor.
+ *
+ * Usually that executor is the shared database client. During `startWorkout`'s
+ * locked re-check it is the transaction client instead. Keeping both reads on
+ * that client matters because the production pool has one connection: asking
+ * the shared client for another connection while a transaction already owns the
+ * only one waits forever.
+ */
+async function activeWorkoutUsing(
+	readRecentSessions: ReadRecentSessions,
+	readSessionBlocks: ReadSessionBlocks
+): Promise<ActiveWorkout | null> {
+	const rows = await readRecentSessions();
 	for (const row of rows) {
 		if (!isWorkout(row.planJson)) continue;
-		const active = hydrateWorkout(row, await blocksOf(row.id));
+		const active = hydrateWorkout(row, await readSessionBlocks(row.id));
 		if (active) return active;
 	}
 	return null;
+}
+
+export async function activeWorkout(userId: string): Promise<ActiveWorkout | null> {
+	return activeWorkoutUsing(
+		() =>
+			db
+				.select({ id: sessions.id, startedAt: sessions.startedAt, planJson: sessions.planJson })
+				.from(sessions)
+				.where(and(eq(sessions.userId, userId), isNull(sessions.endedAt)))
+				.orderBy(desc(sessions.startedAt))
+				.limit(RECENT_SESSIONS),
+		blocksOf
+	);
 }
 
 async function blocksOf(sessionId: string) {
@@ -777,7 +801,31 @@ export async function startWorkout(
 	return await db.transaction(async (tx) => {
 		await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${'start_workout:' + userId}))`);
 
-		const reopened = await activeWorkout(userId);
+		/*
+		 * Re-check after taking the lock, because another server instance may have
+		 * created the workout while this request was composing it. Both reads use
+		 * `tx`: using `activeWorkout` here would ask the one-connection pool for a
+		 * second connection while this transaction is holding the first.
+		 */
+		const reopened = await activeWorkoutUsing(
+			() =>
+				tx
+					.select({ id: sessions.id, startedAt: sessions.startedAt, planJson: sessions.planJson })
+					.from(sessions)
+					.where(and(eq(sessions.userId, userId), isNull(sessions.endedAt)))
+					.orderBy(desc(sessions.startedAt))
+					.limit(RECENT_SESSIONS),
+			(sessionId) =>
+				tx
+					.select({
+						id: sessionBlocks.id,
+						blockType: sessionBlocks.blockType,
+						endedAt: sessionBlocks.endedAt,
+						resultJson: sessionBlocks.resultJson
+					})
+					.from(sessionBlocks)
+					.where(eq(sessionBlocks.sessionId, sessionId))
+		);
 		if (reopened) return reopened;
 
 		const id = randomUUID();
