@@ -125,6 +125,28 @@ describe('resolving a chart into a key', () => {
 });
 
 describe('the repertoire', () => {
+	it('plays Drunken Sailor as four-bar verse and chorus with split final bars', () => {
+		const seed = chartBySlug('drunken-sailor')!;
+		const chart = realiseChart(seed, seed.defaultKey!);
+		expect(seed.defaultKey).toBe('E');
+		expect(chart.rows).toHaveLength(2);
+		expect(chart.rows.flat()).toHaveLength(8);
+		for (const row of chart.rows) {
+			expect(row.map((bar) => bar.chords.map((chord) => chord.symbol))).toEqual([
+				['Em'],
+				['D'],
+				['Em'],
+				['D', 'Em']
+			]);
+			expect(row[3].chords.map((chord) => chord.beats)).toEqual([2, 2]);
+			expect(row[3].lyric).toBe('Early in the morning');
+		}
+		expect(totalBeats(chart.bars)).toBe(32);
+		expect(realiseChart(seed, 'A').rows[0][3].chords.map((chord) => chord.symbol)).toEqual([
+			'G',
+			'Am'
+		]);
+	});
 	it('gives every standard the year that puts it in the public domain', () => {
 		// The only thing making these shippable, so it is not optional.
 		for (const seed of CHARTS.filter((c) => c.category === 'standard')) {

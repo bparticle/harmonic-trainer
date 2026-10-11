@@ -1727,6 +1727,11 @@
 		</div>
 		<!-- A distraction is exactly what a wall of tune names becomes mid-practice. -->
 		<div class="flex shrink-0 gap-2">
+			{#if !demo}
+				<a class="chip" href={`/songbook?edit=${encodeURIComponent(seed.slug)}`}>
+					{mineSeed ? 'Edit chart' : 'Edit a copy'}
+				</a>
+			{/if}
 			<button
 				type="button"
 				class="chip"
@@ -1892,7 +1897,10 @@
 						</span>
 					{/if}
 					{#if mineSeed}
-						<a class="ml-auto rounded-md px-2 py-1 underline" href="/songbook">edit chart</a>
+						<a
+							class="ml-auto rounded-md px-2 py-1 underline"
+							href={`/songbook?edit=${encodeURIComponent(seed.slug)}`}>edit chart</a
+						>
 					{/if}
 				</div>
 			{/if}

@@ -47,12 +47,13 @@ const BUILT_IN = new Set(CHARTS.map((c) => c.slug));
 export type SongbookEntry = {
 	slug: string;
 	name: string;
+	artist?: string;
 	category: ChartSeed['category'];
 	style: ChartSeed['style'];
 	mode: 'major' | 'minor';
 	bars: number;
 	defaultBpm: number;
-	defaultGroove: string;
+	defaultGroove: Groove;
 	defaultKey?: string;
 	published?: number;
 	notes: string;
@@ -81,6 +82,7 @@ async function mine(userId: string): Promise<Array<ChartSeed & { id: string }>> 
 			id: row.id,
 			slug: row.slug,
 			name: row.name,
+			artist: row.artist,
 			style: row.style,
 			category: 'mine',
 			mode: row.mode,
@@ -105,6 +107,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		return {
 			slug: chart.slug,
 			name: chart.name,
+			artist: chart.artist ?? (chart.category === 'traditional' ? 'Traditional' : undefined),
 			category: chart.category,
 			style: chart.style,
 			mode: chart.mode,
@@ -212,6 +215,7 @@ type Refusal = { ok: false; problems: string[]; entered: Record<string, unknown>
 type Accepted = {
 	ok: true;
 	name: string;
+	artist: string;
 	keyName: string;
 	mode: 'major' | 'minor';
 	notes: string;
@@ -223,6 +227,7 @@ type Accepted = {
 
 function readSubmission(form: FormData): Accepted | Refusal {
 	const name = String(form.get('name') ?? '').trim();
+	const artist = String(form.get('artist') ?? '').trim();
 	const keyName = String(form.get('key') ?? 'C');
 	const mode = form.get('mode') === 'minor' ? 'minor' : 'major';
 	const notes = String(form.get('notes') ?? '').trim();
@@ -236,6 +241,7 @@ function readSubmission(form: FormData): Accepted | Refusal {
 	const entered = {
 		id: String(form.get('id') ?? '') || undefined,
 		name,
+		artist,
 		key: keyName,
 		mode,
 		bpm: safeBpm,
@@ -263,6 +269,7 @@ function readSubmission(form: FormData): Accepted | Refusal {
 	return {
 		ok: true,
 		name,
+		artist,
 		keyName,
 		mode,
 		notes,
@@ -292,6 +299,7 @@ export const actions: Actions = {
 			userId,
 			slug,
 			name: read.name,
+			artist: read.artist,
 			style: 'custom',
 			mode: read.mode,
 			notes: read.notes,
@@ -334,6 +342,7 @@ export const actions: Actions = {
 			.update(charts)
 			.set({
 				name: read.name,
+				artist: read.artist,
 				mode: read.mode,
 				notes: read.notes,
 				defaultBpm: read.bpm,

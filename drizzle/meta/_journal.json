@@ -120,6 +120,13 @@
       "when": 1788520915910,
       "tag": "0016_hear_quality",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1791721268971,
+      "tag": "0017_chart_artist",
+      "breakpoints": true
     }
   ]
 }

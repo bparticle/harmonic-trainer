@@ -1,0 +1,1 @@
+ALTER TABLE "charts" ADD COLUMN "artist" text DEFAULT '' NOT NULL;

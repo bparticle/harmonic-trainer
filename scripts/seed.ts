@@ -92,6 +92,7 @@ async function main() {
 				id: randomUUID(),
 				slug: chart.slug,
 				name: chart.name,
+				artist: chart.artist ?? '',
 				gridJson: chart.grid,
 				style: chart.style,
 				mode: chart.mode,

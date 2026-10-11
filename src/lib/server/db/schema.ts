@@ -515,6 +515,7 @@ export const charts = pgTable(
 		userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
 		slug: text('slug').notNull(),
 		name: text('name').notNull(),
+		artist: text('artist').notNull().default(''),
 		gridJson: jsonb('grid_json').$type<string[][]>().notNull(),
 		style: text('style').$type<ChartStyle>().notNull(),
 		mode: text('mode').$type<'major' | 'minor'>().notNull().default('major'),

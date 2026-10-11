@@ -1,119 +1,68 @@
 <script lang="ts">
+	import { tick } from 'svelte';
+	import { page } from '$app/state';
 	import ChartEditor from '$lib/components/ChartEditor.svelte';
-	import { CHART_CATEGORIES, type ChartCategory } from '$lib/curriculum/charts';
+	import { CHART_CATEGORIES, realiseChart, type ChartCategory } from '$lib/curriculum/charts';
+	import { browseSongs, type BookSort } from '$lib/curriculum/songbook';
 	import { GROOVES } from '$lib/audio/groove';
 	import { formatKey, parseKey } from '$lib/music/key';
-	import { realiseChart, type ChartSeed } from '$lib/curriculum/charts';
 	import type { SongbookEntry } from './+page.server';
 
-	/*
-	 * The songbook.
-	 *
-	 * Everything there is to play, and the place a tune of your own gets written
-	 * down. Both used to live on `/backing`: the list as a sidebar you collapsed
-	 * to get it out of the way, and the editor *inside the practice area*, reached
-	 * by a small link at the bottom of that list. Writing a chart replaced the
-	 * chart, the transport and the score with a grid of text boxes.
-	 *
-	 * It read as bolted on because it was. Practising and cataloguing are
-	 * different activities — one is done with your hands on the keys and the other
-	 * with them on a keyboard — and this is the second one given a room.
-	 *
-	 * **What the filters are for.** Thirty-five tunes is past the point where a
-	 * list is something you read; it becomes something you scroll past. So the
-	 * list narrows: by words, by what kind of thing it is, by the rhythm section
-	 * it opens with, by whether it is yours, and by whether you have been taught
-	 * the chords in it.
-	 *
-	 * **Readiness is a signpost, never a lock.** Every tune here opens, in every
-	 * key, whatever the ladder says. What the mark does is answer the question the
-	 * list could not previously answer at all — *which of these can I actually
-	 * play today* — and, on the ones you cannot, say which chord is in the way.
-	 * The workout uses the same fact to decide where to set a mission; this is
-	 * that fact made visible where tunes are chosen. A padlock would be a
-	 * different product.
-	 */
-
 	let { data, form } = $props();
-
 	const entries = $derived(data.entries as SongbookEntry[]);
-
-	// --- narrowing down ------------------------------------------------------
-
 	let search = $state('');
 	let category = $state<ChartCategory | 'all'>('all');
-	let groove = $state<string>('all');
+	let artist = $state('all');
+	let key = $state('all');
+	let groove = $state('all');
 	let readyOnly = $state(false);
-
-	const grooveName = (id: string) => GROOVES.find((g) => g.id === id)?.name ?? id;
-
-	/** The key a tune opens in, said the way the rest of the app says it. */
-	const homeKey = (entry: SongbookEntry) => {
-		if (!entry.defaultKey) return 'any key';
-		const label = formatKey(parseKey(entry.defaultKey));
-		return entry.mode === 'minor' ? `${label} minor` : label;
-	};
-
-	/*
-	 * Only the categories and grooves that something is actually filed under.
-	 *
-	 * A filter offering a choice that empties the list is a filter that has lied
-	 * to you once. Derived from the entries rather than from the vocabularies, so
-	 * adding a chart in a new style adds the chip and removing the last one takes
-	 * it away.
-	 */
+	let sort = $state<BookSort>('title');
+	let searchInput = $state<HTMLInputElement>();
+	let editorPanel = $state<HTMLElement>();
+	let returnFocus: HTMLElement | null = null;
+	let confirming = $state<string | null>(null);
 	const categories = $derived(
 		(Object.keys(CHART_CATEGORIES) as ChartCategory[]).filter((c) =>
 			entries.some((entry) => entry.category === c)
 		)
 	);
-
+	const artists = $derived(
+		[
+			...new Set(
+				entries.map((entry) => entry.artist).filter((name): name is string => Boolean(name))
+			)
+		].sort((a, b) => a.localeCompare(b))
+	);
 	const grooves = $derived(
-		GROOVES.map((g) => g.id).filter((id) => entries.some((entry) => entry.defaultGroove === id))
+		GROOVES.filter((g) => entries.some((entry) => entry.defaultGroove === g.id))
 	);
-
-	const shown = $derived.by(() => {
-		const words = search.trim().toLowerCase();
-		return entries.filter((entry) => {
-			if (category !== 'all' && entry.category !== category) return false;
-			if (groove !== 'all' && entry.defaultGroove !== groove) return false;
-			if (readyOnly && !entry.ready) return false;
-			if (!words) return true;
-			return entry.name.toLowerCase().includes(words) || entry.notes.toLowerCase().includes(words);
-		});
-	});
-
-	const readyCount = $derived(entries.filter((entry) => entry.ready).length);
-
-	const filtered = $derived(
-		search.trim() !== '' || category !== 'all' || groove !== 'all' || readyOnly
+	const KEYS = ['C', 'G', 'D', 'A', 'E', 'B', 'Gb', 'Db', 'Ab', 'Eb', 'Bb', 'F'];
+	const keysInBook = $derived(KEYS.filter((k) => entries.some((entry) => entry.defaultKey === k)));
+	const keyLabel = (name: string) => formatKey(parseKey(name));
+	const grooveName = (id: string) => GROOVES.find((g) => g.id === id)?.name ?? id;
+	const homeKey = (entry: SongbookEntry) =>
+		entry.defaultKey
+			? `${keyLabel(entry.defaultKey)}${entry.mode === 'minor' ? ' minor' : ''}`
+			: 'Any key';
+	const shown = $derived(
+		browseSongs(entries, { search, category, artist, key, groove, readyOnly, sort })
 	);
-
+	const extraCount = $derived(
+		Number(artist !== 'all') + Number(key !== 'all') + Number(groove !== 'all') + Number(readyOnly)
+	);
+	const filtered = $derived(Boolean(search.trim()) || category !== 'all' || extraCount > 0);
 	function clearFilters() {
 		search = '';
 		category = 'all';
-		groove = 'all';
+		artist = key = groove = 'all';
 		readyOnly = false;
 	}
 
-	// --- writing one down ----------------------------------------------------
-
-	/*
-	 * The editor opens over the list rather than beside it.
-	 *
-	 * A chart is a grid sixteen bars wide and the list is a column; trying to hold
-	 * both at once is what made this feel cramped on the play-along page. Here
-	 * there is no transport to displace, so the editor simply takes the room.
-	 */
-	/*
-	 * A refused save comes back as a bag of what was typed, and `fail` widens its
-	 * type to the fields every branch shares. Read loosely here rather than
-	 * threaded through a type that would have to be kept in step with the action.
-	 */
 	type Refused = {
 		problems?: string[];
 		id?: string;
 		name?: string;
+		artist?: string;
 		text?: string;
 		key?: string;
 		mode?: string;
@@ -122,436 +71,747 @@
 		notes?: string;
 		lyrics?: string[][];
 	};
-
-	const refused = $derived(form as Refused | null);
-
+	// Seed a draft once; closing it clears the server's previous refusal.
+	// svelte-ignore state_referenced_locally
+	let refused = $state<Refused | null>((form as Refused | null) ?? null);
 	// svelte-ignore state_referenced_locally
 	let editing = $state<SongbookEntry | null>(
-		refused?.id ? (entries.find((entry) => entry.id === refused.id) ?? null) : null
+		entries.find((entry) =>
+			refused?.id ? entry.id === refused.id : entry.slug === page.url.searchParams.get('edit')
+		) ?? null
 	);
 	// svelte-ignore state_referenced_locally
 	let writing = $state(Boolean(refused) && !refused?.id);
-	let confirming = $state<string | null>(null);
-
 	const open = $derived(writing || editing !== null);
-
-	const KEYS = ['C', 'G', 'D', 'A', 'E', 'B', 'Gb', 'Db', 'Ab', 'Eb', 'Bb', 'F'];
-	const keyLabel = (name: string) => formatKey(parseKey(name));
-
-	function close() {
-		writing = false;
-		editing = null;
-	}
-
-	/**
-	 * A stored chart, turned back into the chord symbols it was typed as.
-	 *
-	 * The grid holds numerals, because that is what makes one typing play in all
-	 * twelve keys — so editing it means resolving it back into the key it was
-	 * written in first. Same round trip the play-along page used to do, moved here
-	 * with the editor.
-	 */
 	function asTyped(entry: SongbookEntry): string {
-		const seed = {
-			slug: entry.slug,
-			name: entry.name,
-			style: entry.style,
-			category: entry.category,
-			mode: entry.mode,
-			defaultBpm: entry.defaultBpm,
-			defaultGroove: entry.defaultGroove,
-			grid: entry.grid,
-			lyrics: entry.lyrics,
-			notes: entry.notes
-		} as ChartSeed;
-
-		return realiseChart(seed, entry.defaultKey ?? 'C')
+		return realiseChart(entry, entry.defaultKey ?? 'C')
 			.rows.map((row) => row.map((bar) => bar.chords.map((c) => c.symbol).join(' ')).join(' | '))
 			.join('\n');
 	}
-
-	/*
-	 * What the editor opens holding.
-	 *
-	 * A refused save wins over the chart being edited, so a rejected edit reopens
-	 * on what you typed rather than throwing it away and starting from the stored
-	 * version again.
-	 */
 	const editorInitial = $derived(
 		refused ??
 			(editing
 				? {
 						name: editing.name,
+						artist: editing.artist,
 						text: asTyped(editing),
 						key: editing.defaultKey ?? 'C',
 						mode: editing.mode,
 						bpm: editing.defaultBpm,
 						groove: editing.defaultGroove,
 						lyrics: editing.lyrics,
-						// The loader shows 'Yours.' where a chart has no notes. It is a
-						// placeholder on the way out and must not become real text on the
-						// way back in.
 						notes: editing.notes === 'Yours.' ? '' : editing.notes
 					}
 				: null)
 	);
+	async function startEditing(entry: SongbookEntry | null, event: MouseEvent) {
+		returnFocus = event.currentTarget as HTMLElement;
+		refused = null;
+		editing = entry;
+		writing = !entry;
+		confirming = null;
+		await tick();
+		editorPanel?.querySelector<HTMLInputElement>('input[name="name"]')?.focus();
+		editorPanel?.scrollIntoView({ block: 'start' });
+	}
+	async function close() {
+		writing = false;
+		editing = null;
+		refused = null;
+		await tick();
+		if (returnFocus?.isConnected) returnFocus.focus();
+		else searchInput?.focus();
+	}
+	function focusSearch(event: KeyboardEvent) {
+		if (
+			open ||
+			event.defaultPrevented ||
+			event.altKey ||
+			event.ctrlKey ||
+			event.metaKey ||
+			event.key !== '/'
+		)
+			return;
+		const target = event.target;
+		if (
+			target instanceof HTMLElement &&
+			(target.isContentEditable || target.closest('input, textarea, select, button'))
+		)
+			return;
+		event.preventDefault();
+		searchInput?.focus();
+	}
 </script>
 
-<svelte:head>
-	<title>Songbook · Roundel</title>
-</svelte:head>
-
-<div class="mx-auto flex max-w-[1500px] flex-col gap-6 px-3 py-6 sm:px-5">
-	<header class="flex flex-wrap items-end justify-between gap-3">
+<svelte:head><title>Songbook · Roundel</title></svelte:head>
+<svelte:window onkeydown={focusSearch} />
+<main class="songbook">
+	<header class="book-header">
 		<div>
-			<h1 class="font-display text-ink text-2xl font-semibold tracking-tight">Songbook</h1>
-			<p class="text-ink-dim mt-1 font-mono text-xs">
-				{entries.length} tunes · {readyCount} ready
-			</p>
+			<p class="eyebrow">Your repertoire</p>
+			<h1>Songbook</h1>
+			<p class="intro">Find a song. Make it yours. Play.</p>
 		</div>
-
-		{#if !open}
-			<button type="button" class="write" onclick={() => (writing = true)}>
-				<span class="write-plus" aria-hidden="true">＋</span>
-				<span class="write-verb">Chart</span>
-			</button>
-		{/if}
+		{#if !open}<button type="button" class="primary" onclick={(event) => startEditing(null, event)}
+				><span aria-hidden="true">＋</span> Add a chart</button
+			>{:else}<button type="button" class="secondary" onclick={close}>← Back to songs</button>{/if}
 	</header>
-
 	{#if open}
-		<!-- The editor, in a room of its own. See the note at the top of this file
-		     for why it is no longer standing where the chart should be. -->
-		<section class="border-ground-line bg-ground-raised rounded-xl border p-4">
-			<div class="mb-1 flex justify-end">
-				<button type="button" class="text-ink-dim text-xs underline" onclick={close}>close</button>
-			</div>
-
-			<ChartEditor
-				keys={KEYS}
-				{keyLabel}
-				initialKey={editing?.defaultKey ?? 'C'}
-				initial={editorInitial}
-				editing={editing?.id ? { id: editing.id, name: editing.name } : null}
-				onCancel={close}
-			/>
-
-			{#if refused?.problems?.length}
-				<div role="alert" class="border-ground-line mt-4 rounded-lg border p-3">
-					<p class="mb-1 text-sm font-semibold">Couldn't save</p>
-					<ul class="flex flex-col gap-0.5">
-						{#each refused.problems as problem (problem)}
-							<li class="text-ink-muted font-mono text-xs">{problem}</li>
-						{/each}
+		<section class="editor-panel" bind:this={editorPanel} aria-label="Chart editor">
+			{#if editing && !editing.id}<p class="copy-note">
+					This is a built-in chart. Save your changes as a personal copy in Yours.
+				</p>{/if}
+			{#key editing?.slug ?? 'new'}<ChartEditor
+					keys={KEYS}
+					{keyLabel}
+					initialKey={editing?.defaultKey ?? 'C'}
+					initial={editorInitial}
+					editing={editing?.id ? { id: editing.id, name: editing.name } : null}
+					onCancel={close}
+				/>{/key}
+			{#if refused?.problems?.length}<div role="alert" class="save-error">
+					<p>Couldn't save your chart</p>
+					<ul>
+						{#each refused.problems as problem, index (index)}<li>{problem}</li>{/each}
 					</ul>
-				</div>
-			{/if}
+				</div>{/if}
 		</section>
-	{/if}
-
-	<!-- Narrowing down ------------------------------------------------------ -->
-	<section class="filters" aria-label="Narrow the list">
-		<input
-			class="search"
-			type="search"
-			bind:value={search}
-			placeholder="Search tunes"
-			aria-label="Search the songbook"
-		/>
-
-		<div class="chips" role="group" aria-label="Kind">
-			<button
-				type="button"
-				class="chip"
-				class:is-on={category === 'all'}
-				onclick={() => (category = 'all')}>All</button
-			>
-			{#each categories as option (option)}
-				<button
-					type="button"
-					class="chip"
-					class:is-on={category === option}
-					onclick={() => (category = option)}>{CHART_CATEGORIES[option]}</button
-				>
-			{/each}
-		</div>
-
-		<div class="chips" role="group" aria-label="Rhythm section">
-			<button
-				type="button"
-				class="chip"
-				class:is-on={groove === 'all'}
-				onclick={() => (groove = 'all')}>Any groove</button
-			>
-			{#each grooves as option (option)}
-				<button
-					type="button"
-					class="chip"
-					class:is-on={groove === option}
-					onclick={() => (groove = option)}>{grooveName(option)}</button
-				>
-			{/each}
-		</div>
-
-		<button
-			type="button"
-			class="chip"
-			class:is-on={readyOnly}
-			aria-pressed={readyOnly}
-			onclick={() => (readyOnly = !readyOnly)}>Ready only</button
-		>
-
-		{#if filtered}
-			<button type="button" class="text-ink-dim text-xs underline" onclick={clearFilters}
-				>clear</button
-			>
-		{/if}
-	</section>
-
-	<!-- The list ------------------------------------------------------------ -->
-	{#if shown.length === 0}
-		<p class="lede">
-			No matches. <button type="button" class="underline" onclick={clearFilters}
-				>Clear filters</button
-			>
-		</p>
 	{:else}
-		<p class="text-ink-dim font-mono text-xs">
-			{shown.length} / {entries.length} · simplest first
-		</p>
-
-		<ul class="tunes">
-			{#each shown as entry (entry.slug)}
-				<li class="tune" class:is-waiting={!entry.ready}>
-					<div class="tune-head">
-						<a class="tune-name" href={`/backing?chart=${encodeURIComponent(entry.slug)}`}
-							>{entry.name}</a
-						>
-						{#if entry.category === 'mine'}<span class="tag">yours</span>{/if}
-					</div>
-
-					<p class="tune-meta">
-						{entry.bars} bars · {homeKey(entry)} · {grooveName(entry.defaultGroove)} · {entry.defaultBpm}
-						BPM{#if entry.published}
-							· {entry.published}{/if}
-					</p>
-
-					<p class="tune-notes">{entry.notes}</p>
-
-					<div class="tune-foot">
-						{#if entry.ready}
-							<span class="ready">✓ ready</span>
-						{:else}
-							<!-- Never "locked". It says what the tune would ask, which is the
-							     difference between a closed door and a next thing to learn. -->
-							<span class="wants">wants {entry.wants.join(', ')}</span>
-						{/if}
-
-						<a class="action" href={`/backing?chart=${encodeURIComponent(entry.slug)}`}>play →</a>
-
-						{#if entry.id}
-							<button
-								type="button"
-								class="action"
-								onclick={() => {
-									editing = entry;
-									writing = false;
-									confirming = null;
-								}}>edit</button
-							>
-							{#if confirming === entry.id}
-								<form method="POST" action="?/remove" class="inline-flex items-center gap-2">
-									<input type="hidden" name="id" value={entry.id} />
-									<span class="text-ink-dim text-xs">Delete?</span>
-									<button class="action">Delete</button>
-									<button type="button" class="action" onclick={() => (confirming = null)}
-										>Keep</button
-									>
-								</form>
-							{:else}
-								<button type="button" class="action" onclick={() => (confirming = entry.id ?? null)}
-									>delete</button
+		<section class="browse" aria-label="Find songs">
+			<div class="search-wrap">
+				<svg
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="1.5"
+					aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 5 5" /></svg
+				>
+				<input
+					bind:this={searchInput}
+					type="search"
+					bind:value={search}
+					placeholder="Search by song, artist or notes…"
+					aria-label="Search by song, artist or notes"
+				/>
+				{#if search}<button
+						class="clear-search"
+						type="button"
+						onclick={() => {
+							search = '';
+							searchInput?.focus();
+						}}
+						aria-label="Clear search">×</button
+					>{:else}<kbd aria-hidden="true">/</kbd>{/if}
+			</div>
+			<div class="browse-controls">
+				<div class="categories" role="group" aria-label="Song category">
+					<button type="button" aria-pressed={category === 'all'} onclick={() => (category = 'all')}
+						>All songs <span>{entries.length}</span></button
+					>
+					{#each categories as option (option)}<button
+							type="button"
+							aria-pressed={category === option}
+							onclick={() => (category = option)}
+							>{CHART_CATEGORIES[option]}
+							<span>{entries.filter((entry) => entry.category === option).length}</span></button
+						>{/each}
+				</div>
+				<label class="sort"
+					>Sort by <select bind:value={sort}
+						><option value="title">Song title</option><option value="artist">Artist</option><option
+							value="simplest">Simplest first</option
+						><option value="tempo">Tempo</option></select
+					></label
+				>
+			</div>
+			<details class="more-filters">
+				<summary
+					>More filters{#if extraCount}
+						<span>({extraCount} active)</span>{/if}</summary
+				>
+				<div class="filter-fields">
+					<label
+						>Artist / composer<select bind:value={artist}
+							><option value="all">All artists</option>{#each artists as option (option)}<option
+									value={option}>{option}</option
+								>{/each}</select
+						></label
+					>
+					<label
+						>Home key<select bind:value={key}
+							><option value="all">All keys</option>{#each keysInBook as option (option)}<option
+									value={option}>{keyLabel(option)}</option
+								>{/each}</select
+						></label
+					>
+					<label
+						>Groove<select bind:value={groove}
+							><option value="all">All grooves</option>{#each grooves as option (option.id)}<option
+									value={option.id}>{option.name}</option
+								>{/each}</select
+						></label
+					>
+					<label class="ready-filter"
+						><input type="checkbox" bind:checked={readyOnly} /> Ready to play only</label
+					>
+				</div>
+			</details>
+		</section>
+		<div class="results-summary">
+			<p role="status" aria-live="polite">
+				{shown.length}
+				{shown.length === 1 ? 'song' : 'songs'}{#if filtered}
+					of {entries.length}{/if}
+			</p>
+			{#if filtered}<button class="text-button" type="button" onclick={clearFilters}
+					>Clear filters</button
+				>{/if}
+		</div>
+		{#if shown.length === 0}
+			<div class="empty">
+				<h2>No songs found</h2>
+				<p>Try another song or artist, or clear your filters to see the whole songbook.</p>
+				<button type="button" class="secondary" onclick={clearFilters}>Show all songs</button>
+			</div>
+		{:else}
+			<div class="list-heading" aria-hidden="true">
+				<span>Song / artist</span><span>Key</span><span>Groove / BPM</span><span>Practice</span
+				><span>Actions</span>
+			</div>
+			<ul class="songs">
+				{#each shown as entry (entry.slug)}
+					<li class="song">
+						<div class="song-row">
+							<div class="song-title">
+								<a href={`/backing?chart=${encodeURIComponent(entry.slug)}`}>{entry.name}</a>
+								<p>
+									{entry.artist ||
+										(entry.category === 'form' || entry.category === 'cycle'
+											? 'Practice pattern'
+											: 'Artist not set')}
+									{#if entry.id || entry.artist !== 'Traditional'}
+										<span class="source"
+											>· {entry.id ? 'Yours' : CHART_CATEGORIES[entry.category]}</span
+										>
+									{/if}
+								</p>
+							</div>
+							<div class="song-key">{homeKey(entry)}</div>
+							<div class="song-groove">
+								{grooveName(entry.defaultGroove)}<span
+									>{entry.defaultBpm} BPM · {entry.bars} bars</span
 								>
-							{/if}
-						{/if}
-					</div>
-				</li>
-			{/each}
-		</ul>
+							</div>
+							<div class="song-readiness">
+								{#if entry.ready}<span>✓ Ready</span>{:else}<span class="learn">To explore</span
+									>{/if}
+							</div>
+							<div class="song-actions">
+								<button
+									type="button"
+									class="edit-button"
+									aria-label={entry.id ? `Edit ${entry.name}` : `Edit a copy of ${entry.name}`}
+									onclick={(event) => startEditing(entry, event)}
+									>{entry.id ? 'Edit' : 'Edit a copy'}</button
+								><a
+									class="play-button"
+									href={`/backing?chart=${encodeURIComponent(entry.slug)}`}
+									aria-label={`Play ${entry.name}`}>Play <span aria-hidden="true">→</span></a
+								>
+							</div>
+						</div>
+						<details class="song-details">
+							<summary>Chart details</summary>
+							<div class="detail-content">
+								<p>{entry.notes === 'Yours.' ? 'Your personal chart.' : entry.notes}</p>
+								{#if entry.wants.length}<p>
+										Chords to explore: {entry.wants.join(', ')}. You can play this song now.
+									</p>{/if}{#if entry.published}<p>Published {entry.published}.</p>{/if}
+								{#if entry.id}{#if confirming === entry.id}<form
+											method="POST"
+											action="?/remove"
+											class="delete-confirm"
+										>
+											<input type="hidden" name="id" value={entry.id} /><span
+												>Delete this chart?</span
+											><button class="secondary" type="submit">Delete chart</button><button
+												type="button"
+												class="text-button"
+												onclick={() => (confirming = null)}>Keep chart</button
+											>
+										</form>{:else}<button
+											type="button"
+											class="text-button"
+											onclick={() => (confirming = entry.id ?? null)}>Delete chart…</button
+										>{/if}{/if}
+							</div>
+						</details>
+					</li>
+				{/each}
+			</ul>
+		{/if}
 	{/if}
-</div>
+</main>
 
 <style>
-	/*
-	 * Weight, not hue.
-	 *
-	 * Hue means pitch everywhere in this app and a tune is not a pitch, so nothing
-	 * on this page is coloured — a tune you are ready for is drawn in full ink and
-	 * one you are not in muted ink, and that is the whole visual vocabulary. In
-	 * particular nothing here is red and nothing is a padlock: the difference
-	 * between the two states is *how far away it is*, not whether you are allowed.
-	 */
-
-	.write {
+	.songbook {
+		max-width: 1320px;
+		margin: 0 auto;
+		padding: clamp(1.25rem, 4vw, 3rem) clamp(1rem, 3vw, 2.5rem) 4rem;
+	}
+	.book-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 1rem;
+		margin-bottom: 2rem;
+	}
+	.eyebrow {
+		color: var(--color-ink-dim);
+		font: 0.7rem var(--font-mono);
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		margin-bottom: 0.4rem;
+	}
+	h1 {
+		font-size: clamp(2rem, 4vw, 3rem);
+		font-weight: 600;
+		letter-spacing: -0.045em;
+		line-height: 1.1;
+	}
+	.intro {
+		color: var(--color-ink-muted);
+		font-size: 0.9rem;
+		margin-top: 0.65rem;
+	}
+	button,
+	summary {
+		cursor: pointer;
+	}
+	.primary,
+	.secondary {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.35rem;
-		border: 1px solid var(--color-ground-line);
-		border-radius: 0.75rem;
-		padding: 0.6rem 0.9rem;
-		background: var(--color-ground-raised);
-	}
-
-	.write:hover {
-		border-color: color-mix(in oklab, var(--color-ink) 35%, transparent);
-	}
-
-	.write-verb {
-		color: var(--color-ink);
-		font-size: 0.9rem;
+		justify-content: center;
+		gap: 0.4rem;
+		min-height: 44px;
+		border-radius: 0.4rem;
+		padding: 0.65rem 1rem;
+		font-size: 0.85rem;
 		font-weight: 600;
 	}
-
-	.write-plus {
-		color: var(--color-ink-muted);
-		font-size: 1rem;
-		line-height: 1;
+	.primary {
+		background: var(--color-ink);
+		color: var(--color-ground);
 	}
-
-	.filters {
+	.primary:hover {
+		background: var(--color-ink-muted);
+	}
+	.secondary {
+		border: 1px solid var(--color-ground-line);
+		color: var(--color-ink);
+	}
+	.secondary:hover {
+		background: var(--color-ground-raised);
+	}
+	.browse {
+		border-bottom: 1px solid var(--color-ground-line);
+	}
+	.search-wrap {
 		display: flex;
-		flex-wrap: wrap;
 		align-items: center;
-		gap: 0.4rem 0.6rem;
-	}
-
-	.search {
-		flex: 1 1 18rem;
-		min-width: 0;
+		gap: 0.9rem;
+		padding: 0.55rem 1rem;
+		background: var(--color-ground-raised);
 		border: 1px solid var(--color-ground-line);
 		border-radius: 0.5rem;
-		background: var(--color-ground-raised);
-		padding: 0.4rem 0.6rem;
-		color: var(--color-ink);
-		font-size: 0.82rem;
 	}
-
-	.search::placeholder {
+	.search-wrap:focus-within {
+		border-color: var(--color-ink-muted);
+		outline: 2px solid var(--color-ink);
+		outline-offset: 3px;
+	}
+	.search-wrap svg {
+		width: 22px;
+		height: 22px;
+		flex-shrink: 0;
+		color: var(--color-ink-muted);
+	}
+	.search-wrap input {
+		width: 100%;
+		min-width: 0;
+		min-height: 40px;
+		background: transparent;
+		font-size: 1rem;
+		color: var(--color-ink);
+	}
+	.search-wrap input:focus-visible {
+		outline: none;
+	}
+	.search-wrap input::placeholder {
 		color: var(--color-ink-dim);
 	}
-
-	.chips {
+	.search-wrap input::-webkit-search-cancel-button {
+		display: none;
+	}
+	kbd {
+		border: 1px solid var(--color-ground-line);
+		border-radius: 0.2rem;
+		padding: 0.05rem 0.45rem;
+		color: var(--color-ink-dim);
+		font-size: 0.8rem;
+	}
+	.clear-search {
+		min-width: 40px;
+		min-height: 40px;
+		font-size: 1.5rem;
+		color: var(--color-ink-muted);
+	}
+	.browse-controls {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		flex-wrap: wrap;
+		gap: 0.75rem 1.5rem;
+		margin-top: 1.25rem;
+	}
+	.categories {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 0.25rem;
+		gap: 0.1rem 1rem;
 	}
-
-	.chip {
-		border: 1px solid var(--color-ground-line);
-		border-radius: 999px;
-		padding: 0.2rem 0.6rem;
+	.categories button {
+		min-height: 44px;
+		border-bottom: 2px solid transparent;
 		color: var(--color-ink-muted);
-		font-family: var(--font-mono, monospace);
-		font-size: 0.68rem;
-		text-transform: lowercase;
+		font-size: 0.85rem;
+		padding: 0.6rem 0;
 	}
-
-	.chip:hover {
+	.categories button[aria-pressed='true'] {
+		color: var(--color-ink);
+		border-bottom-color: var(--color-ink);
+	}
+	.categories button:hover {
 		color: var(--color-ink);
 	}
-
-	.chip.is-on {
-		border-color: color-mix(in oklab, var(--color-ink) 45%, transparent);
+	.categories span {
+		margin-left: 0.2rem;
+		font: 0.65rem var(--font-mono);
+		color: var(--color-ink-dim);
+	}
+	.sort {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		font-size: 0.75rem;
+		color: var(--color-ink-dim);
+	}
+	select {
+		min-height: 44px;
 		color: var(--color-ink);
+		border: 1px solid var(--color-ground-line);
+		border-radius: 0.3rem;
+		background: var(--color-ground-raised);
+		padding: 0.45rem 0.6rem;
+		font-size: 0.8rem;
+		max-width: 100%;
 	}
-
-	.tunes {
-		display: grid;
-		gap: 0.6rem;
-		grid-template-columns: repeat(auto-fill, minmax(min(100%, 21rem), 1fr));
+	.more-filters {
+		padding: 0.65rem 0;
 	}
-
-	.tune {
+	.more-filters summary {
+		width: fit-content;
+		padding: 0.35rem 0;
+		color: var(--color-ink-muted);
+		font-size: 0.75rem;
+	}
+	.filter-fields {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 1rem;
+		padding: 0.7rem 0 0.5rem;
+	}
+	.filter-fields label {
 		display: flex;
 		flex-direction: column;
-		gap: 0.3rem;
-		border: 1px solid var(--color-ground-line);
-		border-radius: 0.75rem;
-		padding: 0.7rem 0.8rem;
-		background: var(--color-ground-raised);
+		gap: 0.4rem;
+		font-size: 0.75rem;
+		color: var(--color-ink-muted);
+		flex: 1 1 150px;
+		min-width: 0;
 	}
-
-	/* Muted rather than greyed out: it is further away, not unavailable. */
-	.tune.is-waiting {
-		background: transparent;
+	.filter-fields .ready-filter {
+		flex-direction: row;
+		align-items: center;
+		min-height: 44px;
+		align-self: end;
 	}
-
-	.tune-head {
+	.ready-filter input {
+		width: 18px;
+		height: 18px;
+		accent-color: var(--color-ink);
+	}
+	.results-summary {
 		display: flex;
-		align-items: baseline;
+		justify-content: space-between;
+		align-items: center;
+		min-height: 54px;
+		gap: 1rem;
+		font: 0.7rem var(--font-mono);
+		color: var(--color-ink-dim);
+	}
+	.text-button {
+		min-height: 44px;
+		color: var(--color-ink-muted);
+		text-decoration: underline;
+		font-size: 0.75rem;
+	}
+	.text-button:hover {
+		color: var(--color-ink);
+	}
+	.list-heading,
+	.song-row {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) 100px 145px 105px 180px;
+		gap: 1rem;
+		align-items: center;
+	}
+	.list-heading {
+		padding: 0.65rem 0.75rem;
+		border-bottom: 1px solid var(--color-ground-line);
+		font: 0.65rem var(--font-mono);
+		color: var(--color-ink-dim);
+	}
+	.list-heading span:last-child {
+		text-align: right;
+	}
+	.song {
+		border-bottom: 1px solid var(--color-ground-line);
+		padding: 0.8rem 0.75rem 0.2rem;
+	}
+	.song:hover,
+	.song:focus-within {
+		background: color-mix(in oklab, var(--color-ground-raised) 60%, transparent);
+	}
+	.song-title {
+		min-width: 0;
+	}
+	.song-title a {
+		display: inline-block;
+		font-size: 1rem;
+		font-weight: 600;
+		line-height: 1.3;
+		overflow-wrap: anywhere;
+	}
+	.song-title a:hover {
+		text-decoration: underline;
+		text-underline-offset: 3px;
+	}
+	.song-title p {
+		margin-top: 0.25rem;
+		color: var(--color-ink-muted);
+		font-size: 0.75rem;
+		overflow-wrap: anywhere;
+	}
+	.source,
+	.learn {
+		color: var(--color-ink-dim);
+	}
+	.song-key,
+	.song-groove {
+		font-size: 0.8rem;
+		color: var(--color-ink-muted);
+	}
+	.song-groove span {
+		display: block;
+		margin-top: 0.2rem;
+		font: 0.65rem var(--font-mono);
+		color: var(--color-ink-dim);
+	}
+	.song-readiness {
+		font-size: 0.75rem;
+	}
+	.song-actions {
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
 		gap: 0.5rem;
 	}
-
-	.tune-name {
+	.edit-button,
+	.play-button {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem;
+		min-height: 44px;
+		border-radius: 0.3rem;
+		font-size: 0.75rem;
+		white-space: nowrap;
+	}
+	.edit-button {
+		color: var(--color-ink-muted);
+		padding: 0.4rem 0.5rem;
+	}
+	.edit-button:hover {
 		color: var(--color-ink);
-		font-size: 0.95rem;
-		font-weight: 600;
-		line-height: 1.2;
+		background: var(--color-ground-overlay);
 	}
-
-	.tune-name:hover {
-		text-decoration: underline;
-	}
-
-	.tune.is-waiting .tune-name {
-		color: var(--color-ink-muted);
-	}
-
-	.tag {
+	.play-button {
 		border: 1px solid var(--color-ground-line);
-		border-radius: 999px;
-		padding: 0 0.35rem;
-		color: var(--color-ink-dim);
-		font-family: var(--font-mono, monospace);
-		font-size: 0.6rem;
+		color: var(--color-ink);
+		padding: 0.4rem 0.75rem;
 	}
-
-	.tune-meta {
+	.play-button:hover {
+		background: var(--color-ground-overlay);
+		border-color: var(--color-ink-dim);
+	}
+	.song-details summary {
+		width: fit-content;
 		color: var(--color-ink-dim);
-		font-family: var(--font-mono, monospace);
 		font-size: 0.68rem;
+		padding: 0.45rem 0;
 	}
-
-	.tune-notes {
+	.song-details summary:hover {
 		color: var(--color-ink-muted);
-		font-size: 0.76rem;
-		line-height: 1.45;
 	}
-
-	.tune-foot {
+	.detail-content {
+		padding: 0.5rem 0 0.75rem;
+		max-width: 780px;
+		font-size: 0.85rem;
+		color: var(--color-ink-muted);
+		line-height: 1.6;
+	}
+	.detail-content p + p {
+		margin-top: 0.5rem;
+	}
+	.delete-confirm {
 		display: flex;
 		flex-wrap: wrap;
-		align-items: baseline;
-		gap: 0.25rem 0.7rem;
-		margin-top: 0.15rem;
-		font-family: var(--font-mono, monospace);
-		font-size: 0.68rem;
+		gap: 0.75rem;
+		align-items: center;
+		margin-top: 0.5rem;
 	}
-
-	.ready {
-		color: var(--color-ink);
+	.empty {
+		padding: 3.5rem 0;
+		max-width: 460px;
 	}
-
-	.wants {
-		flex: 1 1 100%;
-		color: var(--color-ink-dim);
+	.empty h2 {
+		font-size: 1.35rem;
+		font-weight: 600;
 	}
-
-	.action {
+	.empty p {
 		color: var(--color-ink-muted);
-		text-decoration: underline;
+		margin: 0.65rem 0 1.25rem;
+		line-height: 1.6;
 	}
-
-	.action:hover {
-		color: var(--color-ink);
+	.editor-panel {
+		scroll-margin-top: 1rem;
+		border-top: 1px solid var(--color-ground-line);
+		padding-top: 1.5rem;
+	}
+	.copy-note {
+		color: var(--color-ink-muted);
+		font-size: 0.85rem;
+		padding-bottom: 1.25rem;
+	}
+	.save-error {
+		margin-top: 1rem;
+		border: 1px solid var(--color-ground-line);
+		padding: 1rem;
+		font-size: 0.85rem;
+	}
+	@media (max-width: 1050px) {
+		.list-heading,
+		.song-row {
+			grid-template-columns: minmax(0, 1fr) 85px 125px 175px;
+		}
+		.list-heading span:nth-child(4) {
+			display: none;
+		}
+		.song-readiness {
+			grid-column: 1;
+			font-size: 0.68rem;
+		}
+		.song-actions {
+			grid-column: 4;
+			grid-row: 1;
+		}
+	}
+	@media (max-width: 700px) {
+		.book-header {
+			align-items: flex-start;
+		}
+		.primary,
+		.secondary {
+			font-size: 0.75rem;
+			padding: 0.6rem 0.75rem;
+		}
+		.intro {
+			max-width: 180px;
+			font-size: 0.8rem;
+		}
+		.search-wrap {
+			gap: 0.5rem;
+			padding: 0.45rem 0.65rem;
+		}
+		.search-wrap input {
+			font-size: 0.85rem;
+		}
+		kbd {
+			display: none;
+		}
+		.categories {
+			gap: 0.05rem 0.85rem;
+		}
+		.sort {
+			margin-top: 0.25rem;
+		}
+		.list-heading {
+			display: none;
+		}
+		.song {
+			padding: 1rem 0 0.35rem;
+		}
+		.song-row {
+			grid-template-columns: minmax(0, 1fr) auto;
+			gap: 0.5rem 1rem;
+		}
+		.song-title {
+			grid-column: 1 / -1;
+		}
+		.song-key {
+			grid-column: 1;
+			grid-row: 2;
+		}
+		.song-groove {
+			grid-column: 1;
+			grid-row: 3;
+			font-size: 0.75rem;
+		}
+		.song-groove span {
+			display: inline;
+			margin-left: 0.6rem;
+		}
+		.song-readiness {
+			grid-column: 1;
+			grid-row: 4;
+		}
+		.song-actions {
+			grid-column: 2;
+			grid-row: 2 / 5;
+			gap: 0.25rem;
+		}
+		.edit-button {
+			padding: 0.4rem;
+		}
+	}
+	@media (max-width: 380px) {
+		.song-actions {
+			flex-direction: column-reverse;
+		}
+		.song-groove span {
+			display: block;
+			margin-left: 0;
+		}
 	}
 </style>

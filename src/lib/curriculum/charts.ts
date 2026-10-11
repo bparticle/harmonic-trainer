@@ -49,6 +49,8 @@ export const CHART_CATEGORIES: Record<ChartCategory, string> = {
 export type ChartSeed = {
 	slug: string;
 	name: string;
+	/** Performer or composer, when known. Personal charts can name a recording artist. */
+	artist?: string;
 	style: ChartStyle;
 	category: ChartCategory;
 	/** How the key is named and heard. Numerals always resolve against the major
@@ -263,6 +265,8 @@ export const CHARTS: ChartSeed[] = [
 	{
 		slug: 'indiana',
 		name: '(Back Home Again in) Indiana',
+		// https://www.loc.gov/teachers/classroommaterials/primarysourcesets/states/indiana/index.html
+		artist: 'James F. Hanley / Ballard MacDonald',
 		style: 'custom',
 		category: 'standard',
 		mode: 'major',
@@ -285,6 +289,8 @@ export const CHARTS: ChartSeed[] = [
 	{
 		slug: 'sweet-georgia-brown',
 		name: 'Sweet Georgia Brown',
+		// https://blogs.loc.gov/copyright/2021/01/the-lifecycle-of-copyright-1925-works-enter-the-public-domain/
+		artist: 'Ben Bernie / Maceo Pinkard / Kenneth Casey',
 		style: 'custom',
 		category: 'standard',
 		mode: 'major',
@@ -307,6 +313,8 @@ export const CHARTS: ChartSeed[] = [
 	{
 		slug: 'st-louis-blues',
 		name: 'St. Louis Blues',
+		// https://archivalcollections.library.mcgill.ca/index.php/st-louis-blues
+		artist: 'W. C. Handy',
 		style: 'blues',
 		category: 'standard',
 		mode: 'major',
@@ -347,6 +355,8 @@ export const CHARTS: ChartSeed[] = [
 	{
 		slug: 'ja-da',
 		name: 'Ja-Da',
+		// https://americanhistory.si.edu/collections/object/nmah_668523
+		artist: 'Bob Carleton',
 		style: 'custom',
 		category: 'standard',
 		mode: 'major',
@@ -381,6 +391,8 @@ export const CHARTS: ChartSeed[] = [
 	{
 		slug: 'after-youve-gone',
 		name: "After You've Gone",
+		// https://www.loc.gov/item/jukebox-313413/
+		artist: 'Turner Layton / Henry Creamer',
 		style: 'custom',
 		category: 'standard',
 		mode: 'major',
@@ -400,6 +412,8 @@ export const CHARTS: ChartSeed[] = [
 	{
 		slug: 'basin-street-blues',
 		name: 'Basin Street Blues',
+		// https://adp-assets.library.ucsb.edu/VictorBlackLabelDiscography_v5.pdf
+		artist: 'Spencer Williams',
 		style: 'custom',
 		category: 'standard',
 		mode: 'major',
@@ -416,6 +430,8 @@ export const CHARTS: ChartSeed[] = [
 	{
 		slug: 'avalon',
 		name: 'Avalon',
+		// https://tile.loc.gov/storage-services/service/gdc/gdcfindingaidpdfs/mu2005.wp.0028/mu2005.wp.0028.pdf
+		artist: 'Al Jolson / Vincent Rose',
 		style: 'custom',
 		category: 'standard',
 		mode: 'major',
@@ -434,6 +450,8 @@ export const CHARTS: ChartSeed[] = [
 	{
 		slug: 'bill-bailey',
 		name: "Bill Bailey, Won't You Please Come Home",
+		// https://www.loc.gov/item/jukebox-4018/
+		artist: 'Hughie Cannon',
 		style: 'custom',
 		category: 'standard',
 		mode: 'major',
@@ -453,6 +471,8 @@ export const CHARTS: ChartSeed[] = [
 	{
 		slug: 'trouble-in-mind',
 		name: 'Trouble in Mind',
+		// https://americanhistory.si.edu/collections/object/nmah_1009343
+		artist: 'Richard M. Jones',
 		style: 'blues',
 		category: 'standard',
 		mode: 'major',
@@ -547,15 +567,27 @@ export const CHARTS: ChartSeed[] = [
 		mode: 'minor',
 		defaultBpm: 132,
 		defaultGroove: 'rock',
-		defaultKey: 'D',
+		defaultKey: 'E',
 		grid: [
-			['i', 'i', 'bVII', 'bVII'],
-			['i', 'i', 'bVII', 'i'],
-			['i', 'i', 'bVII', 'bVII'],
-			['i', 'bVII', 'i', 'i']
+			['i', 'bVII', 'i', 'bVII i'],
+			['i', 'bVII', 'i', 'bVII i']
+		],
+		lyrics: [
+			[
+				'What will we do with a drunken sailor?',
+				'What will we do with a drunken sailor?',
+				'What will we do with a drunken sailor?',
+				'Early in the morning'
+			],
+			[
+				'Way hay and up she rises',
+				'Way hay and up she rises',
+				'Way hay and up she rises',
+				'Early in the morning'
+			]
 		],
 		notes:
-			'Two chords, sixteen bars, and one of them is the flat seven — which sounds like it should be outside the key and is not: in a minor key it is the seventh chord of the scale. Dorian without the theory lesson.'
+			'A four-bar verse and a four-bar chorus: Em, D, Em, then D–Em sharing the final bar. The same changes repeat for every verse.'
 	},
 	{
 		slug: 'wade-in-the-water',
@@ -760,6 +792,8 @@ export const CHARTS: ChartSeed[] = [
 	{
 		slug: 'oh-susanna',
 		name: 'Oh! Susanna',
+		// https://hdl.loc.gov/loc.music/sm1848.450780
+		artist: 'Stephen Foster',
 		style: 'custom',
 		category: 'standard',
 		mode: 'major',
@@ -850,6 +884,8 @@ export const CHARTS: ChartSeed[] = [
 	{
 		slug: 'shine-on-harvest-moon',
 		name: 'Shine On, Harvest Moon',
+		// https://www.themorgan.org/music-manuscripts-and-printed-music/224304
+		artist: 'Nora Bayes / Jack Norworth',
 		style: 'custom',
 		category: 'standard',
 		mode: 'major',

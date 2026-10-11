@@ -113,6 +113,16 @@ npm run account:create -- owner "Your name" "you@example.com"
 npm run dev
 ```
 
+The songbook searches song titles, artists/composers and notes, with filters
+for category, artist, home key, groove and readiness. Personal charts have an
+**Edit** action; **Edit a copy** opens a built-in chart as a new personal chart.
+You can also open the selected chart's editor from Play along. Add an artist
+in the chart editor to make your own songs searchable by artist.
+
+When upgrading an existing installation, run `npm run db:migrate` before
+starting this version; migration `0017_chart_artist` adds the artist field
+without changing existing charts.
+
 The account command prints a temporary password when one is not supplied. Open
 `http://localhost:5173`, sign in with it, then change it from **Account**.
 Practice material is created as you go, so a fresh account starts with one

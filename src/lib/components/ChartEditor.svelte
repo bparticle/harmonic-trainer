@@ -43,6 +43,7 @@
 		 * around it, arriving already filled in. */
 		initial?: {
 			name?: string;
+			artist?: string;
 			text?: string;
 			key?: string;
 			mode?: string;
@@ -75,6 +76,8 @@
 	 */
 	// svelte-ignore state_referenced_locally
 	let name = $state(initial?.name ?? '');
+	// svelte-ignore state_referenced_locally
+	let artist = $state(initial?.artist ?? '');
 	// svelte-ignore state_referenced_locally
 	let writtenKey = $state(initial?.key ?? initialKey);
 	// svelte-ignore state_referenced_locally
@@ -201,6 +204,10 @@
 		<label class="field-wrap grow">
 			<span class="field-label">Chart name</span>
 			<input bind:value={name} name="name" required class="field w-full" />
+		</label>
+		<label class="field-wrap grow">
+			<span class="field-label">Artist / composer</span>
+			<input bind:value={artist} name="artist" class="field w-full" placeholder="Optional" />
 		</label>
 		<label class="field-wrap">
 			<span class="field-label">Written key</span>

@@ -38,6 +38,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			id: row.id,
 			slug: row.slug,
 			name: row.name,
+			artist: row.artist,
 			style: row.style,
 			category: 'mine',
 			mode: row.mode,
