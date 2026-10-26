@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { formatPitch, midi, pitchClass } from '$lib/music/note';
-import { STOPS, STOP_IDS, seeded, stopById, type Item } from './line';
-import { isPlain } from './recipes';
+import { SECTIONS, STOPS, STOP_IDS, seeded, stopById, type Item } from './line';
+import { isPlain, stepName } from './recipes';
 
 const SEEDS = [1, 7, 42, 1234, 99_999, 0xfffffff0];
 const everyItem = (): Array<[string, number, Item]> =>
@@ -135,6 +135,65 @@ describe('the line', () => {
 		const pairs = items.map((item) => item.tones.map((tone) => formatPitch(tone.note)).join('→'));
 		expect(pairs).toContain('E→F');
 		expect(pairs).toContain('B→C');
+	});
+
+	it('asks for a whole step on every item of the whole-step stop, and nothing else', () => {
+		// The first version mixed half steps in as review under the title "Skip
+		// one", and the only sign was the small count on the card.
+		const letters = 'CDEFGAB';
+		for (const seed of SEEDS) {
+			for (const item of stopById('whole')!.make(seeded(seed))) {
+				expect(item.tones[1].offset, `#${seed}`).toBe(2);
+				const [from, to] = item.tones.map((tone) => tone.note);
+				// Spelled as a major second: the next letter, so C♯ to D♯, not E♭.
+				expect((letters.indexOf(to.letter) - letters.indexOf(from.letter) + 7) % 7).toBe(1);
+			}
+		}
+		const pairs = stopById('whole')!
+			.make(seeded(1))
+			.map((item) => item.tones.map((tone) => formatPitch(tone.note)).join('→'));
+		expect(pairs).toContain('E→F#');
+		expect(pairs).toContain('B→C#');
+	});
+
+	it('names every hop it asks for', () => {
+		for (const [stop, seed, item] of everyItem()) {
+			if (item.chord) continue;
+			expect(stepName(item.tones[1].offset), `${stop} #${seed}`).not.toMatch(/half steps/);
+		}
+	});
+
+	it('says what every stop teaches before it asks anything', () => {
+		const titles = new Set<string>();
+		for (const stop of STOPS) {
+			expect(stop.title.length, stop.id).toBeGreaterThan(0);
+			expect(stop.summary.length, stop.id).toBeGreaterThan(0);
+			expect(stop.brief.length, stop.id).toBeGreaterThan(0);
+			expect(titles.has(stop.title), stop.title).toBe(false);
+			titles.add(stop.title);
+		}
+	});
+
+	it('keeps each section of the line together, in syllabus order', () => {
+		const order = Object.keys(SECTIONS);
+		const runs = STOPS.map((stop) => stop.section).filter((s, i, all) => s !== all[i - 1]);
+		expect(new Set(runs).size).toBe(runs.length);
+		expect(runs).toEqual(order.filter((id) => runs.includes(id as (typeof runs)[number])));
+	});
+
+	it('draws every chord example on C, with the moved note where it was', () => {
+		// The step examples are not all on C: E to F is the point of one.
+		for (const stop of STOPS) {
+			for (const figure of stop.figures) {
+				if (figure.chord) expect(pitchClass(figure.tones[0].note), stop.id).toBe(0);
+				if (figure.ghost) {
+					expect(
+						figure.tones.some((tone) => tone.offset === figure.ghost!.offset),
+						stop.id
+					).toBe(false);
+				}
+			}
+		}
 	});
 
 	it('spells a third as a third, not as whatever key it lands on', () => {

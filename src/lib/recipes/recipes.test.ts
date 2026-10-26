@@ -5,6 +5,7 @@ import {
 	RECIPE_IDS,
 	cook,
 	gaps,
+	intervalName,
 	isPlain,
 	rootTier,
 	rootsFor,
@@ -53,6 +54,16 @@ describe('recipes', () => {
 		expect(degrees('minor')).toEqual(['1', '♭3', '5']);
 		expect(degrees('dominant7')).toEqual(['1', '3', '5', '♭7']);
 		expect(degrees('diminished7')).toEqual(['1', '♭3', '♭5', '♭♭7']);
+	});
+
+	it('has a standard name for every degree a recipe uses', () => {
+		for (const id of RECIPE_IDS) {
+			for (const tone of tonesOf(cook(id, 'C'))) {
+				expect(intervalName(tone.degree), `${id}: ${tone.degree}`).not.toBe(tone.degree);
+			}
+		}
+		expect(intervalName('♭3')).toBe('minor third');
+		expect(intervalName('♭♭7')).toBe('diminished seventh');
 	});
 
 	it('keeps the root in the octave it was given', () => {

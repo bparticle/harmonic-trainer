@@ -10,7 +10,12 @@ import { seeded, stopById, STOP_IDS, type Item, type StopId } from './line';
  * produces.
  */
 
-export const ROUND_VERSION = 1;
+/**
+ * Bumped whenever a stop's items change for the same seed, so a round still
+ * waiting in a page's outbox is refused rather than replayed against items it
+ * never saw. 2: the whole steps stop asks only for whole steps.
+ */
+export const ROUND_VERSION = 2;
 
 export type RoundSpec = {
 	line: 'recipes';

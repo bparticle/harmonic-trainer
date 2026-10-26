@@ -49,12 +49,14 @@ remain planned in `ROADMAP.md`.
   changes, cycles and public-domain standards, plus anything you type in.
 - **Explore** — the wheel, chord neighbours, voice leading, with the notes under
   your hands lighting up as you play them.
-- **Recipes** — theory you play rather than read. A line of short stops, from
-  one key's distance to the seventh-chord family, each building a chord from
-  its recipe of counted keys on the keyboard; and a branch line that discovers
-  the circle of fifths by counting the same seven keys until it comes back to C,
-  then rides it from memory both ways. Every answer is a note played. It keeps
-  its own record and leaves the courses and the daily workout untouched.
+- **Recipes** — theory you play rather than read. A chord's recipe is its
+  formula: the intervals above its root, counted in half steps. A line of short
+  stops goes from half and whole steps through thirds and the fifth to triads
+  and seventh chords, each briefed in standard terms with the recipe drawn on C
+  before you build it on the keyboard; and a branch line goes up in fifths
+  until it comes back to C, then round the circle from memory both ways. Every
+  answer is a note played. It keeps its own record and leaves the courses and
+  the daily workout untouched.
 - **Profile** — what has actually happened: hours played, chords judged, badges
   won, and the twelve keys as swatches so the ones you never play are visible at
   a glance. Every number traces to a row; none is an estimate, and there is no

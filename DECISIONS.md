@@ -7331,3 +7331,123 @@ instance that already applied the hand-written version skips it.
 The server does not believe a submitted round. It regenerates the items from
 the seed and walks the outcomes through the same queue the page walked —
 including every item sent round again — and works the score out itself.
+
+---
+
+## Chord recipes, second pass — standard names, and every question says what it wants
+
+The first pass was played and liked: visual, no keys standing in for buttons.
+It was also, in the words of the person playing it, unclear about what the
+exercises were for. Two things were wrong, and both were decisions recorded
+above rather than accidents.
+
+### "Shown, not explained" was right about the how and wrong about the what
+
+The drawing teaches how to find a note well: the count over each leg, the arcs
+over the keys, the wrong note counted from the root. What it cannot say is what
+a question wants, or why a stop exists. A player who misread the drawing had
+nothing on the page to check it against. The stop titles made it worse — Next
+door, Skip one, Small and big, Order up, Squeeze stretch, Hang the third, Full
+menu — names that only make sense once you already know what the stop teaches.
+
+The rule now: words are the standard ones, and there are enough of them to say
+what is being asked. Titles are what a theory book calls the thing (Half steps,
+Major and minor thirds, Diminished and augmented triads, Suspended chords).
+Chords are named in words beside their symbol: `D major triad`,
+`F♯ half-diminished seventh`. Distances are half steps everywhere — the brief
+says "also called a semitone" once — and never keys; the circle's centre said
+"keys up" and now says "half steps up". A found note is named for what it is
+in the chord, `E · the major third`, not `E · 4 keys`.
+
+### "Skip one" was not only whole steps
+
+The concrete failure. After its two demonstrations, the stop served three
+whole steps and two half steps, shuffled, as review. The only sign was the count
+on the card and the digit in the headline changing from 2 to 1, under a title
+that said, in effect, always two. Played as titled, it marked a correct answer
+wrong. Now every item on it is a whole step, spelled as a major second (C♯ to
+D♯, not E♭), B to C♯ is served early as the second trap after E to F♯, and the
+last three hide the count.
+
+Mixing is not wrong in itself. The thirds stop mixes major and minor thirds and
+still does; its brief says they are mixed, and each question's headline names
+the one it wants in large type. A mixed stop has to say so twice: once before it
+starts and once per question.
+
+The counting is chromatic, and now says so in the first sentence of the half
+step brief and the introduction: every key counts, black or white. Nothing on
+the line is diatonic until the circle of fifths.
+
+### A briefing before every stop
+
+Opening a stop from the map, or moving on from the end of one, shows a briefing
+first: what the thing is, in standard terms, in two or three short paragraphs;
+the recipe drawn on C with the same card the questions use — for a stop that
+moves one note, the old position drawn as a dashed ghost; and what the
+questions will ask. Each example plays when tapped. Start, Space or the pedal
+begins the round. Again, from the end of a round, skips the briefing, which has
+just been read.
+
+The step examples are not all on C. E to F and E to F♯ are the point of the
+first two stops, so they are drawn as themselves.
+
+### The introduction plays its one claim
+
+The page rests on one idea: a chord type is a fixed set of distances above its
+root, so a recipe learnt once builds the chord on any key. The introduction
+says that in plain terms — half steps, the recipe as a formula, major as 1 3 5
+and minor as 1 ♭3 5 — and then lets it be played: press any key, on screen or on
+a MIDI keyboard, and the recipe is built on it, card and arcs and all. Every
+colour changes; no count moves. It also lists the four rungs of a stop.
+
+It is open until the first stop has been ridden and folded after, because a
+returning player wants the map, not the lesson.
+
+### Every question says what to play, in one sentence
+
+Under the headline: "Play the note a whole step (2 half steps) above E." "The
+root, D, is on the keys. Add the major third and the perfect fifth." "The A
+major triad is on the keys. Move one note to make the A minor triad: play only
+the note that changes." It gives away no more than the hint does — with the
+name only, the half steps are not counted out.
+
+Two wording bugs were caught in the browser rather than in review. The first
+draft said "C is sounding". Nothing is played when a question starts: the
+given notes are drawn on the keys, and only a demonstration or a finished shape
+makes a sound. And "Move one note
+to make E" read as the note E, so a chord in the sentence is always named in
+words; the symbol stays in the headline above it. Playing the old third on a
+move stop counts as a slip, as it always did; the sentence now states that rule
+instead of leaving it to be discovered.
+
+### The map is laid out by measurement
+
+A station used to be centred on its text. The summaries made the text taller,
+which moved the stations, and the circle line's spur — placed by a constant —
+stopped meeting its first station. Stations now hang 1.9rem from the top of
+their stop, level with the title, the way a map names a station; section
+labels and the branch name are two fixed lines; and the spur and the wide-screen
+branch offset are worked out from those numbers. Checked in the browser at both
+layouts: the spur, the first circle station and the fifth's station share one
+y-coordinate.
+
+Two older layout faults were fixed on the way. The branch moved beside the line
+at 960px but needs 1,052px plus the gutters, so anything from 960 to about
+1,070px scrolled sideways; it now moves at 1,100px. And on a phone the longer
+titles squeezed the progress pips into a vertical column; below 600px the pips
+get their own row.
+
+### Round version 2
+
+The whole step stop's items changed for the same seed, so `ROUND_VERSION` is 2.
+A round still waiting in a page's outbox from before is refused on load rather
+than replayed against items it never saw. Stop ids are unchanged, so every
+record carries over; the whole step stop's best so far was set on the mixed
+version.
+
+### One spelling exception, in a briefing only
+
+The briefing examples are on C so they can be compared, and C°7 is C E♭ G♭ B𝄫.
+That is the correct spelling and it stays, with a clause in the brief saying B𝄫
+is the A key. The questions still never serve a diminished seventh that needs
+a double flat.

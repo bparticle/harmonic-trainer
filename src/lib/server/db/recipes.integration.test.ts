@@ -12,7 +12,7 @@ afterEach(async () => {
 });
 
 function played(stop: 'major' | 'clockwise', slips: number[] = []) {
-	let round: Round = begin({ line: 'recipes', stop, seed: 3, practised: false, version: 1 });
+	let round: Round = begin({ line: 'recipes', stop, seed: 3, practised: false, version: 2 });
 	while (!isOver(round)) {
 		const entry = round.queue[round.position];
 		const slipped = slips.includes(entry.item) && !entry.again;

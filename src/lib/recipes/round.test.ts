@@ -20,7 +20,7 @@ const spec = (stop: RoundSpec['stop'], practised = false): RoundSpec => ({
 	stop,
 	seed: 11,
 	practised,
-	version: 1
+	version: 2
 });
 
 /** Play every item of a round perfectly, except the ones listed, which slip once. */
@@ -141,7 +141,7 @@ describe('checking a submitted round', () => {
 		const outcomes = outcomesOf(round);
 		expect(replay({ id, spec: { ...round.spec, stop: 'nowhere' }, outcomes })).toBeNull();
 		expect(replay({ id: 'nope', spec: round.spec, outcomes })).toBeNull();
-		expect(replay({ id, spec: { ...round.spec, version: 2 }, outcomes })).toBeNull();
+		expect(replay({ id, spec: { ...round.spec, version: 1 }, outcomes })).toBeNull();
 	});
 
 	it('works the result out itself rather than reading it from the body', () => {

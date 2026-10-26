@@ -34,7 +34,7 @@
 		/** Legs already travelled, as pairs of positions. */
 		legs: Array<[number, number]>;
 		direction: 1 | -1;
-		/** Keys to count for the next hop, when the trip is still telling you. */
+		/** Half steps to count for the next hop, when the trip is still telling you. */
 		count?: number | null;
 		label: string;
 	} = $props();
@@ -92,7 +92,7 @@
 
 	{#if count !== null}
 		<text class="count" y="10" text-anchor="middle">{count}</text>
-		<text class="count-unit" y="32" text-anchor="middle">keys up</text>
+		<text class="count-unit" y="32" text-anchor="middle">half steps up</text>
 	{/if}
 
 	{#each stations as station, i (i)}

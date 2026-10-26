@@ -37,12 +37,40 @@ export type Item = {
 	chord: AbstractChord | null;
 	recipe: RecipeId | null;
 	/** For a morph, the chord it starts from. */
-	before: { chord: AbstractChord; tones: Tone[] } | null;
+	before: { chord: AbstractChord; tones: Tone[]; recipe: RecipeId } | null;
 	/** For a trip round the circle: which hop this is, and which way round. */
 	circle: { step: number; direction: 1 | -1 } | null;
 };
 
 export type LineId = 'recipes' | 'circle';
+
+/**
+ * Where a stop sits in the syllabus. The map draws a label where each one
+ * starts, so the line reads as what it is — intervals first, because they are
+ * what every recipe is measured in, then the chords built from them.
+ */
+export const SECTIONS = {
+	intervals: { title: 'Intervals', note: 'The distances recipes are made of.' },
+	triads: { title: 'Triads', note: 'Three notes: root, third, fifth.' },
+	sevenths: { title: 'Seventh chords', note: 'A triad with a seventh on top.' },
+	review: { title: 'Review', note: 'By chord symbol only.' },
+	circle: { title: 'Circle of fifths', note: 'Branches off at the perfect fifth.' }
+} as const;
+export type SectionId = keyof typeof SECTIONS;
+
+/**
+ * A worked example for a stop's briefing, always on C: the shape it teaches,
+ * drawn the way the card will draw it. `ghost` is where the moving note was in
+ * the chord it comes from, when the stop is about moving one.
+ */
+export type Figure = {
+	tones: Tone[];
+	chord: AbstractChord | null;
+	recipe: RecipeId | null;
+	/** The chord this one is made from, for a stop that moves one note. */
+	from: RecipeId | null;
+	ghost: { offset: number; pc: number } | null;
+};
 
 export const STOP_IDS = [
 	'half',
@@ -77,7 +105,17 @@ export type Emblem =
 export type Stop = {
 	id: StopId;
 	line: LineId;
+	section: SectionId;
+	/** The standard name of what the stop teaches. Never a pun. */
 	title: string;
+	/** One line for the map: the fact, in the terms a theory book uses. */
+	summary: string;
+	/**
+	 * Read before the first item: what the thing is, in standard terms, and
+	 * what the items are going to ask. Short paragraphs, plain text.
+	 */
+	brief: string[];
+	figures: Figure[];
 	emblem: Emblem;
 	/**
 	 * The items follow on from one another, so a slip cannot be sent round
@@ -156,8 +194,9 @@ function start(pc: number): Note {
  * A hop: one key lit, one to find a counted distance above it.
  *
  * With an interval the landing is spelled as that interval — the third above E
- * is G♯, not A♭ — and labelled with the degree it is. Without one, it is just
- * a count of keys and the landing is spelled the way it is counted.
+ * is G♯, not A♭; the whole step above C♯ is D♯, not E♭ — and labelled with
+ * its degree when it has one worth reading. Without one, it is just a count
+ * of half steps and the landing is spelled the way it is counted.
  */
 function hop(
 	from: Note,
@@ -174,7 +213,7 @@ function hop(
 		kind: circle ? 'circle' : 'hop',
 		hint,
 		tones: [
-			{ note: from, offset: 0, degree: interval ? '1' : '' },
+			{ note: from, offset: 0, degree: degree ? '1' : '' },
 			{ note: landing, offset: keys, degree }
 		],
 		given: [0],
@@ -186,6 +225,10 @@ function hop(
 	};
 }
 
+/**
+ * The degree a hop's landing is labelled with. A whole step has none: under a
+ * lone pair of notes a `2` would read as a count, and the count is the lesson.
+ */
 function degreeOf(interval: string): string {
 	return { m3: '♭3', M3: '3', P4: '4', P5: '5' }[interval] ?? '';
 }
@@ -223,7 +266,7 @@ function morph(from: RecipeId, to: RecipeId, root: Note, hint: Hint): Item {
 		wanted: indices.filter((i) => !kept.has(pitchClass(tones[i].note))),
 		chord,
 		recipe: to,
-		before: { chord: before, tones: tonesOf(before) },
+		before: { chord: before, tones: tonesOf(before), recipe: from },
 		circle: null
 	};
 }
@@ -351,7 +394,7 @@ function morphs(
 export const CLOCKWISE = ['C', 'G', 'D', 'A', 'E', 'B', 'F#', 'Db', 'Ab', 'Eb', 'Bb', 'F'];
 export const ANTICLOCKWISE = ['C', 'F', 'Bb', 'Eb', 'Ab', 'Db', 'Gb', 'B', 'E', 'A', 'D', 'G'];
 
-/** Twelve hops, C to C. A fifth is seven keys up; a fourth, five. */
+/** Twelve hops, C to C. A fifth is seven half steps up; a fourth, five. */
 function trip(direction: 1 | -1, hints: Hint[]): Item[] {
 	const names = direction === 1 ? CLOCKWISE : ANTICLOCKWISE;
 	const keys = direction === 1 ? 7 : 5;
@@ -368,6 +411,29 @@ function trip(direction: 1 | -1, hints: Hint[]): Item[] {
 // The stops
 // ---------------------------------------------------------------------------
 
+/** A chord on C, and where the note that moved used to be when it came from another. */
+function chordFigure(recipe: RecipeId, from?: RecipeId): Figure {
+	const chord = cook(recipe, C);
+	const tones = tonesOf(chord);
+	let ghost: Figure['ghost'] = null;
+	if (from) {
+		const before = tonesOf(cook(from, C));
+		const moved = tones.findIndex((tone, i) => before[i] && before[i].offset !== tone.offset);
+		if (moved >= 0) ghost = { offset: before[moved].offset, pc: pitchClass(before[moved].note) };
+	}
+	return { tones, chord, recipe, from: from ?? null, ghost };
+}
+
+function stepFigure(fromPc: number, keys: number, interval?: string): Figure {
+	return {
+		tones: hop(start(fromPc), keys, 'keys', interval).tones,
+		chord: null,
+		recipe: null,
+		from: null,
+		ghost: null
+	};
+}
+
 function shapeEmblem(recipe: RecipeId, open: number[] = []): Emblem {
 	return { kind: 'shape', tones: tonesOf(cook(recipe, C)), open };
 }
@@ -380,7 +446,15 @@ export const STOPS: Stop[] = [
 	{
 		id: 'half',
 		line: 'recipes',
-		title: 'Next door',
+		section: 'intervals',
+		title: 'Half steps',
+		summary: 'The smallest distance: the very next key.',
+		brief: [
+			'A half step (also called a semitone) is the distance from one key to the very next one — black or white, whichever comes next. Every distance on this page is counted in half steps.',
+			'Most white keys have a black key next door. E–F and B–C do not: from E, the next key up is F.',
+			'You are given a note; play the key a half step above it. The first two play themselves for you to copy.'
+		],
+		figures: [stepFigure(0, 1), stepFigure(4, 1)],
 		emblem: hopEmblem(1),
 		chain: false,
 		make: (random) => {
@@ -397,23 +471,43 @@ export const STOPS: Stop[] = [
 	{
 		id: 'whole',
 		line: 'recipes',
-		title: 'Skip one',
+		section: 'intervals',
+		title: 'Whole steps',
+		summary: 'Two half steps: skip exactly one key.',
+		brief: [
+			'A whole step (a whole tone) is two half steps. Count every key, black and white: skip exactly one and play the next.',
+			'From C that is D. From E it is F♯, not F — E to F is only a half step. The same happens at B: a whole step up is C♯.',
+			'Every question in this stop is a whole step up. Near the end the count is hidden and the name is all you get.'
+		],
+		figures: [stepFigure(0, 2, 'M2'), stepFigure(4, 2, 'M2')],
 		emblem: hopEmblem(2),
 		chain: false,
 		make: (random) => {
-			const counts = shuffle([2, 2, 2, 1, 1], random);
-			const pcs = shuffle([1, 2, 3, 5, 6, 7, 8, 9, 10, 11], random);
+			// Only whole steps. The first version slipped half steps in among them
+			// as review, under a title that said otherwise; see DECISIONS.
+			const rest = shuffle([1, 2, 3, 5, 6, 7, 8, 9, 10], random);
+			const trap = pick([4, 11], random);
 			return [
-				hop(start(0), 2, 'keys'),
-				hop(start(4), 2, 'keys'),
-				...counts.map((count, i) => hop(start(pcs[i]), count, 'card'))
+				hop(start(0), 2, 'keys', 'M2'),
+				hop(start(4), 2, 'keys', 'M2'),
+				hop(start(11), 2, 'card', 'M2'),
+				...rest.slice(0, 4).map((pc) => hop(start(pc), 2, 'card', 'M2')),
+				...shuffle([trap, ...rest.slice(4, 6)], random).map((pc) => hop(start(pc), 2, 'name', 'M2'))
 			];
 		}
 	},
 	{
 		id: 'thirds',
 		line: 'recipes',
-		title: 'Small and big',
+		section: 'intervals',
+		title: 'Major and minor thirds',
+		summary: '4 half steps or 3: what makes a chord major or minor.',
+		brief: [
+			'A third spans three letter names: C to E, D to F, A to C. A major third is 4 half steps; a minor third is 3.',
+			'Which third sits above the root is what makes a chord major or minor, so this is the distance worth knowing cold.',
+			'You are given a note; play the third above it. The two kinds are mixed, and the heading says which one each question wants.'
+		],
+		figures: [stepFigure(0, 4, 'M3'), stepFigure(0, 3, 'm3')],
 		emblem: hopEmblem(4, 'M3'),
 		chain: false,
 		make: (random) => {
@@ -437,7 +531,15 @@ export const STOPS: Stop[] = [
 	{
 		id: 'fifth',
 		line: 'recipes',
-		title: 'The fifth',
+		section: 'intervals',
+		title: 'Perfect fifth',
+		summary: '7 half steps: the outer note of a major or minor triad.',
+		brief: [
+			'A perfect fifth is 7 half steps and spans five letter names: C to G, D to A. Every major and minor triad has one, from its root to its top note.',
+			'It is also the step that takes you round the circle of fifths, which branches off the line here.',
+			'You are given a note; play the perfect fifth above it.'
+		],
+		figures: [stepFigure(0, 7, 'P5')],
 		emblem: hopEmblem(7, 'P5'),
 		chain: false,
 		make: (random) => {
@@ -452,7 +554,15 @@ export const STOPS: Stop[] = [
 	{
 		id: 'major',
 		line: 'recipes',
-		title: 'Major',
+		section: 'triads',
+		title: 'Major triad',
+		summary: 'Root, major third, perfect fifth: 1 3 5.',
+		brief: [
+			'A triad is three notes stacked in thirds. The major triad’s recipe is the root, the major third above it (4 half steps) and the perfect fifth above it (7 half steps). Counted from note to note, that is 4 and then 3.',
+			'The recipe is the same on every root: C E G, F A C, D F♯ A. The notes change; the distances never do.',
+			'First copy C major. Then the root is put on the keys for you and the card shows the distances: add the third and the fifth. Last, only the chord symbol is shown — a letter on its own means major — and you play all three notes.'
+		],
+		figures: [chordFigure('major')],
 		emblem: shapeEmblem('major'),
 		chain: false,
 		make: recipeStop('major', 3, 3)
@@ -460,7 +570,15 @@ export const STOPS: Stop[] = [
 	{
 		id: 'minor',
 		line: 'recipes',
-		title: 'Minor',
+		section: 'triads',
+		title: 'Minor triad',
+		summary: 'Root, minor third, perfect fifth: 1 ♭3 5.',
+		brief: [
+			'The minor triad keeps the major triad’s root and fifth and lowers the third: a minor third, 3 half steps above the root. Counted from note to note, that is 3 and then 4 — the major triad’s distances the other way round.',
+			'On C: C E♭ G. On A: A C E. The symbol is the root with a small m: Cm, Am.',
+			'Copy C minor, then build it from the card with the root given, then from the symbol alone.'
+		],
+		figures: [chordFigure('minor')],
 		emblem: shapeEmblem('minor'),
 		chain: false,
 		make: recipeStop('minor', 3, 3)
@@ -468,7 +586,14 @@ export const STOPS: Stop[] = [
 	{
 		id: 'flip',
 		line: 'recipes',
-		title: 'Flip the third',
+		section: 'triads',
+		title: 'Major to minor and back',
+		summary: 'Move the third a half step; the root and fifth stay.',
+		brief: [
+			'A major and a minor triad on the same root share two notes. Only the third moves: down a half step turns major into minor, up a half step turns minor into major.',
+			'A chord is put on the keys with the chord to make beside it — C → Cm. Play only the note that changes.'
+		],
+		figures: [chordFigure('major'), chordFigure('minor', 'major')],
 		emblem: shapeEmblem('minor', [1]),
 		chain: false,
 		make: (random) => {
@@ -491,7 +616,14 @@ export const STOPS: Stop[] = [
 	{
 		id: 'order',
 		line: 'recipes',
-		title: 'Order up',
+		section: 'triads',
+		title: 'Major and minor from the symbol',
+		summary: 'Chord symbols only: play the whole triad, root included.',
+		brief: [
+			'No card and no root this time: only a chord symbol. A letter on its own is major (D = D F♯ A); with an m it is minor (Dm = D F A).',
+			'Play all three notes, root included, in any order and any octave.'
+		],
+		figures: [chordFigure('major'), chordFigure('minor')],
 		emblem: shapeEmblem('major', [0, 1, 2]),
 		chain: false,
 		make: (random) => orders(['major', 'minor'], 8, random)
@@ -499,7 +631,15 @@ export const STOPS: Stop[] = [
 	{
 		id: 'stretch',
 		line: 'recipes',
-		title: 'Squeeze, stretch',
+		section: 'triads',
+		title: 'Diminished and augmented triads',
+		summary: 'Lower or raise the fifth: 1 ♭3 ♭5 and 1 3 ♯5.',
+		brief: [
+			'Two more triads come from moving the fifth a half step.',
+			'Diminished (C°) is a minor triad with its fifth lowered: 1 ♭3 ♭5, two minor thirds stacked (3 + 3). Augmented (C+) is a major triad with its fifth raised: 1 3 ♯5, two major thirds stacked (4 + 4).',
+			'First move the fifth of a chord that is on the keys, then build both from the symbol alone.'
+		],
+		figures: [chordFigure('diminished', 'minor'), chordFigure('augmented', 'major')],
 		emblem: shapeEmblem('augmented', [2]),
 		chain: false,
 		make: (random) => {
@@ -533,7 +673,15 @@ export const STOPS: Stop[] = [
 	{
 		id: 'sus',
 		line: 'recipes',
-		title: 'Hang the third',
+		section: 'triads',
+		title: 'Suspended chords',
+		summary: 'The third replaced by the 4th or the 2nd: sus4, sus2.',
+		brief: [
+			'A suspended chord has no third, so it is neither major nor minor.',
+			'sus4 uses the perfect fourth instead of the third: 1 4 5 (C F G). sus2 uses the major second instead: 1 2 5 (C D G).',
+			'A chord is put on the keys; move its third, or put it back, to make the chord shown beside it.'
+		],
+		figures: [chordFigure('sus4', 'major'), chordFigure('sus2', 'major')],
 		emblem: shapeEmblem('sus4', [1]),
 		chain: false,
 		make: (random) => {
@@ -566,7 +714,15 @@ export const STOPS: Stop[] = [
 	{
 		id: 'sevenths',
 		line: 'recipes',
-		title: 'Add a seventh',
+		section: 'sevenths',
+		title: 'Major seventh and dominant seventh',
+		summary: 'A major triad plus the 7 or the ♭7.',
+		brief: [
+			'A seventh chord is a triad with a fourth note on top, a seventh above the root. It is quickest to find down from the root an octave up.',
+			'Major seventh (C∆, also written Cmaj7): the 7 is a half step below the octave, 11 half steps above the root — 1 3 5 7. Dominant seventh (C7): the ♭7 is a whole step below the octave, 10 half steps up — 1 3 5 ♭7.',
+			'Add the seventh to a chord on the keys, swap one seventh for the other, then build both from the symbol.'
+		],
+		figures: [chordFigure('major7'), chordFigure('dominant7')],
 		emblem: shapeEmblem('major7', [3]),
 		chain: false,
 		make: (random) => {
@@ -586,7 +742,19 @@ export const STOPS: Stop[] = [
 	{
 		id: 'family',
 		line: 'recipes',
-		title: 'The seventh family',
+		section: 'sevenths',
+		title: 'Minor seventh, half-diminished, diminished seventh',
+		summary: 'From the dominant seventh, lower one note at a time.',
+		brief: [
+			'Start from the dominant seventh, 1 3 5 ♭7, and lower one note at a time.',
+			'Lower the third: minor seventh (Cm7), 1 ♭3 5 ♭7. Lower the fifth as well: half-diminished seventh (Cø7, also written Cm7♭5), 1 ♭3 ♭5 ♭7. Lower the seventh again: diminished seventh (C°7), 1 ♭3 ♭5 ♭♭7 — minor thirds all the way up. On C that seventh is spelled B𝄫, which is the A key.',
+			'Make each move on a chord that is on the keys, then build them from the symbol alone.'
+		],
+		figures: [
+			chordFigure('minor7', 'dominant7'),
+			chordFigure('halfDiminished', 'minor7'),
+			chordFigure('diminished7', 'halfDiminished')
+		],
 		emblem: shapeEmblem('minor7', [1]),
 		chain: false,
 		make: (random) => {
@@ -615,7 +783,14 @@ export const STOPS: Stop[] = [
 	{
 		id: 'missing',
 		line: 'recipes',
-		title: 'Missing note',
+		section: 'review',
+		title: 'Missing chord tone',
+		summary: 'One note of the chord is left out: play it.',
+		brief: [
+			'A chord is put on the keys with one note missing — a third, a fifth or a seventh, and in the last two questions the root itself.',
+			'Read the symbol, work out which note of its recipe is not there, and play it. At first the card shows where the gap is; after that, only the symbol.'
+		],
+		figures: [],
 		emblem: shapeEmblem('dominant7', [1]),
 		chain: false,
 		make: (random) => {
@@ -638,7 +813,14 @@ export const STOPS: Stop[] = [
 	{
 		id: 'menu',
 		line: 'recipes',
-		title: 'Full menu',
+		section: 'review',
+		title: 'All chord types, mixed',
+		summary: 'Every chord on the line, from the symbol alone.',
+		brief: [
+			'Major, minor, diminished, augmented, sus4, and four seventh chords — major seventh, dominant seventh, minor seventh and half-diminished — mixed, with only the symbol shown.',
+			'Play every note, root included. A chord you slip on comes back once at the end.'
+		],
+		figures: [],
 		emblem: shapeEmblem('halfDiminished', [0, 1, 2, 3]),
 		chain: false,
 		make: (random) =>
@@ -661,7 +843,15 @@ export const STOPS: Stop[] = [
 	{
 		id: 'clockwise',
 		line: 'circle',
-		title: 'Up in fifths',
+		section: 'circle',
+		title: 'Up in fifths (clockwise)',
+		summary: 'A perfect fifth up, twelve times, back to C.',
+		brief: [
+			'Start on C and go up a perfect fifth (7 half steps). From where you land, do it again. Twelve fifths visit every key once and bring you back to C: that ring is the circle of fifths.',
+			'Clockwise, each key along the way has one more sharp in its key signature, or one flat fewer. Past F♯ the names switch to flats — D♭ rather than C♯ — the way those keys are usually written.',
+			'The keys on the circle are named as you reach them.'
+		],
+		figures: [stepFigure(0, 7, 'P5')],
 		emblem: { kind: 'wheel', direction: 1 },
 		chain: true,
 		make: () => trip(1, [...repeat('keys' as const, 3), ...repeat('card' as const, 9)])
@@ -669,7 +859,15 @@ export const STOPS: Stop[] = [
 	{
 		id: 'anticlockwise',
 		line: 'circle',
-		title: 'Up in fourths',
+		section: 'circle',
+		title: 'Up in fourths (counter-clockwise)',
+		summary: 'A perfect fourth up goes round the other way.',
+		brief: [
+			'Going up a perfect fourth (5 half steps) travels the same circle the other way: C F B♭ E♭ A♭ D♭ G♭ B E A D G, and back to C. A fourth up lands on the same key as a fifth down.',
+			'Counter-clockwise, each key has one more flat or one sharp fewer. Chord progressions move this way all the time: G7 to C is a fourth up.',
+			'Past G♭ the names switch to sharps — B rather than C♭.'
+		],
+		figures: [stepFigure(0, 5, 'P4')],
 		emblem: { kind: 'wheel', direction: -1 },
 		chain: true,
 		make: () => trip(-1, [...repeat('keys' as const, 3), ...repeat('card' as const, 9)])
@@ -677,7 +875,13 @@ export const STOPS: Stop[] = [
 	{
 		id: 'by-heart',
 		line: 'circle',
-		title: 'By heart',
+		section: 'circle',
+		title: 'Both ways from memory',
+		summary: 'Twelve fifths, then twelve fourths, with no count shown.',
+		brief: [
+			'Both trips again — twelve fifths clockwise, then twelve fourths back — with no count shown. This is the circle of fifths from memory.'
+		],
+		figures: [],
 		emblem: { kind: 'wheel', direction: 0 },
 		chain: true,
 		make: () => [...trip(1, repeat('name', 12)), ...trip(-1, repeat('name', 12))]

@@ -14,8 +14,27 @@
 	import HopBand, { type Arc, type Mark } from '$lib/recipes/HopBand.svelte';
 	import RecipeCard, { type CardTone } from '$lib/recipes/RecipeCard.svelte';
 	import StopEmblem from '$lib/recipes/StopEmblem.svelte';
-	import { INTERCHANGE, STOPS, stopById, type Item, type StopId } from '$lib/recipes/line';
-	import { recipeName } from '$lib/recipes/recipes';
+	import {
+		INTERCHANGE,
+		SECTIONS,
+		STOPS,
+		stopById,
+		type Figure,
+		type Item,
+		type StopId
+	} from '$lib/recipes/line';
+	import {
+		cook,
+		halfSteps,
+		intervalName,
+		noteLabel,
+		recipeName,
+		rootsFor,
+		stepName,
+		tonesOf,
+		type RecipeId,
+		type Tone
+	} from '$lib/recipes/recipes';
 	import {
 		ROUND_VERSION,
 		begin,
@@ -44,10 +63,12 @@
 	 * moving one note does to it. Every answer is a note played on the keys — a
 	 * key always means the pitch it sounds, and never stands in for a button.
 	 *
-	 * The words are kept to the names of things. What to do is shown: the first
-	 * item of a stop plays itself once, then hands over, and everything after it
-	 * is told by the drawing — the shape on the card, the arcs over the keys,
-	 * the colours of the notes.
+	 * The words are the standard ones — half step, major third, dominant
+	 * seventh — and every stop says what it teaches before it asks anything: a
+	 * short briefing with the recipe drawn on C. Every question then says in one
+	 * plain sentence what to play. The drawing still does the showing: the first
+	 * item of a stop plays itself once, then hands over, and the card, the arcs
+	 * over the keys and the colours of the notes carry the rest.
 	 */
 
 	let { data } = $props();
@@ -56,8 +77,10 @@
 	// svelte-ignore state_referenced_locally
 	let record = $state<LineRecord>(data.record);
 
-	type View = 'line' | 'play' | 'done';
+	type View = 'line' | 'brief' | 'play' | 'done';
 	let view = $state<View>('line');
+	/** The stop whose briefing is open. */
+	let briefing = $state<StopId | null>(null);
 	let round = $state<Round | null>(null);
 	let roundId = '';
 	let plate = $state<Plate>(emptyPlate());
@@ -112,6 +135,98 @@
 		// The end of the recipe line: back to the branch that is still to ride.
 		return stop.line === 'recipes' ? circleStops[0] : stopById('major')!;
 	});
+
+	const briefStop = $derived(briefing ? stopById(briefing)! : null);
+	/** Nothing ridden yet: the introduction starts open. */
+	const firstVisit = $derived(STOPS.every((s) => record[s.id].rounds === 0));
+
+	// -------------------------------------------------------------------------
+	// The introduction's worked example: one recipe, on whatever key is pressed
+	// -------------------------------------------------------------------------
+
+	/*
+	 * The single idea the page rests on, shown rather than claimed: press any
+	 * key and the same recipe is built on it. Every colour changes; the counts
+	 * on the card and the arcs over the keys do not.
+	 */
+	const EXAMPLE_FROM = 48;
+	const EXAMPLE_COUNT = 20;
+	const EXAMPLE_RECIPES: RecipeId[] = ['major', 'minor'];
+	let exampleRecipe = $state<RecipeId>('major');
+	let exampleRoot = $state(0);
+	const example = $derived.by(() => {
+		const root =
+			rootsFor(exampleRecipe).find((r) => pitchClass(r) === exampleRoot) ??
+			rootsFor(exampleRecipe)[0];
+		const chord = cook(exampleRecipe, root);
+		return { chord, tones: tonesOf(chord) };
+	});
+	const exampleKeys = $derived(example.tones.map((tone) => keyOf(tone.note)));
+	const exampleArcs = $derived(
+		exampleKeys
+			.slice(1)
+			.map((to, i): Arc => ({ id: `ex-${i}`, from: exampleKeys[i], to, look: 'solid' }))
+	);
+	const exampleMarks = $derived(
+		example.tones.map((tone): Mark => ({
+			note: keyOf(tone.note),
+			pc: pitchClass(tone.note),
+			name: formatPitch(tone.note),
+			look: 'on'
+		}))
+	);
+
+	function tryRoot(note: number) {
+		exampleRoot = ((note % 12) + 12) % 12;
+		sound(exampleKeys, 1.1, 0.5);
+	}
+
+	function tryRecipe(id: RecipeId) {
+		void startAudio().catch(() => {});
+		exampleRecipe = id;
+		sound(exampleKeys, 1.1, 0.5);
+	}
+
+	/** Every tone drawn sounding and named: a worked example has nothing to find. */
+	const shown = (tones: Tone[]): CardTone[] =>
+		tones.map((tone, slot) => ({
+			slot,
+			offset: tone.offset,
+			degree: tone.degree,
+			pc: pitchClass(tone.note),
+			name: formatPitch(tone.note),
+			look: 'on'
+		}));
+
+	/**
+	 * `1 ♭3 5 · C E♭ G`, the recipe and what it makes on this root; for a
+	 * lone distance, `whole step · 2 half steps`.
+	 */
+	const formula = (tones: Tone[]) =>
+		tones.length > 2
+			? `${tones.map((tone) => tone.degree).join(' ')} · ${tones.map((tone) => noteLabel(tone.note)).join(' ')}`
+			: `${stepName(tones[1].offset)} · ${halfSteps(tones[1].offset)}`;
+
+	/** `C major triad`; for a lone distance, the two notes: `E → F♯`. */
+	const figureTitle = (figure: Figure) =>
+		figure.recipe
+			? `${noteLabel(figure.tones[0].note)} ${recipeName(figure.recipe)}`
+			: figure.tones.map((tone) => noteLabel(tone.note)).join(' → ');
+
+	const figureFrom = (figure: Figure) =>
+		figure.from ? `from ${formatChord(cook(figure.from, figure.tones[0].note), true)}` : '';
+
+	function hearFigure(figure: Figure) {
+		void startAudio().catch(() => {});
+		const keys = figure.tones.map((tone) => keyOf(tone.note));
+		if (figure.chord) sound(keys, 1.2, 0.5);
+		else {
+			sound([keys[0]], 0.6, 0.5);
+			later(450, () => sound([keys[1]], 0.8, 0.5));
+		}
+	}
+
+	const capitalise = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
 	// -------------------------------------------------------------------------
 	// What the current item looks like
@@ -250,14 +365,7 @@
 		return { offset: was.offset, pc: pitchClass(was.note) };
 	});
 
-	const INTERVAL_NAMES: Record<string, string> = {
-		'♭3': 'minor third',
-		'3': 'major third',
-		'4': 'perfect fourth',
-		'5': 'perfect fifth'
-	};
-
-	/** Keys between the root and the landing, for a hop. */
+	/** Half steps between the root and the landing, for a hop. */
 	const hopKeys = $derived(item && item.tones.length === 2 ? item.tones[1].offset : 0);
 
 	// The circle: which stations this trip has reached, spelled as it reached them.
@@ -324,21 +432,59 @@
 		});
 	});
 
-	const describe = (it: Item): string => {
-		const root = formatPitch(it.tones[0].note, true);
-		const want = it.wanted.map(
-			(i) => `${it.tones[i].degree || 'the note'} ${it.tones[i].offset} keys up`
-		);
-		if (it.chord) {
-			const name = `${formatChord(it.chord, true)}, ${it.recipe ? recipeName(it.recipe) : ''}`;
-			if (it.before) return `Turn ${formatChord(it.before.chord, true)} into ${name}.`;
-			if (it.kind === 'fill') return `${name} with one note missing. Play it.`;
-			return it.given.includes(0)
-				? `${name}. ${root} is sounding. Find ${want.join(', ')}.`
-				: `${name}. Play all of it, root first.`;
+	/** `D major triad`, `F♯ half-diminished seventh`; for a hop, what it is called. */
+	const nameOf = (it: Item): string =>
+		it.recipe
+			? `${noteLabel(it.tones[0].note)} ${recipeName(it.recipe)}`
+			: stepName(it.tones[1].offset);
+
+	const NUMBERS = ['no', 'one', 'two', 'three', 'four'];
+
+	/** `the major third and the perfect fifth`. */
+	const listOf = (parts: string[]) =>
+		parts.length < 2 ? parts.join('') : `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}`;
+
+	/**
+	 * What to play, in one plain sentence.
+	 *
+	 * The first version said nothing at all and left the drawing to explain the
+	 * question; a player who misread the drawing had no way to find out what was
+	 * being asked. Now every item says it, in the same terms the briefing used,
+	 * and gives away no more than the hint does: with the name only, the
+	 * distance is not counted out.
+	 */
+	function task(it: Item, marked: boolean): string {
+		const root = noteLabel(it.tones[0].note);
+		const counted = it.hint !== 'name';
+		const shown = marked ? ' The keys to play are marked.' : '';
+		if (!it.chord) {
+			const keys = it.tones[1].offset;
+			const count = counted ? ` (${halfSteps(keys)})` : '';
+			return it.circle
+				? `From ${root}, go up a ${stepName(keys)}${count}.${shown}`
+				: `Play the note a ${stepName(keys)}${count} above ${root}.${shown}`;
 		}
-		return `${root} is sounding. Play the key ${it.tones[1].offset} up.`;
-	};
+		// Chords are named in words here, never by symbol alone: "make E" reads
+		// as the note E. The symbol is in the headline above.
+		const name = nameOf(it);
+		if (it.before) {
+			const from = `The ${root} ${recipeName(it.before.recipe)} is on the keys.`;
+			return it.before.tones.length < it.tones.length
+				? `${from} Add one note to make the ${name}: play only the new note.${shown}`
+				: `${from} Move one note to make the ${name}: play only the note that changes.${shown}`;
+		}
+		if (it.kind === 'fill') {
+			return `The ${name} is on the keys with one note missing. Play the missing note.${shown}`;
+		}
+		if (it.given.includes(0)) {
+			const add = it.wanted.map((i) => `the ${intervalName(it.tones[i].degree)}`);
+			return `The root, ${root}, is on the keys. Add ${listOf(add)}.${shown}`;
+		}
+		return `Play all ${NUMBERS[it.tones.length]} notes, root included, in any order.${shown}`;
+	}
+
+	const describe = (it: Item): string =>
+		`${it.chord ? `${formatChord(it.chord, true)}, ${nameOf(it)}` : capitalise(nameOf(it))}. ${task(it, it.hint === 'keys')}`;
 
 	// -------------------------------------------------------------------------
 	// Sound, celebrated or not
@@ -385,8 +531,9 @@
 	let run = 0;
 
 	function onNote(note: number) {
-		if (view !== 'play' || !item || phase === 'landed') return;
 		if (document.querySelector('[aria-modal="true"]')) return;
+		if (view === 'line') return tryRoot(note);
+		if (view !== 'play' || !item || phase === 'landed') return;
 		// Playing is the answer to a demonstration, running or about to start.
 		stopDemo();
 
@@ -396,30 +543,30 @@
 			stray = null;
 			const tone = item.tones[heard.tone];
 			sparkAt(heard.tone, pitchClass(tone.note));
-			words = `${formatPitch(tone.note, true)} · ${tone.offset - previousOffset(item, heard.tone)} keys`;
-			spoken = `${formatPitch(tone.note, true)}, found.`;
+			const name = formatPitch(tone.note, true);
+			const root = noteLabel(item.tones[0].note);
+			// Named as what it is: the chord's own word for it, or the distance.
+			words = item.chord
+				? `${name} · ${tone.degree === '1' ? 'the root' : `the ${intervalName(tone.degree)}`}`
+				: `${name} · a ${stepName(tone.offset)} above ${root}`;
+			spoken = `${name}, found.`;
 			if (isComplete(item, plate)) land();
 		} else if (heard.kind === 'stray') {
 			const serial = ++straySerial;
 			stray = { note, keys: heard.keys, serial };
 			const where = formatPitch(spellChromatic(note, 'sharp'), true);
-			words = item.chord
-				? `${where} · not in ${formatChord(item.chord, true)}`
-				: heard.keys === null
+			// Counted from the root, the same way the arc over the keys counts it.
+			const counted =
+				heard.keys === null
 					? where
-					: `${where} · ${heard.keys} keys up`;
-			spoken = `${formatPitch(spellChromatic(note, 'sharp'), true)} is not in this one.`;
+					: `${where} is ${halfSteps(heard.keys)} above ${noteLabel(item.tones[0].note)}`;
+			words = item.chord ? `${counted} · not in the ${nameOf(item)}` : counted;
+			spoken = `${where} is not in this one.`;
 			if (plate.strays.length >= 2 && item.hint !== 'keys') assisted = true;
 			later(1600, () => {
 				if (stray?.serial === serial) stray = null;
 			});
 		}
-	}
-
-	/** The distance from the note below in the stack, which is what the arc counts. */
-	function previousOffset(it: Item, slot: number): number {
-		const below = it.tones.filter((t) => t.offset < it.tones[slot].offset).map((t) => t.offset);
-		return below.length ? Math.max(...below) : 0;
 	}
 
 	function land() {
@@ -555,10 +702,23 @@
 	// Rounds
 	// -------------------------------------------------------------------------
 
+	/** A stop, opened from the map or the end of the last one: its briefing first. */
+	function openStop(id: StopId) {
+		void startAudio().catch(() => {});
+		clearTimers();
+		fx?.clear();
+		demo = null;
+		round = null;
+		briefing = id;
+		view = 'brief';
+		window.scrollTo({ top: 0 });
+	}
+
 	function ride(id: StopId) {
 		void startAudio().catch(() => {});
 		clearTimers();
 		fx?.clear();
+		briefing = null;
 		round = begin({
 			line: 'recipes',
 			stop: id,
@@ -593,6 +753,7 @@
 		demo = null;
 		view = 'line';
 		round = null;
+		briefing = null;
 	}
 
 	// -------------------------------------------------------------------------
@@ -643,10 +804,10 @@
 	// -------------------------------------------------------------------------
 
 	function primary() {
-		if (view === 'line' && suggested) ride(suggested);
-		else if (view === 'line') ride('half');
+		if (view === 'line') openStop(suggested ?? 'half');
+		else if (view === 'brief' && briefing) ride(briefing);
 		else if (view === 'play') runDemo(true);
-		else if (view === 'done' && nextStop) ride(nextStop.id);
+		else if (view === 'done' && nextStop) openStop(nextStop.id);
 	}
 
 	function onkeydown(event: KeyboardEvent) {
@@ -733,7 +894,7 @@
 {#snippet stopButton(id: StopId, interchange: boolean)}
 	{@const s = stopById(id)!}
 	{@const r = record[id]}
-	<button class="stop-button" onclick={() => ride(id)}>
+	<button class="stop-button" onclick={() => openStop(id)}>
 		<svg class="stop-mark" viewBox="-14 -14 28 28" aria-hidden="true">
 			<circle class="stop-ring" r="9" />
 			{#if r.best !== null}
@@ -746,6 +907,7 @@
 		</span>
 		<span class="stop-text">
 			<span class="stop-title">{s.title}</span>
+			<span class="stop-summary">{s.summary}</span>
 			{#if suggested === id || recordLine(id)}
 				<span class="stop-record">{suggested === id ? 'next' : recordLine(id)}</span>
 			{/if}
@@ -753,33 +915,148 @@
 	</button>
 {/snippet}
 
+{#snippet figureCard(figure: Figure)}
+	<button class="figure" onclick={() => hearFigure(figure)}>
+		<span class="figure-head">
+			{#if figure.chord}
+				<ChordSymbol chord={figure.chord} size="1.5rem" />
+			{/if}
+			<span class="figure-title">{figureTitle(figure)}</span>
+			{#if figureFrom(figure)}<span class="figure-from">{figureFrom(figure)}</span>{/if}
+		</span>
+		<RecipeCard
+			tones={shown(figure.tones)}
+			rootPc={pitchClass(figure.tones[0].note)}
+			ghost={figure.ghost}
+			label="{figureTitle(figure)}: {formula(figure.tones)}"
+		/>
+		<span class="figure-formula">{formula(figure.tones)}</span>
+	</button>
+{/snippet}
+
 {#if view === 'line'}
+	{@const next = stopById(suggested ?? 'half')!}
 	<main class="line-view">
 		<header class="line-head">
 			<div>
 				<h1>Chord recipes</h1>
-				<p>Every chord is a short trip along the keys. Ride it once and it is yours.</p>
+				<p>
+					Every chord type has a recipe: a fixed set of distances above its root. Learn the recipe
+					once and you can build that chord on any of the twelve keys.
+				</p>
 			</div>
-			<button class="primary ride-next" onclick={() => ride(suggested ?? 'half')}>
-				<span class="ride-emblem"
-					><StopEmblem emblem={stopById(suggested ?? 'half')!.emblem} /></span
-				>
-				{stopById(suggested ?? 'half')!.title}
+			<button class="primary ride-next" onclick={() => openStop(next.id)}>
+				<span class="ride-emblem"><StopEmblem emblem={next.emblem} /></span>
+				{next.title}
 			</button>
 		</header>
 
+		<details class="intro" open={firstVisit}>
+			<summary>How recipes work</summary>
+			<div class="intro-body">
+				<div class="intro-text">
+					<p>
+						Distances are counted in <strong>half steps</strong>. One half step is the very next
+						key, black or white; two half steps make a <strong>whole step</strong>.
+					</p>
+					<p>
+						A chord’s <strong>recipe</strong> — its formula — lists each note by how far it sits
+						above the root. A <strong>major triad</strong> is the root, the major third (4 half
+						steps up) and the perfect fifth (7 half steps up), written 1 3 5. A
+						<strong>minor triad</strong> lowers the third to 3 half steps: 1 ♭3 5.
+					</p>
+					<p>
+						Press any key below and the recipe is built on it. Every note changes; the distances do
+						not.
+					</p>
+				</div>
+
+				<figure class="example">
+					<div class="example-head">
+						<ChordSymbol chord={example.chord} size="2rem" />
+						<span class="example-name">
+							{noteLabel(example.tones[0].note)}
+							{recipeName(exampleRecipe)}
+						</span>
+						<span class="example-switch" role="group" aria-label="Recipe">
+							{#each EXAMPLE_RECIPES as id (id)}
+								<button aria-pressed={exampleRecipe === id} onclick={() => tryRecipe(id)}>
+									{capitalise(id)}
+								</button>
+							{/each}
+						</span>
+					</div>
+					<RecipeCard
+						tones={shown(example.tones)}
+						rootPc={exampleRoot}
+						label="{noteLabel(example.tones[0].note)} {recipeName(exampleRecipe)}: {formula(
+							example.tones
+						)}"
+					/>
+					<div class="example-keys">
+						<HopBand
+							from={EXAMPLE_FROM}
+							count={EXAMPLE_COUNT}
+							arcs={exampleArcs}
+							marks={exampleMarks}
+						/>
+						<Keyboard
+							from={EXAMPLE_FROM}
+							count={EXAMPLE_COUNT}
+							lit={midi.live}
+							found={exampleKeys}
+							onnoteon={(note) =>
+								midi.push({ type: 'noteon', note, velocity: 80, time: performance.now() })}
+							onnoteoff={(note) => midi.push({ type: 'noteoff', note, time: performance.now() })}
+						/>
+					</div>
+					<figcaption>
+						{formula(example.tones)} · counted note to note,
+						{listOf(exampleArcs.map((arc) => String(arc.to - arc.from)))} half steps
+					</figcaption>
+				</figure>
+
+				<div class="intro-steps">
+					<h2>How a stop works</h2>
+					<ol>
+						<li><strong>Read</strong> what it teaches, with the recipe drawn on C.</li>
+						<li><strong>Watch, then copy.</strong> The first question plays itself.</li>
+						<li>
+							<strong>From the recipe.</strong> The card counts the half steps; find the notes.
+						</li>
+						<li>
+							<strong>From the name.</strong> Only the chord symbol or the interval’s name.
+						</li>
+					</ol>
+					<p>
+						Any octave counts. A wrong note is shown counted from the root, and that question comes
+						back once at the end.
+					</p>
+				</div>
+			</div>
+		</details>
+
 		<div class="network">
-			<section class="line" aria-labelledby="recipe-line">
-				<h2 id="recipe-line" class="line-name">Recipe line</h2>
+			<section class="line" aria-label="Intervals and chords">
 				<ol>
-					{#each recipeStops as s (s.id)}
-						<li class="stop" class:is-next={suggested === s.id}>
+					{#each recipeStops as s, i (s.id)}
+						{@const starts = i === 0 || recipeStops[i - 1].section !== s.section}
+						<li class="stop" class:is-next={suggested === s.id} class:has-section={starts}>
+							{#if starts}
+								<p class="section-label">
+									<span class="label-title">{SECTIONS[s.section].title}</span>
+									<span>{SECTIONS[s.section].note}</span>
+								</p>
+							{/if}
 							{@render stopButton(s.id, s.id === INTERCHANGE)}
 							{#if s.id === INTERCHANGE}
 								<!-- The circle line leaves from here, so it lives here: in
 								     the flow on a narrow screen, beside the line on a wide one. -->
 								<section class="branch" aria-labelledby="circle-line">
-									<h2 id="circle-line" class="line-name">Circle line · change here</h2>
+									<h2 id="circle-line" class="line-name">
+										<span class="label-title">{SECTIONS.circle.title}</span>
+										<span>{SECTIONS.circle.note}</span>
+									</h2>
 									<ol>
 										{#each circleStops as c (c.id)}
 											<li class="stop" class:is-next={suggested === c.id}>
@@ -796,7 +1073,7 @@
 		</div>
 
 		<p class="hands-free">
-			<span><kbd>Space</kbd> / pedal · {stopById(suggested ?? 'half')!.title}</span>
+			<span><kbd>Space</kbd> / pedal · {next.title}</span>
 		</p>
 		{#if saveTrouble && pending.length}
 			<p class="save-note">
@@ -804,6 +1081,39 @@
 				<button class="quiet" onclick={() => void flush()}>Try now</button>
 			</p>
 		{/if}
+	</main>
+{:else if view === 'brief' && briefStop}
+	<main class="brief-view">
+		<header class="play-head">
+			<button class="back" onclick={toLine} aria-label="All stops">←</button>
+			<p class="brief-section">{SECTIONS[briefStop.section].title}</p>
+		</header>
+		<article class="brief">
+			<h1>{briefStop.title}</h1>
+			{#each briefStop.brief as paragraph, i (i)}
+				<p>{paragraph}</p>
+			{/each}
+			{#if briefStop.figures.length}
+				<div class="figures" class:is-single={briefStop.figures.length === 1}>
+					{#each briefStop.figures as figure, i (i)}
+						{@render figureCard(figure)}
+					{/each}
+				</div>
+				<p class="figure-hint">
+					{#if briefStop.figures.some((figure) => figure.chord)}
+						Drawn on C. The numbers over the line count half steps; the labels under the notes are
+						the recipe.
+					{:else}
+						The numbers over the line count half steps.
+					{/if}
+					Tap one to hear it.
+				</p>
+			{/if}
+			<div class="brief-actions">
+				<button class="primary" onclick={() => ride(briefStop.id)}>Start</button>
+				<span class="hands-free"><span><kbd>Space</kbd> / pedal</span></span>
+			</div>
+		</article>
 	</main>
 {:else if round && stop}
 	<main class="play-view">
@@ -831,6 +1141,7 @@
 		{#if view === 'play' && item}
 			<section class="stage" aria-live="off">
 				{#if item.circle && trip}
+					<p class="task">{task(item, guided)}</p>
 					<div class="stage-wheel">
 						<CircleTrack
 							stations={trip.stations}
@@ -850,21 +1161,12 @@
 								</span>
 							{/if}
 							<ChordSymbol chord={item.chord} size="clamp(3rem, 9vw, 5.5rem)" />
-						{:else if item.tones[1].degree}
-							<span class="degree-big">{item.tones[1].degree}</span>
+							<span class="headline-name">{nameOf(item)}</span>
 						{:else}
-							<span class="degree-big">{hopKeys}</span>
+							<span class="interval-big">{capitalise(nameOf(item))}</span>
 						{/if}
-						<span class="headline-name">
-							{#if item.recipe}
-								{recipeName(item.recipe)}
-							{:else if item.tones[1].degree}
-								{INTERVAL_NAMES[item.tones[1].degree] ?? ''}
-							{:else}
-								{hopKeys === 1 ? 'key up' : 'keys up'}
-							{/if}
-						</span>
 					</div>
+					<p class="task">{task(item, guided)}</p>
 					<div class="stage-card">
 						<RecipeCard
 							tones={cardTones}
@@ -939,7 +1241,7 @@
 				</ol>
 				<div class="done-actions">
 					{#if nextStop}
-						<button class="primary" onclick={() => ride(nextStop!.id)}>
+						<button class="primary" onclick={() => openStop(nextStop!.id)}>
 							Next stop · {nextStop.title}
 						</button>
 					{/if}
@@ -1075,7 +1377,133 @@
 	}
 
 	.line-head p {
+		max-width: 36rem;
 		margin-top: 0.3rem;
+		line-height: 1.5;
+		color: var(--color-ink-muted);
+	}
+
+	/*
+	 * The introduction. Open until the first stop has been ridden, then folded
+	 * away under its summary: read once, it is in the way of the map.
+	 */
+	.intro {
+		margin-top: 1.6rem;
+		border: 1px solid var(--color-ground-line);
+		border-radius: 12px;
+	}
+
+	.intro > summary {
+		padding: 0.85rem 1rem;
+		font-weight: 600;
+		cursor: pointer;
+	}
+
+	.intro-body {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+		gap: 1.6rem 2.4rem;
+		padding: 0.2rem 1rem 1.3rem;
+	}
+
+	@media (min-width: 900px) {
+		.intro-body {
+			grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+			grid-template-areas:
+				'text example'
+				'steps example';
+			align-items: start;
+		}
+
+		.intro-text {
+			grid-area: text;
+		}
+
+		.example {
+			grid-area: example;
+		}
+
+		.intro-steps {
+			grid-area: steps;
+		}
+	}
+
+	.intro-text p,
+	.intro-steps p {
+		max-width: 34rem;
+		margin-top: 0.7rem;
+		line-height: 1.55;
+		color: var(--color-ink-muted);
+	}
+
+	.intro-text p:first-child {
+		margin-top: 0;
+	}
+
+	.intro strong {
+		font-weight: 600;
+		color: var(--color-ink);
+	}
+
+	.example {
+		display: flex;
+		flex-direction: column;
+		gap: 0.6rem;
+		margin: 0;
+	}
+
+	.example-head {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.4rem 0.9rem;
+	}
+
+	.example-name {
+		font-family: var(--font-mono);
+		font-size: 0.8rem;
+		color: var(--color-ink-muted);
+	}
+
+	.example-switch {
+		display: inline-flex;
+		margin-left: auto;
+		border: 1px solid var(--color-ground-line);
+		border-radius: 8px;
+		overflow: hidden;
+	}
+
+	.example-switch button {
+		min-height: 2.25rem;
+		padding: 0.3rem 0.85rem;
+		font-size: 0.85rem;
+		color: var(--color-ink-muted);
+	}
+
+	.example-switch button[aria-pressed='true'] {
+		background: var(--color-ink);
+		color: var(--color-ground);
+	}
+
+	.example figcaption {
+		font-family: var(--font-mono);
+		font-size: 0.72rem;
+		text-align: center;
+		color: var(--color-ink-dim);
+	}
+
+	.intro-steps h2 {
+		font-size: 0.95rem;
+		font-weight: 600;
+	}
+
+	.intro-steps ol {
+		display: grid;
+		gap: 0.3rem;
+		margin: 0.5rem 0 0;
+		padding-left: 1.2rem;
+		list-style: decimal;
+		line-height: 1.45;
 		color: var(--color-ink-muted);
 	}
 
@@ -1089,9 +1517,15 @@
 	}
 
 	.line-name {
-		margin: 0 0 0.6rem 3.5rem;
+		display: flex;
+		height: 2.3rem;
+		flex-direction: column;
+		justify-content: flex-end;
+		margin: 0 0 0.2rem 3.5rem;
 		font-family: var(--font-mono);
 		font-size: 0.7rem;
+		font-weight: 400;
+		line-height: 1.15rem;
 		letter-spacing: 0.04em;
 		color: var(--color-ink-dim);
 	}
@@ -1134,7 +1568,13 @@
 		position: relative;
 		display: grid;
 		grid-template-columns: 2.5rem 9rem minmax(0, 1fr);
-		align-items: center;
+		/*
+		 * Everything hangs from the top, with the station's centre 1.9rem
+		 * down — level with the title, the way a map names a station. A
+		 * summary that wraps grows the stop downwards and moves nothing, so
+		 * the track ends and the branch spur can be placed by measurement.
+		 */
+		align-items: start;
 		gap: 1rem;
 		width: 100%;
 		min-height: 3.8rem;
@@ -1153,6 +1593,7 @@
 	.stop-mark {
 		width: 2.5rem;
 		height: 2.5rem;
+		margin-top: 0.25rem;
 		overflow: visible;
 	}
 
@@ -1179,12 +1620,14 @@
 	.stop-emblem {
 		display: flex;
 		height: 2.2rem;
+		margin-top: 0.4rem;
 		align-items: center;
 	}
 
 	.stop-emblem.is-wheel {
 		justify-content: center;
 		height: 2.8rem;
+		margin-top: 0.1rem;
 	}
 
 	.stop-text {
@@ -1192,6 +1635,7 @@
 		min-width: 0;
 		flex-direction: column;
 		gap: 0.1rem;
+		padding-top: 0.7rem;
 	}
 
 	.stop-title {
@@ -1200,11 +1644,55 @@
 		letter-spacing: -0.01em;
 	}
 
+	.stop-summary {
+		font-size: 0.86rem;
+		line-height: 1.35;
+		color: var(--color-ink-muted);
+	}
+
 	.stop-record {
 		font-family: var(--font-mono);
 		font-size: 0.68rem;
 		color: var(--color-ink-dim);
 		white-space: nowrap;
+	}
+
+	/*
+	 * Where a part of the syllabus starts. Inside the station, so the track
+	 * runs through it unbroken; two fixed lines high, so the first station's
+	 * track can start exactly level with it.
+	 */
+	.section-label {
+		display: flex;
+		height: 2.3rem;
+		flex-direction: column;
+		justify-content: flex-end;
+		margin: 1.3rem 0 0.1rem 3.5rem;
+		font-family: var(--font-mono);
+		font-size: 0.7rem;
+		line-height: 1.15rem;
+		letter-spacing: 0.03em;
+		color: var(--color-ink-dim);
+	}
+
+	.section-label > span,
+	.line-name > span {
+		overflow: hidden;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+	}
+
+	.label-title {
+		font-weight: 600;
+		color: var(--color-ink);
+	}
+
+	ol > .stop:first-child > .section-label {
+		margin-top: 0;
+	}
+
+	ol > .stop.has-section:first-child::before {
+		top: calc(2.4rem + 1.9rem);
 	}
 
 	.stop.is-next > .stop-button .stop-record {
@@ -1224,18 +1712,21 @@
 		padding: 0.4rem 0 0.6rem;
 	}
 
+	/* Level with the first circle station: 0.4 padding, 2.3 label, 0.2 gap,
+	   1.9 to the station's centre. It runs on under the station's ring to the
+	   branch's own track, so the two lines meet rather than nearly meet. */
 	.branch::before {
 		content: '';
 		position: absolute;
 		left: -1.35rem;
-		top: 2.75rem;
-		width: 1.35rem;
+		top: 4.8rem;
+		width: 2.6rem;
 		height: 4px;
 		margin-top: -2px;
 		background: var(--color-ink-dim);
 	}
 
-	@media (max-width: 959px) {
+	@media (max-width: 1099px) {
 		.branch .line-name {
 			margin-left: 2.6rem;
 		}
@@ -1252,10 +1743,12 @@
 		}
 	}
 
-	@media (min-width: 960px) {
+	/* 520 + 72 + 460 and the gutters: any narrower and the branch hangs off the page. */
+	@media (min-width: 1100px) {
+		/* The first circle station level with the fifth: 1.9 − (2.3 + 0.2 + 1.9). */
 		.branch {
 			position: absolute;
-			top: -1.75rem;
+			top: -2.5rem;
 			left: calc(100% + 4.5rem);
 			width: 460px;
 			margin: 0;
@@ -1264,7 +1757,7 @@
 
 		.branch::before {
 			left: -4.5rem;
-			top: 3.65rem;
+			top: 4.4rem;
 			width: 4.3rem;
 			background: repeating-linear-gradient(
 				90deg,
@@ -1272,11 +1765,120 @@
 				transparent 6px 11px
 			);
 		}
+	}
 
-		.branch .line-name {
-			height: 1.15rem;
-			margin-bottom: 0.6rem;
+	/* ---------------------------------------------------------------------- */
+	/* A stop's briefing                                                       */
+	/* ---------------------------------------------------------------------- */
+
+	.brief-view {
+		max-width: 780px;
+		margin: 0 auto;
+		padding: 0.9rem 1rem 2.6rem;
+	}
+
+	.brief-section {
+		font-family: var(--font-mono);
+		font-size: 0.72rem;
+		letter-spacing: 0.04em;
+		color: var(--color-ink-dim);
+	}
+
+	.brief {
+		margin-top: 1.2rem;
+	}
+
+	.brief h1 {
+		font-size: clamp(1.8rem, 5vw, 2.6rem);
+		font-weight: 600;
+		line-height: 1.1;
+		letter-spacing: -0.03em;
+	}
+
+	.brief > p {
+		max-width: 40rem;
+		margin-top: 0.85rem;
+		font-size: 1.02rem;
+		line-height: 1.6;
+		color: var(--color-ink-muted);
+	}
+
+	.brief > p:first-of-type {
+		color: var(--color-ink);
+	}
+
+	.figures {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+		gap: 0.8rem;
+		margin-top: 1.5rem;
+	}
+
+	.figures.is-single {
+		grid-template-columns: minmax(0, 34rem);
+	}
+
+	.figure {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		padding: 0.8rem 0.9rem 0.7rem;
+		border: 1px solid var(--color-ground-line);
+		border-radius: 12px;
+		text-align: left;
+		transition: border-color 120ms linear;
+	}
+
+	@media (hover: hover) {
+		.figure:hover {
+			border-color: var(--color-ink-muted);
 		}
+	}
+
+	.figure-head {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: 0.2rem 0.6rem;
+	}
+
+	.figure-title {
+		font-weight: 600;
+	}
+
+	.figure-from,
+	.figure-formula {
+		font-family: var(--font-mono);
+		font-size: 0.75rem;
+		color: var(--color-ink-muted);
+	}
+
+	.figure-from {
+		color: var(--color-ink-dim);
+	}
+
+	.figure-hint {
+		margin-top: 0.6rem;
+		font-family: var(--font-mono);
+		font-size: 0.7rem;
+		line-height: 1.5;
+		color: var(--color-ink-dim);
+	}
+
+	.brief-actions {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.6rem 1.2rem;
+		margin-top: 1.8rem;
+	}
+
+	.brief-actions .primary {
+		min-width: 8rem;
+	}
+
+	.brief-actions .hands-free {
+		margin-top: 0;
 	}
 
 	/* ---------------------------------------------------------------------- */
@@ -1307,9 +1909,13 @@
 	}
 
 	.play-title {
+		min-width: 0;
+		max-width: 50%;
+		overflow: hidden;
 		font-size: 1.1rem;
 		font-weight: 600;
 		white-space: nowrap;
+		text-overflow: ellipsis;
 	}
 
 	.pips {
@@ -1355,6 +1961,25 @@
 
 	.pip.is-again {
 		border-radius: 3px;
+	}
+
+	/* A phone: the stop's full name on the first row, the progress on its own
+	   below. Squeezed onto one row the pips stacked into a column. */
+	@media (max-width: 600px) {
+		.play-head {
+			flex-wrap: wrap;
+			row-gap: 0.6rem;
+		}
+
+		.play-title {
+			flex: 1 1 0;
+			max-width: none;
+		}
+
+		.pips {
+			order: 4;
+			flex-basis: 100%;
+		}
 	}
 
 	.fx-toggle {
@@ -1405,12 +2030,13 @@
 		font-size: 1.6rem;
 	}
 
-	.degree-big {
+	.interval-big {
 		font-family: var(--font-display);
 		font-weight: 600;
-		font-size: clamp(3rem, 9vw, 5.5rem);
+		font-size: clamp(2.2rem, 6.5vw, 4rem);
 		line-height: 1;
 		letter-spacing: -0.03em;
+		text-align: center;
 	}
 
 	.headline-name {
@@ -1418,6 +2044,18 @@
 		font-size: 0.8rem;
 		letter-spacing: 0.03em;
 		color: var(--color-ink-muted);
+	}
+
+	/* What to play, in a sentence: the one line on the stage that is read
+	   rather than looked at, so it gets the text face and a measure. */
+	.task {
+		max-width: 38rem;
+		margin: 0.5rem auto 0.2rem;
+		text-align: center;
+		font-size: 1rem;
+		line-height: 1.45;
+		color: var(--color-ink);
+		text-wrap: balance;
 	}
 
 	.stage-card {
@@ -1552,7 +2190,7 @@
 			display: none;
 		}
 
-		.degree-big,
+		.interval-big,
 		.headline :global(.chord-symbol) {
 			font-size: 2.4rem !important;
 		}
