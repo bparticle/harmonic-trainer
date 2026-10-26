@@ -655,6 +655,47 @@ work rather than M12's, and it must not be interleaved with billing.
 
 ---
 
+## Recipe stops in the daily workout
+
+`/recipes` exists and keeps its own record. The next step is letting a day's
+workout call at one of its stops, so the theory a teacher drills before a
+lesson lands in the same departure as the playing.
+
+### What is already shaped for it
+
+- **A stop is a pure, seeded function.** `itemsFor(spec)` in
+  `src/lib/recipes/round.ts` returns the same items for the same seed, so a
+  workout composed in the morning can carry `{ stop, seed }` and serve exactly
+  that round when the task opens — the same property the workout's card queues
+  rely on.
+- **Marking is pure too.** `hear`, `serve`, `resultOf` and `replay` have no
+  page in them. A workout task can drive them from the session page's existing
+  `onNote` subscription; the recipe page's components (`RecipeCard`,
+  `HopBand`, `CircleTrack`) take plain props and can be dropped into a task
+  body as they are.
+- **The record already answers "what next".** `loadLineRecord` gives each
+  stop's rounds and best clean share; the first stop with no rounds is the
+  page's own suggestion, and is the obvious default for a workout too.
+
+### Shape of the work
+
+1. A `recipe` task kind beside `sight`, `quality` and the rest, carrying a
+   `RoundSpec`. Its goal is the round, not a count of questions.
+2. The composer offers it only when the record says a stop is unridden or
+   below a clean share — never as padding, and inside the existing task
+   ceiling, not on top of it.
+3. Finishing the task saves through the same `/api/recipes` path, so the
+   recipe page and the workout agree about the record without a second table.
+
+### Not decided
+
+Whether a recipe task replaces a drill slot or the discovery slot, and whether
+stops should be scheduled by FSRS at all. The rounds are short and the stops
+are few; a "ride it again after a week" rule may be all they need, and nothing
+should be wired to the scheduler until that has been watched in use.
+
+---
+
 ## Order
 
 **M12 → M13.** M15 and M16 have landed, and M14, M9 and M10 before them, with

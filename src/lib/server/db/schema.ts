@@ -19,8 +19,7 @@ import { sql } from 'drizzle-orm';
 import type { Landing } from '$lib/practice/match';
 import type { Groove } from '$lib/audio/groove';
 import type { TaskKind } from '$lib/session/workout';
-import type { RoundSpec } from '$lib/theory/catalog';
-import type { Attempt, RoundResult } from '$lib/theory/round';
+import type { Outcome, RoundResult, RoundSpec } from '$lib/recipes/round';
 
 /*
  * Conventions
@@ -175,7 +174,16 @@ export const users = pgTable('users', {
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });
 
-/** Theory has its own record; it never changes performance drills or their scheduler. */
+/**
+ * One finished ride through a stop on the chord-recipe line.
+ *
+ * Its own record, apart from the cards and their schedule: nothing here moves
+ * a review or opens a rung, and the daily workout does not read it. The table
+ * keeps the name and the generic JSON columns it was created with in 0018, so
+ * an instance that already applied that migration needs nothing new — `spec`
+ * says which line a row belongs to, and rows from before the line existed are
+ * simply never read.
+ */
 export const theoryRounds = pgTable(
 	'theory_rounds',
 	{
@@ -184,7 +192,7 @@ export const theoryRounds = pgTable(
 			.notNull()
 			.references(() => users.id, { onDelete: 'cascade' }),
 		specJson: jsonb('spec_json').$type<RoundSpec>().notNull(),
-		attemptsJson: jsonb('attempts_json').$type<Attempt[]>().notNull(),
+		attemptsJson: jsonb('attempts_json').$type<Outcome[]>().notNull(),
 		resultJson: jsonb('result_json').$type<RoundResult>().notNull(),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},

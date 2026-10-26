@@ -37,7 +37,7 @@
 		{ href: '/backing', label: 'Play along' },
 		{ href: '/songbook', label: 'Songbook' },
 		{ href: '/explore', label: 'Explore' },
-		{ href: '/theory', label: 'Theory arcade' }
+		{ href: '/recipes', label: 'Recipes' }
 	];
 
 	const isCurrent = (href: string) =>
