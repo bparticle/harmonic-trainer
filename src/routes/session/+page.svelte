@@ -28,7 +28,7 @@
 	import { formatNote } from '$lib/music/note';
 	import { spell } from '$lib/music/spell';
 	import { describeGoal, type Verdict } from '$lib/practice/goal';
-	import { taskTags } from '$lib/session/progress';
+	import { taskTags, type ActiveWorkout } from '$lib/session/progress';
 	import { skillLabel } from '$lib/curriculum/cards';
 	import { itemsForRung, rungById, stageByKey, stationHolding } from '$lib/curriculum/ladder';
 	import Roundel from '$lib/components/Roundel.svelte';
@@ -45,7 +45,7 @@
 	/*
 	 * The workout.
 	 *
-	 * Three to five tasks in order, each with a goal rather than a clock that runs
+	 * Up to six tasks in order, each with a goal rather than a clock that runs
 	 * out. Drills end when their count is met; after a mission attempt, the player
 	 * can keep reaching for its bar or carry the recorded verdict into the rest of
 	 * the workout. Nothing here counts down at anything.
@@ -246,6 +246,11 @@
 			? (result as Verdict)
 			: null;
 	});
+	const lastTask = $derived(index === total - 1);
+	const continueLabel = $derived(lastTask ? 'Finish workout' : 'Continue workout');
+	const nextMission = $derived(
+		workout?.tasks.slice(index + 1).find((candidate) => candidate.kind === 'mission') ?? null
+	);
 
 	/*
 	 * The MIDI session is owned by the root layout; only the handlers belong to
@@ -851,7 +856,12 @@
 
 	/** Put this card back on the end of the run. The rule is in `queue.ts`. */
 	function putBack() {
-		if (currentCard) queue = putBackAt(queue, position);
+		if (currentCard)
+			queue = putBackAt(
+				queue,
+				position,
+				taskCards.map((card) => card.id)
+			);
 	}
 
 	/**
@@ -1504,7 +1514,11 @@
 	 * when hands-free actually matters.
 	 */
 	function advanceHandsFree(source: 'pedal' | 'key') {
-		if (!task || busy || finished) return;
+		if (busy || finished) return;
+		if (!task) {
+			if (data.workout?.complete) void endNow();
+			return;
+		}
 		if (task.kind === 'mission') {
 			// Once the band has heard an attempt, Space and the pedal follow the
 			// primary action on screen: continue. Reopening Play Along here made an
@@ -1524,7 +1538,7 @@
 			// on a sustain pedal should not be able to make it. Hands-free stops at
 			// finishing the task, which is what it has always meant here.
 			if (noveltyChords.length && !noveltyHeard) void playNovelty();
-			else if (!opensRung) void finishTask({ tried: true });
+			else if (!opensRung) void finishTask({ previewed: true });
 			return;
 		}
 		if (prompt && !answered) {
@@ -1585,16 +1599,16 @@
 		busy = true;
 		problem = null;
 		try {
-			await post({
+			const saved = (await post({
 				action: 'finish-task',
 				sessionId: data.workout.id,
 				index: entry.index,
 				reviews: pending,
 				result
-			});
+			})) as ActiveWorkout;
 			await stopAll();
 
-			const next = index + 1;
+			const next = saved.resumeAt;
 			if (next >= total) await endWorkout();
 			else {
 				// Moved and cleared in one breath, before anything renders. See
@@ -1931,7 +1945,7 @@
 							disabled={busy}
 							aria-describedby="mission-hands-free"
 						>
-							{busy ? 'saving…' : 'Continue workout'}
+							{busy ? 'saving…' : continueLabel}
 						</button>
 						<button
 							class="border-ground-line text-ink rounded-2xl border px-6 py-4 font-semibold disabled:opacity-40"
@@ -1945,12 +1959,12 @@
 							disabled={busy}
 							aria-describedby="mission-hands-free"
 						>
-							{busy ? 'opening…' : 'Play mission'}
+							{busy ? 'opening…' : 'Play along'}
 						</button>
 					{/if}
 				</div>
 				<span id="mission-hands-free" class="text-ink-dim font-mono text-[0.7rem]">
-					<kbd>Space</kbd> / pedal · {verdict ? 'continue workout' : 'open play along'}
+					<kbd>Space</kbd> / pedal · {verdict ? continueLabel.toLowerCase() : 'open play along'}
 				</span>
 			</section>
 
@@ -2042,9 +2056,10 @@
 					{:else}
 						<button
 							class="bg-ink text-ground rounded-2xl px-8 py-4 text-lg font-semibold disabled:opacity-40"
-							onclick={() => finishTask({ tried: true })}
+							onclick={() => finishTask({ previewed: true })}
 							disabled={busy}
-							aria-describedby="new-thing-hands-free">Tried it</button
+							aria-describedby="new-thing-hands-free"
+							>{nextMission ? 'Continue to play along' : continueLabel}</button
 						>
 					{/if}
 
@@ -2063,13 +2078,6 @@
 							class="text-ink-dim hover:text-ink rounded-2xl px-4 py-4 font-semibold transition-colors disabled:opacity-40"
 							onclick={() => finishTask({ tried: true })}
 							disabled={busy}>Not yet</button
-						>
-					{/if}
-
-					{#if task.novelty.kind === 'groove'}
-						<a
-							class="border-ground-line text-ink rounded-2xl border px-6 py-4 font-semibold"
-							href="/backing">Open play along</a
 						>
 					{/if}
 
@@ -2096,6 +2104,17 @@
 					{/if}
 				</div>
 
+				{#if task.novelty.kind === 'groove' && nextMission}
+					<p class="text-ink-muted max-w-prose text-sm">
+						Try this groove in {nextMission.mission.chartName}, next. The band will be set up for
+						you.
+					</p>
+				{:else if task.novelty.kind === 'progression'}
+					<p class="text-ink-muted max-w-prose text-sm">
+						Play through these chords at your own pace, then continue.
+					</p>
+				{/if}
+
 				{#if workout?.openNext}
 					<p class="open-offer">
 						{#if workout.openNext.move === 'deeper'}
@@ -2116,7 +2135,9 @@
 						? 'hear it'
 						: opensRung
 							? 'opening a rung is a button, not a pedal'
-							: 'next'}
+							: nextMission
+								? 'continue to play along'
+								: continueLabel.toLowerCase()}
 				</span>
 			</section>
 
@@ -2479,11 +2500,15 @@
 	{:else}
 		<div class="grid flex-1 place-items-center text-center">
 			<div>
+				<h1 class="font-display text-ink mb-3 text-3xl font-semibold">Practice complete.</h1>
+				<p class="text-ink-muted mb-6">Your playing is saved. See how it went.</p>
 				<button
-					class="bg-ink text-ground rounded-lg px-5 py-3 font-semibold disabled:opacity-40"
-					onclick={endWorkout}
-					disabled={busy}>Finish</button
+					class="bg-ink text-ground rounded-lg px-8 py-4 text-lg font-semibold disabled:opacity-40"
+					onclick={endNow}
+					disabled={busy}>{busy ? 'saving…' : 'Finish workout'}</button
 				>
+				<p class="text-ink-dim mt-3 font-mono text-xs"><kbd>Space</kbd> / pedal · finish workout</p>
+				{#if problem}<p class="audio-problem" role="alert">{problem}</p>{/if}
 			</div>
 		</div>
 	{/if}

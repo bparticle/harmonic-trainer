@@ -34,16 +34,25 @@ export function openQueue(count: number): QueueStep[] {
 /**
  * Put the card at `position` back on the end of the run.
  *
- * Once per card, and never for a card that is already the second look. A second
+ * At most two corrections per task, once per card. A scheduled future repeat
+ * already supplies the correction, so it does not also add a retry. A second
  * look that goes wrong is a card for tomorrow's queue rather than another lap
  * of today's: the scheduler has heard about it, and a run that could put the
  * same card back indefinitely is a run with no way out of it. Anything that
  * would loop is returned unchanged, so callers can ask without checking.
  */
-export function putBack(queue: QueueStep[], position: number): QueueStep[] {
+export function putBack(
+	queue: QueueStep[],
+	position: number,
+	cardIds?: readonly string[]
+): QueueStep[] {
 	const step = queue[position];
 	if (!step || step.retry) return queue;
-	if (queue.some((other, at) => at > position && other.at === step.at)) return queue;
+	// A correction is a short coda, never a second lap of the whole task.
+	if (queue.filter((other) => other.retry).length >= 2) return queue;
+	const sameCard = (other: QueueStep) =>
+		other.at === step.at || Boolean(cardIds?.[step.at] && cardIds[other.at] === cardIds[step.at]);
+	if (queue.some((other, at) => sameCard(other) && (at > position || other.retry))) return queue;
 	return [...queue, { at: step.at, retry: true }];
 }
 

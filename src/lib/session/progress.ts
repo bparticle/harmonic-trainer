@@ -5,6 +5,7 @@ import type { WorkoutBlockType } from '$lib/server/db/schema';
 import { skillLabel } from '$lib/curriculum/cards';
 import {
 	TASK_COUNT,
+	TASK_KINDS,
 	type Choice,
 	type Makeup,
 	type Task,
@@ -72,7 +73,7 @@ export function taskIndexOf(blockType: string): number | null {
 	return Number(position);
 }
 
-const KINDS = new Set<string>(['sight', 'ear', 'function', 'crossing', 'mission', 'new_thing']);
+const KINDS = new Set<string>(TASK_KINDS);
 
 // ---------------------------------------------------------------------------
 // Reading a stored plan
@@ -146,6 +147,7 @@ export function hydrateWorkout(row: StoredSession, blocks: StoredBlock[]): Activ
 	for (const block of blocks) {
 		const index = taskIndexOf(block.blockType);
 		if (index === null || index >= workout.tasks.length) continue;
+		if (block.blockType !== taskBlockType(workout.tasks[index].kind, index)) continue;
 		byIndex.set(index, block);
 	}
 
@@ -179,6 +181,8 @@ export type TaskPreview = {
 	kind: TaskKind;
 	title: string;
 	line: string;
+	/** Planned drill questions, before the bounded correction round. */
+	questions: number;
 	/**
 	 * Two or three words each, saying where this task's material came from.
 	 *
@@ -211,6 +215,7 @@ export function previewTasks(workout: Workout): TaskPreview[] {
 		kind: task.kind,
 		title: task.title,
 		line: previewLine(task),
+		questions: 'cardIds' in task ? task.cardIds.length : 0,
 		tags: taskTags(task)
 	}));
 }

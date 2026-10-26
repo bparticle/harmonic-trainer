@@ -32,68 +32,14 @@ import type { CardDirection, ChartStyle } from '$lib/server/db/schema';
 import { isRetiredIntroduction, selectDue, type Schedulable } from '$lib/srs/scheduler';
 
 /**
- * Composing a workout.
+ * Deterministic daily practice: bounded drills, one discovery, and one final
+ * play-along. Due, near-due and fresh cards all stay available, but familiar
+ * cards are asked once per drill and only unseen material gets a planned repeat.
+ * Every emitted queue shares a musical-item budget with the rest of the workout.
  *
- * The successor to `planSession`, and the same discipline: pure, no clock of its
- * own, no database, no browser. Given the same inputs and the same date it
- * composes the same workout, which is what makes a reload resume rather than
- * re-roll.
- *
- * What changed is the thing being composed. A session was six fixed blocks sized
- * by a timer and filled from the due pile — so a well-run deck made it end in
- * three minutes, and every day looked like the last one. A workout is three to
- * five **tasks**, each with a goal that can be met rather than a clock that runs
- * out, and it is composed fresh each day from four inputs: the due pile, the
- * neighbourhood of the ladder position, the record's cold spots, and one novelty
- * slot.
- *
- * The drill tasks isolate one small skill at a time; the mission puts them back
- * together in a chart. On sight turns one written symbol into a hand shape, the
- * ear removes the writing, and function and the hinge add harmonic context. The
- * mission *is* the chart, under a constraint, with a goal. `Goal`
- * itself, the line that describes one and the bar a guide-tone goal is set at
- * now live in `practice/goal.ts` beside the evaluator that answers them — see
- * the note there for why they had to move out of this module.
- *
- * Every drill task is a queue of card ids over one bank, and together they
- * partition it by direction — on sight takes `see_play`, the ear takes
- * `hear_play` and `hear_name`, the function takes `degree_play`, and the hinge
- * takes `pivot_play` — which is what "one pool per workout, nothing asked twice"
- * amounts to in practice. The partition has to be a real one: a direction in no
- * pool is a card generated, scheduled, and never once asked, and the app carried
- * two of those. The fallthrough in `composeWorkout` hands each built task out
- * once, so a workout of four tasks is four tasks.
- *
- * Three things the plan left open, decided here and open to being overruled by
- * the record later:
- *
- *   - **A short pool cycles rather than ending early.** "The task ends at the
- *     count, never at pile-empty" is the whole point of the fallback tiers, but
- *     an account three days old owns four ear questions in total. Ten questions
- *     from four cards is ear training; four questions and a shrug is the bug
- *     being fixed. The pool is passed over at most `MAX_PASSES` times, so one
- *     card is asked three times and not ten.
- *   - **Scales stay in the ear pool.** The plan leaves open whether the ear task
- *     should ever play sequences and recommends chords only. Taking the
- *     recommendation now would leave a brand-new account — one rung, the C major
- *     scale — with no ear material at all, and a first workout that has to be
- *     playable is the stronger constraint. `directionsForRung` already refuses
- *     to ask a scale to be *named*; being asked to play one back is a fair
- *     question.
- *   - **The function task asks cards, not the ladder directly.** This module
- *     first built its degree prompts by walking `itemsForRung` over everywhere
- *     reached, which was quick and answered nothing to anyone. A prompt
- *     synthesised on the spot is never due, never graded and never recorded — so
- *     `DIRECTION_WEIGHT['degree_play']`, which the plan asks for in the same
- *     breath, would have weighed nothing, because no degree question would ever
- *     have passed through `selectDue`. Making a card direction and then routing
- *     around the scheduler is two decisions that contradict each other. So the
- *     degrees are generated as cards in `cards.ts` like every other question,
- *     and the function task is a queue of card ids exactly as the ear task is.
- *     What survives from the first version is the round-robin: the queue is
- *     spread across keys, because a function is the one thing in the app that
- *     means the same in all twelve of them and eight `IV`s in one key is a
- *     spelling drill wearing a numeral.
+ * Scales remain playable by ear from the first day. Function and crossing use
+ * their own scheduled cards; a mission uses the real play-along page and only
+ * charts whose vocabulary the player has reached.
  */
 
 const DAY_MS = 86_400_000;
@@ -119,16 +65,21 @@ export type WorkoutSize = 'short' | 'standard' | 'long';
 /**
  * How much work a size asks for.
  *
- * A floor rather than an exact count, and only since the introduction started
- * riding in front of it: on a day the ladder has opened something, the workout
- * is this many tasks *plus* the shapes that arrived, and on every other day it
- * is exactly this many. Meeting the material is not one of the day's exercises
- * and must not eat one — see `slotsFor`.
+ * A ceiling. Introductions fit inside it, and missing material makes a workout
+ * shorter rather than adding another trip through the same drills or song.
  */
 export const TASK_COUNT: Record<WorkoutSize, number> = { short: 3, standard: 4, long: 6 };
 
-export type TaskKind =
-	'sight' | 'quality' | 'ear' | 'function' | 'crossing' | 'mission' | 'new_thing';
+export const TASK_KINDS = [
+	'sight',
+	'quality',
+	'ear',
+	'function',
+	'crossing',
+	'mission',
+	'new_thing'
+] as const;
+export type TaskKind = (typeof TASK_KINDS)[number];
 
 /**
  * A mission: the real play-along page under a constraint.
@@ -590,28 +541,13 @@ export type WorkoutInput = {
 /** Six aural questions: enough to discriminate without making listening the whole workout. */
 const EAR_QUESTIONS = 6;
 
-/**
- * How many times a short pool may be gone round.
- *
- * The clamp that keeps "never runs dry" from becoming "the same chord ten
- * times". Three passes over one card is a drill; ten is a punishment.
- */
-const MAX_PASSES = 3;
+/** Two sweeps allow a new shape to move from demonstration to recall. */
+const MAX_PASSES = 2;
 
-/**
- * Fewer than the ear asks, because each one is two answers — play it, then name
- * it — so eight of these is about the same amount of work as ten of those.
- */
+/** Long workouts ask eight two-part questions; standard caps these at six. */
 const FUNCTION_QUESTIONS = 8;
 
-/**
- * Fewest of all, because meeting a shape is not practising it.
- *
- * This task is added to a day rather than taken out of one — see `slotsFor` — so
- * its size is the size of the imposition it makes on a morning where the ladder
- * has just moved. Six is a rung's worth of new chords with a little repetition,
- * and it is over before it feels like homework.
- */
+/** Written symbols, reduced to three on a short day. */
 const SIGHT_QUESTIONS = 6;
 
 /**
@@ -930,25 +866,7 @@ function leadWithPinned(
 	return unique([...pinnedAll.slice(0, count), ...rest, ...ordered], (c) => c.cardId);
 }
 
-/** Repeat a short pool rather than ending early, up to `MAX_PASSES` times. */
-/**
- * How many times one musical thing may be asked in one workout.
- *
- * **Three, across every task rather than within each of them**, and that is the
- * whole of the fix. `MAX_PASSES` below is a per-task cap and was doing its job:
- * a task over a one-card pool asked it three times, which is a lesson rather
- * than a punishment. But the four drill tasks partition the bank by *direction*,
- * so on a first morning — one rung, one scale, two cards — the sight task looked
- * at a pool of one and asked three, and then the ear task looked at a different
- * pool of one, could not tell it was the same scale, and asked three more. Six
- * questions about the C major scale, reported as *the same thing over and over*
- * and correctly.
- *
- * A budget per item rather than per card is what lets two tasks agree, since a
- * chord is one item and four cards. It only ever binds on a small bank: where
- * there is material, no task asks the same item twice anyway, and this changes
- * nothing.
- */
+/** At most three planned encounters with a musical item across all drills. */
 const ASKS_PER_ITEM = 3;
 
 /** What is left of each item's budget, shared by every queue in one workout. */
@@ -979,32 +897,57 @@ function allowanceFor(budget: ItemBudget, item: string): number {
 	return remaining <= 0 ? 0 : Math.max(1, Math.ceil(remaining / 2));
 }
 
-function toQueue(ordered: Schedulable[], count: number, budget: ItemBudget): string[] {
+function toQueue(
+	ordered: Schedulable[],
+	count: number,
+	budget: ItemBudget,
+	pinnedCount = 0
+): string[] {
+	// Keep the chosen opening, then prefer material earlier tasks have not used.
+	// Stable sorting preserves the scheduler's order among equally used items.
+	ordered = [
+		...ordered.slice(0, pinnedCount),
+		...ordered
+			.slice(pinnedCount)
+			.sort(
+				(a, b) =>
+					(budget.get(itemOf(b)) ?? ASKS_PER_ITEM) - (budget.get(itemOf(a)) ?? ASKS_PER_ITEM)
+			)
+	];
 	const allowance = new Map<string, number>();
 	for (const card of ordered) {
 		const item = itemOf(card);
 		if (!allowance.has(item)) allowance.set(item, allowanceFor(budget, item));
 	}
 
-	/*
-	 * The pool, passed over until the count is met or every item is spent.
-	 *
-	 * `fill` used to do this by repeating the whole pool and slicing, which is
-	 * the same thing while every card may be asked equally often. It is not the
-	 * same thing once an item runs out mid-pass: this drops that card and carries
-	 * on with the rest, where a repeat-and-slice would have kept handing it out.
-	 */
+	// Take one direction per item in each sweep so a sound is not immediately
+	// asked again under a different prompt.
 	const out: string[] = [];
+	const asked = new Set<string>();
 	const left = new Map(allowance);
 	for (let pass = 0; pass < MAX_PASSES && out.length < count; pass++) {
 		let placed = false;
-		for (const card of ordered) {
+		const seenThisPass = new Set<string>();
+		const candidates =
+			pass === 0
+				? ordered
+				: [
+						...ordered.filter((card) => !asked.has(card.cardId)),
+						...ordered.filter((card) => asked.has(card.cardId))
+					];
+		for (const card of candidates) {
 			if (out.length >= count) break;
 			const item = itemOf(card);
 			const remaining = left.get(item) ?? 0;
 			if (remaining <= 0) continue;
+			if (seenThisPass.has(item)) continue;
+			// Familiar questions need one attempt. Only new material gets a planned
+			// second look; mistakes have their own bounded retry queue.
+			if (asked.has(card.cardId) && card.state.reps > 0) continue;
 			out.push(card.cardId);
+			asked.add(card.cardId);
 			left.set(item, remaining - 1);
+			seenThisPass.add(item);
 			placed = true;
 		}
 		if (!placed) break;
@@ -1062,6 +1005,8 @@ type QueueOptions = {
 	coldKeys?: string[];
 	pinnedSkill?: string | null;
 	keyCenter?: string;
+	/** The chosen workout size may ask fewer questions than the standalone drill. */
+	count?: number;
 	/**
 	 * The workout's remaining asks per item, shared by every queue it builds.
 	 *
@@ -1117,7 +1062,8 @@ function ledQueue(tiered: Schedulable[], options: QueueOptions, count: number): 
 	return toQueue(
 		leadWithPinned(tiered, led, pinnedShare(count)),
 		count,
-		options.budget ?? newBudget()
+		options.budget ?? newBudget(),
+		Math.min(led.length, pinnedShare(count))
 	);
 }
 
@@ -1144,15 +1090,15 @@ export function sightQueue(cards: Schedulable[], options: QueueOptions): string[
 		...tiered.filter((card) => !isRetiredIntroduction(card)),
 		...tiered.filter((card) => isRetiredIntroduction(card))
 	];
-	return ledQueue(introductionsFirst, options, SIGHT_QUESTIONS);
+	return ledQueue(introductionsFirst, options, options.count ?? SIGHT_QUESTIONS);
 }
 
-/** Six aural questions, and never fewer merely because the deck is well run. */
+/** Up to six aural questions, using near-due material when the due pile is empty. */
 export function earQueue(cards: Schedulable[], options: QueueOptions): string[] {
 	const pool = cards.filter((card) => inQualityHalf(card, 'folded'));
 	const tiered = tieredPool(pool, { ...options, directions: EAR_DIRECTIONS });
 	if (tiered.length === 0) return [];
-	return ledQueue(tiered, options, EAR_QUESTIONS);
+	return ledQueue(tiered, options, options.count ?? EAR_QUESTIONS);
 }
 
 /**
@@ -1178,7 +1124,7 @@ export function qualityQueue(cards: Schedulable[], options: QueueOptions): strin
 	if (tiered.length === 0) return [];
 	return toQueue(
 		spreadByShape(tiered, options.day),
-		QUALITY_QUESTIONS,
+		options.count ?? QUALITY_QUESTIONS,
 		options.budget ?? newBudget()
 	);
 }
@@ -1259,6 +1205,7 @@ function interleave<T>(lanes: T[][]): T[] {
  * about the sevenths in B first would be an odd way of honouring it.
  */
 export function functionQueue(cards: Schedulable[], options: QueueOptions): string[] {
+	const count = options.count ?? FUNCTION_QUESTIONS;
 	const tiered = tieredPool(cards, { ...options, directions: FUNCTION_DIRECTIONS });
 	if (tiered.length === 0) return [];
 
@@ -1276,9 +1223,10 @@ export function functionQueue(cards: Schedulable[], options: QueueOptions): stri
 			]
 		: allPinned;
 	return toQueue(
-		leadWithPinned(spread, pinned, pinnedShare(FUNCTION_QUESTIONS)),
-		FUNCTION_QUESTIONS,
-		options.budget ?? newBudget()
+		leadWithPinned(spread, pinned, pinnedShare(count)),
+		count,
+		options.budget ?? newBudget(),
+		Math.min(pinned.length, pinnedShare(count))
 	);
 }
 
@@ -1299,7 +1247,7 @@ export function functionQueue(cards: Schedulable[], options: QueueOptions): stri
  */
 export function crossingQueue(
 	cards: Schedulable[],
-	options: { now: Date; day: number; coldKeys?: string[]; budget?: ItemBudget }
+	options: { now: Date; day: number; coldKeys?: string[]; budget?: ItemBudget; count?: number }
 ): string[] {
 	const tiered = tieredPool(cards, { ...options, directions: CROSSING_DIRECTIONS });
 	if (tiered.length === 0) return [];
@@ -1323,7 +1271,7 @@ export function crossingQueue(
 
 	return toQueue(
 		interleave(rotate(lanes, options.day)),
-		CROSSING_QUESTIONS,
+		options.count ?? CROSSING_QUESTIONS,
 		options.budget ?? newBudget()
 	);
 }
@@ -1890,90 +1838,29 @@ function noveltyLine(novelty: Novelty): string {
 	}
 }
 
-/**
- * The order of the kinds, by size.
- *
- * Reading a symbol and playing it is regular practice now, not only an
- * introduction. Short rotates one drill a day. Standard rotates balanced pairs:
- * sight with ear, sight with function, then sight with the hinge. That makes
- * reading the steady thread while the complementary skill changes. Long asks
- * all four drill questions once.
- *
- * The mission and the new thing survive at every size, since a short day that
- * never plays with anyone and never meets anything is not a short workout, it
- * is a shrug.
- *
- * **The sight slot leads whenever it appears.** A new symbol therefore still
- * arrives before anything tests it, while graduated symbols turn this same task
- * into the regular chart-reading and finger practice the workout was missing.
- *
- * **The colour slot sits directly behind it on the same terms.** It builds only
- * while a shape is still being learned and it falls through to nothing, so on
- * the ordinary morning it costs no questions and does not appear. On the morning
- * after `all-triads` opens it does, and it goes second: the sight task is where
- * the chords arrive, this is where you learn what they *sound* like, and both
- * come before any question that assumes you know. Asking somebody to name a
- * chord by ear before anything has asked them to tell major from minor is the
- * order this whole milestone is about, and slot order is where that order is
- * actually kept.
- */
-function slotsFor(size: WorkoutSize, day: number): TaskKind[] {
-	switch (size) {
-		case 'short':
-			return SHORT_DRILLS[day % SHORT_DRILLS.length] === 'sight'
-				? ['sight', 'quality', 'mission', 'new_thing']
-				: ['quality', SHORT_DRILLS[day % SHORT_DRILLS.length], 'mission', 'new_thing'];
-		case 'standard':
-			return [
-				'sight',
-				'quality',
-				...STANDARD_DRILLS[day % STANDARD_DRILLS.length].slice(1),
-				'mission',
-				'new_thing'
-			];
-		case 'long':
-			return ['sight', 'quality', 'ear', 'function', 'crossing', 'mission', 'new_thing'];
-	}
+type DrillKind = Exclude<TaskKind, 'mission' | 'new_thing'>;
+
+/** Introductions lead; the remaining drills rotate without changing phase. */
+function slotsFor(size: WorkoutSize, day: number): DrillKind[] {
+	const companions: DrillKind[] = ['ear', 'function', 'crossing'];
+	const short: DrillKind[] = ['sight', ...companions];
+	const preferred: DrillKind[] =
+		size === 'short'
+			? ['quality', short[day % short.length]]
+			: size === 'standard'
+				? ['sight', 'quality', companions[day % companions.length]]
+				: ['sight', 'quality', ...companions];
+	return [...new Set([...preferred, 'sight', ...companions] as DrillKind[])];
 }
-
-/** One compact drill beside the mission and novelty. */
-const SHORT_DRILLS: TaskKind[] = ['sight', 'ear', 'function', 'crossing'];
-
-/** Two complementary drills: hands lead twice, the ear remains a frequent visitor. */
-const STANDARD_DRILLS: TaskKind[][] = [
-	['sight', 'ear'],
-	['sight', 'function'],
-	['sight', 'crossing']
-];
 
 // ---------------------------------------------------------------------------
 // The composer
 // ---------------------------------------------------------------------------
 
 /**
- * Compose today's workout.
- *
- * Deterministic in the date and the inputs: the same state on the same day
- * composes the identical workout, and the next day's genuinely differs. Nothing
- * here reads a clock, a database or a keyboard, so all of that is provable
- * without any of them.
- *
- * A slot that cannot be built falls through rather than leaving a hole — ear to
- * function to mission and back round, so a slot is filled by whatever else there
- * is before it is given up on.
- *
- * The mission used to be the end of every fallthrough, on the grounds that it
- * was always buildable because the built-in charts are always there. It is not
- * any more, and deliberately: a chart nobody has been taught the chords of is
- * worse than no chart. On the first day of an account — one rung, seven notes,
- * no chord shape at all — the drill room has one task in it and no tune is
- * playable, so the workout is genuinely two tasks long and nothing can honestly
- * make it four.
- *
- * It therefore says so rather than padding. `missionHeld` names the nearest tune
- * and what it is waiting for, the size picker counts the tasks that were
- * actually composed, and by the second rung there is a play-along. A count that
- * is true is worth more than a count that is round.
+ * Compose a bounded workout in three phases: drills, discovery, then one song.
+ * Queues spend their shared budget only when selected. Unavailable phases stay
+ * absent instead of sending the player back through earlier work.
  */
 export function composeWorkout(input: WorkoutInput): Workout {
 	const now = input.now ?? new Date();
@@ -2032,17 +1919,20 @@ export function composeWorkout(input: WorkoutInput): Workout {
 	const chartBySlug = new Map(charts.map((c) => [c.slug, c]));
 	const vocabulary = input.vocabulary ?? emptyVocabulary();
 
-	/*
-	 * Whether there is a tune to play at all, on the mission's own terms.
-	 *
-	 * Asked here rather than inside the novelty slot so both readers get the same
-	 * answer from the same predicate: a groove offered on a morning when no chart
-	 * is playable and `missionHeld` is about to say so is two halves of one screen
-	 * disagreeing.
-	 */
-	const canPlayAlong = charts.some(
-		(chart) => isReady(chart.demand, vocabulary) && (chart.mode !== 'minor' || minorKeys.length > 0)
-	);
+	const mission = composeMission({
+		charts,
+		vocabulary,
+		reached: input.reached,
+		keyCenter,
+		coldKeys: stationOnly ? [] : coldKeys,
+		coldSpots,
+		ladders: input.ladders ?? {},
+		plays: input.plays ?? {},
+		minorKeys: stationOnly ? minorKeys.filter((key) => stationKeys.includes(key)) : minorKeys,
+		stationOnly,
+		day,
+		nth: 0
+	});
 
 	/*
 	 * The novelty is chosen after the vocabulary rather than before it, and the
@@ -2057,144 +1947,38 @@ export function composeWorkout(input: WorkoutInput): Workout {
 		yesterday: input.yesterdaysNovelty ?? null,
 		minorKeys,
 		vocabulary,
-		canPlayAlong,
+		canPlayAlong: mission !== null,
 		day
 	});
 
-	/*
-	 * Five queues, one bank, partitioned by direction — and, for the one
-	 * direction two of them share, by whether its card has graduated. So nothing
-	 * is asked twice without any queue having to know the others exist. See
-	 * `EAR_DIRECTIONS`.
-	 *
-	 * And **one budget between them**, which is the thing the partition could not
-	 * do on its own. Direction is what keeps a *card* from being asked twice; it
-	 * says nothing about the C major scale being one scale whether it is read or
-	 * heard. The budget is the only place the four queues meet, and they meet in
-	 * the order they are shown, so the earliest task gets first call on a small
-	 * bank and none of them gets all of it. See `ASKS_PER_ITEM`.
-	 */
-	const budget = newBudget();
-	const sight = sightTask(
-		sightQueue(bank, { now, day, coldKeys, pinnedSkill, keyCenter, budget }),
-		bank
-	);
-	// Second on the budget as it is second in the day: the sounds are met before
-	// anything asks you to name one.
-	const quality = qualityTask(
-		qualityQueue(bank, { now, day, coldKeys, pinnedSkill, keyCenter, budget }),
-		bank
-	);
-	const ear = earTask(earQueue(bank, { now, day, coldKeys, pinnedSkill, keyCenter, budget }), bank);
-	const fn = functionTask(
-		functionQueue(bank, { now, day, coldKeys, pinnedSkill, keyCenter, budget }),
-		bank
-	);
-	/*
-	 * And no key question at one station.
-	 *
-	 * Not an omission to apologise for: `crossingQueue`'s own note says the spread
-	 * across keys *is* the exercise, because the thing being taught is telling
-	 * confusable places apart. Asked six times in one key it is six repetitions of
-	 * "yes, still C" — a question whose answer is printed on the board above it.
-	 * A run that stays at one station has one task fewer and is honest about why.
-	 */
-	const crossing = stationOnly
-		? null
-		: crossingTask(crossingQueue(bank, { now, day, coldKeys, budget }), bank);
-
-	let missionsBuilt = 0;
-	/*
-	 * Missions already set, as tune-and-key.
-	 *
-	 * A long workout asks for two, and early on the ready pool can hold one tune —
-	 * on an account two rungs old it holds exactly one. `composeMission` cycles
-	 * its pool with `nth % length`, so the second ask comes back with the same
-	 * chart, and with only one key reached it comes back in the same key too. Two
-	 * identical tasks is not a longer workout, so the second is refused and the
-	 * slot falls through to the drill room like any other slot that cannot be
-	 * built.
-	 */
-	const missionsSet = new Set<string>();
-	const nextMission = (): MissionTask | null => {
-		const mission = composeMission({
-			charts,
-			vocabulary,
-			reached: input.reached,
-			keyCenter,
-			// A run kept to one station has no cold keys to rotate towards and one
-			// minor key to offer — its own relative, and only if the ladder opened
-			// it. A minor tune with nowhere minor to go is refused, which is the
-			// same rule `composeMission` already applies to every other account.
-			coldKeys: stationOnly ? [] : coldKeys,
-			coldSpots,
-			ladders: input.ladders ?? {},
-			plays: input.plays ?? {},
-			minorKeys: stationOnly ? minorKeys.filter((key) => stationKeys.includes(key)) : minorKeys,
-			stationOnly,
-			day,
-			nth: missionsBuilt
-		});
-		if (!mission) return null;
-
-		const already = `${mission.chartSlug} ${mission.keyCenter}`;
-		if (missionsSet.has(already)) return null;
-		missionsSet.add(already);
-
-		missionsBuilt++;
-		return missionTask(mission, chartBySlug.get(mission.chartSlug));
-	};
-
-	// A drill task is built once and handed out once. Without this a fallthrough
-	// would satisfy two slots with the same task and quietly make a workout of
-	// four tasks into three.
-	const spent = new Set<Task>();
-	const take = (task: Task | null): Task | null => {
-		if (!task || spent.has(task)) return null;
-		spent.add(task);
-		return task;
-	};
+	// Discover a groove in today's song, with one trip to the band. The preview
+	// and the actual transport must name the same groove.
+	if (mission && novelty?.kind === 'groove') mission.groove = novelty.groove;
+	if (mission && size === 'short') mission.choruses = 1;
 
 	const tasks: Task[] = [];
-	for (const slot of slotsFor(size, day)) {
-		/*
-		 * Falling through in this order and no other: the ear and the function are
-		 * the questions nothing else in the app can pose, and the mission is the
-		 * one that can always be posed.
-		 *
-		 * The sight slot is the exception at both ends. Nothing falls *into* it and
-		 * it falls through to nothing itself, so the written-symbol practice appears
-		 * at the cadence chosen by the size model rather than being used as padding.
-		 *
-		 * The colour slot is the same exception for the same reason, one step
-		 * further on. Nothing falls into it, because a quality drill handed out to
-		 * fill a gap would be four questions asking whether a major triad is major
-		 * on a morning when nothing about that was in doubt; and it falls through
-		 * to nothing, because *every shape you have met is known* is the ordinary
-		 * state of an account and the correct amount of this task then is none of
-		 * it. Unlike the sight task it does not join the other chains either: it is
-		 * the one drill whose pool is defined by not having been learned yet, so
-		 * there is never a spare one of it to plug a hole with.
-		 */
+	const budget = newBudget();
+	const drillLimit = TASK_COUNT[size] - Number(Boolean(mission)) - Number(Boolean(novelty));
+	for (const kind of slotsFor(size, day)) {
+		if (tasks.length >= drillLimit) break;
+		const count = size === 'short' ? 3 : kind === 'function' && size === 'standard' ? 6 : undefined;
+		const options = { now, day, coldKeys, pinnedSkill, keyCenter, budget, count };
 		const built =
-			slot === 'sight'
-				? take(sight)
-				: slot === 'quality'
-					? take(quality)
-					: slot === 'ear'
-						? (take(ear) ?? take(fn) ?? take(crossing) ?? take(sight) ?? nextMission())
-						: slot === 'function'
-							? (take(fn) ?? take(crossing) ?? take(ear) ?? take(sight) ?? nextMission())
-							: slot === 'crossing'
-								? (take(crossing) ?? take(fn) ?? take(ear) ?? take(sight) ?? nextMission())
-								: slot === 'new_thing'
-									? novelty
-										? newThingTask(novelty)
-										: (nextMission() ?? take(ear) ?? take(fn) ?? take(crossing) ?? take(sight))
-									: (nextMission() ?? take(ear) ?? take(fn) ?? take(crossing) ?? take(sight));
-
+			kind === 'sight'
+				? sightTask(sightQueue(bank, options), bank)
+				: kind === 'quality'
+					? qualityTask(qualityQueue(bank, options), bank)
+					: kind === 'ear'
+						? earTask(earQueue(bank, options), bank)
+						: kind === 'function'
+							? functionTask(functionQueue(bank, options), bank)
+							: stationOnly
+								? null
+								: crossingTask(crossingQueue(bank, options), bank);
 		if (built) tasks.push(built);
 	}
+	if (novelty) tasks.push(newThingTask(novelty));
+	if (mission) tasks.push(missionTask(mission, chartBySlug.get(mission.chartSlug)));
 
 	return {
 		version: 2,
@@ -2208,7 +1992,7 @@ export function composeWorkout(input: WorkoutInput): Workout {
 		novelty,
 		openNext,
 		// Only worth saying when a slot actually wanted one and could not have it.
-		missionHeld: missionsBuilt === 0 ? heldBack(charts, vocabulary) : null
+		missionHeld: mission ? null : heldBack(charts, vocabulary)
 	};
 }
 

@@ -156,6 +156,7 @@
 	);
 
 	const preview = $derived(data.previews[size] ?? []);
+	const plannedQuestions = $derived(preview.reduce((sum, item) => sum + item.questions, 0));
 	const resuming = $derived(Boolean(data.resume));
 
 	/*
@@ -693,10 +694,16 @@
 								class:is-selected={size === option}
 								aria-pressed={size === option}
 								onclick={() => (size = option)}
-								>{option} · {data.previews[option]?.length ?? 0}</button
+								>{option} · {data.previews[option]?.length ?? 0} tasks</button
 							>
 						{/each}
 					</div>
+					<p class="text-ink-dim mt-3 font-mono text-xs" aria-live="polite">
+						{plannedQuestions}
+						{plannedQuestions === 1 ? 'question' : 'questions'}
+						{#if preview.some((item) => item.kind === 'mission')}
+							· one song to finish{/if}. Up to two correction questions per drill.
+					</p>
 
 					<!--
 						The way back out of a choice, which the map had no way of undoing.

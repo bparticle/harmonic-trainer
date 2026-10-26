@@ -17,6 +17,24 @@ describe('the run a drill walks', () => {
 });
 
 describe('putting a missed card back', () => {
+	it('uses an already planned repeat instead of adding the same question again', () => {
+		const queue = openQueue(3);
+		expect(putBack(queue, 0, ['a', 'b', 'a'])).toBe(queue);
+	});
+
+	it('gives repeated occurrences of a card at most one corrective retry', () => {
+		const ids = ['a', 'b', 'a'];
+		const queue = putBack(openQueue(3), 2, ids);
+		expect(putBack(queue, 0, ids)).toBe(queue);
+	});
+
+	it('caps the correction round at two questions even if every answer was missed', () => {
+		let queue = openQueue(6);
+		for (let position = 0; position < queue.length; position++) queue = putBack(queue, position);
+		expect(queue).toHaveLength(8);
+		expect(queue.filter((step) => step.retry)).toHaveLength(2);
+	});
+
 	it('puts it on the end, marked as the second look', () => {
 		const queue = putBack(openQueue(3), 0);
 		expect(queue).toHaveLength(4);

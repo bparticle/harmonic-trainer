@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { GROOVES } from '$lib/audio/groove';
 import type { CardDirection } from '$lib/server/db/schema';
 import { initialState, type Schedulable, type SrsState } from '$lib/srs/scheduler';
 import {
@@ -156,6 +157,155 @@ const functionCards = (workout: Workout) =>
 const missions = (workout: Workout) =>
 	workout.tasks.flatMap((t) => (t.kind === 'mission' ? [t.mission] : []));
 
+describe('a daily workout stays bounded and moves towards playing', () => {
+	it('finishes with one mission even when drills or novelty cannot be filled', () => {
+		for (const size of ['short', 'standard', 'long'] as const) {
+			const workout = composeWorkout(
+				input({
+					size,
+					cards: [],
+					nextCell: null,
+					played: {
+						progressions: PROGRESSIONS.map((p) => p.id),
+						grooves: GROOVES.map((groove) => groove.id)
+					}
+				})
+			);
+			expect(missions(workout)).toHaveLength(1);
+			expect(workout.tasks.at(-1)?.kind).toBe('mission');
+		}
+	});
+
+	it('puts new material before the final song', () => {
+		const workout = composeWorkout(input({ rungLooksSolid: true }));
+		expect(taskKinds(workout).indexOf('new_thing')).toBeLessThan(
+			taskKinds(workout).indexOf('mission')
+		);
+		expect(workout.tasks.at(-1)?.kind).toBe('mission');
+	});
+
+	it('keeps Colour inside the chosen size instead of adding a section', () => {
+		const fresh = {
+			...card('colour', 'hear_quality', 'C'),
+			state: initialState(NOW),
+			shape: 'major'
+		};
+		for (const size of ['short', 'standard', 'long'] as const) {
+			const workout = composeWorkout(input({ size, cards: [...bank(), fresh] }));
+			expect(taskKinds(workout)).toContain('quality');
+			expect(workout.tasks.length).toBeLessThanOrEqual(TASK_COUNT[size]);
+		}
+	});
+
+	it('does not replay a familiar pool to fill a question quota', () => {
+		const cards = [card('a', 'hear_play', 'C'), card('b', 'hear_name', 'G')];
+		const queue = earQueue(cards, { now: NOW, day: 0 });
+		expect(queue).toHaveLength(2);
+		expect(new Set(queue)).toEqual(new Set(['a', 'b']));
+	});
+
+	it('spreads different directions of the same item apart', () => {
+		const cards = ['a', 'b', 'c'].flatMap((item) => [
+			{ ...card(`${item}-play`, 'hear_play', 'C'), item },
+			{ ...card(`${item}-name`, 'hear_name', 'C'), item }
+		]);
+		const byId = new Map(cards.map((c) => [c.cardId, c.item]));
+		const queue = earQueue(cards, { now: NOW, day: 0 });
+		expect(new Set(queue.slice(0, 3).map((id) => byId.get(id))).size).toBe(3);
+	});
+
+	it('uses a different prompt before repeating an unseen card', () => {
+		const cards = ['a', 'b', 'c'].flatMap((item) =>
+			(['hear_play', 'hear_name'] as const).map((direction) => ({
+				...card(`${item}-${direction}`, direction, 'C', { reps: 0 }),
+				item
+			}))
+		);
+		const queue = earQueue(cards, { now: NOW, day: 0 });
+		expect(queue).toHaveLength(6);
+		expect(new Set(queue).size).toBe(6);
+	});
+
+	it('does not spend the question budget on drills omitted from a short workout', () => {
+		const cards = [
+			{ ...card('seen', 'see_play', 'C'), state: initialState(NOW), item: 'scale' },
+			{ ...card('heard', 'hear_play', 'C'), state: initialState(NOW), item: 'scale' }
+		];
+		const now = new Date(NOW.getTime() + ((1 - (dayNumber(NOW) % 4) + 4) % 4) * DAY);
+		const workout = composeWorkout(input({ size: 'short', cards, now }));
+		expect(taskKinds(workout)).not.toContain('sight');
+		expect(earCards(workout)).toEqual(['heard', 'heard']);
+	});
+
+	it('sets up the final song in the groove introduced immediately before it', () => {
+		const workout = composeWorkout(
+			input({
+				played: { progressions: PROGRESSIONS.map((p) => p.id), grooves: [] },
+				nextCell: null
+			})
+		);
+		expect(workout.novelty?.kind).toBe('groove');
+		if (workout.novelty?.kind === 'groove') {
+			expect(missions(workout)[0].groove).toBe(workout.novelty.groove);
+		}
+		expect(missions(workout)).toHaveLength(1);
+	});
+
+	it('makes short drills smaller as well as reducing the number of tasks', () => {
+		const workout = composeWorkout(input({ size: 'short' }));
+		for (const task of workout.tasks) {
+			if ('cardIds' in task) expect(task.cardIds.length).toBeLessThanOrEqual(3);
+		}
+		expect(missions(workout)[0].choruses).toBe(1);
+		expect(workout.tasks.at(-1)?.goal).toMatchObject({ choruses: 1 });
+	});
+
+	it('prefers unused musical items in the next drill when the bank has enough variety', () => {
+		const cards = Array.from({ length: 9 }, (_, item) =>
+			(['see_play', 'hear_play'] as const).map((direction) => ({
+				...card(`${item}-${direction}`, direction, 'C'),
+				item: `shape-${item}`
+			}))
+		).flat();
+		const now = new Date(NOW.getTime() + ((3 - (dayNumber(NOW) % 3)) % 3) * DAY);
+		const workout = composeWorkout(input({ cards, now }));
+		const byId = new Map(cards.map((card) => [card.cardId, card.item]));
+		const seen = new Set(sightCards(workout).map((id) => byId.get(id)));
+		expect(earCards(workout)).toHaveLength(6);
+		for (const id of earCards(workout).slice(0, 3)) expect(seen.has(byId.get(id))).toBe(false);
+	});
+
+	it('keeps real curriculum banks bounded across sizes and dates', () => {
+		const cards = cardsForReached(REACHED).map((generated, at) => ({
+			...card(`real-${at}`, generated.direction, generated.keyCenter),
+			skillCode: generated.skillCode,
+			shape: generated.payload.shape,
+			item: `${generated.keyCenter}|${generated.payload.kind}|${generated.payload.label}`
+		}));
+		const byId = new Map(cards.map((card) => [card.cardId, card]));
+		for (let day = 0; day < 14; day++) {
+			for (const size of ['short', 'standard', 'long'] as const) {
+				const workout = composeWorkout(
+					input({ cards, size, now: new Date(NOW.getTime() + day * DAY) })
+				);
+				expect(workout.tasks.length).toBeLessThanOrEqual(TASK_COUNT[size]);
+				expect(missions(workout)).toHaveLength(1);
+				expect(workout.tasks.at(-1)?.kind).toBe('mission');
+				const asked = new Map<string, number>();
+				for (const task of workout.tasks) {
+					if (!('cardIds' in task)) continue;
+					expect(new Set(task.cardIds).size).toBe(task.cardIds.length);
+					for (const id of task.cardIds) {
+						const item = byId.get(id)!.item;
+						asked.set(item, (asked.get(item) ?? 0) + 1);
+					}
+				}
+				for (const count of asked.values()) expect(count).toBeLessThanOrEqual(3);
+			}
+		}
+	});
+});
+
 describe('the shape of a workout', () => {
 	it('counts tasks rather than minutes', () => {
 		for (const size of ['short', 'standard', 'long'] as WorkoutSize[]) {
@@ -196,8 +346,8 @@ describe('the shape of a workout', () => {
 			'ear',
 			'function',
 			'crossing',
-			'mission',
-			'new_thing'
+			'new_thing',
+			'mission'
 		]);
 	});
 
@@ -458,8 +608,8 @@ describe('the sight task, where the material arrives', () => {
 			input({ size: 'standard', cards: [...bank(), unmet('new-one')] })
 		);
 
-		expect(taskKinds(ordinary)).toEqual(['sight', 'function', 'mission', 'new_thing']);
-		expect(taskKinds(arriving)).toEqual(['sight', 'function', 'mission', 'new_thing']);
+		expect(taskKinds(ordinary)).toEqual(['sight', 'function', 'new_thing', 'mission']);
+		expect(taskKinds(arriving)).toEqual(['sight', 'function', 'new_thing', 'mission']);
 	});
 
 	it('is part of a balanced long workout after the symbols graduate', () => {
@@ -515,9 +665,14 @@ describe('the ear queue never runs dry', () => {
 	 * spending everything does not know whether another task is coming, and
 	 * leaving something behind is the safe way to be wrong.
 	 */
-	it('goes round a short pool rather than stopping early, but only so far', () => {
+	it('ends a familiar short pool without repeating it to fill the quota', () => {
 		const one = [card('only-one', 'hear_play', 'C')];
-		expect(earQueue(one, { now: NOW, day: 0 })).toEqual(['only-one', 'only-one']);
+		expect(earQueue(one, { now: NOW, day: 0 })).toEqual(['only-one']);
+	});
+
+	it('gives an unseen card a guided attempt and one recall attempt', () => {
+		const one = [card('new-one', 'hear_play', 'C', { reps: 0 })];
+		expect(earQueue(one, { now: NOW, day: 0 })).toEqual(['new-one', 'new-one']);
 	});
 
 	it('has nothing to say when the bank holds no aural cards at all', () => {
@@ -610,9 +765,9 @@ describe('the function queue', () => {
 		expect(byId.get(queue[0])!.keyCenter).toBe('Bb');
 	});
 
-	it('goes round a short pool rather than stopping early, but only so far', () => {
+	it('ends a familiar short pool without repeating it to fill the quota', () => {
 		const one = [card('only-one', 'degree_play', 'C')];
-		expect(functionQueue(one, { now: NOW, day: 0 })).toEqual(['only-one', 'only-one']);
+		expect(functionQueue(one, { now: NOW, day: 0 })).toEqual(['only-one']);
 	});
 
 	it('has nothing to say when nothing reached carries a numeral', () => {

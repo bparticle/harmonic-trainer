@@ -1745,10 +1745,11 @@
 				type="button"
 				class="chip"
 				onclick={() => (settingsOpen = !settingsOpen)}
-				aria-pressed={settingsOpen}
+				aria-expanded={settingsOpen}
+				aria-controls="playback-setup"
 				aria-label={settingsOpen ? 'Hide setup' : 'Show setup'}
 			>
-				⚙ Setup
+				⚙ {settingsOpen ? 'Hide setup' : 'Show setup'}
 			</button>
 		</div>
 	</header>
@@ -2088,181 +2089,206 @@
 				sidebar-era width rather than stretching to fill the row — most end
 				up stacked, and only pair up where the row has room to spare.
 			-->
-			{#if settingsOpen}
-				<div
-					class="setup-panel border-ground-line bg-ground-raised mt-5 flex flex-wrap gap-x-8 gap-y-6 rounded-xl border p-4"
+			{#if !settingsOpen}
+				<button
+					type="button"
+					class="setup-reopen"
+					onclick={() => (settingsOpen = true)}
+					aria-expanded="false"
+					aria-controls="playback-setup"
+					aria-label="Show key, tempo and sound controls"
 				>
-					<div class="w-60">
-						<h2 class="panel-title">Key</h2>
-						<div class="grid grid-cols-4 gap-1.5">
-							{#each KEYS as k (k)}
-								{@const pc = pitchClass(parseKey(k).tonic)}
-								<button
-									type="button"
-									class="chip key-chip justify-center"
-									class:is-on={k === keyName}
-									style:--tint="var(--pc-{pc})"
-									onclick={() => {
-										keyName = k;
-										void restartIfPlaying();
-									}}>{keyLabel(k)}</button
-								>
-							{/each}
-						</div>
-					</div>
-
-					<div class="w-60">
-						<h2 class="panel-title">Tempo</h2>
-						<div class="flex items-center gap-2">
-							<button
-								type="button"
-								class="stepper"
-								onclick={() => nudgeTempo(-5)}
-								aria-label="Slower">−</button
-							>
-							<span class="font-mono text-ink flex-1 text-center text-3xl tabular-nums">{bpm}</span>
-							<button
-								type="button"
-								class="stepper"
-								onclick={() => nudgeTempo(5)}
-								aria-label="Faster">+</button
-							>
-						</div>
-						<input
-							type="range"
-							min={MIN_BPM}
-							max={MAX_BPM}
-							step="1"
-							bind:value={bpm}
-							oninput={() => track.setBpm(bpm)}
-							class="mt-2.5 w-full"
-							aria-label="Tempo in beats per minute"
-						/>
-					</div>
-
-					<div class="w-60">
-						<div class="mb-1 flex items-center gap-2">
-							<h2 class="panel-title">Groove</h2>
-							<InfoHint label="About this groove" text={grooveSpec(groove).notes} />
-						</div>
-						<!-- Three across rather than four: nine of them make a square, and
-						     the longer names fit without being cramped. -->
-						<div class="grid grid-cols-3 gap-1.5">
-							{#each GROOVES as option (option.id)}
-								<button
-									type="button"
-									class="chip justify-center"
-									class:is-on={groove === option.id}
-									title={option.notes}
-									onclick={() => {
-										groove = option.id;
-										void restartIfPlaying();
-									}}>{option.name}</button
-								>
-							{/each}
-						</div>
-					</div>
-
-					<div class="w-60">
-						<h2 class="panel-title">Count-in</h2>
-						<button
-							type="button"
-							class="chip w-full"
-							class:is-on={countIn}
-							onclick={() => (countIn = !countIn)}
-							aria-pressed={countIn}
-						>
-							<span class="dot" class:is-lit={countIn}></span>
-							One bar of clicks
-						</button>
-					</div>
-
-					<div class="w-60">
-						<h2 class="panel-title">Rounds</h2>
-						<div class="repeat-options" aria-label="Number of rounds">
-							{#each PASS_LIMITS as option (option.label)}
-								<button
-									type="button"
-									class="chip"
-									class:is-on={passLimit === option.value}
-									onclick={() => {
-										passLimit = option.value;
-										void restartIfPlaying();
-									}}
-									aria-pressed={passLimit === option.value}
-									aria-label={option.value === null
-										? 'Keep looping until stopped'
-										: `Stop after ${option.value} ${option.value === 1 ? 'round' : 'rounds'}`}
-								>
-									{option.label}
-								</button>
-							{/each}
-						</div>
-						<p class="setup-note">
-							{passLimit === null
-								? 'Keeps looping until you stop.'
-								: `Stops and shows your score after ${passLimit} ${passLimit === 1 ? 'round' : 'rounds'}.`}
-						</p>
-					</div>
-
-					<div class="w-60">
-						<div class="mb-1 flex items-center gap-2">
-							<h2 class="panel-title">Fireworks</h2>
-							<InfoHint
-								label="About fireworks"
-								text="Visual effects only. Scoring stays the same."
-							/>
-						</div>
-						<button
-							type="button"
-							class="chip w-full"
-							class:is-on={fireworks}
-							onclick={() => (fireworks = !fireworks)}
-							aria-pressed={fireworks}
-						>
-							<span class="dot" class:is-lit={fireworks}></span>
-							Visual effects
-						</button>
-					</div>
-
-					<div class="w-full">
-						<div class="mb-1 flex items-center gap-2">
-							<h2 class="panel-title">Mix</h2>
-							<InfoHint
-								label="About comping"
-								text="Comping is off by default so the band leaves the chords to you."
-							/>
-						</div>
-						<div class="flex flex-col gap-2">
-							{#each PARTS as [part, label] (part)}
-								<div class="flex items-center gap-2">
+					<span class="setup-summary">
+						<strong>Key, tempo &amp; sound</strong>
+						<span>
+							Controls hidden · {keyLabel(keyName)}{seed.mode === 'minor' ? ' minor' : ''}
+							· {bpm} BPM · {grooveSpec(groove).name}
+						</span>
+					</span>
+					<span class="setup-reopen-action">Show setup <span aria-hidden="true">↓</span></span>
+				</button>
+			{/if}
+			<div id="playback-setup" hidden={!settingsOpen}>
+				{#if settingsOpen}
+					<div
+						role="region"
+						aria-label="Playback setup"
+						class="setup-panel border-ground-line bg-ground-raised mt-5 flex flex-wrap gap-x-8 gap-y-6 rounded-xl border p-4"
+					>
+						<div class="w-60">
+							<h2 class="panel-title">Key</h2>
+							<div class="grid grid-cols-4 gap-1.5">
+								{#each KEYS as k (k)}
+									{@const pc = pitchClass(parseKey(k).tonic)}
 									<button
 										type="button"
-										class="chip w-[7.5rem] shrink-0"
-										class:is-on={!muted[part]}
-										onclick={() => setMuted(part, !muted[part])}
-										aria-pressed={!muted[part]}
+										class="chip key-chip justify-center"
+										class:is-on={k === keyName}
+										style:--tint="var(--pc-{pc})"
+										onclick={() => {
+											keyName = k;
+											void restartIfPlaying();
+										}}>{keyLabel(k)}</button
 									>
-										<span class="dot" class:is-lit={!muted[part]}></span>
-										{label}
+								{/each}
+							</div>
+						</div>
+
+						<div class="w-60">
+							<h2 class="panel-title">Tempo</h2>
+							<div class="flex items-center gap-2">
+								<button
+									type="button"
+									class="stepper"
+									onclick={() => nudgeTempo(-5)}
+									aria-label="Slower">−</button
+								>
+								<span class="font-mono text-ink flex-1 text-center text-3xl tabular-nums"
+									>{bpm}</span
+								>
+								<button
+									type="button"
+									class="stepper"
+									onclick={() => nudgeTempo(5)}
+									aria-label="Faster">+</button
+								>
+							</div>
+							<input
+								type="range"
+								min={MIN_BPM}
+								max={MAX_BPM}
+								step="1"
+								bind:value={bpm}
+								oninput={() => track.setBpm(bpm)}
+								class="mt-2.5 w-full"
+								aria-label="Tempo in beats per minute"
+							/>
+						</div>
+
+						<div class="w-60">
+							<div class="mb-1 flex items-center gap-2">
+								<h2 class="panel-title">Groove</h2>
+								<InfoHint label="About this groove" text={grooveSpec(groove).notes} />
+							</div>
+							<!-- Three across rather than four: nine of them make a square, and
+						     the longer names fit without being cramped. -->
+							<div class="grid grid-cols-3 gap-1.5">
+								{#each GROOVES as option (option.id)}
+									<button
+										type="button"
+										class="chip justify-center"
+										class:is-on={groove === option.id}
+										title={option.notes}
+										onclick={() => {
+											groove = option.id;
+											void restartIfPlaying();
+										}}>{option.name}</button
+									>
+								{/each}
+							</div>
+						</div>
+
+						<div class="w-60">
+							<h2 class="panel-title">Count-in</h2>
+							<button
+								type="button"
+								class="chip w-full"
+								class:is-on={countIn}
+								onclick={() => (countIn = !countIn)}
+								aria-pressed={countIn}
+							>
+								<span class="dot" class:is-lit={countIn}></span>
+								One bar of clicks
+							</button>
+						</div>
+
+						<div class="w-60">
+							<h2 class="panel-title">Rounds</h2>
+							<div class="repeat-options" aria-label="Number of rounds">
+								{#each PASS_LIMITS as option (option.label)}
+									<button
+										type="button"
+										class="chip"
+										class:is-on={passLimit === option.value}
+										onclick={() => {
+											passLimit = option.value;
+											void restartIfPlaying();
+										}}
+										aria-pressed={passLimit === option.value}
+										aria-label={option.value === null
+											? 'Keep looping until stopped'
+											: `Stop after ${option.value} ${option.value === 1 ? 'round' : 'rounds'}`}
+									>
+										{option.label}
 									</button>
-									<input
-										type="range"
-										min="0"
-										max="1"
-										step="0.05"
-										value={level[part]}
-										oninput={(e) => setLevel(part, Number(e.currentTarget.value))}
-										class="min-w-0 flex-1"
-										disabled={muted[part]}
-										aria-label={`${label} level`}
-									/>
-								</div>
-							{/each}
+								{/each}
+							</div>
+							<p class="setup-note">
+								{passLimit === null
+									? 'Keeps looping until you stop.'
+									: `Stops and shows your score after ${passLimit} ${passLimit === 1 ? 'round' : 'rounds'}.`}
+							</p>
+						</div>
+
+						<div class="w-60">
+							<div class="mb-1 flex items-center gap-2">
+								<h2 class="panel-title">Fireworks</h2>
+								<InfoHint
+									label="About fireworks"
+									text="Visual effects only. Scoring stays the same."
+								/>
+							</div>
+							<button
+								type="button"
+								class="chip w-full"
+								class:is-on={fireworks}
+								onclick={() => (fireworks = !fireworks)}
+								aria-pressed={fireworks}
+							>
+								<span class="dot" class:is-lit={fireworks}></span>
+								Visual effects
+							</button>
+						</div>
+
+						<div class="w-full">
+							<div class="mb-1 flex items-center gap-2">
+								<h2 class="panel-title">Mix</h2>
+								<InfoHint
+									label="About comping"
+									text="Comping is off by default so the band leaves the chords to you."
+								/>
+							</div>
+							<div class="flex flex-col gap-2">
+								{#each PARTS as [part, label] (part)}
+									<div class="flex items-center gap-2">
+										<button
+											type="button"
+											class="chip w-[7.5rem] shrink-0"
+											class:is-on={!muted[part]}
+											onclick={() => setMuted(part, !muted[part])}
+											aria-pressed={!muted[part]}
+										>
+											<span class="dot" class:is-lit={!muted[part]}></span>
+											{label}
+										</button>
+										<input
+											type="range"
+											min="0"
+											max="1"
+											step="0.05"
+											value={level[part]}
+											oninput={(e) => setLevel(part, Number(e.currentTarget.value))}
+											class="min-w-0 flex-1"
+											disabled={muted[part]}
+											aria-label={`${label} level`}
+										/>
+									</div>
+								{/each}
+							</div>
 						</div>
 					</div>
-				</div>
-			{/if}
+				{/if}
+			</div>
 		</section>
 
 		<!--
@@ -2465,6 +2491,50 @@
 </main>
 
 <style>
+	.setup-reopen {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem 1.5rem;
+		width: 100%;
+		min-height: 60px;
+		margin-top: 1.25rem;
+		padding: 0.85rem 1rem;
+		border: 1px solid var(--color-ground-line);
+		border-radius: 0.5rem;
+		background: var(--color-ground-raised);
+		text-align: left;
+		cursor: pointer;
+	}
+
+	.setup-reopen:hover {
+		border-color: var(--color-ink-dim);
+		background: var(--color-ground-overlay);
+	}
+
+	.setup-summary {
+		display: flex;
+		flex-direction: column;
+		gap: 0.3rem;
+	}
+
+	.setup-summary strong {
+		color: var(--color-ink);
+		font-size: 0.9rem;
+		font-weight: 600;
+	}
+
+	.setup-summary > span {
+		color: var(--color-ink-muted);
+		font-size: 0.75rem;
+	}
+
+	.setup-reopen-action {
+		color: var(--color-ink);
+		font-size: 0.8rem;
+		white-space: nowrap;
+	}
 	.panel-title {
 		font-family: var(--font-mono);
 		font-size: 0.7rem;

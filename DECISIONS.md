@@ -7178,3 +7178,33 @@ watched two requests collide. If the workout still doubles back after this,
 the race was not the whole of it and the report needs a closer look at exactly
 when "return to the workout page" happens — mid-run after the mission
 specifically, or after a full "Done" screen and a fresh Depart.
+
+### Daily workouts have a size ceiling and finish with one song
+
+The replay after returning from a mission had another concrete cause:
+`taskIndexOf` did not recognize `quality`, so hydration treated a finished
+Colour block as unfinished. Task kinds now share one definition, and hydration
+requires both the kind and the position to match. After saving a task, the page
+uses the server's first unfinished position instead of blindly adding one.
+
+Short, standard and long now mean **at most three, four and six tasks**. Colour
+uses a drill slot instead of adding one. Short drills ask at most three
+questions and their song asks for one chorus; standard Function asks six.
+Unavailable sections make the workout shorter rather than padding it with
+another mission or moving drills behind a song. The order is drills, discovery,
+then one play-along. A new groove is introduced for that final song and the
+mission carries it to the transport. Stored plans retain their existing order.
+
+Queues are composed only when selected, so omitted drills cannot spend the
+shared item budget. Familiar card rows appear once per drill; unseen material
+can have a second guided-to-recall encounter. Each sweep takes one direction
+per musical item, and later drills prefer unused items after honoring the
+pinned opening. The three-encounter budget still spans the entire workout.
+Corrections are capped at two per drill and use any already scheduled repeat
+before appending another copy. The scheduler still records every answer.
+
+Discovery buttons describe continuing instead of claiming "Tried it". The final
+mission says "Finish workout", and the completion screen reached after a
+successful run supports Space and the sustain pedal as well as its button.
+The home preview exposes the actual planned question count and the correction
+limit before departure.

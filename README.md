@@ -39,7 +39,7 @@ remain planned in `ROADMAP.md`.
 
 - **Play** — connect a MIDI keyboard and it names what you play as you play it,
   with the reasoning, on a harmonic wheel that shows why.
-- **Today** — a workout of three to five tasks, composed fresh each morning and
+- **Today** — a workout of up to six tasks, composed fresh each morning and
   finished by meeting its goals rather than by running a clock down. Pick any
   key, any step or any progression to build it around; spaced repetition
   schedules the review and a twelve-key ladder suggests where to go next, and
@@ -472,7 +472,7 @@ whoever builds the rest.
 
 ## The daily workout
 
-**Today** is a workout: three to seven tasks, composed fresh each morning, each
+**Today** is a workout: up to three, four or six tasks, composed fresh each morning, each
 one ending because its goal was met rather than because a clock ran out.
 
 The drills isolate one small skill at a time; the mission puts them back
@@ -482,10 +482,10 @@ play-along page then asks for the whole performance under a constraint:
 
 | Task              | What it asks                                                                                           |
 | ----------------- | ------------------------------------------------------------------------------------------------------ |
-| **On sight**      | Six symbols, read and played: direct chord-sheet reading and finger practice                           |
+| **On sight**      | Up to six symbols, read and played: direct chord-sheet reading and finger practice                     |
 | **Colour**        | Four new or troublesome chord qualities: hear the sound, then identify its kind                        |
-| **Ear**           | Six questions: listen and play it back, or listen and name it                                          |
-| **Function**      | Eight degrees, spread across keys: "IV — E♭", played and then named                                    |
+| **Ear**           | Up to six questions: listen and play it back, or listen and name it                                    |
+| **Function**      | Up to eight degrees, spread across keys: "IV — E♭", played and then named                              |
 | **The hinge**     | Six pivots: one chord doing two jobs, named by its function in two keys at once                        |
 | **Mission**       | The play-along page itself, with a key, a tempo floor, a groove and a bar to clear                     |
 | **One new thing** | A single unseen item: the next rung, a progression, a groove never played over. Shown once, tried once |
@@ -501,10 +501,12 @@ avoiding, and one slot kept for something you have not met. Composition is
 seeded on the date, so a reload resumes the same workout and tomorrow's is
 genuinely a different one.
 
-**A task never runs out of questions.** The ear task fills its six from the due
-pile first, then near-due, then anything already reached — so "nothing due
-today" is not a sentence it can produce, which is what a well-scheduled deck
-used to say most days.
+**A small bank makes a shorter drill.** Questions come from due, near-due and
+already reached material. Familiar questions are asked once; unseen material
+may get a second attempt with less guidance. Different prompts for one musical
+item are spread apart, with at most three planned encounters across the workout.
+Missed questions can add at most two correction questions per drill, and an
+already scheduled repeat takes the place of an extra correction.
 
 **A mission is the play-along page, not a version of it.** It opens the real
 page with the constraint in the address bar, so the scoring, the streaks, the
@@ -522,13 +524,15 @@ tune asks there is no mission, and the workout says which tune is nearest, what
 it wants and where that is taught, rather than sending you to a cycle of chords
 nobody has mentioned.
 
-Short, standard and long are three, four and six tasks. Standard always pairs
-On sight with one rotating companion — Ear, Function or The hinge — while long
-includes all four drills once. Minutes were always an
-estimate; tasks are countable, which is why the home screen can show exactly
-what today holds instead of a set of durations that never varied — and on the
-first day or two, when there is one rung reached and no tune is playable yet, it
-shows the shorter count it can actually fill instead of a round number.
+Short, standard and long have ceilings of three, four and six tasks. Colour
+fits inside that limit when needed. Short drills ask at most three questions,
+and a short mission asks for one chorus; standard Function asks at most six
+questions. The picker shows the actual task and question counts.
+
+The order is drills, one new thing, then one final play-along. A new groove is
+introduced for that same song and selected in the band automatically. Missing
+sections never create another mission or send the player back to earlier
+drills. Early accounts get the shorter workout their material can support.
 
 The end screen says what changed, and every figure on it traces to a row: the
 questions this workout graded against the last workout that graded any, each

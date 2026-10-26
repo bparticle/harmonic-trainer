@@ -14,7 +14,7 @@ import {
 	taskTags,
 	type StoredBlock
 } from './progress';
-import type { Makeup, Mission, Task, Workout } from './workout';
+import { TASK_KINDS, type Makeup, type Mission, type Task, type Workout } from './workout';
 
 const STARTED = new Date('2026-02-10T09:00:00Z');
 
@@ -116,6 +116,9 @@ const V1_PLAN = {
 };
 
 describe('a task names the row that records it', () => {
+	it('reads every composed task kind, including Colour, back from its block name', () => {
+		for (const kind of TASK_KINDS) expect(taskIndexOf(taskBlockType(kind, 2)), kind).toBe(2);
+	});
 	it('says what it was and which one it was', () => {
 		expect(taskBlockType('mission', 4)).toBe('mission_4');
 		expect(taskBlockType('new_thing', 0)).toBe('new_thing_0');
@@ -167,6 +170,31 @@ describe('telling a workout from what came before it', () => {
 });
 
 describe('picking a workout back up', () => {
+	it('keeps Colour finished when returning from a play-along', () => {
+		const colour: Task = {
+			kind: 'quality',
+			title: 'Colour',
+			instruction: 'Listen, then choose the kind.',
+			goal: questions(2),
+			cardIds: ['major', 'minor']
+		};
+		const plan = workout([TASKS.sight, colour, TASKS.ear, TASKS.mission, TASKS.newThing]);
+		const active = hydrateWorkout(stored(plan), [
+			block('sight_0', { endedAt: STARTED }),
+			block('quality_1', { endedAt: STARTED }),
+			block('ear_2', { endedAt: STARTED }),
+			block('mission_3', { endedAt: STARTED })
+		])!;
+		expect(active.resumeAt).toBe(4);
+		expect(active.tasks[1].finished).toBe(true);
+	});
+
+	it('ignores a block with the right position but the wrong task kind', () => {
+		const active = hydrateWorkout(stored(), [block('mission_0', { endedAt: STARTED })])!;
+		expect(active.resumeAt).toBe(0);
+		expect(active.tasks[0].finished).toBe(false);
+	});
+
 	it('starts at the first task when nothing has been begun', () => {
 		const active = hydrateWorkout(stored(), [])!;
 		expect(active.resumeAt).toBe(0);
@@ -235,6 +263,7 @@ describe('previewing today’s tasks', () => {
 	it('counts the questions, because a question is countable and a minute was not', () => {
 		expect(preview[0].line).toContain('3');
 		expect(preview[1].line).toContain('2');
+		expect(preview.reduce((sum, task) => sum + task.questions, 0)).toBe(5);
 	});
 
 	it('names the tune a mission is set on and the bar it has to clear', () => {
