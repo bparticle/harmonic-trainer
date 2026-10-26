@@ -49,9 +49,12 @@ remain planned in `ROADMAP.md`.
   changes, cycles and public-domain standards, plus anything you type in.
 - **Explore** — the wheel, chord neighbours, voice leading, with the notes under
   your hands lighting up as you play them.
-- **Theory arcade** — a separate five-stop course for understanding the notes:
-  circle-of-fifths journeys, key-signature locks, chord recipes, Roman numerals,
-  and relative-key connections. Guided rounds teach; recall rounds test memory.
+- **Recipes** — theory you play rather than read. A line of short stops, from
+  one key's distance to the seventh-chord family, each building a chord from
+  its recipe of counted keys on the keyboard; and a branch line that discovers
+  the circle of fifths by counting the same seven keys until it comes back to C,
+  then rides it from memory both ways. Every answer is a note played. It keeps
+  its own record and leaves the courses and the daily workout untouched.
 - **Profile** — what has actually happened: hours played, chords judged, badges
   won, and the twelve keys as swatches so the ones you never play are visible at
   a glance. Every number traces to a row; none is an estimate, and there is no
@@ -123,9 +126,9 @@ You can also open the selected chart's editor from Play along. Add an artist
 in the chart editor to make your own songs searchable by artist.
 
 When upgrading an existing installation, run `npm run db:migrate` before
-starting this version. Migration `0018_theory_arcade` adds an account-owned
-theory-round record. It does not change existing courses, daily workouts,
-cards, or spaced-repetition schedules.
+starting this version. Migration `0018_theory_arcade` adds the account-owned
+record that **Recipes** writes to. It does not change existing courses, daily
+workouts, cards, or spaced-repetition schedules.
 
 The account command prints a temporary password when one is not supplied. Open
 `http://localhost:5173`, sign in with it, then change it from **Account**.

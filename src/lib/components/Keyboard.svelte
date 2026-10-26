@@ -1,3 +1,56 @@
+<script module lang="ts">
+	const BLACK = new Set([1, 3, 6, 8, 10]);
+	export const WHITE_WIDTH = 40;
+	export const BLACK_WIDTH = 24;
+	export const WHITE_HEIGHT = 190;
+	export const BLACK_HEIGHT = 118;
+
+	export type KeyInfo = { note: number; pc: number; black: boolean; x: number };
+
+	/**
+	 * Where each key is drawn, in the keyboard's own units.
+	 *
+	 * Exported so a drawing laid over the keys — an arc from one note to another,
+	 * a mark above a key — can be placed on the same grid this one is, rather
+	 * than measuring it back out of the DOM or keeping a second copy of the
+	 * widths in step by hand.
+	 */
+	export function keyLayout(from: number, count: number): { keys: KeyInfo[]; width: number } {
+		const keys: KeyInfo[] = [];
+		let x = 0;
+		for (let i = 0; i < count; i++) {
+			const note = from + i;
+			const pc = ((note % 12) + 12) % 12;
+			const black = BLACK.has(pc);
+			if (black) {
+				// Black keys straddle the gap between the two white keys either side.
+				keys.push({ note, pc, black, x: x - BLACK_WIDTH / 2 });
+			} else {
+				keys.push({ note, pc, black, x });
+				x += WHITE_WIDTH;
+			}
+		}
+		/*
+		 * As wide as what is drawn, not as wide as the white keys.
+		 *
+		 * A window that ends on a black key — which any window cut to the material
+		 * can — puts half a sharp past the last white key's right edge, and a viewBox
+		 * measured in white keys clipped it. Half a key, always the top one, always
+		 * on the right: the same shape as a scale running off the end, in miniature.
+		 */
+		const width = Math.max(
+			keys.filter((k) => !k.black).length * WHITE_WIDTH,
+			...keys.filter((k) => k.black).map((k) => k.x + BLACK_WIDTH)
+		);
+		return { keys, width };
+	}
+
+	/** The middle of a key, across. */
+	export function keyCentre(key: KeyInfo): number {
+		return key.x + (key.black ? BLACK_WIDTH : WHITE_WIDTH) / 2;
+	}
+</script>
+
 <script lang="ts">
 	/*
 	 * On-screen keyboard.
@@ -43,51 +96,16 @@
 		onnoteoff?: (note: number) => void;
 	} = $props();
 
-	const BLACK = new Set([1, 3, 6, 8, 10]);
-	const WHITE_WIDTH = 40;
-	const BLACK_WIDTH = 24;
-	const WHITE_HEIGHT = 190;
-	const BLACK_HEIGHT = 118;
-
 	const litSet = $derived(new Set(lit));
 	const targetSet = $derived(new Set(target));
 	const foundSet = $derived(new Set(found));
 	const demoSet = $derived(new Set(demo === null ? [] : Array.isArray(demo) ? demo : [demo]));
 	let pressed = $state<Set<number>>(new Set());
 
-	type KeyInfo = { note: number; pc: number; black: boolean; x: number };
-
-	const keys = $derived.by(() => {
-		const out: KeyInfo[] = [];
-		let x = 0;
-		for (let i = 0; i < count; i++) {
-			const note = from + i;
-			const pc = ((note % 12) + 12) % 12;
-			const black = BLACK.has(pc);
-			if (black) {
-				// Black keys straddle the gap between the two white keys either side.
-				out.push({ note, pc, black, x: x - BLACK_WIDTH / 2 });
-			} else {
-				out.push({ note, pc, black, x });
-				x += WHITE_WIDTH;
-			}
-		}
-		return out;
-	});
-
-	const whites = $derived(keys.filter((k) => !k.black));
-	const blacks = $derived(keys.filter((k) => k.black));
-	/*
-	 * As wide as what is drawn, not as wide as the white keys.
-	 *
-	 * A window that ends on a black key — which any window cut to the material
-	 * can — puts half a sharp past the last white key's right edge, and a viewBox
-	 * measured in white keys clipped it. Half a key, always the top one, always
-	 * on the right: the same shape as a scale running off the end, in miniature.
-	 */
-	const width = $derived(
-		Math.max(whites.length * WHITE_WIDTH, ...blacks.map((k) => k.x + BLACK_WIDTH))
-	);
+	const layout = $derived(keyLayout(from, count));
+	const whites = $derived(layout.keys.filter((k) => !k.black));
+	const blacks = $derived(layout.keys.filter((k) => k.black));
+	const width = $derived(layout.width);
 
 	const NAMES = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
 	const labelFor = (note: number) =>

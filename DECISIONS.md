@@ -7208,3 +7208,126 @@ mission says "Finish workout", and the completion screen reached after a
 successful run supports Space and the sustain pedal as well as its button.
 The home preview exposes the actual planned question count and the correction
 limit before departure.
+
+---
+
+## Chord recipes — theory you play, not theory you read
+
+A separate page, `/recipes`, for the part of a lesson that used to happen at the
+piano before the app was opened: what a half step is, what a third is, how a
+major chord is built, how to get round the circle of fifths in both directions.
+It sits beside the courses and the daily workout and changes neither — its
+rounds go to their own table and nothing in the workout composer, the ladder,
+the cards or the scheduler reads them.
+
+### The first draft was a quiz, and it was thrown away
+
+The first version was five games of multiple choice with explanatory text on
+every screen, and two of them used the piano as a controller: the white keys C
+to B answered I to vii°, the keys under the choices picked a number of sharps.
+That is the thing this page most needed not to do. A key that means "answer
+three" in one game and "the note E" in the next teaches the hand something
+false about the instrument, and the habit outlives the game.
+
+So the rule now has no exceptions: **every answer is a note, played, and a key
+always means the pitch it sounds.** There are no answer buttons anywhere on the
+page. Anything that could not be asked that way was dropped rather than bent —
+which is why key-signature counting and Roman numerals are not here yet. They
+want an honest way to be played first.
+
+### Shown, not explained
+
+The words on the page are the names of things — `Cm7`, `minor seventh`, `♭3` —
+and nothing else. What to do is shown: the first item of a stop plays itself
+once, stepping on every key it counts with a quiet note on each, then hands
+over. Everything after that is told by the drawing.
+
+Each stop climbs the same three rungs of help, and only the help changes:
+
+1. **keys** — the notes to find are drawn on the keyboard. Copy them. Never
+   scored, and skipped once a stop has been played clean.
+2. **card** — only the recipe: the shape, with the keys between its notes
+   counted. The open notes keep their colour, so a player who has learnt the
+   palette can find them by colour as well as by counting. That is deliberate:
+   the colours are this app's way of naming pitches, and learning them is part
+   of the point.
+3. **name** — only the chord symbol. The shape has to come from memory, and
+   the root has to be found too.
+
+### The drawing is a line on the map
+
+A recipe is drawn as a transit line: twelve ticks for the twelve keys of an
+octave, the chord's notes as the same roundel the network draws a key with, in
+their own colours, and the counted distance arched over each leg. A major triad
+reads as a journey — board at the root, ride four stops, change, ride three.
+Move to another root and every colour changes while the spacing does not move a
+tick; that is the one fact the drawing is built to make obvious.
+
+Over the keyboard the same distances are drawn again on the instrument itself,
+with a stepping stone on every key counted, so the count can be checked by eye
+against the keys under the hand. A wrong note is drawn there too, dashed and in
+ink, counted from the root: "that was five keys up". It is never drawn in its
+own colour, because a hue beside a wrong answer reads as a verdict, and
+**nothing goes red**.
+
+Distances are ink, never a hue. A distance has no pitch, so it gets weight;
+the colour is all in the notes at either end.
+
+### The circle of fifths is discovered, not handed over
+
+The circle line branches off the stop that teaches the fifth. Its twelve
+stations are unnamed until reached: you are given C and the count — seven keys
+up — and the circle is what appears as you keep counting it, the track drawn
+behind you until it closes on C. The other direction counts five. The last stop
+does both, with no count shown, and that is the memorisation the lesson was
+for.
+
+The trip changes spelling at the bottom of the circle, where F♯ and G♭ share a
+key: clockwise it leaves F♯ for D♭ rather than C♯, counter-clockwise G♭ for B.
+Seven sharps is the right answer and the wrong lesson.
+
+### Plain spellings only
+
+Every recipe is served only on roots whose notes need no E♯, B♯, F♭, C♭ or
+double accidental — E♭ minor and C♯ minor, never D♭ minor; no diminished
+seventh on D at all. Those spellings are correct and the music core produces
+them happily; they are also a second lesson, about spelling, arriving in the
+middle of the first, about distance.
+
+### Marked by pitch class, so the pedal and the octave do not matter
+
+A note is right if it is the right key in any octave. The page listens to
+`onNote`, not to settled chords, so a chord can be built a note at a time on
+the on-screen keyboard or put down whole on a piano, and a sustain pedal held
+through it changes nothing. The pedal itself starts a stop and moves on from a
+finished one, and does nothing while an item is waiting: a pedal goes down
+while chords are played, and that is not a request for help.
+
+A chord built a note at a time is sounded once it is complete, so it is heard
+as a chord. A chord held down whole is not sounded again — the piano already
+said it.
+
+### Slips come round again, once
+
+A scored item that took a slip or a demonstration is served once more at the
+end of the round, and the round ends when it has been played cleanly. The
+second time counts for nothing in the score; the score is the share of items
+played right first time with no help, and it is the only number recorded. A
+stop's record on the map is its best such share. The circle stops cannot send a
+hop back — a trip is one journey — so a slip there is simply counted.
+
+### The table the first draft created is kept
+
+Migration `0018` created `theory_rounds` with generic JSON columns. It is kept
+as it was so an instance that already applied it needs nothing new: rows now
+carry a `spec` with `line: 'recipes'`, and the loader reads only those. The
+draft's own rows, if any exist, are never read and never break anything.
+
+The migration's SQL was hand-written and had no snapshot, so the next
+`drizzle-kit generate` would have created the table a second time. It has been
+regenerated with its snapshot; the journal keeps the original timestamp, so an
+instance that already applied the hand-written version skips it.
+
+The server does not believe a submitted round. It regenerates the items from
+the seed and walks the outcomes through the same queue the page walked —
+including every item sent round again — and works the score out itself.
