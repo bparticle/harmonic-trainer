@@ -16,7 +16,7 @@ separately. Roundel puts that shape in front of you — on the wheel and across
 the map — while the rest of it makes sure you can also hear it, recognise it on
 your own instrument, and find it again next week.
 
-Not a music theory course. One loop, worked from every direction: take a
+The playing curriculum follows one loop, worked from every direction: take a
 progression, hear it, drill it across all twelve keys, and apply it —
 recognising it as you play, or playing along with a generated rhythm section.
 
@@ -49,6 +49,9 @@ remain planned in `ROADMAP.md`.
   changes, cycles and public-domain standards, plus anything you type in.
 - **Explore** — the wheel, chord neighbours, voice leading, with the notes under
   your hands lighting up as you play them.
+- **Theory arcade** — a separate five-stop course for understanding the notes:
+  circle-of-fifths journeys, key-signature locks, chord recipes, Roman numerals,
+  and relative-key connections. Guided rounds teach; recall rounds test memory.
 - **Profile** — what has actually happened: hours played, chords judged, badges
   won, and the twelve keys as swatches so the ones you never play are visible at
   a glance. Every number traces to a row; none is an estimate, and there is no
@@ -120,8 +123,9 @@ You can also open the selected chart's editor from Play along. Add an artist
 in the chart editor to make your own songs searchable by artist.
 
 When upgrading an existing installation, run `npm run db:migrate` before
-starting this version; migration `0017_chart_artist` adds the artist field
-without changing existing charts.
+starting this version. Migration `0018_theory_arcade` adds an account-owned
+theory-round record. It does not change existing courses, daily workouts,
+cards, or spaced-repetition schedules.
 
 The account command prints a temporary password when one is not supplied. Open
 `http://localhost:5173`, sign in with it, then change it from **Account**.

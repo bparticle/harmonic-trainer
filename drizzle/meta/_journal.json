@@ -127,6 +127,13 @@
       "when": 1791721268971,
       "tag": "0017_chart_artist",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1793016000000,
+      "tag": "0018_theory_arcade",
+      "breakpoints": true
     }
   ]
 }

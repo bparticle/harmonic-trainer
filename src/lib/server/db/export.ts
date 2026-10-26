@@ -13,6 +13,7 @@ import {
 	sessions,
 	srsState,
 	takes,
+	theoryRounds,
 	transferEvents,
 	userPrefs,
 	users
@@ -41,6 +42,10 @@ export async function exportAccount(userId: string) {
 	const ownedRuns = await db.select().from(playRuns).where(eq(playRuns.userId, userId));
 	const ownedBadges = await db.select().from(badges).where(eq(badges.userId, userId));
 	const ownedTakes = await db.select().from(takes).where(eq(takes.userId, userId));
+	const ownedTheoryRounds = await db
+		.select()
+		.from(theoryRounds)
+		.where(eq(theoryRounds.userId, userId));
 	const ownedRepertoire = await db.select().from(repertoire).where(eq(repertoire.userId, userId));
 
 	const cardIds = ownedCards.map((row) => row.id);
@@ -85,6 +90,7 @@ export async function exportAccount(userId: string) {
 		playRuns: ownedRuns,
 		chordAttempts: chordAttemptRows,
 		badges: ownedBadges,
+		theoryRounds: ownedTheoryRounds,
 		// Raw MIDI has no honest JSON shape of its own; base64 is the plain one.
 		takes: ownedTakes.map((take) => ({
 			...take,

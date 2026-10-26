@@ -19,6 +19,8 @@ import { sql } from 'drizzle-orm';
 import type { Landing } from '$lib/practice/match';
 import type { Groove } from '$lib/audio/groove';
 import type { TaskKind } from '$lib/session/workout';
+import type { RoundSpec } from '$lib/theory/catalog';
+import type { Attempt, RoundResult } from '$lib/theory/round';
 
 /*
  * Conventions
@@ -172,6 +174,22 @@ export const users = pgTable('users', {
 	sessionEpoch: integer('session_epoch').notNull().default(0),
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });
+
+/** Theory has its own record; it never changes performance drills or their scheduler. */
+export const theoryRounds = pgTable(
+	'theory_rounds',
+	{
+		id: uuid('id').primaryKey(),
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		specJson: jsonb('spec_json').$type<RoundSpec>().notNull(),
+		attemptsJson: jsonb('attempts_json').$type<Attempt[]>().notNull(),
+		resultJson: jsonb('result_json').$type<RoundResult>().notNull(),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(t) => [index('theory_rounds_user_created_idx').on(t.userId, t.createdAt)]
+);
 
 /**
  * A record of one failed sign-in or one reset request, kept only long enough
