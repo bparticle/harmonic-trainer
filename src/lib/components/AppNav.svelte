@@ -34,6 +34,7 @@
 	const LINKS = [
 		{ href: '/', label: 'Today' },
 		{ href: '/play', label: 'Play' },
+		{ href: '/fifths', label: 'Fifths' },
 		{ href: '/backing', label: 'Play along' },
 		{ href: '/songbook', label: 'Songbook' },
 		{ href: '/explore', label: 'Explore' },
