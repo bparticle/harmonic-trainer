@@ -7451,3 +7451,149 @@ The briefing examples are on C so they can be compared, and C°7 is C E♭ G♭ 
 That is the correct spelling and it stays, with a clause in the brief saying B𝄫
 is the A key. The questions still never serve a diminished seventh that needs
 a double flat.
+
+---
+
+## Fifths — the circle of fifths as a game that keeps up with you
+
+`/fifths` is an arcade for the circle of fifths: where each major key lives,
+what it is called and what its signature is. It is local to the browser — no
+table, no account record — and it touches nothing in the courses, the ladder or
+the workout. The first version was played the week it went into the nav and
+was called boring, for two reasons that were both design rather than polish:
+the progression was fast and rigid, and the five kinds of question did not play
+fluently, because every turn asked for a different gesture in a different
+place.
+
+### Five waves, unlocked for turning up
+
+The first version taught in fixed waves of three keys, four, six, two, and then
+everything. Finishing a wave unlocked the next however it went: sixteen misses
+out of sixteen still said "Wave clear". The third wave doubled the keys in one
+go; the fourth spent twelve questions on C♯ and C♭; the fifth was the same 26
+questions for ever, scored. Nothing was kept between visits except the furthest
+wave and a high score, so a key missed every time was asked exactly as often as
+one never missed.
+
+### A strength per key
+
+Every key now carries a strength from 0 to 5, saved after every answer.
+
+- **Keys arrive one at a time**, outward from C, alternating sides: G, F, D, B♭
+  and on to C♯ and C♭. C, G and F come in together, because there is nothing to
+  learn about a circle from fewer than three. The next key arrives when every
+  key in play is **solid** (3), and never more than one a round.
+- **Below solid any right first answer adds one. From solid upward only a quick
+  one does**, under three seconds. The top of the scale is meant to be instant
+  recall, not working it out by counting round from C. A miss takes one away.
+- **Weak keys are asked more**, weighted by the square of their distance from 5,
+  with a key already asked in the same set counting for a third.
+- **A miss comes back two questions later**, once, with its choices reshuffled.
+  Only first answers move a key: a review is a second look, not evidence.
+
+The one-key-a-round limit came out of the browser. Without it a quick player
+was given a key at almost every break between sets, each followed by its Find
+set, and rounds became Find, Find, Find — the rigidity this rewrite was for,
+arriving by a different route.
+
+"Add D now" and "Open every key" are there because a player knows their own
+hands better than three answers do. Opened keys come in at 1, not solid:
+claimed, not shown. The first version's save is read once: every wave it had
+finished comes in solid, and the one it stopped on starts again.
+
+### What a key is asked depends on how well it is known
+
+Five kinds of question, each opened by strength: **Find** it on the circle from
+its name (any key in play), its **Key signature** from four (1), **Name** a
+marked station from four (2), **Find by signature** (2), and **One step round**
+from a neighbour, clockwise or anticlockwise (3).
+
+A kind of question needs three keys it can ask before it is worth a set, and
+stepping needs four. With two, a set alternated between them and was a coin
+toss — "1♯, 1♭, 1♯, 1♭". With only C, G and F every step starts from C, and
+"C ↻" four times is one question asked four times.
+
+### Four of a kind, with a card between
+
+A round is three sets of four, and a set asks one kind of question. The first
+version changed kind on every turn and the only sign was a caption in small
+capitals beside the circle, so every turn began with working out what to press.
+Holding the kind for four turns keeps the thinking varied and the hands still.
+A card names the next set before it starts; it goes by itself, or on Enter,
+Space, the pedal or a tap.
+
+A new key is shown in the middle of the circle, sounded and tapped, and the set
+after it is always Find, with the new key in it but never first: it is still
+under the finger that tapped it.
+
+### One circle, and every answer on it
+
+The question sits in the hub, inside the ring. Where-questions are answered on
+the stations; which-questions put their four choices in the hub under the
+question, next to the marked station rather than in a column across the
+screen. A notch at the edge of the hub turns to whatever the question is about:
+the station aimed at, the marked one, the one tapped.
+
+The first version switched the stations off whenever the answer was a button.
+The thing being looked at stopped responding, and the buttons that replaced
+them unmounted the focused element, so a keyboard player fell back to the
+heading and had to tab in again every few turns. The twelve stations are now
+always buttons and never leave the DOM; when they are not the answer they are
+marked disabled and keep a roving tab stop.
+
+The keyboard is one scheme for the whole game: ← → aim and Enter taps, 1 to 4
+choose, Escape ends the round, and Enter, Space or the pedal starts the next.
+A mouse click does not take keyboard focus with it.
+
+### A played note answers what the prompt does not name
+
+With a MIDI keyboard connected, playing the tonic answers a marked station, a
+signature to find, or a step from a neighbour. It never answers "Find E♭": the
+prompt has already said the note. A played note is matched by pitch class, so
+F♯ and G♭ are one key under the hand, as they are.
+
+### You always hear the right key
+
+Every answer plays the right key's tonic triad, kept round middle C wherever
+the key is — softer after a miss, brighter as a streak climbs. The sound is
+always the answer, so a miss is told where the key is by ear as well as by eye.
+Between rounds a station plays its key when tapped. Sound has its own switch.
+
+The chord was 1.5 seconds and ran out of the synth's sixteen voices under quick
+answers, which Tone reports by dropping notes; it is 0.8.
+
+### Nothing goes red, here either
+
+The first version drew a miss with a red cross, and scored in a yellow that
+meant no pitch. A miss now dashes the station that was tapped in ink and names
+what lives there — "that was C" is the useful half of a miss — and lights the
+right station in its own colour, for 1.6 seconds rather than 0.46, which was
+not long enough to read it. Buttons and numbers are ink. There is no score any
+more: it was 100 plus 20 per streak, which only restated the streak.
+
+Between rounds the circle is the record. Each station's ring fills with its
+colour by strength, the next station is drawn dashed, and the rings of keys that
+grew pulse once. The first version showed the circle empty at the end of a
+wave, at the one moment it had something to show.
+
+### The fireworks are the play-along's
+
+The same `Fireworks` layer, on its own switch: sparks at a station, the edges
+lit in the last key's colour once a streak passes three, the play-along's streak
+words, confetti for a clean round. Not its farewell: a broken streak's number
+landed on top of the answer being revealed, at the one moment the board has to
+be read. The counter in the corner resets in plain view.
+
+### Caught in the browser and the tests
+
+- A Name question could offer B and C♭ together: two names for one station,
+  both ruled out without knowing either. The first version's mixed wave did the
+  same. Distractors now sit on different stations.
+- The first set after C, G and F were shown was Key signature, chosen at random.
+  A set straight after an introduction is now Find.
+- The guarantee that a new key is asked could not place C in the opening set,
+  because every slot already held another key owed a question. It replaces a
+  duplicate now.
+- After D♭ was introduced the pointer stayed on it, so Enter answered whatever
+  was asked about D♭ next. A pointer the game placed is cleared before anything
+  answered on the rim.

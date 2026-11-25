@@ -57,6 +57,11 @@ remain planned in `ROADMAP.md`.
   until it comes back to C, then round the circle from memory both ways. Every
   answer is a note played. It keeps its own record and leaves the courses and
   the daily workout untouched.
+- **Fifths** — the circle of fifths as an arcade. Find each major key on the
+  circle, name it, read its signature, step round from its neighbours; keys
+  arrive one at a time as the ones you have go solid, and the circle colours in
+  as they get quick. A MIDI keyboard answers anything the question does not
+  name. Saved in the browser only.
 - **Profile** — what has actually happened: hours played, chords judged, badges
   won, and the twelve keys as swatches so the ones you never play are visible at
   a glance. Every number traces to a row; none is an estimate, and there is no
